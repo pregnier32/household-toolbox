@@ -11,7 +11,7 @@ export default function WaitlistForm() {
   const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault()
     
-    if (!isSupabaseConfigured()) {
+    if (!isSupabaseConfigured) {
       setMessage('Supabase is not configured. Please set up your environment variables.')
       setStatus('error')
       return
