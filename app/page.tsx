@@ -42,7 +42,7 @@ export default function Home() {
             <p className="mt-4 max-w-xl text-pretty text-sm text-slate-300 sm:text-base">
               Household Toolbox brings your maintenance schedules, important documents,
               checklists, and planning tools together so nothing around the house slips
-              through the cracks again.
+              through the cracks again!
             </p>
 
             {/* CTA + Email form */}
