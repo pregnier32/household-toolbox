@@ -1,36 +1,116 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# Household Toolbox
+
+The digital toolbox for your whole household. Track maintenance schedules, organize important documents, and coordinate checklists so nothing around the house slips through the cracks.
+
+## Features
+
+- 🧰 **Maintenance Timeline** - Track filters, gutters, inspections, and more with reminders
+- 📂 **Important Documents** - Keep warranties, policies, and records organized and easy to find
+- ✅ **Shared Checklists** - Coordinate move-in, hosting, packing, and seasonal checklists with your whole household
+- 👥 **Collaboration** - Share responsibility with partners, roommates, or family
+
+## Tech Stack
+
+- **Framework:** Next.js 16 with App Router
+- **Language:** TypeScript
+- **Styling:** Tailwind CSS 4
+- **Database:** Supabase
+- **Deployment:** Ready for Vercel
 
 ## Getting Started
 
-First, run the development server:
+### Prerequisites
 
+- Node.js 18+ 
+- npm, yarn, pnpm, or bun
+- A Supabase account and project
+
+### Installation
+
+1. Clone the repository:
 ```bash
-npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
+git clone <your-repo-url>
+cd household-toolbox
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+2. Install dependencies:
+```bash
+npm install
+```
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+3. Set up environment variables:
+   - Copy `.env.example` to `.env.local`
+   - Fill in your Supabase credentials:
+     ```env
+     NEXT_PUBLIC_SUPABASE_URL=your_supabase_project_url
+     NEXT_PUBLIC_SUPABASE_ANON_KEY=your_supabase_anon_key
+     ```
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+4. Set up Supabase:
+   - Create a `waitlist` table in your Supabase database:
+     ```sql
+     CREATE TABLE waitlist (
+       id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
+       email TEXT UNIQUE NOT NULL,
+       created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+     );
+     ```
+   - Enable Row Level Security (RLS) and create a policy to allow inserts:
+     ```sql
+     ALTER TABLE waitlist ENABLE ROW LEVEL SECURITY;
+     
+     CREATE POLICY "Allow public inserts" ON waitlist
+       FOR INSERT
+       TO anon
+       WITH CHECK (true);
+     ```
 
-## Learn More
+5. Run the development server:
+```bash
+npm run dev
+```
 
-To learn more about Next.js, take a look at the following resources:
+6. Open [http://localhost:3000](http://localhost:3000) in your browser.
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+## Project Structure
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+```
+household-toolbox/
+├── app/
+│   ├── components/      # React components
+│   ├── layout.tsx       # Root layout
+│   └── page.tsx         # Home page
+├── lib/
+│   └── supabaseClient.ts  # Supabase client configuration
+├── public/              # Static assets
+└── env/                 # Environment files (legacy - use .env.local)
+```
 
-## Deploy on Vercel
+## Available Scripts
 
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
+- `npm run dev` - Start development server
+- `npm run build` - Build for production
+- `npm run start` - Start production server
+- `npm run lint` - Run ESLint
 
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+## Environment Variables
+
+| Variable | Description |
+|----------|-------------|
+| `NEXT_PUBLIC_SUPABASE_URL` | Your Supabase project URL |
+| `NEXT_PUBLIC_SUPABASE_ANON_KEY` | Your Supabase anonymous/public key |
+
+## Deployment
+
+The easiest way to deploy is using [Vercel](https://vercel.com):
+
+1. Push your code to GitHub
+2. Import your repository in Vercel
+3. Add your environment variables in Vercel's project settings
+4. Deploy!
+
+For more details, see the [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying).
+
+## License
+
+Private project - All rights reserved.
