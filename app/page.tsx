@@ -1,6 +1,14 @@
+'use client';
+
 import Image from 'next/image'
+import { useState } from 'react'
+import { signUp } from './actions/auth'
 
 export default function Home() {
+  const [isSignUp, setIsSignUp] = useState(false);
+  const [isLoading, setIsLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [success, setSuccess] = useState<string | null>(null);
   return (
     <main className="min-h-screen bg-slate-950 text-slate-100">
       {/* Page wrapper */}
@@ -55,56 +63,230 @@ export default function Home() {
             </div>
           </div>
 
-          {/* Right side “card” */}
+          {/* Right side "card" - Sign In/Sign Up */}
           <div className="rounded-2xl border border-slate-800 bg-slate-900/50 p-5 shadow-2xl shadow-emerald-500/10">
-            <p className="text-xs font-medium uppercase tracking-[0.18em] text-emerald-300">
-              At-a-glance
-            </p>
-            <h2 className="mt-3 text-lg font-semibold text-slate-50">
-              Your household control panel
-            </h2>
-            <p className="mt-2 text-sm text-slate-300">
-              See what needs attention this week across maintenance, bills, and
-              tasks—without digging through emails, texts, and paper folders.
-            </p>
+            <div className="mb-4 flex gap-2 rounded-lg bg-slate-900/70 p-1">
+              <button
+                type="button"
+                onClick={() => {
+                  setIsSignUp(false);
+                  setError(null);
+                  setSuccess(null);
+                }}
+                className={`flex-1 rounded-md px-3 py-2 text-sm font-medium transition-colors ${
+                  !isSignUp
+                    ? 'bg-emerald-400/20 text-emerald-300'
+                    : 'text-slate-400 hover:text-slate-300'
+                }`}
+              >
+                Sign In
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  setIsSignUp(true);
+                  setError(null);
+                  setSuccess(null);
+                }}
+                className={`flex-1 rounded-md px-3 py-2 text-sm font-medium transition-colors ${
+                  isSignUp
+                    ? 'bg-emerald-400/20 text-emerald-300'
+                    : 'text-slate-400 hover:text-slate-300'
+                }`}
+              >
+                Sign Up
+              </button>
+            </div>
 
-            <div className="mt-5 space-y-3 text-sm">
-              <div className="flex items-start gap-3 rounded-xl border border-slate-800 bg-slate-900/70 p-3">
-                <div className="mt-0.5 h-7 w-7 flex-none rounded-lg bg-emerald-400/10 text-center text-lg">
-                  🧰
-                </div>
-                <div>
-                  <p className="font-medium text-slate-100">Maintenance timeline</p>
-                  <p className="text-xs text-slate-400">
-                    Track filters, gutters, inspections, and more with reminders.
-                  </p>
-                </div>
+            {error && (
+              <div className="mb-4 rounded-lg border border-red-500/50 bg-red-500/10 px-3 py-2 text-sm text-red-300">
+                {error}
+              </div>
+            )}
+
+            {success && (
+              <div className="mb-4 rounded-lg border border-emerald-500/50 bg-emerald-500/10 px-3 py-2 text-sm text-emerald-300">
+                {success}
+              </div>
+            )}
+
+            <form
+              onSubmit={async (e) => {
+                e.preventDefault();
+                setError(null);
+                setSuccess(null);
+                setIsLoading(true);
+
+                const formData = new FormData(e.currentTarget);
+                const email = formData.get('email') as string;
+                const password = formData.get('password') as string;
+                const firstName = formData.get('firstName') as string;
+                const lastName = formData.get('lastName') as string;
+
+                if (isSignUp) {
+                  const result = await signUp({ email, password, firstName, lastName });
+                  setIsLoading(false);
+
+                  if (result.success) {
+                    setSuccess('Account created successfully! You can now sign in.');
+                    // Reset form
+                    e.currentTarget.reset();
+                  } else {
+                    setError(result.error || 'Failed to create account');
+                  }
+                } else {
+                  // Sign in logic will be implemented later
+                  setIsLoading(false);
+                  setError('Sign in functionality coming soon');
+                }
+              }}
+              className="space-y-4"
+            >
+              {isSignUp && (
+                <>
+                  <div>
+                    <label htmlFor="firstName" className="block text-xs font-medium text-slate-300 mb-1.5">
+                      First Name <span className="text-red-400">*</span>
+                    </label>
+                    <input
+                      type="text"
+                      id="firstName"
+                      name="firstName"
+                      className="w-full rounded-lg border border-slate-700 bg-slate-900/70 px-3 py-2 text-sm text-slate-100 placeholder-slate-500 focus:border-emerald-500/50 focus:outline-none focus:ring-1 focus:ring-emerald-500/50"
+                      placeholder="First name"
+                      required
+                    />
+                  </div>
+                  <div>
+                    <label htmlFor="lastName" className="block text-xs font-medium text-slate-300 mb-1.5">
+                      Last Name <span className="text-red-400">*</span>
+                    </label>
+                    <input
+                      type="text"
+                      id="lastName"
+                      name="lastName"
+                      className="w-full rounded-lg border border-slate-700 bg-slate-900/70 px-3 py-2 text-sm text-slate-100 placeholder-slate-500 focus:border-emerald-500/50 focus:outline-none focus:ring-1 focus:ring-emerald-500/50"
+                      placeholder="Last name"
+                      required
+                    />
+                  </div>
+                </>
+              )}
+
+              <div>
+                <label htmlFor="email" className="block text-xs font-medium text-slate-300 mb-1.5">
+                  Email <span className="text-red-400">*</span>
+                </label>
+                <input
+                  type="email"
+                  id="email"
+                  name="email"
+                  className="w-full rounded-lg border border-slate-700 bg-slate-900/70 px-3 py-2 text-sm text-slate-100 placeholder-slate-500 focus:border-emerald-500/50 focus:outline-none focus:ring-1 focus:ring-emerald-500/50"
+                  placeholder="you@example.com"
+                  required
+                />
               </div>
 
-              <div className="flex items-start gap-3 rounded-xl border border-slate-800 bg-slate-900/70 p-3">
-                <div className="mt-0.5 h-7 w-7 flex-none rounded-lg bg-emerald-400/10 text-center text-lg">
-                  📂
-                </div>
-                <div>
-                  <p className="font-medium text-slate-100">Important documents</p>
-                  <p className="text-xs text-slate-400">
-                    Keep warranties, policies, and records organized and easy to find.
-                  </p>
-                </div>
+              <div>
+                <label htmlFor="password" className="block text-xs font-medium text-slate-300 mb-1.5">
+                  Password <span className="text-red-400">*</span>
+                </label>
+                <input
+                  type="password"
+                  id="password"
+                  name="password"
+                  className="w-full rounded-lg border border-slate-700 bg-slate-900/70 px-3 py-2 text-sm text-slate-100 placeholder-slate-500 focus:border-emerald-500/50 focus:outline-none focus:ring-1 focus:ring-emerald-500/50"
+                  placeholder="••••••••"
+                  required
+                />
               </div>
 
-              <div className="flex items-start gap-3 rounded-xl border border-slate-800 bg-slate-900/70 p-3">
-                <div className="mt-0.5 h-7 w-7 flex-none rounded-lg bg-emerald-400/10 text-center text-lg">
-                  ✅
+              {!isSignUp && (
+                <div className="flex items-center justify-between text-xs">
+                  <label className="flex items-center gap-2 text-slate-400">
+                    <input
+                      type="checkbox"
+                      className="rounded border-slate-700 bg-slate-900/70 text-emerald-500 focus:ring-emerald-500/50"
+                    />
+                    <span>Remember me</span>
+                  </label>
+                  <a href="#" className="text-emerald-400 hover:text-emerald-300">
+                    Forgot password?
+                  </a>
                 </div>
-                <div>
-                  <p className="font-medium text-slate-100">Shared checklists</p>
-                  <p className="text-xs text-slate-400">
-                    Coordinate move-in, hosting, packing, and seasonal checklists with
-                    your whole household.
-                  </p>
-                </div>
-              </div>
+              )}
+
+              <button
+                type="submit"
+                disabled={isLoading}
+                className="w-full rounded-lg bg-emerald-500 px-4 py-2.5 text-sm font-semibold text-slate-950 transition-colors hover:bg-emerald-400 focus:outline-none focus:ring-2 focus:ring-emerald-500/50 focus:ring-offset-2 focus:ring-offset-slate-900 disabled:cursor-not-allowed disabled:opacity-50"
+              >
+                {isLoading
+                  ? 'Processing...'
+                  : isSignUp
+                    ? 'Create Account'
+                    : 'Sign In'}
+              </button>
+            </form>
+
+            {isSignUp && (
+              <p className="mt-4 text-center text-xs text-slate-400">
+                By signing up, you agree to our{' '}
+                <a href="#" className="text-emerald-400 hover:text-emerald-300">
+                  Terms of Service
+                </a>{' '}
+                and{' '}
+                <a href="#" className="text-emerald-400 hover:text-emerald-300">
+                  Privacy Policy
+                </a>
+              </p>
+            )}
+          </div>
+        </section>
+
+        {/* Control Panel Section */}
+        <section className="mb-16">
+          <p className="text-xs font-medium uppercase tracking-[0.18em] text-emerald-300">
+            At-a-glance
+          </p>
+          <h2 className="mt-2 text-xl font-semibold text-slate-50 sm:text-2xl">
+            Your household control panel
+          </h2>
+          <p className="mt-2 max-w-xl text-sm text-slate-300">
+            See what needs attention this week across maintenance, bills, and
+            tasks—without digging through emails, texts, and paper folders.
+          </p>
+
+          <div className="mt-6 grid gap-5 md:grid-cols-3">
+            <div className="rounded-2xl border border-slate-800 bg-slate-900/70 p-4">
+              <p className="text-2xl">🧰</p>
+              <h3 className="mt-3 text-sm font-semibold text-slate-100">
+                Maintenance timeline
+              </h3>
+              <p className="mt-2 text-xs text-slate-400">
+                Track filters, gutters, inspections, and more with reminders.
+              </p>
+            </div>
+
+            <div className="rounded-2xl border border-slate-800 bg-slate-900/70 p-4">
+              <p className="text-2xl">📂</p>
+              <h3 className="mt-3 text-sm font-semibold text-slate-100">
+                Important documents
+              </h3>
+              <p className="mt-2 text-xs text-slate-400">
+                Keep warranties, policies, and records organized and easy to find.
+              </p>
+            </div>
+
+            <div className="rounded-2xl border border-slate-800 bg-slate-900/70 p-4">
+              <p className="text-2xl">✅</p>
+              <h3 className="mt-3 text-sm font-semibold text-slate-100">
+                Shared checklists
+              </h3>
+              <p className="mt-2 text-xs text-slate-400">
+                Coordinate move-in, hosting, packing, and seasonal checklists with
+                your whole household.
+              </p>
             </div>
           </div>
         </section>

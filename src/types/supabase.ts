@@ -41,31 +41,40 @@ export type Database = {
     Tables: {
       users: {
         Row: {
+          active: string
           created_at: string
           email: string
           first_name: string | null
+          guest_admin_id: number | null
           id: string
           last_name: string | null
+          password: string
           user_id: string | null
-          user_name: string
+          user_status: string
         }
         Insert: {
+          active: string
           created_at?: string
           email: string
           first_name?: string | null
+          guest_admin_id?: number | null
           id?: string
           last_name?: string | null
+          password: string
           user_id?: string | null
-          user_name: string
+          user_status: string
         }
         Update: {
+          active?: string
           created_at?: string
           email?: string
           first_name?: string | null
+          guest_admin_id?: number | null
           id?: string
           last_name?: string | null
+          password?: string
           user_id?: string | null
-          user_name?: string
+          user_status?: string
         }
         Relationships: []
       }
