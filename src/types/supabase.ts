@@ -44,36 +44,36 @@ export type Database = {
           active: string
           created_at: string
           email: string
-          first_name: string | null
+          first_name: string
           guest_admin_id: number | null
           id: string
-          last_name: string | null
+          last_name: string
           password: string
-          user_id: string | null
+          user_id: string
           user_status: string
         }
         Insert: {
           active: string
           created_at?: string
           email: string
-          first_name?: string | null
+          first_name: string
           guest_admin_id?: number | null
           id?: string
-          last_name?: string | null
+          last_name: string
           password: string
-          user_id?: string | null
+          user_id?: string
           user_status: string
         }
         Update: {
           active?: string
           created_at?: string
           email?: string
-          first_name?: string | null
+          first_name?: string
           guest_admin_id?: number | null
           id?: string
-          last_name?: string | null
+          last_name?: string
           password?: string
-          user_id?: string | null
+          user_id?: string
           user_status?: string
         }
         Relationships: []

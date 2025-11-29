@@ -1,9 +1,10 @@
 'use server';
 
 import { randomUUID } from 'crypto';
-import { supabase } from '@/lib/supabaseClient';
+import { supabaseServer } from '@/lib/supabaseServer';
 import bcrypt from 'bcryptjs';
 import { TablesInsert } from '@/src/types/supabase';
+import { createSession } from '@/lib/session';
 
 type SignUpData = {
   email: string;
@@ -12,11 +13,98 @@ type SignUpData = {
   lastName?: string;
 };
 
+type SignInData = {
+  email: string;
+  password: string;
+};
+
 type SignUpResult = {
   success: boolean;
   error?: string;
   userId?: string;
 };
+
+type SignInResult = {
+  success: boolean;
+  error?: string;
+  user?: {
+    id: string;
+    email: string;
+    firstName: string;
+    lastName?: string;
+  };
+};
+
+export async function signIn(data: SignInData): Promise<SignInResult> {
+  try {
+    // Validate input
+    if (!data.email || !data.password) {
+      return {
+        success: false,
+        error: 'Email and password are required',
+      };
+    }
+
+    // Validate email format
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    if (!emailRegex.test(data.email)) {
+      return {
+        success: false,
+        error: 'Invalid email format',
+      };
+    }
+
+    // Find user by email
+    const { data: user, error: fetchError } = await supabaseServer
+      .from('users')
+      .select('id, email, password, first_name, last_name, active')
+      .eq('email', data.email.toLowerCase().trim())
+      .single();
+
+    if (fetchError || !user) {
+      return {
+        success: false,
+        error: 'Invalid email or password',
+      };
+    }
+
+    // Check if user is active
+    if (user.active !== 'Y') {
+      return {
+        success: false,
+        error: 'Account is inactive. Please contact support.',
+      };
+    }
+
+    // Verify password
+    const isPasswordValid = await bcrypt.compare(data.password, user.password);
+    if (!isPasswordValid) {
+      return {
+        success: false,
+        error: 'Invalid email or password',
+      };
+    }
+
+    // Create session
+    await createSession(user.id);
+
+    return {
+      success: true,
+      user: {
+        id: user.id,
+        email: user.email,
+        firstName: user.first_name,
+        lastName: user.last_name || undefined,
+      },
+    };
+  } catch (error) {
+    console.error('Sign in error:', error);
+    return {
+      success: false,
+      error: 'An unexpected error occurred. Please try again.',
+    };
+  }
+}
 
 export async function signUp(data: SignUpData): Promise<SignUpResult> {
   try {
@@ -46,7 +134,7 @@ export async function signUp(data: SignUpData): Promise<SignUpResult> {
     }
 
     // Check if user already exists
-    const { data: existingUser, error: checkError } = await supabase
+    const { data: existingUser, error: checkError } = await supabaseServer
       .from('users')
       .select('email')
       .eq('email', data.email.toLowerCase().trim())
@@ -90,7 +178,7 @@ export async function signUp(data: SignUpData): Promise<SignUpResult> {
     };
 
     // Insert user into database
-    const { data: newUser, error: insertError } = await supabase
+    const { data: newUser, error: insertError } = await supabaseServer
       .from('users')
       .insert(userData)
       .select('id')

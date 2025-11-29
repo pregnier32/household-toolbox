@@ -1,14 +1,17 @@
 'use client';
 
 import Image from 'next/image'
-import { useState } from 'react'
-import { signUp } from './actions/auth'
+import { useState, useRef } from 'react'
+import { useRouter } from 'next/navigation'
+import { signUp, signIn } from './actions/auth'
 
 export default function Home() {
   const [isSignUp, setIsSignUp] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
+  const formRef = useRef<HTMLFormElement>(null);
+  const router = useRouter();
   return (
     <main className="min-h-screen bg-slate-950 text-slate-100">
       {/* Page wrapper */}
@@ -111,13 +114,15 @@ export default function Home() {
             )}
 
             <form
+              ref={formRef}
               onSubmit={async (e) => {
                 e.preventDefault();
                 setError(null);
                 setSuccess(null);
                 setIsLoading(true);
 
-                const formData = new FormData(e.currentTarget);
+                const form = e.currentTarget;
+                const formData = new FormData(form);
                 const email = formData.get('email') as string;
                 const password = formData.get('password') as string;
                 const firstName = formData.get('firstName') as string;
@@ -130,14 +135,20 @@ export default function Home() {
                   if (result.success) {
                     setSuccess('Account created successfully! You can now sign in.');
                     // Reset form
-                    e.currentTarget.reset();
+                    formRef.current?.reset();
                   } else {
                     setError(result.error || 'Failed to create account');
                   }
                 } else {
-                  // Sign in logic will be implemented later
+                  const result = await signIn({ email, password });
                   setIsLoading(false);
-                  setError('Sign in functionality coming soon');
+
+                  if (result.success) {
+                    // Redirect to dashboard
+                    router.push('/dashboard');
+                  } else {
+                    setError(result.error || 'Failed to sign in');
+                  }
                 }
               }}
               className="space-y-4"
@@ -297,7 +308,7 @@ export default function Home() {
             Designed for real-life households
           </h2>
           <p className="mt-2 max-w-xl text-sm text-slate-300">
-            Household Toolbox isn’t another todo app. It’s a practical command center
+            Household Toolbox isn't another todo app. It's a practical command center
             for the boring but important stuff that keeps your home running.
           </p>
 
