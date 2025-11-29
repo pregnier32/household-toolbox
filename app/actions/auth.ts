@@ -159,8 +159,10 @@ export async function signUp(data: SignUpData): Promise<SignUpResult> {
     const hashedPassword = await bcrypt.hash(data.password, 10);
 
     // Trim and prepare name fields
-    const firstName = data.firstName.trim() || null;
-    const lastName = data.lastName?.trim() || null;
+    // first_name is required, so it will always be a string after trim
+    const firstName = data.firstName.trim();
+    // last_name is required by schema, so use empty string if not provided
+    const lastName = data.lastName?.trim() || '';
 
     // Generate UUID for user id
     const userId = randomUUID();
