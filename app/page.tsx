@@ -1,4 +1,4 @@
-import WaitlistForm from './components/WaitlistForm'
+import Image from 'next/image'
 
 export default function Home() {
   return (
@@ -7,13 +7,15 @@ export default function Home() {
       <div className="mx-auto flex min-h-screen max-w-5xl flex-col px-4 py-10 sm:px-6 lg:px-8">
         {/* Nav */}
         <header className="mb-10 flex items-center justify-between">
-          <div className="flex items-center gap-2">
-            <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-emerald-400/10 ring-1 ring-emerald-400/40">
-              <span className="text-lg font-semibold text-emerald-300">HT</span>
-            </div>
-            <span className="text-sm font-semibold tracking-wide text-slate-200">
-              Household Toolbox
-            </span>
+          <div className="flex items-center">
+            <Image
+              src="/images/logo/Logo_Side_White.png"
+              alt="Household Toolbox"
+              width={200}
+              height={40}
+              className="h-auto"
+              priority
+            />
           </div>
 
           <nav className="hidden gap-6 text-sm text-slate-300 sm:flex">
@@ -30,7 +32,7 @@ export default function Home() {
         <section className="mb-16 grid flex-1 gap-10 md:grid-cols-[minmax(0,1.4fr)_minmax(0,1fr)] md:items-center">
           <div>
             <div className="inline-flex items-center rounded-full border border-emerald-400/30 bg-emerald-400/10 px-3 py-1 text-xs font-medium text-emerald-200">
-              All your home life admin, in one place
+             Organize, plan, and maintain your household
             </div>
 
             <h1 className="mt-6 text-balance text-4xl font-semibold tracking-tight text-slate-50 sm:text-5xl md:text-6xl">
@@ -42,15 +44,15 @@ export default function Home() {
             <p className="mt-4 max-w-xl text-pretty text-sm text-slate-300 sm:text-base">
               Household Toolbox brings your maintenance schedules, important documents,
               checklists, and planning tools together so nothing around the house slips
-              through the cracks again!!
+              through the cracks again.
             </p>
 
-            {/* CTA + Email form */}
-            <WaitlistForm />
-
-            <p className="mt-3 text-xs text-slate-400">
-              No spam. Just an occasional update when new tools go live.
-            </p>
+            {/* Coming Soon Message */}
+            <div className="mt-8 inline-flex items-center rounded-xl border border-emerald-400/30 bg-emerald-400/10 px-6 py-4">
+              <p className="text-lg font-semibold text-emerald-200">
+                Coming Soon in 2026
+              </p>
+            </div>
           </div>
 
           {/* Right side “card” */}
