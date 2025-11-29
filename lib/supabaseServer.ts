@@ -14,6 +14,14 @@ export const supabaseServer = createClient(supabaseUrl, supabaseServiceKey, {
   auth: {
     autoRefreshToken: false,
     persistSession: false
+  },
+  db: {
+    schema: 'public'
+  },
+  global: {
+    headers: {
+      'x-client-info': 'household-toolbox-server'
+    }
   }
 })
 

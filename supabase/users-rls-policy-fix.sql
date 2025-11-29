@@ -6,6 +6,7 @@ ALTER TABLE users ENABLE ROW LEVEL SECURITY;
 
 -- Create a policy to allow public inserts for user registration
 -- This allows anonymous users to create accounts
+-- Note: The service role key should bypass RLS, but this policy serves as a backup
 CREATE POLICY "Allow public user registration" ON users
   FOR INSERT
   TO anon
