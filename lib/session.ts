@@ -17,7 +17,7 @@ export async function createSession(userId: string) {
   });
 }
 
-export async function getSession(): Promise<{ id: string; email: string; firstName: string; lastName?: string } | null> {
+export async function getSession(): Promise<{ id: string; email: string; firstName: string; lastName?: string; userStatus?: string } | null> {
   const cookieStore = await cookies();
   const sessionId = cookieStore.get(SESSION_COOKIE_NAME)?.value;
 
@@ -28,7 +28,7 @@ export async function getSession(): Promise<{ id: string; email: string; firstNa
   try {
     const { data: user, error } = await supabaseServer
       .from('users')
-      .select('id, email, first_name, last_name, active')
+      .select('id, email, first_name, last_name, active, user_status')
       .eq('id', sessionId)
       .eq('active', 'Y')
       .single();
@@ -42,6 +42,7 @@ export async function getSession(): Promise<{ id: string; email: string; firstNa
       email: user.email,
       firstName: user.first_name,
       lastName: user.last_name || undefined,
+      userStatus: user.user_status || undefined,
     };
   } catch (error) {
     console.error('Session error:', error);
