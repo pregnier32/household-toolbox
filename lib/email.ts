@@ -1,4 +1,5 @@
 import { Resend } from 'resend';
+import { supabaseServer } from '@/lib/supabaseServer';
 
 // Initialize Resend client
 const resend = new Resend(process.env.RESEND_API_KEY);
@@ -7,6 +8,207 @@ type WelcomeEmailParams = {
   to: string;
   firstName: string;
 };
+
+/**
+ * Gets the welcome email template from the database or returns default
+ */
+async function getWelcomeEmailTemplate(): Promise<{
+  subject: string;
+  html: string;
+  text: string;
+}> {
+  try {
+    const { data, error } = await supabaseServer
+      .from('settings')
+      .select('value')
+      .eq('key', 'welcome_email_template')
+      .single();
+
+    if (error || !data || !data.value) {
+      // Return default template if not found
+      return {
+        subject: 'Welcome to Household Toolbox! 🧰',
+        html: `<!DOCTYPE html>
+<html>
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Welcome to Household Toolbox</title>
+  </head>
+  <body style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif; line-height: 1.6; color: #334155; background-color: #f8fafc; margin: 0; padding: 0;">
+    <div style="max-width: 600px; margin: 0 auto; padding: 20px;">
+      <!-- Header -->
+      <div style="background-color: #0f172a; padding: 30px 20px; text-align: center; border-radius: 8px 8px 0 0;">
+        <h1 style="color: #10b981; margin: 0; font-size: 24px; font-weight: 600;">
+          🧰 Household Toolbox
+        </h1>
+      </div>
+      
+      <!-- Main Content -->
+      <div style="background-color: #ffffff; padding: 40px 30px; border-radius: 0 0 8px 8px; box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);">
+        <h2 style="color: #1e293b; margin-top: 0; font-size: 22px; font-weight: 600;">
+          Welcome, \${firstName}! 👋
+        </h2>
+        
+        <p style="color: #475569; font-size: 16px; margin: 20px 0;">
+          Thank you for signing up for Household Toolbox! We're excited to help you organize, plan, and maintain your household.
+        </p>
+        
+        <p style="color: #475569; font-size: 16px; margin: 20px 0;">
+          With Household Toolbox, you can:
+        </p>
+        
+        <ul style="color: #475569; font-size: 16px; margin: 20px 0; padding-left: 20px;">
+          <li style="margin: 10px 0;">📅 Track maintenance schedules and get reminders</li>
+          <li style="margin: 10px 0;">📂 Organize important documents and warranties</li>
+          <li style="margin: 10px 0;">✅ Create and share checklists with your household</li>
+          <li style="margin: 10px 0;">👥 Coordinate tasks with family members or roommates</li>
+        </ul>
+        
+        <div style="margin: 30px 0; text-align: center;">
+          <a href="\${appUrl}/dashboard" 
+             style="display: inline-block; background-color: #10b981; color: #ffffff; text-decoration: none; padding: 12px 30px; border-radius: 6px; font-weight: 600; font-size: 16px;">
+            Get Started
+          </a>
+        </div>
+        
+        <p style="color: #64748b; font-size: 14px; margin: 30px 0 0 0; border-top: 1px solid #e2e8f0; padding-top: 20px;">
+          If you have any questions or need help getting started, feel free to reach out to us.
+        </p>
+      </div>
+      
+      <!-- Footer -->
+      <div style="text-align: center; margin-top: 20px; padding: 20px 0;">
+        <p style="color: #94a3b8; font-size: 12px; margin: 5px 0;">
+          © \${year} Household Toolbox. All rights reserved.
+        </p>
+        <p style="color: #94a3b8; font-size: 12px; margin: 5px 0;">
+          Built to make home life admin less painful.
+        </p>
+      </div>
+    </div>
+  </body>
+</html>`,
+        text: `Welcome to Household Toolbox, \${firstName}!
+
+Thank you for signing up! We're excited to help you organize, plan, and maintain your household.
+
+With Household Toolbox, you can:
+- Track maintenance schedules and get reminders
+- Organize important documents and warranties
+- Create and share checklists with your household
+- Coordinate tasks with family members or roommates
+
+Get started: \${appUrl}/dashboard
+
+If you have any questions or need help getting started, feel free to reach out to us.
+
+© \${year} Household Toolbox. All rights reserved.
+Built to make home life admin less painful.`,
+      };
+    }
+
+    return data.value;
+  } catch (error) {
+    console.error('Error fetching welcome email template:', error);
+    // Return default template on error
+    return {
+      subject: 'Welcome to Household Toolbox! 🧰',
+      html: `<!DOCTYPE html>
+<html>
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Welcome to Household Toolbox</title>
+  </head>
+  <body style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif; line-height: 1.6; color: #334155; background-color: #f8fafc; margin: 0; padding: 0;">
+    <div style="max-width: 600px; margin: 0 auto; padding: 20px;">
+      <!-- Header -->
+      <div style="background-color: #0f172a; padding: 30px 20px; text-align: center; border-radius: 8px 8px 0 0;">
+        <h1 style="color: #10b981; margin: 0; font-size: 24px; font-weight: 600;">
+          🧰 Household Toolbox
+        </h1>
+      </div>
+      
+      <!-- Main Content -->
+      <div style="background-color: #ffffff; padding: 40px 30px; border-radius: 0 0 8px 8px; box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);">
+        <h2 style="color: #1e293b; margin-top: 0; font-size: 22px; font-weight: 600;">
+          Welcome, \${firstName}! 👋
+        </h2>
+        
+        <p style="color: #475569; font-size: 16px; margin: 20px 0;">
+          Thank you for signing up for Household Toolbox! We're excited to help you organize, plan, and maintain your household.
+        </p>
+        
+        <p style="color: #475569; font-size: 16px; margin: 20px 0;">
+          With Household Toolbox, you can:
+        </p>
+        
+        <ul style="color: #475569; font-size: 16px; margin: 20px 0; padding-left: 20px;">
+          <li style="margin: 10px 0;">📅 Track maintenance schedules and get reminders</li>
+          <li style="margin: 10px 0;">📂 Organize important documents and warranties</li>
+          <li style="margin: 10px 0;">✅ Create and share checklists with your household</li>
+          <li style="margin: 10px 0;">👥 Coordinate tasks with family members or roommates</li>
+        </ul>
+        
+        <div style="margin: 30px 0; text-align: center;">
+          <a href="\${appUrl}/dashboard" 
+             style="display: inline-block; background-color: #10b981; color: #ffffff; text-decoration: none; padding: 12px 30px; border-radius: 6px; font-weight: 600; font-size: 16px;">
+            Get Started
+          </a>
+        </div>
+        
+        <p style="color: #64748b; font-size: 14px; margin: 30px 0 0 0; border-top: 1px solid #e2e8f0; padding-top: 20px;">
+          If you have any questions or need help getting started, feel free to reach out to us.
+        </p>
+      </div>
+      
+      <!-- Footer -->
+      <div style="text-align: center; margin-top: 20px; padding: 20px 0;">
+        <p style="color: #94a3b8; font-size: 12px; margin: 5px 0;">
+          © \${year} Household Toolbox. All rights reserved.
+        </p>
+        <p style="color: #94a3b8; font-size: 12px; margin: 5px 0;">
+          Built to make home life admin less painful.
+        </p>
+      </div>
+    </div>
+  </body>
+</html>`,
+      text: `Welcome to Household Toolbox, \${firstName}!
+
+Thank you for signing up! We're excited to help you organize, plan, and maintain your household.
+
+With Household Toolbox, you can:
+- Track maintenance schedules and get reminders
+- Organize important documents and warranties
+- Create and share checklists with your household
+- Coordinate tasks with family members or roommates
+
+Get started: \${appUrl}/dashboard
+
+If you have any questions or need help getting started, feel free to reach out to us.
+
+© \${year} Household Toolbox. All rights reserved.
+Built to make home life admin less painful.`,
+    };
+  }
+}
+
+/**
+ * Replaces template variables in the email content
+ */
+function replaceTemplateVariables(
+  template: string,
+  firstName: string,
+  appUrl: string,
+  year: number
+): string {
+  return template
+    .replace(/\$\{firstName\}/g, firstName)
+    .replace(/\$\{appUrl\}/g, appUrl)
+    .replace(/\$\{year\}/g, year.toString());
+}
 
 /**
  * Sends a welcome email to a newly registered user
@@ -20,94 +222,25 @@ export async function sendWelcomeEmail({ to, firstName }: WelcomeEmailParams): P
 
   try {
     const fromEmail = process.env.RESEND_FROM_EMAIL || 'onboarding@resend.dev';
+    const appUrl = process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000';
+    const year = new Date().getFullYear();
+    
+    // Get the template from database
+    const template = await getWelcomeEmailTemplate();
+    
+    // Replace template variables
+    const subject = replaceTemplateVariables(template.subject, firstName, appUrl, year);
+    const html = replaceTemplateVariables(template.html, firstName, appUrl, year);
+    const text = replaceTemplateVariables(template.text, firstName, appUrl, year);
     
     console.log(`[Email] Sending welcome email to ${to} from ${fromEmail}`);
     
     const { data, error } = await resend.emails.send({
       from: `Household Toolbox <${fromEmail}>`,
       to: [to],
-      subject: 'Welcome to Household Toolbox! 🧰',
-      html: `
-        <!DOCTYPE html>
-        <html>
-          <head>
-            <meta charset="utf-8">
-            <meta name="viewport" content="width=device-width, initial-scale=1.0">
-            <title>Welcome to Household Toolbox</title>
-          </head>
-          <body style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif; line-height: 1.6; color: #334155; background-color: #f8fafc; margin: 0; padding: 0;">
-            <div style="max-width: 600px; margin: 0 auto; padding: 20px;">
-              <!-- Header -->
-              <div style="background-color: #0f172a; padding: 30px 20px; text-align: center; border-radius: 8px 8px 0 0;">
-                <h1 style="color: #10b981; margin: 0; font-size: 24px; font-weight: 600;">
-                  🧰 Household Toolbox
-                </h1>
-              </div>
-              
-              <!-- Main Content -->
-              <div style="background-color: #ffffff; padding: 40px 30px; border-radius: 0 0 8px 8px; box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);">
-                <h2 style="color: #1e293b; margin-top: 0; font-size: 22px; font-weight: 600;">
-                  Welcome, ${firstName}! 👋
-                </h2>
-                
-                <p style="color: #475569; font-size: 16px; margin: 20px 0;">
-                  Thank you for signing up for Household Toolbox! We're excited to help you organize, plan, and maintain your household.
-                </p>
-                
-                <p style="color: #475569; font-size: 16px; margin: 20px 0;">
-                  With Household Toolbox, you can:
-                </p>
-                
-                <ul style="color: #475569; font-size: 16px; margin: 20px 0; padding-left: 20px;">
-                  <li style="margin: 10px 0;">📅 Track maintenance schedules and get reminders</li>
-                  <li style="margin: 10px 0;">📂 Organize important documents and warranties</li>
-                  <li style="margin: 10px 0;">✅ Create and share checklists with your household</li>
-                  <li style="margin: 10px 0;">👥 Coordinate tasks with family members or roommates</li>
-                </ul>
-                
-                <div style="margin: 30px 0; text-align: center;">
-                  <a href="${process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000'}/dashboard" 
-                     style="display: inline-block; background-color: #10b981; color: #ffffff; text-decoration: none; padding: 12px 30px; border-radius: 6px; font-weight: 600; font-size: 16px;">
-                    Get Started
-                  </a>
-                </div>
-                
-                <p style="color: #64748b; font-size: 14px; margin: 30px 0 0 0; border-top: 1px solid #e2e8f0; padding-top: 20px;">
-                  If you have any questions or need help getting started, feel free to reach out to us.
-                </p>
-              </div>
-              
-              <!-- Footer -->
-              <div style="text-align: center; margin-top: 20px; padding: 20px 0;">
-                <p style="color: #94a3b8; font-size: 12px; margin: 5px 0;">
-                  © ${new Date().getFullYear()} Household Toolbox. All rights reserved.
-                </p>
-                <p style="color: #94a3b8; font-size: 12px; margin: 5px 0;">
-                  Built to make home life admin less painful.
-                </p>
-              </div>
-            </div>
-          </body>
-        </html>
-      `,
-      text: `
-Welcome to Household Toolbox, ${firstName}!
-
-Thank you for signing up! We're excited to help you organize, plan, and maintain your household.
-
-With Household Toolbox, you can:
-- Track maintenance schedules and get reminders
-- Organize important documents and warranties
-- Create and share checklists with your household
-- Coordinate tasks with family members or roommates
-
-Get started: ${process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000'}/dashboard
-
-If you have any questions or need help getting started, feel free to reach out to us.
-
-© ${new Date().getFullYear()} Household Toolbox. All rights reserved.
-Built to make home life admin less painful.
-      `.trim(),
+      subject,
+      html,
+      text: text.trim(),
     });
 
     if (error) {
