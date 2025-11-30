@@ -4,7 +4,8 @@ import { randomUUID } from 'crypto';
 import { supabaseServer } from '@/lib/supabaseServer';
 import bcrypt from 'bcryptjs';
 import { TablesInsert } from '@/src/types/supabase';
-import { createSession } from '@/lib/session';
+import { createSession, getSession } from '@/lib/session';
+import { sendWelcomeEmail } from '@/lib/email';
 
 type SignUpData = {
   email: string;
@@ -194,12 +195,242 @@ export async function signUp(data: SignUpData): Promise<SignUpResult> {
       };
     }
 
+    // Send welcome email (non-blocking - don't fail signup if email fails)
+    try {
+      await sendWelcomeEmail({
+        to: data.email.toLowerCase().trim(),
+        firstName: firstName,
+      });
+    } catch (emailError) {
+      // Log the error but don't fail the signup process
+      console.error('Failed to send welcome email:', emailError);
+    }
+
     return {
       success: true,
       userId: newUser.id,
     };
   } catch (error) {
     console.error('Sign up error:', error);
+    return {
+      success: false,
+      error: 'An unexpected error occurred. Please try again.',
+    };
+  }
+}
+
+type UpdateProfileData = {
+  firstName: string;
+  lastName?: string;
+  email: string;
+};
+
+type UpdateProfileResult = {
+  success: boolean;
+  error?: string;
+  user?: {
+    id: string;
+    email: string;
+    firstName: string;
+    lastName?: string;
+  };
+};
+
+export async function updateProfile(data: UpdateProfileData): Promise<UpdateProfileResult> {
+  try {
+    // Get current session to verify user
+    const session = await getSession();
+    if (!session) {
+      return {
+        success: false,
+        error: 'You must be signed in to update your profile',
+      };
+    }
+
+    // Validate input
+    if (!data.email || !data.firstName) {
+      return {
+        success: false,
+        error: 'Email and first name are required',
+      };
+    }
+
+    // Validate email format
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    if (!emailRegex.test(data.email)) {
+      return {
+        success: false,
+        error: 'Invalid email format',
+      };
+    }
+
+    // Trim and prepare name fields
+    const firstName = data.firstName.trim();
+    const lastName = data.lastName?.trim() || '';
+    const email = data.email.toLowerCase().trim();
+
+    // Check if email is being changed and if it's already taken by another user
+    if (email !== session.email) {
+      const { data: existingUser, error: checkError } = await supabaseServer
+        .from('users')
+        .select('id, email')
+        .eq('email', email)
+        .neq('id', session.id)
+        .single();
+
+      if (checkError && checkError.code !== 'PGRST116') {
+        // PGRST116 is "not found" which is what we want
+        return {
+          success: false,
+          error: 'Error checking existing user',
+        };
+      }
+
+      if (existingUser) {
+        return {
+          success: false,
+          error: 'An account with this email already exists',
+        };
+      }
+    }
+
+    // Update user in database
+    const { data: updatedUser, error: updateError } = await supabaseServer
+      .from('users')
+      .update({
+        first_name: firstName,
+        last_name: lastName,
+        email: email,
+      })
+      .eq('id', session.id)
+      .select('id, email, first_name, last_name')
+      .single();
+
+    if (updateError) {
+      console.error('Update profile error:', updateError);
+      return {
+        success: false,
+        error: updateError.message || 'Failed to update profile',
+      };
+    }
+
+    return {
+      success: true,
+      user: {
+        id: updatedUser.id,
+        email: updatedUser.email,
+        firstName: updatedUser.first_name,
+        lastName: updatedUser.last_name || undefined,
+      },
+    };
+  } catch (error) {
+    console.error('Update profile error:', error);
+    return {
+      success: false,
+      error: 'An unexpected error occurred. Please try again.',
+    };
+  }
+}
+
+type ChangePasswordData = {
+  currentPassword: string;
+  newPassword: string;
+  confirmPassword: string;
+};
+
+type ChangePasswordResult = {
+  success: boolean;
+  error?: string;
+};
+
+export async function changePassword(data: ChangePasswordData): Promise<ChangePasswordResult> {
+  try {
+    // Get current session to verify user
+    const session = await getSession();
+    if (!session) {
+      return {
+        success: false,
+        error: 'You must be signed in to change your password',
+      };
+    }
+
+    // Validate input
+    if (!data.currentPassword || !data.newPassword || !data.confirmPassword) {
+      return {
+        success: false,
+        error: 'All password fields are required',
+      };
+    }
+
+    // Validate new password length
+    if (data.newPassword.length < 8) {
+      return {
+        success: false,
+        error: 'New password must be at least 8 characters long',
+      };
+    }
+
+    // Check if new password matches confirmation
+    if (data.newPassword !== data.confirmPassword) {
+      return {
+        success: false,
+        error: 'New password and confirmation do not match',
+      };
+    }
+
+    // Check if new password is different from current password
+    if (data.currentPassword === data.newPassword) {
+      return {
+        success: false,
+        error: 'New password must be different from your current password',
+      };
+    }
+
+    // Get user's current password from database
+    const { data: user, error: fetchError } = await supabaseServer
+      .from('users')
+      .select('password')
+      .eq('id', session.id)
+      .single();
+
+    if (fetchError || !user) {
+      return {
+        success: false,
+        error: 'Error fetching user data',
+      };
+    }
+
+    // Verify current password
+    const isCurrentPasswordValid = await bcrypt.compare(data.currentPassword, user.password);
+    if (!isCurrentPasswordValid) {
+      return {
+        success: false,
+        error: 'Current password is incorrect',
+      };
+    }
+
+    // Hash new password
+    const hashedNewPassword = await bcrypt.hash(data.newPassword, 10);
+
+    // Update password in database
+    const { error: updateError } = await supabaseServer
+      .from('users')
+      .update({ password: hashedNewPassword })
+      .eq('id', session.id);
+
+    if (updateError) {
+      console.error('Change password error:', updateError);
+      return {
+        success: false,
+        error: updateError.message || 'Failed to change password',
+      };
+    }
+
+    return {
+      success: true,
+    };
+  } catch (error) {
+    console.error('Change password error:', error);
     return {
       success: false,
       error: 'An unexpected error occurred. Please try again.',

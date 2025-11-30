@@ -4,6 +4,7 @@ import { useState, useEffect } from 'react';
 import Image from 'next/image';
 import { useRouter } from 'next/navigation';
 import { UserMenu } from '../components/UserMenu';
+import { HelpMenu } from '../components/HelpMenu';
 
 type User = {
   id: string;
@@ -123,6 +124,7 @@ export default function Dashboard() {
                 <span>Admin</span>
               </button>
             )}
+            <HelpMenu />
             <UserMenu
               userName={`${user.firstName} ${user.lastName || ''}`.trim()}
               onSignOut={handleSignOut}

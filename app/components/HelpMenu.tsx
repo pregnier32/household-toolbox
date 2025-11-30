@@ -3,12 +3,11 @@
 import { useState, useRef, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 
-type UserMenuProps = {
-  userName: string;
-  onSignOut: () => void;
+type HelpMenuProps = {
+  className?: string;
 };
 
-export function UserMenu({ userName, onSignOut }: UserMenuProps) {
+export function HelpMenu({ className = '' }: HelpMenuProps) {
   const [isOpen, setIsOpen] = useState(false);
   const menuRef = useRef<HTMLDivElement>(null);
   const router = useRouter();
@@ -31,12 +30,12 @@ export function UserMenu({ userName, onSignOut }: UserMenuProps) {
   }, [isOpen]);
 
   return (
-    <div className="relative" ref={menuRef}>
+    <div className={`relative ${className}`} ref={menuRef}>
       <button
         onClick={() => setIsOpen(!isOpen)}
-        className="flex items-center gap-2 rounded-lg px-3 py-2 text-sm font-medium text-slate-300 transition-colors hover:bg-slate-800 hover:text-slate-100"
+        className="flex items-center gap-2 rounded-lg px-3 py-2 text-sm font-medium text-slate-300 transition-colors hover:text-emerald-300 hover:bg-slate-800/50"
       >
-        <span>{userName}</span>
+        <span>Help</span>
         <svg
           className={`h-4 w-4 transition-transform ${isOpen ? 'rotate-180' : ''}`}
           fill="none"
@@ -53,11 +52,11 @@ export function UserMenu({ userName, onSignOut }: UserMenuProps) {
       </button>
 
       {isOpen && (
-        <div className="absolute right-0 mt-2 w-48 rounded-lg border border-slate-700 bg-slate-800 shadow-lg">
+        <div className="absolute right-0 mt-2 w-48 rounded-lg border border-slate-700 bg-slate-800 shadow-lg z-50">
           <div className="py-1">
             <button
               onClick={() => {
-                router.push('/dashboard/profile');
+                router.push('/faq');
                 setIsOpen(false);
               }}
               className="flex w-full items-center gap-3 px-4 py-2 text-sm text-slate-300 transition-colors hover:bg-slate-700"
@@ -72,18 +71,17 @@ export function UserMenu({ userName, onSignOut }: UserMenuProps) {
                   strokeLinecap="round"
                   strokeLinejoin="round"
                   strokeWidth={2}
-                  d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z"
+                  d="M8.228 9c.549-1.165 2.03-2 3.772-2 2.21 0 4 1.343 4 3 0 1.657-1.343 3-3 3H6m12-4a9 9 0 11-18 0 9 9 0 0118 0z"
                 />
               </svg>
-              <span>My Profile</span>
+              <span>FAQ</span>
             </button>
-            <div className="my-1 border-t border-slate-700"></div>
             <button
               onClick={() => {
-                onSignOut();
+                router.push('/support');
                 setIsOpen(false);
               }}
-              className="flex w-full items-center gap-3 px-4 py-2 text-sm text-red-400 transition-colors hover:bg-slate-700"
+              className="flex w-full items-center gap-3 px-4 py-2 text-sm text-slate-300 transition-colors hover:bg-slate-700"
             >
               <svg
                 className="h-4 w-4"
@@ -95,10 +93,10 @@ export function UserMenu({ userName, onSignOut }: UserMenuProps) {
                   strokeLinecap="round"
                   strokeLinejoin="round"
                   strokeWidth={2}
-                  d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1"
+                  d="M18.364 5.636l-3.536 3.536m0 5.656l3.536 3.536M9.172 9.172L5.636 5.636m3.536 9.192l-3.536 3.536M21 12a9 9 0 11-18 0 9 9 0 0118 0zm-5 0a4 4 0 11-8 0 4 4 0 018 0z"
                 />
               </svg>
-              <span>Sign Out</span>
+              <span>Support</span>
             </button>
           </div>
         </div>

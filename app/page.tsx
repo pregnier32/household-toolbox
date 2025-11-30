@@ -4,6 +4,7 @@ import Image from 'next/image'
 import { useState, useRef } from 'react'
 import { useRouter } from 'next/navigation'
 import { signUp, signIn } from './actions/auth'
+import { HelpMenu } from './components/HelpMenu'
 
 export default function Home() {
   const [isSignUp, setIsSignUp] = useState(false);
@@ -29,13 +30,14 @@ export default function Home() {
             />
           </div>
 
-          <nav className="hidden gap-6 text-sm text-slate-300 sm:flex">
+          <nav className="hidden gap-6 text-sm text-slate-300 sm:flex items-center">
             <a href="#features" className="hover:text-emerald-300">
               Features
             </a>
             <a href="#how-it-works" className="hover:text-emerald-300">
               How it works
             </a>
+            <HelpMenu />
           </nav>
         </header>
 

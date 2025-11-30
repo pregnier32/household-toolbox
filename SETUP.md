@@ -11,6 +11,11 @@ This guide will help you set up your Household Toolbox project from scratch.
 NEXT_PUBLIC_SUPABASE_URL=https://your-project.supabase.co
 NEXT_PUBLIC_SUPABASE_ANON_KEY=your_anon_key_here
 SUPABASE_SERVICE_ROLE_KEY=your_service_role_key_here
+
+# Optional: Email service (for welcome emails)
+RESEND_API_KEY=your_resend_api_key_here
+RESEND_FROM_EMAIL=noreply@yourdomain.com
+NEXT_PUBLIC_APP_URL=http://localhost:3000
 ```
 
 You can find these values in your Supabase project settings under "API" → "Project API keys".
@@ -18,6 +23,18 @@ You can find these values in your Supabase project settings under "API" → "Pro
 - `SUPABASE_SERVICE_ROLE_KEY`: The service_role key (NEVER expose to client - server-side only)
 
 **Important:** The service role key bypasses Row Level Security and should only be used in server-side code (like server actions).
+
+### Email Service (Optional)
+
+To enable welcome emails when users sign up, you'll need to configure Resend:
+
+1. Sign up for a free account at [resend.com](https://resend.com)
+2. Get your API key from the Resend dashboard
+3. Add `RESEND_API_KEY` to your `.env.local` file
+4. (Optional) Set `RESEND_FROM_EMAIL` to use a custom domain email (defaults to `onboarding@resend.dev`)
+5. (Optional) Set `NEXT_PUBLIC_APP_URL` to your production URL for production emails
+
+**Note:** Welcome emails are sent automatically when users sign up, but signup will still succeed even if the email fails to send (non-blocking).
 
 ## Step 2: Supabase Database Setup
 
