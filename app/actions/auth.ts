@@ -5,7 +5,7 @@ import { supabaseServer } from '@/lib/supabaseServer';
 import bcrypt from 'bcryptjs';
 import { TablesInsert } from '@/src/types/supabase';
 import { createSession, getSession } from '@/lib/session';
-import { sendWelcomeEmail } from '@/lib/email';
+import { sendWelcomeEmail, sendPasswordResetEmail } from '@/lib/email';
 
 type SignUpData = {
   email: string;
@@ -431,6 +431,222 @@ export async function changePassword(data: ChangePasswordData): Promise<ChangePa
     };
   } catch (error) {
     console.error('Change password error:', error);
+    return {
+      success: false,
+      error: 'An unexpected error occurred. Please try again.',
+    };
+  }
+}
+
+type RequestPasswordResetData = {
+  email: string;
+};
+
+type RequestPasswordResetResult = {
+  success: boolean;
+  error?: string;
+};
+
+export async function requestPasswordReset(data: RequestPasswordResetData): Promise<RequestPasswordResetResult> {
+  try {
+    // Validate input
+    if (!data.email) {
+      return {
+        success: false,
+        error: 'Email is required',
+      };
+    }
+
+    // Validate email format
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    if (!emailRegex.test(data.email)) {
+      return {
+        success: false,
+        error: 'Invalid email format',
+      };
+    }
+
+    const email = data.email.toLowerCase().trim();
+
+    // Find user by email
+    const { data: user, error: fetchError } = await supabaseServer
+      .from('users')
+      .select('id, email, first_name, active')
+      .eq('email', email)
+      .single();
+
+    // Don't reveal if user exists or not (security best practice)
+    // Always return success message even if user doesn't exist
+    if (fetchError || !user) {
+      // Log for debugging but don't reveal to user
+      console.log(`Password reset requested for non-existent email: ${email}`);
+      return {
+        success: true,
+      };
+    }
+
+    // Check if user is active
+    if (user.active !== 'Y') {
+      // Still return success to not reveal account status
+      console.log(`Password reset requested for inactive account: ${email}`);
+      return {
+        success: true,
+      };
+    }
+
+    // Generate a secure random token
+    const resetToken = randomUUID() + '-' + randomUUID();
+    
+    // Set expiration to 1 hour from now
+    const expiresAt = new Date();
+    expiresAt.setHours(expiresAt.getHours() + 1);
+
+    // Invalidate any existing unused tokens for this user
+    await supabaseServer
+      .from('password_reset_tokens')
+      .update({ used: true })
+      .eq('user_id', user.id)
+      .eq('used', false);
+
+    // Insert new reset token
+    const { error: insertError } = await supabaseServer
+      .from('password_reset_tokens')
+      .insert({
+        user_id: user.id,
+        token: resetToken,
+        expires_at: expiresAt.toISOString(),
+        used: false,
+      });
+
+    if (insertError) {
+      console.error('Error creating password reset token:', insertError);
+      return {
+        success: false,
+        error: 'Failed to create reset token. Please try again.',
+      };
+    }
+
+    // Send password reset email (non-blocking - don't fail if email fails)
+    try {
+      await sendPasswordResetEmail({
+        to: user.email,
+        firstName: user.first_name,
+        resetToken: resetToken,
+      });
+    } catch (emailError) {
+      // Log the error but don't fail the process
+      console.error('Failed to send password reset email:', emailError);
+      // Still return success to not reveal if email was sent
+    }
+
+    return {
+      success: true,
+    };
+  } catch (error) {
+    console.error('Request password reset error:', error);
+    return {
+      success: false,
+      error: 'An unexpected error occurred. Please try again.',
+    };
+  }
+}
+
+type ResetPasswordData = {
+  token: string;
+  newPassword: string;
+  confirmPassword: string;
+};
+
+type ResetPasswordResult = {
+  success: boolean;
+  error?: string;
+};
+
+export async function resetPassword(data: ResetPasswordData): Promise<ResetPasswordResult> {
+  try {
+    // Validate input
+    if (!data.token || !data.newPassword || !data.confirmPassword) {
+      return {
+        success: false,
+        error: 'All fields are required',
+      };
+    }
+
+    // Validate password length
+    if (data.newPassword.length < 8) {
+      return {
+        success: false,
+        error: 'Password must be at least 8 characters long',
+      };
+    }
+
+    // Check if passwords match
+    if (data.newPassword !== data.confirmPassword) {
+      return {
+        success: false,
+        error: 'Passwords do not match',
+      };
+    }
+
+    // Find the reset token
+    const { data: resetTokenData, error: tokenError } = await supabaseServer
+      .from('password_reset_tokens')
+      .select('id, user_id, expires_at, used')
+      .eq('token', data.token)
+      .single();
+
+    if (tokenError || !resetTokenData) {
+      return {
+        success: false,
+        error: 'Invalid or expired reset token',
+      };
+    }
+
+    // Check if token has been used
+    if (resetTokenData.used) {
+      return {
+        success: false,
+        error: 'This reset token has already been used',
+      };
+    }
+
+    // Check if token has expired
+    const expiresAt = new Date(resetTokenData.expires_at);
+    if (expiresAt < new Date()) {
+      return {
+        success: false,
+        error: 'This reset token has expired',
+      };
+    }
+
+    // Hash the new password
+    const hashedPassword = await bcrypt.hash(data.newPassword, 10);
+
+    // Update user's password
+    const { error: updateError } = await supabaseServer
+      .from('users')
+      .update({ password: hashedPassword })
+      .eq('id', resetTokenData.user_id);
+
+    if (updateError) {
+      console.error('Error updating password:', updateError);
+      return {
+        success: false,
+        error: 'Failed to update password. Please try again.',
+      };
+    }
+
+    // Mark token as used
+    await supabaseServer
+      .from('password_reset_tokens')
+      .update({ used: true })
+      .eq('id', resetTokenData.id);
+
+    return {
+      success: true,
+    };
+  } catch (error) {
+    console.error('Reset password error:', error);
     return {
       success: false,
       error: 'An unexpected error occurred. Please try again.',

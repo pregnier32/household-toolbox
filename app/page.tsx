@@ -3,6 +3,7 @@
 import Image from 'next/image'
 import { useState, useRef } from 'react'
 import { useRouter } from 'next/navigation'
+import Link from 'next/link'
 import { signUp, signIn } from './actions/auth'
 import { HelpMenu } from './components/HelpMenu'
 
@@ -223,9 +224,9 @@ export default function Home() {
                     />
                     <span>Remember me</span>
                   </label>
-                  <a href="#" className="text-emerald-400 hover:text-emerald-300">
+                  <Link href="/forgot-password" className="text-emerald-400 hover:text-emerald-300">
                     Forgot password?
-                  </a>
+                  </Link>
                 </div>
               )}
 

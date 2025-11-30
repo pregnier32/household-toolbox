@@ -380,3 +380,128 @@ This email was sent from the Household Toolbox support form.
   }
 }
 
+type PasswordResetEmailParams = {
+  to: string;
+  firstName: string;
+  resetToken: string;
+};
+
+/**
+ * Sends a password reset email to a user
+ */
+export async function sendPasswordResetEmail({ to, firstName, resetToken }: PasswordResetEmailParams): Promise<{ success: boolean; error?: string }> {
+  // If Resend API key is not configured, log a warning but don't fail
+  if (!process.env.RESEND_API_KEY) {
+    console.warn('RESEND_API_KEY not configured. Password reset email will not be sent.');
+    return { success: false, error: 'Email service not configured' };
+  }
+
+  try {
+    const fromEmail = process.env.RESEND_FROM_EMAIL || 'onboarding@resend.dev';
+    const appUrl = process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000';
+    const resetUrl = `${appUrl}/reset-password?token=${resetToken}`;
+    const year = new Date().getFullYear();
+    
+    const subject = 'Reset Your Household Toolbox Password';
+    
+    const html = `<!DOCTYPE html>
+<html>
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Reset Your Password</title>
+  </head>
+  <body style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif; line-height: 1.6; color: #334155; background-color: #f8fafc; margin: 0; padding: 0;">
+    <div style="max-width: 600px; margin: 0 auto; padding: 20px;">
+      <!-- Header -->
+      <div style="background-color: #0f172a; padding: 30px 20px; text-align: center; border-radius: 8px 8px 0 0;">
+        <h1 style="color: #10b981; margin: 0; font-size: 24px; font-weight: 600;">
+          🧰 Household Toolbox
+        </h1>
+      </div>
+      
+      <!-- Main Content -->
+      <div style="background-color: #ffffff; padding: 40px 30px; border-radius: 0 0 8px 8px; box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);">
+        <h2 style="color: #1e293b; margin-top: 0; font-size: 22px; font-weight: 600;">
+          Reset Your Password
+        </h2>
+        
+        <p style="color: #475569; font-size: 16px; margin: 20px 0;">
+          Hi ${firstName},
+        </p>
+        
+        <p style="color: #475569; font-size: 16px; margin: 20px 0;">
+          We received a request to reset your password for your Household Toolbox account. Click the button below to reset your password:
+        </p>
+        
+        <div style="margin: 30px 0; text-align: center;">
+          <a href="${resetUrl}" 
+             style="display: inline-block; background-color: #10b981; color: #ffffff; text-decoration: none; padding: 12px 30px; border-radius: 6px; font-weight: 600; font-size: 16px;">
+            Reset Password
+          </a>
+        </div>
+        
+        <p style="color: #64748b; font-size: 14px; margin: 20px 0;">
+          Or copy and paste this link into your browser:
+        </p>
+        <p style="color: #64748b; font-size: 12px; margin: 10px 0; word-break: break-all; background-color: #f1f5f9; padding: 10px; border-radius: 4px;">
+          ${resetUrl}
+        </p>
+        
+        <p style="color: #64748b; font-size: 14px; margin: 30px 0 0 0; border-top: 1px solid #e2e8f0; padding-top: 20px;">
+          This link will expire in 1 hour. If you didn't request a password reset, you can safely ignore this email.
+        </p>
+      </div>
+      
+      <!-- Footer -->
+      <div style="text-align: center; margin-top: 20px; padding: 20px 0;">
+        <p style="color: #94a3b8; font-size: 12px; margin: 5px 0;">
+          © ${year} Household Toolbox. All rights reserved.
+        </p>
+        <p style="color: #94a3b8; font-size: 12px; margin: 5px 0;">
+          Built to make home life admin less painful.
+        </p>
+      </div>
+    </div>
+  </body>
+</html>`;
+    
+    const text = `Reset Your Household Toolbox Password
+
+Hi ${firstName},
+
+We received a request to reset your password for your Household Toolbox account. Click the link below to reset your password:
+
+${resetUrl}
+
+This link will expire in 1 hour. If you didn't request a password reset, you can safely ignore this email.
+
+© ${year} Household Toolbox. All rights reserved.
+Built to make home life admin less painful.`;
+    
+    console.log(`[Email] Sending password reset email to ${to} from ${fromEmail}`);
+    
+    const { data, error } = await resend.emails.send({
+      from: `Household Toolbox <${fromEmail}>`,
+      to: [to],
+      subject,
+      html,
+      text: text.trim(),
+    });
+
+    if (error) {
+      console.error('[Email] Error sending password reset email:', error);
+      return { success: false, error: error.message };
+    }
+
+    console.log(`[Email] Password reset email sent successfully! Email ID: ${data?.id || 'N/A'}`);
+    return { success: true };
+  } catch (error) {
+    console.error('Error sending password reset email:', error);
+    return { 
+      success: false, 
+      error: error instanceof Error ? error.message : 'Unknown error occurred' 
+    };
+  }
+}
+
