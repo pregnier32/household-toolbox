@@ -3,6 +3,8 @@
 import { useState, useEffect, useRef } from 'react';
 import { useRouter } from 'next/navigation';
 import Image from 'next/image';
+import { IconPicker } from '../../../components/IconPicker';
+import { DynamicIcon } from '../../../components/DynamicIcon';
 
 type ToolIcon = {
   id: string;
@@ -20,9 +22,9 @@ type Tool = {
   created_at: string | null;
   updated_at: string | null;
   icons: {
+    default?: ToolIcon;
     coming_soon?: ToolIcon;
     available?: ToolIcon;
-    active?: ToolIcon;
   };
 };
 
@@ -34,10 +36,6 @@ type ToolFormData = {
   status: string;
 };
 
-type IconUpload = {
-  file: File | null;
-  preview: string | null;
-};
 
 export default function ToolsPage() {
   const [tools, setTools] = useState<Tool[]>([]);
@@ -56,21 +54,7 @@ export default function ToolsPage() {
     price: '0.00',
     status: 'coming_soon',
   });
-  const [iconUploads, setIconUploads] = useState<{
-    coming_soon: IconUpload;
-    available: IconUpload;
-    active: IconUpload;
-  }>({
-    coming_soon: { file: null, preview: null },
-    available: { file: null, preview: null },
-    active: { file: null, preview: null },
-  });
-  const [selectedIconStatus, setSelectedIconStatus] = useState<string>('coming_soon');
-  const fileInputRefs = {
-    coming_soon: useRef<HTMLInputElement>(null),
-    available: useRef<HTMLInputElement>(null),
-    active: useRef<HTMLInputElement>(null),
-  };
+  const [iconSelection, setIconSelection] = useState<string>('');
   const router = useRouter();
 
   useEffect(() => {
@@ -123,12 +107,7 @@ export default function ToolsPage() {
       price: '0.00',
       status: 'coming_soon',
     });
-    setIconUploads({
-      coming_soon: { file: null, preview: null },
-      available: { file: null, preview: null },
-      active: { file: null, preview: null },
-    });
-    setSelectedIconStatus('coming_soon');
+    setIconSelection('');
     setError(null);
     setSuccess(null);
     setShowForm(true);
@@ -144,12 +123,7 @@ export default function ToolsPage() {
       price: tool.price.toString(),
       status: tool.status,
     });
-    setIconUploads({
-      coming_soon: { file: null, preview: null },
-      available: { file: null, preview: null },
-      active: { file: null, preview: null },
-    });
-    setSelectedIconStatus('coming_soon');
+    setIconSelection('');
     setError(null);
     setSuccess(null);
     setShowForm(true);
@@ -180,29 +154,9 @@ export default function ToolsPage() {
     }
   };
 
-  const handleFileChange = (statusType: 'coming_soon' | 'available' | 'active', e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (file) {
-      // Validate file type
-      if (!file.type.startsWith('image/')) {
-        setError('Please select an image file');
-        return;
-      }
-      
-      // Create preview
-      const reader = new FileReader();
-      reader.onloadend = () => {
-        setIconUploads({
-          ...iconUploads,
-          [statusType]: {
-            file,
-            preview: reader.result as string,
-          },
-        });
-      };
-      reader.readAsDataURL(file);
-      setError(null);
-    }
+  const handleIconChange = (iconName: string) => {
+    setIconSelection(iconName);
+    setError(null);
   };
 
   const handleNext = () => {
@@ -268,33 +222,22 @@ export default function ToolsPage() {
         throw new Error('Failed to get tool ID');
       }
 
-      // Now upload icons
-      const iconPromises: Promise<void>[] = [];
-      
-      for (const [iconType, iconUpload] of Object.entries(iconUploads)) {
-        if (iconUpload.file) {
-          const iconFormData = new FormData();
-          iconFormData.append('tool_id', toolId);
-          iconFormData.append('icon_file', iconUpload.file);
-          iconFormData.append('icon_type', iconType);
+      // Now save icon (single icon for the tool)
+      if (iconSelection) {
+        const iconFormData = new FormData();
+        iconFormData.append('tool_id', toolId);
+        iconFormData.append('icon_name', iconSelection);
+        iconFormData.append('icon_type', 'default'); // Use 'default' as the icon type
 
-          iconPromises.push(
-            fetch('/api/admin/tools/icons', {
-              method: 'POST',
-              body: iconFormData,
-            }).then(async (res) => {
-              const data = await res.json();
-              if (!res.ok) {
-                throw new Error(data.error || `Failed to upload ${iconType} icon`);
-              }
-            })
-          );
+        const iconResponse = await fetch('/api/admin/tools/icons', {
+          method: 'POST',
+          body: iconFormData,
+        });
+
+        const iconData = await iconResponse.json();
+        if (!iconResponse.ok) {
+          throw new Error(iconData.error || 'Failed to save icon');
         }
-      }
-
-      // Wait for all icon uploads to complete
-      if (iconPromises.length > 0) {
-        await Promise.all(iconPromises);
       }
 
       setSuccess(editingId ? 'Tool updated successfully!' : 'Tool created successfully!');
@@ -380,7 +323,7 @@ export default function ToolsPage() {
               Tools Management
             </h1>
             <p className="text-slate-400 text-sm">
-              Create and manage tools that users can access. Each tool requires an icon file for its status.
+              Create and manage tools that users can access. Select icons from the Lucide icon library for each status.
             </p>
           </div>
           <button
@@ -543,7 +486,7 @@ export default function ToolsPage() {
                       </p>
                     ) : (
                       <p className="mt-1 text-xs text-slate-500">
-                        Note: Tools become "Active" when users purchase them. You can still upload the active status icon below.
+                        Note: Tools become "Active" when users purchase them. Use the "Available" icon for purchased tools.
                       </p>
                     )}
                   </div>
@@ -578,117 +521,46 @@ export default function ToolsPage() {
                 </form>
                 )}
 
-                {/* Step 2: Icon Management */}
+                {/* Step 2: Icon Selection */}
                 {formStep === 2 && (
                   <div className="space-y-6">
                     <div>
-                      <h3 className="text-lg font-semibold text-slate-50 mb-2">Upload Icons</h3>
+                      <h3 className="text-lg font-semibold text-slate-50 mb-2">Select Icon</h3>
                       <p className="text-sm text-slate-400">
-                        Upload icons for different statuses. You can change the status and upload icons for each one.
+                        Choose an icon from the Lucide icon library. Each icon can only be used by one tool.
                       </p>
                     </div>
 
-                    {/* Status Selector */}
-                    <div>
-                      <label className="block text-sm font-medium text-slate-300 mb-1.5">
-                        Select Status
-                      </label>
-                      <select
-                        value={selectedIconStatus}
-                        onChange={(e) => {
-                          setSelectedIconStatus(e.target.value);
-                          setError(null);
-                        }}
-                        className="w-full rounded-lg border border-slate-700 bg-slate-900/70 px-3 py-2 text-sm text-slate-100 focus:border-emerald-500/50 focus:outline-none focus:ring-1 focus:ring-emerald-500/50"
-                      >
-                        <option value="coming_soon">Coming Soon</option>
-                        <option value="available">Available</option>
-                        <option value="active">Active</option>
-                      </select>
-                    </div>
-
-                    {/* Icon Upload for Selected Status */}
-                    <div>
-                      <label className="block text-sm font-medium text-slate-300 mb-1.5">
-                        Icon File for {formatStatus(selectedIconStatus)}
-                      </label>
-                      <input
-                        ref={fileInputRefs[selectedIconStatus as keyof typeof fileInputRefs]}
-                        type="file"
-                        accept="image/*"
-                        onChange={(e) => handleFileChange(selectedIconStatus as 'coming_soon' | 'available' | 'active', e)}
-                        className="w-full rounded-lg border border-slate-700 bg-slate-900/70 px-3 py-2 text-sm text-slate-100 focus:border-emerald-500/50 focus:outline-none focus:ring-1 focus:ring-emerald-500/50"
-                      />
-                      <p className="mt-1 text-xs text-slate-500">
-                        Upload an image file. If an icon already exists, uploading a new file will replace it.
-                      </p>
-                    </div>
-
-                    {/* Preview for Selected Status */}
-                    {iconUploads[selectedIconStatus as keyof typeof iconUploads].preview && (
-                      <div>
-                        <p className="text-xs text-slate-400 mb-2">Preview:</p>
-                        <div className="inline-block border border-slate-700 rounded-lg p-2 bg-slate-800/50">
-                          <img
-                            src={iconUploads[selectedIconStatus as keyof typeof iconUploads].preview || ''}
-                            alt={`${selectedIconStatus} icon preview`}
-                            className="max-w-32 max-h-32 object-contain"
-                          />
-                        </div>
-                      </div>
-                    )}
-
-                    {/* Show Existing Icons When Editing */}
-                    {editingId && (() => {
+                    {/* Icon Picker */}
+                    <IconPicker
+                      value={iconSelection}
+                      onChange={handleIconChange}
+                      label="Tool Icon"
+                    />
+                    
+                    {/* Show existing icon when editing if no new selection */}
+                    {editingId && !iconSelection && (() => {
                       const tool = tools.find((t) => t.id === editingId);
-                      const existingIcon = tool?.icons[selectedIconStatus as keyof typeof tool.icons];
-                      if (existingIcon && !iconUploads[selectedIconStatus as keyof typeof iconUploads].preview) {
+                      // Get the first available icon (could be coming_soon, available, or default)
+                      const existingIcon = tool?.icons.coming_soon || tool?.icons.available || tool?.icons.default;
+                      
+                      if (existingIcon) {
+                        const iconUrl = existingIcon.icon_url;
                         return (
-                          <div>
+                          <div className="mt-2">
                             <p className="text-xs text-slate-400 mb-2">Current icon:</p>
                             <div className="inline-block border border-slate-700 rounded-lg p-2 bg-slate-800/50">
-                              <p className="text-xs text-slate-500">Icon exists (upload new file to replace)</p>
+                              {iconUrl && !iconUrl.startsWith('http') && !iconUrl.startsWith('/') ? (
+                                <DynamicIcon iconName={iconUrl} size={32} className="text-slate-300" />
+                              ) : (
+                                <p className="text-xs text-slate-500">Icon exists (select new icon to replace)</p>
+                              )}
                             </div>
                           </div>
                         );
                       }
                       return null;
                     })()}
-
-                    {/* Icon Status Overview */}
-                    <div className="border-t border-slate-800 pt-4">
-                      <p className="text-sm font-medium text-slate-300 mb-3">Icon Status:</p>
-                      <div className="grid grid-cols-3 gap-3">
-                        {(['coming_soon', 'available', 'active'] as const).map((statusType) => {
-                          const hasUpload = !!iconUploads[statusType].file;
-                          const tool = editingId ? tools.find((t) => t.id === editingId) : null;
-                          const hasExisting = !!tool?.icons[statusType];
-                          return (
-                            <div
-                              key={statusType}
-                              className={`p-3 rounded-lg border ${
-                                selectedIconStatus === statusType
-                                  ? 'border-emerald-500 bg-emerald-500/10'
-                                  : 'border-slate-700 bg-slate-800/50'
-                              }`}
-                            >
-                              <p className="text-xs font-medium text-slate-300 mb-1">
-                                {formatStatus(statusType)}
-                              </p>
-                              <div className="flex items-center gap-2">
-                                {hasUpload ? (
-                                  <span className="text-xs text-emerald-400">New file ready</span>
-                                ) : hasExisting ? (
-                                  <span className="text-xs text-blue-400">Icon exists</span>
-                                ) : (
-                                  <span className="text-xs text-slate-500">No icon</span>
-                                )}
-                              </div>
-                            </div>
-                          );
-                        })}
-                      </div>
-                    </div>
 
                     {/* Error and Success Messages */}
                     {error && (
@@ -759,7 +631,7 @@ export default function ToolsPage() {
                         )}
                       </td>
                       <td className="px-4 py-3 text-sm text-slate-300">
-                        ${tool.price.toFixed(2)}
+                        ${tool.price.toFixed(2)} / month
                       </td>
                       <td className="px-4 py-3 text-sm">
                         <span
@@ -769,24 +641,20 @@ export default function ToolsPage() {
                         </span>
                       </td>
                       <td className="px-4 py-3 text-sm">
-                        <div className="flex gap-2">
-                          {['coming_soon', 'available', 'active'].map((iconType) => {
-                            const icon = tool.icons[iconType as keyof typeof tool.icons];
-                            return (
-                              <span
-                                key={iconType}
-                                className={`text-xs px-2 py-1 rounded ${
-                                  icon
-                                    ? 'bg-emerald-500/20 text-emerald-300'
-                                    : 'bg-slate-700/50 text-slate-500'
-                                }`}
-                                title={icon ? `${formatStatus(iconType)} icon exists` : `No ${formatStatus(iconType)} icon`}
-                              >
-                                {formatStatus(iconType)}
-                              </span>
-                            );
-                          })}
-                        </div>
+                        {(() => {
+                          const icon = tool.icons.default || tool.icons.available || tool.icons.coming_soon;
+                          const iconName = icon?.icon_url && !icon.icon_url.startsWith('http') && !icon.icon_url.startsWith('/') 
+                            ? icon.icon_url 
+                            : null;
+                          return iconName ? (
+                            <div className="flex items-center gap-2">
+                              <DynamicIcon iconName={iconName} size={20} className="text-slate-300" />
+                              <span className="text-xs text-slate-400">{iconName}</span>
+                            </div>
+                          ) : (
+                            <span className="text-xs text-slate-500">No icon</span>
+                          );
+                        })()}
                       </td>
                       <td className="px-4 py-3 text-sm text-right">
                         <div className="flex items-center justify-end gap-2">

@@ -50,10 +50,26 @@ export async function GET() {
       };
     });
 
-    // Attach icons to tools
+    // Fetch user's purchased tools
+    const { data: userTools, error: userToolsError } = await supabaseServer
+      .from('users_tools')
+      .select('tool_id, status')
+      .eq('user_id', user.id)
+      .eq('status', 'active');
+
+    if (userToolsError) {
+      console.error('Error fetching user tools:', userToolsError);
+      // Continue even if this fails, just won't mark tools as owned
+    }
+
+    // Create a set of tool IDs that the user owns
+    const ownedToolIds = new Set(userTools?.map((ut) => ut.tool_id) || []);
+
+    // Attach icons to tools and mark if user owns them
     const toolsWithIcons = tools?.map((tool) => ({
       ...tool,
       icons: iconsByTool[tool.id] || {},
+      isOwned: ownedToolIds.has(tool.id),
     }));
 
     return NextResponse.json({ tools: toolsWithIcons || [] });

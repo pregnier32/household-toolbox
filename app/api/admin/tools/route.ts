@@ -245,19 +245,23 @@ export async function PUT(request: NextRequest) {
       }
 
       // If changing to a non-inactive status, check if icon exists for that status
+      // Note: 'active' status uses 'available' icon, so check for 'available' icon if status is 'active'
       if (status !== 'inactive') {
-        // Check if icon exists for the new status
+        // Map status to icon type: 'active' status uses 'available' icon
+        const iconTypeForStatus = status === 'active' ? 'available' : status;
+        
+        // Check if icon exists for the new status (or available icon for active status)
         const { data: existingIcon } = await supabaseServer
           .from('tool_icons')
           .select('id')
           .eq('tool_id', id)
-          .eq('icon_type', status)
+          .eq('icon_type', iconTypeForStatus)
           .single();
 
         // If no icon exists and no icon file is provided, reject the status change
         if (!existingIcon && !iconFile) {
           return NextResponse.json(
-            { error: `Cannot change status to "${status}" without an icon file. Please upload an icon file for this status.` },
+            { error: `Cannot change status to "${status}" without an icon file. Please upload an icon file for ${iconTypeForStatus === 'available' ? 'available' : 'this'} status.` },
             { status: 400 }
           );
         }
@@ -284,9 +288,9 @@ export async function PUT(request: NextRequest) {
     // Handle icon upload if provided
     if (iconFile && iconType) {
       // Validate icon type
-      if (!['coming_soon', 'available', 'active'].includes(iconType)) {
+      if (!['coming_soon', 'available'].includes(iconType)) {
         return NextResponse.json(
-          { error: 'Invalid icon type. Must be one of: coming_soon, available, active' },
+          { error: 'Invalid icon type. Must be one of: coming_soon, available' },
           { status: 400 }
         );
       }

@@ -1,11 +1,13 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import Image from 'next/image';
 import { useRouter } from 'next/navigation';
 import { UserMenu } from '../components/UserMenu';
 import { HelpMenu } from '../components/HelpMenu';
 import { AdminMenu } from '../components/AdminMenu';
+import { ToolModal } from '../components/ToolModal';
+import { DynamicIcon } from '../components/DynamicIcon';
 
 type User = {
   id: string;
@@ -30,10 +32,11 @@ type Tool = {
   status: string;
   created_at: string | null;
   updated_at: string | null;
+  isOwned?: boolean;
   icons: {
+    default?: ToolIcon;
     coming_soon?: ToolIcon;
     available?: ToolIcon;
-    active?: ToolIcon;
   };
 };
 
@@ -46,6 +49,10 @@ export default function Dashboard() {
   const [isLoadingStats, setIsLoadingStats] = useState(false);
   const [tools, setTools] = useState<Tool[]>([]);
   const [isLoadingTools, setIsLoadingTools] = useState(false);
+  const [selectedTool, setSelectedTool] = useState<Tool | null>(null);
+  const [isModalOpen, setIsModalOpen] = useState(false);
+  const [isBuying, setIsBuying] = useState(false);
+  const [buyMessage, setBuyMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
   const router = useRouter();
   
   const isSuperAdmin = user?.userStatus === 'superadmin';
@@ -66,6 +73,22 @@ export default function Dashboard() {
         router.push('/');
       });
   }, [router]);
+
+  const loadTools = useCallback(() => {
+    setIsLoadingTools(true);
+    fetch('/api/tools')
+      .then((res) => res.json())
+      .then((data) => {
+        if (data.tools) {
+          setTools(data.tools || []);
+        }
+        setIsLoadingTools(false);
+      })
+      .catch((error) => {
+        console.error('Error fetching tools:', error);
+        setIsLoadingTools(false);
+      });
+  }, []);
 
   useEffect(() => {
     // Fetch admin stats when Overview tab is active and user is superadmin
@@ -89,25 +112,60 @@ export default function Dashboard() {
   useEffect(() => {
     // Fetch tools when Tools tab is active
     if (activeTab === 'tools') {
-      setIsLoadingTools(true);
-      fetch('/api/tools')
-        .then((res) => res.json())
-        .then((data) => {
-          if (data.tools) {
-            setTools(data.tools || []);
-          }
-          setIsLoadingTools(false);
-        })
-        .catch((error) => {
-          console.error('Error fetching tools:', error);
-          setIsLoadingTools(false);
-        });
+      loadTools();
     }
-  }, [activeTab]);
+  }, [activeTab, loadTools]);
 
   const handleSignOut = async () => {
     await fetch('/api/auth/signout', { method: 'POST' });
     router.push('/');
+  };
+
+  const handleToolClick = (tool: Tool) => {
+    setSelectedTool(tool);
+    setIsModalOpen(true);
+    setBuyMessage(null);
+  };
+
+  const handleCloseModal = () => {
+    setIsModalOpen(false);
+    setSelectedTool(null);
+    setBuyMessage(null);
+  };
+
+  const handleBuy = async (toolId: string) => {
+    setIsBuying(true);
+    setBuyMessage(null);
+
+    try {
+      const response = await fetch('/api/tools/buy', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ toolId }),
+      });
+
+      const data = await response.json();
+
+      if (!response.ok) {
+        setBuyMessage({ type: 'error', text: data.error || 'Failed to purchase tool' });
+        setIsBuying(false);
+        return;
+      }
+
+      setBuyMessage({ type: 'success', text: data.message || 'Tool purchased successfully!' });
+      
+      // Refresh tools list after successful purchase
+      setTimeout(() => {
+        loadTools();
+        handleCloseModal();
+      }, 1500);
+    } catch (error) {
+      console.error('Error purchasing tool:', error);
+      setBuyMessage({ type: 'error', text: 'An error occurred while purchasing the tool' });
+      setIsBuying(false);
+    }
   };
 
   if (isLoading) {
@@ -274,35 +332,35 @@ export default function Dashboard() {
               <p className="text-slate-400">Loading tools...</p>
             ) : (
               <div className="space-y-8">
-                {/* Active Tools */}
+                {/* Active Tools - Tools the user owns */}
                 <div>
                   <h2 className="text-lg font-semibold text-slate-100 mb-4">Active</h2>
-                  {tools.filter(t => t.status === 'active').length > 0 ? (
+                  {tools.filter(t => t.isOwned === true).length > 0 ? (
                     <div className="grid gap-4 md:grid-cols-4 lg:grid-cols-6">
                       {tools
-                        .filter(t => t.status === 'active')
+                        .filter(t => t.isOwned === true)
                         .map((tool) => {
-                          const icon = tool.icons.active;
-                          // Try icon_url first, then fall back to icon endpoint if icon exists
+                          // Use default icon first, then fallback to available/coming_soon for backward compatibility
+                          const icon = tool.icons.default || tool.icons.available || tool.icons.coming_soon;
+                          // Get icon name/URL - if it's a URL (starts with http or /), use it, otherwise use icon name
                           const iconSrc = icon?.icon_url || (icon?.id ? `/api/tools/icons/${icon.id}` : null);
                           return (
-                            <div key={tool.id} className="rounded-2xl border border-slate-800 bg-slate-900/70 p-4 hover:border-emerald-500/50 transition-colors">
+                            <div 
+                              key={tool.id} 
+                              onClick={() => handleToolClick(tool)}
+                              className="rounded-2xl border border-slate-800 bg-slate-900/70 p-4 hover:border-emerald-500/50 transition-colors cursor-pointer"
+                            >
                               {iconSrc && (
-                                <div className="mb-3">
-                                  <img 
-                                    src={iconSrc} 
-                                    alt={tool.name}
-                                    className="w-12 h-12 object-contain"
-                                    onError={(e) => {
-                                      console.error('Failed to load icon for tool:', tool.name, 'iconSrc:', iconSrc);
-                                      // Hide the image on error
-                                      e.currentTarget.style.display = 'none';
-                                    }}
+                                <div className="mb-3 flex items-center justify-center">
+                                  <DynamicIcon 
+                                    iconName={iconSrc} 
+                                    size={48} 
+                                    className="text-slate-300"
                                   />
                                 </div>
                               )}
                               <h3 className="text-sm font-semibold text-slate-100 mb-1">{tool.name}</h3>
-                              <p className="text-xs text-emerald-400 font-medium">${tool.price.toFixed(2)}</p>
+                              <p className="text-xs text-emerald-400 font-medium">${tool.price.toFixed(2)} / month</p>
                             </div>
                           );
                         })}
@@ -315,35 +373,35 @@ export default function Dashboard() {
                 {/* Divider */}
                 <div className="border-t border-slate-800 my-6"></div>
 
-                {/* Available Tools */}
+                {/* Available Tools - Tools available for purchase that user doesn't own */}
                 <div>
                   <h2 className="text-lg font-semibold text-slate-100 mb-4">Available</h2>
-                  {tools.filter(t => t.status === 'available').length > 0 ? (
+                  {tools.filter(t => t.status === 'available' && !t.isOwned).length > 0 ? (
                     <div className="grid gap-4 md:grid-cols-4 lg:grid-cols-6">
                       {tools
-                        .filter(t => t.status === 'available')
+                        .filter(t => t.status === 'available' && !t.isOwned)
                         .map((tool) => {
-                          const icon = tool.icons.available;
-                          // Try icon_url first, then fall back to icon endpoint if icon exists
+                          // Use default icon first, then fallback to available/coming_soon for backward compatibility
+                          const icon = tool.icons.default || tool.icons.available || tool.icons.coming_soon;
+                          // Get icon name/URL - if it's a URL (starts with http or /), use it, otherwise use icon name
                           const iconSrc = icon?.icon_url || (icon?.id ? `/api/tools/icons/${icon.id}` : null);
                           return (
-                            <div key={tool.id} className="rounded-2xl border border-slate-800 bg-slate-900/70 p-4 hover:border-emerald-500/50 transition-colors">
+                            <div 
+                              key={tool.id} 
+                              onClick={() => handleToolClick(tool)}
+                              className="rounded-2xl border border-slate-800 bg-slate-900/70 p-4 hover:border-emerald-500/50 transition-colors cursor-pointer"
+                            >
                               {iconSrc && (
-                                <div className="mb-3">
-                                  <img 
-                                    src={iconSrc} 
-                                    alt={tool.name}
-                                    className="w-12 h-12 object-contain"
-                                    onError={(e) => {
-                                      console.error('Failed to load icon for tool:', tool.name, 'iconSrc:', iconSrc);
-                                      // Hide the image on error
-                                      e.currentTarget.style.display = 'none';
-                                    }}
+                                <div className="mb-3 flex items-center justify-center">
+                                  <DynamicIcon 
+                                    iconName={iconSrc} 
+                                    size={48} 
+                                    className="text-slate-300"
                                   />
                                 </div>
                               )}
                               <h3 className="text-sm font-semibold text-slate-100 mb-1">{tool.name}</h3>
-                              <p className="text-xs text-emerald-400 font-medium">${tool.price.toFixed(2)}</p>
+                              <p className="text-xs text-emerald-400 font-medium">${tool.price.toFixed(2)} / month</p>
                             </div>
                           );
                         })}
@@ -364,27 +422,27 @@ export default function Dashboard() {
                       {tools
                         .filter(t => t.status === 'coming_soon')
                         .map((tool) => {
-                          const icon = tool.icons.coming_soon;
-                          // Try icon_url first, then fall back to icon endpoint if icon exists
+                          // Use default icon first, then fallback to coming_soon/available for backward compatibility
+                          const icon = tool.icons.default || tool.icons.coming_soon || tool.icons.available;
+                          // Get icon name/URL - if it's a URL (starts with http or /), use it, otherwise use icon name
                           const iconSrc = icon?.icon_url || (icon?.id ? `/api/tools/icons/${icon.id}` : null);
                           return (
-                            <div key={tool.id} className="rounded-2xl border border-slate-800 bg-slate-900/70 p-4 hover:border-emerald-500/50 transition-colors">
+                            <div 
+                              key={tool.id} 
+                              onClick={() => handleToolClick(tool)}
+                              className="rounded-2xl border border-slate-800 bg-slate-900/70 p-4 hover:border-emerald-500/50 transition-colors cursor-pointer"
+                            >
                               {iconSrc && (
-                                <div className="mb-3">
-                                  <img 
-                                    src={iconSrc} 
-                                    alt={tool.name}
-                                    className="w-12 h-12 object-contain"
-                                    onError={(e) => {
-                                      console.error('Failed to load icon for tool:', tool.name, 'iconSrc:', iconSrc);
-                                      // Hide the image on error
-                                      e.currentTarget.style.display = 'none';
-                                    }}
+                                <div className="mb-3 flex items-center justify-center">
+                                  <DynamicIcon 
+                                    iconName={iconSrc} 
+                                    size={48} 
+                                    className="text-slate-300"
                                   />
                                 </div>
                               )}
                               <h3 className="text-sm font-semibold text-slate-100 mb-1">{tool.name}</h3>
-                              <p className="text-xs text-emerald-400 font-medium">${tool.price.toFixed(2)}</p>
+                              <p className="text-xs text-emerald-400 font-medium">${tool.price.toFixed(2)} / month</p>
                             </div>
                           );
                         })}
@@ -422,6 +480,16 @@ export default function Dashboard() {
           </div>
         )}
       </div>
+
+      {/* Tool Modal */}
+      <ToolModal
+        tool={selectedTool}
+        isOpen={isModalOpen}
+        onClose={handleCloseModal}
+        onBuy={handleBuy}
+        isBuying={isBuying}
+        buyMessage={buyMessage}
+      />
     </main>
   );
 }
