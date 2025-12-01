@@ -1,7 +1,7 @@
 'use client';
 
 import Image from 'next/image'
-import { useState, useRef } from 'react'
+import { useState, useRef, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
 import Link from 'next/link'
 import { signUp, signIn } from './actions/auth'
@@ -12,8 +12,26 @@ export default function Home() {
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
+  const [rememberMe, setRememberMe] = useState(false);
+  const [savedEmail, setSavedEmail] = useState<string>('');
   const formRef = useRef<HTMLFormElement>(null);
+  const emailInputRef = useRef<HTMLInputElement>(null);
   const router = useRouter();
+
+  // Load saved email on mount
+  useEffect(() => {
+    if (typeof window !== 'undefined') {
+      const saved = localStorage.getItem('rememberedEmail');
+      if (saved) {
+        setSavedEmail(saved);
+        setRememberMe(true);
+        // Set the email input value if it exists
+        if (emailInputRef.current) {
+          emailInputRef.current.value = saved;
+        }
+      }
+    }
+  }, []);
   return (
     <main className="min-h-screen bg-slate-950 text-slate-100">
       {/* Page wrapper */}
@@ -147,6 +165,13 @@ export default function Home() {
                   setIsLoading(false);
 
                   if (result.success) {
+                    // Save email if "Remember me" is checked
+                    if (rememberMe && typeof window !== 'undefined') {
+                      localStorage.setItem('rememberedEmail', email);
+                    } else if (typeof window !== 'undefined') {
+                      // Remove saved email if checkbox is unchecked
+                      localStorage.removeItem('rememberedEmail');
+                    }
                     // Redirect to dashboard
                     router.push('/dashboard');
                   } else {
@@ -192,9 +217,11 @@ export default function Home() {
                   Email <span className="text-red-400">*</span>
                 </label>
                 <input
+                  ref={emailInputRef}
                   type="email"
                   id="email"
                   name="email"
+                  defaultValue={savedEmail}
                   className="w-full rounded-lg border border-slate-700 bg-slate-900/70 px-3 py-2 text-sm text-slate-100 placeholder-slate-500 focus:border-emerald-500/50 focus:outline-none focus:ring-1 focus:ring-emerald-500/50"
                   placeholder="you@example.com"
                   required
@@ -220,6 +247,8 @@ export default function Home() {
                   <label className="flex items-center gap-2 text-slate-400">
                     <input
                       type="checkbox"
+                      checked={rememberMe}
+                      onChange={(e) => setRememberMe(e.target.checked)}
                       className="rounded border-slate-700 bg-slate-900/70 text-emerald-500 focus:ring-emerald-500/50"
                     />
                     <span>Remember me</span>
