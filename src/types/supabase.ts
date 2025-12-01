@@ -137,6 +137,77 @@ export type Database = {
         }
         Relationships: []
       }
+      tool_icons: {
+        Row: {
+          created_at: string | null
+          icon_data: string | null
+          icon_type: string
+          icon_url: string | null
+          id: string
+          tool_id: string
+          updated_at: string | null
+        }
+        Insert: {
+          created_at?: string | null
+          icon_data?: string | null
+          icon_type: string
+          icon_url?: string | null
+          id?: string
+          tool_id: string
+          updated_at?: string | null
+        }
+        Update: {
+          created_at?: string | null
+          icon_data?: string | null
+          icon_type?: string
+          icon_url?: string | null
+          id?: string
+          tool_id?: string
+          updated_at?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "tool_icons_tool_id_fkey"
+            columns: ["tool_id"]
+            isOneToOne: false
+            referencedRelation: "tools"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      tools: {
+        Row: {
+          created_at: string | null
+          description: string | null
+          id: string
+          name: string
+          price: number
+          status: string
+          tool_tip: string | null
+          updated_at: string | null
+        }
+        Insert: {
+          created_at?: string | null
+          description?: string | null
+          id?: string
+          name: string
+          price?: number
+          status?: string
+          tool_tip?: string | null
+          updated_at?: string | null
+        }
+        Update: {
+          created_at?: string | null
+          description?: string | null
+          id?: string
+          name?: string
+          price?: number
+          status?: string
+          tool_tip?: string | null
+          updated_at?: string | null
+        }
+        Relationships: []
+      }
       users: {
         Row: {
           active: string
