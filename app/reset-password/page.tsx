@@ -1,12 +1,12 @@
 'use client';
 
 import Image from 'next/image';
-import { useState, useRef, useEffect } from 'react';
+import { useState, useRef, useEffect, Suspense } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import Link from 'next/link';
 import { resetPassword } from '../actions/auth';
 
-export default function ResetPassword() {
+function ResetPasswordForm() {
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState(false);
@@ -211,6 +211,40 @@ export default function ResetPassword() {
         </div>
       </div>
     </main>
+  );
+}
+
+export default function ResetPassword() {
+  return (
+    <Suspense fallback={
+      <main className="min-h-screen bg-slate-950 text-slate-100">
+        <div className="mx-auto flex min-h-screen max-w-5xl flex-col px-4 py-10 sm:px-6 lg:px-8">
+          <header className="mb-10 flex items-center justify-between">
+            <div className="flex items-center">
+              <Link href="/">
+                <Image
+                  src="/images/logo/Logo_Side_White.png"
+                  alt="Household Toolbox"
+                  width={200}
+                  height={40}
+                  className="h-auto"
+                  priority
+                />
+              </Link>
+            </div>
+          </header>
+          <div className="flex flex-1 items-center justify-center">
+            <div className="w-full max-w-md">
+              <div className="rounded-2xl border border-slate-800 bg-slate-900/50 p-8 shadow-2xl shadow-emerald-500/10">
+                <div className="text-center text-slate-400">Loading...</div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </main>
+    }>
+      <ResetPasswordForm />
+    </Suspense>
   );
 }
 
