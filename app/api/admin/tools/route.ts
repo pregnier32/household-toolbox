@@ -107,10 +107,11 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // Validate status
-    if (!['coming_soon', 'available', 'active', 'inactive'].includes(status)) {
+    // Validate status - superadmin can only set to coming_soon, available, or inactive
+    // Active status is set when users purchase tools
+    if (!['coming_soon', 'available', 'inactive'].includes(status)) {
       return NextResponse.json(
-        { error: 'Invalid status. Must be one of: coming_soon, available, active, inactive' },
+        { error: 'Invalid status. Must be one of: coming_soon, available, inactive. Active status is set when users purchase tools.' },
         { status: 400 }
       );
     }
@@ -227,10 +228,18 @@ export async function PUT(request: NextRequest) {
 
     // Handle status change - require icon if status is not 'inactive'
     if (status !== null && status !== existingTool.status) {
-      // Validate status
-      if (!['coming_soon', 'available', 'active', 'inactive'].includes(status)) {
+      // Validate status - superadmin can only set to coming_soon, available, or inactive
+      // Active status is set when users purchase tools
+      // Allow keeping existing active status, but not setting new status to active
+      if (status === 'active' && existingTool.status !== 'active') {
         return NextResponse.json(
-          { error: 'Invalid status. Must be one of: coming_soon, available, active, inactive' },
+          { error: 'Cannot set status to active. Active status is set when users purchase tools.' },
+          { status: 400 }
+        );
+      }
+      if (!['coming_soon', 'available', 'inactive', 'active'].includes(status)) {
+        return NextResponse.json(
+          { error: 'Invalid status. Must be one of: coming_soon, available, inactive. Active status can only be kept if already set.' },
           { status: 400 }
         );
       }

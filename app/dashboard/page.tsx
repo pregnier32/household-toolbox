@@ -15,6 +15,28 @@ type User = {
   userStatus?: string;
 };
 
+type ToolIcon = {
+  id: string;
+  icon_url: string | null;
+  has_icon_data: boolean;
+};
+
+type Tool = {
+  id: string;
+  name: string;
+  tool_tip: string | null;
+  description: string | null;
+  price: number;
+  status: string;
+  created_at: string | null;
+  updated_at: string | null;
+  icons: {
+    coming_soon?: ToolIcon;
+    available?: ToolIcon;
+    active?: ToolIcon;
+  };
+};
+
 export default function Dashboard() {
   const [activeTab, setActiveTab] = useState<'tools' | 'dashboard' | 'overview'>('dashboard');
   const [dashboardSubTab, setDashboardSubTab] = useState<'overview' | 'calendar'>('overview');
@@ -22,6 +44,8 @@ export default function Dashboard() {
   const [isLoading, setIsLoading] = useState(true);
   const [activeUserCount, setActiveUserCount] = useState<number | null>(null);
   const [isLoadingStats, setIsLoadingStats] = useState(false);
+  const [tools, setTools] = useState<Tool[]>([]);
+  const [isLoadingTools, setIsLoadingTools] = useState(false);
   const router = useRouter();
   
   const isSuperAdmin = user?.userStatus === 'superadmin';
@@ -61,6 +85,25 @@ export default function Dashboard() {
         });
     }
   }, [activeTab, isSuperAdmin]);
+
+  useEffect(() => {
+    // Fetch tools when Tools tab is active
+    if (activeTab === 'tools') {
+      setIsLoadingTools(true);
+      fetch('/api/tools')
+        .then((res) => res.json())
+        .then((data) => {
+          if (data.tools) {
+            setTools(data.tools || []);
+          }
+          setIsLoadingTools(false);
+        })
+        .catch((error) => {
+          console.error('Error fetching tools:', error);
+          setIsLoadingTools(false);
+        });
+    }
+  }, [activeTab]);
 
   const handleSignOut = async () => {
     await fetch('/api/auth/signout', { method: 'POST' });
@@ -226,42 +269,132 @@ export default function Dashboard() {
 
         {activeTab === 'tools' && (
           <div>
-            <h1 className="text-2xl font-semibold text-slate-50 mb-4">Tools</h1>
-            <p className="text-slate-400 mb-6">
-              Select and launch the tools you need to manage your household.
-            </p>
-            <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
-              <div className="rounded-2xl border border-slate-800 bg-slate-900/70 p-6 hover:border-emerald-500/50 transition-colors cursor-pointer">
-                <p className="text-2xl mb-2">🧰</p>
-                <h3 className="text-sm font-semibold text-slate-100 mb-2">Maintenance Timeline</h3>
-                <p className="text-xs text-slate-400 mb-4">
-                  Track filters, gutters, inspections, and more with reminders.
-                </p>
-                <button className="text-xs text-emerald-400 hover:text-emerald-300 font-medium">
-                  Launch →
-                </button>
+            <h1 className="text-2xl font-semibold text-slate-50 mb-4">Your Tool Box</h1>
+            {isLoadingTools ? (
+              <p className="text-slate-400">Loading tools...</p>
+            ) : (
+              <div className="space-y-8">
+                {/* Active Tools */}
+                <div>
+                  <h2 className="text-lg font-semibold text-slate-100 mb-4">Active</h2>
+                  {tools.filter(t => t.status === 'active').length > 0 ? (
+                    <div className="grid gap-4 md:grid-cols-4 lg:grid-cols-6">
+                      {tools
+                        .filter(t => t.status === 'active')
+                        .map((tool) => {
+                          const icon = tool.icons.active;
+                          // Try icon_url first, then fall back to icon endpoint if icon exists
+                          const iconSrc = icon?.icon_url || (icon?.id ? `/api/tools/icons/${icon.id}` : null);
+                          return (
+                            <div key={tool.id} className="rounded-2xl border border-slate-800 bg-slate-900/70 p-4 hover:border-emerald-500/50 transition-colors">
+                              {iconSrc && (
+                                <div className="mb-3">
+                                  <img 
+                                    src={iconSrc} 
+                                    alt={tool.name}
+                                    className="w-12 h-12 object-contain"
+                                    onError={(e) => {
+                                      console.error('Failed to load icon for tool:', tool.name, 'iconSrc:', iconSrc);
+                                      // Hide the image on error
+                                      e.currentTarget.style.display = 'none';
+                                    }}
+                                  />
+                                </div>
+                              )}
+                              <h3 className="text-sm font-semibold text-slate-100 mb-1">{tool.name}</h3>
+                              <p className="text-xs text-emerald-400 font-medium">${tool.price.toFixed(2)}</p>
+                            </div>
+                          );
+                        })}
+                    </div>
+                  ) : (
+                    <p className="text-slate-400 text-sm">No active tools at this time.</p>
+                  )}
+                </div>
+
+                {/* Divider */}
+                <div className="border-t border-slate-800 my-6"></div>
+
+                {/* Available Tools */}
+                <div>
+                  <h2 className="text-lg font-semibold text-slate-100 mb-4">Available</h2>
+                  {tools.filter(t => t.status === 'available').length > 0 ? (
+                    <div className="grid gap-4 md:grid-cols-4 lg:grid-cols-6">
+                      {tools
+                        .filter(t => t.status === 'available')
+                        .map((tool) => {
+                          const icon = tool.icons.available;
+                          // Try icon_url first, then fall back to icon endpoint if icon exists
+                          const iconSrc = icon?.icon_url || (icon?.id ? `/api/tools/icons/${icon.id}` : null);
+                          return (
+                            <div key={tool.id} className="rounded-2xl border border-slate-800 bg-slate-900/70 p-4 hover:border-emerald-500/50 transition-colors">
+                              {iconSrc && (
+                                <div className="mb-3">
+                                  <img 
+                                    src={iconSrc} 
+                                    alt={tool.name}
+                                    className="w-12 h-12 object-contain"
+                                    onError={(e) => {
+                                      console.error('Failed to load icon for tool:', tool.name, 'iconSrc:', iconSrc);
+                                      // Hide the image on error
+                                      e.currentTarget.style.display = 'none';
+                                    }}
+                                  />
+                                </div>
+                              )}
+                              <h3 className="text-sm font-semibold text-slate-100 mb-1">{tool.name}</h3>
+                              <p className="text-xs text-emerald-400 font-medium">${tool.price.toFixed(2)}</p>
+                            </div>
+                          );
+                        })}
+                    </div>
+                  ) : (
+                    <p className="text-slate-400 text-sm">No available tools at this time.</p>
+                  )}
+                </div>
+
+                {/* Divider */}
+                <div className="border-t border-slate-800 my-6"></div>
+
+                {/* Coming Soon Tools */}
+                <div>
+                  <h2 className="text-lg font-semibold text-slate-100 mb-4">Coming Soon</h2>
+                  {tools.filter(t => t.status === 'coming_soon').length > 0 ? (
+                    <div className="grid gap-4 md:grid-cols-4 lg:grid-cols-6">
+                      {tools
+                        .filter(t => t.status === 'coming_soon')
+                        .map((tool) => {
+                          const icon = tool.icons.coming_soon;
+                          // Try icon_url first, then fall back to icon endpoint if icon exists
+                          const iconSrc = icon?.icon_url || (icon?.id ? `/api/tools/icons/${icon.id}` : null);
+                          return (
+                            <div key={tool.id} className="rounded-2xl border border-slate-800 bg-slate-900/70 p-4 hover:border-emerald-500/50 transition-colors">
+                              {iconSrc && (
+                                <div className="mb-3">
+                                  <img 
+                                    src={iconSrc} 
+                                    alt={tool.name}
+                                    className="w-12 h-12 object-contain"
+                                    onError={(e) => {
+                                      console.error('Failed to load icon for tool:', tool.name, 'iconSrc:', iconSrc);
+                                      // Hide the image on error
+                                      e.currentTarget.style.display = 'none';
+                                    }}
+                                  />
+                                </div>
+                              )}
+                              <h3 className="text-sm font-semibold text-slate-100 mb-1">{tool.name}</h3>
+                              <p className="text-xs text-emerald-400 font-medium">${tool.price.toFixed(2)}</p>
+                            </div>
+                          );
+                        })}
+                    </div>
+                  ) : (
+                    <p className="text-slate-400 text-sm">No tools coming soon at this time.</p>
+                  )}
+                </div>
               </div>
-              <div className="rounded-2xl border border-slate-800 bg-slate-900/70 p-6 hover:border-emerald-500/50 transition-colors cursor-pointer">
-                <p className="text-2xl mb-2">📂</p>
-                <h3 className="text-sm font-semibold text-slate-100 mb-2">Document Vault</h3>
-                <p className="text-xs text-slate-400 mb-4">
-                  Keep warranties, policies, and records organized and easy to find.
-                </p>
-                <button className="text-xs text-emerald-400 hover:text-emerald-300 font-medium">
-                  Launch →
-                </button>
-              </div>
-              <div className="rounded-2xl border border-slate-800 bg-slate-900/70 p-6 hover:border-emerald-500/50 transition-colors cursor-pointer">
-                <p className="text-2xl mb-2">✅</p>
-                <h3 className="text-sm font-semibold text-slate-100 mb-2">Checklists</h3>
-                <p className="text-xs text-slate-400 mb-4">
-                  Coordinate move-in, hosting, packing, and seasonal checklists.
-                </p>
-                <button className="text-xs text-emerald-400 hover:text-emerald-300 font-medium">
-                  Launch →
-                </button>
-              </div>
-            </div>
+            )}
           </div>
         )}
 

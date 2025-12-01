@@ -518,15 +518,34 @@ export default function ToolsPage() {
                     </label>
                     <select
                       value={formData.status}
-                      onChange={(e) => setFormData({ ...formData, status: e.target.value })}
+                      onChange={(e) => {
+                        // Prevent setting new tools to active
+                        if (e.target.value === 'active' && !editingId) {
+                          setError('Cannot set status to active. Active status is set when users purchase tools.');
+                          return;
+                        }
+                        setFormData({ ...formData, status: e.target.value });
+                        setError(null);
+                      }}
                       className="w-full rounded-lg border border-slate-700 bg-slate-900/70 px-3 py-2 text-sm text-slate-100 focus:border-emerald-500/50 focus:outline-none focus:ring-1 focus:ring-emerald-500/50"
                       required
                     >
                       <option value="coming_soon">Coming Soon</option>
                       <option value="available">Available</option>
-                      <option value="active">Active</option>
+                      {formData.status === 'active' && (
+                        <option value="active">Active</option>
+                      )}
                       <option value="inactive">Inactive</option>
                     </select>
+                    {formData.status === 'active' ? (
+                      <p className="mt-1 text-xs text-emerald-400">
+                        This tool is active. You can change it to Available or Coming Soon.
+                      </p>
+                    ) : (
+                      <p className="mt-1 text-xs text-slate-500">
+                        Note: Tools become "Active" when users purchase them. You can still upload the active status icon below.
+                      </p>
+                    )}
                   </div>
 
                   {/* Error and Success Messages - Inside Modal */}
