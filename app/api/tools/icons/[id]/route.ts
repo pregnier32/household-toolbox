@@ -45,7 +45,7 @@ export async function GET(
       console.error('Icon fetch error:', iconError);
       // Return a 1x1 transparent PNG instead of JSON so the browser doesn't show broken image
       const transparentPng = Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==', 'base64');
-      return new NextResponse(transparentPng, {
+      return new NextResponse(new Uint8Array(transparentPng), {
         status: 404,
         headers: {
           'Content-Type': 'image/png',
@@ -57,7 +57,7 @@ export async function GET(
       console.error('Icon not found for ID:', iconId);
       // Return a 1x1 transparent PNG instead of JSON
       const transparentPng = Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==', 'base64');
-      return new NextResponse(transparentPng, {
+      return new NextResponse(transparentPng.buffer.slice(transparentPng.byteOffset, transparentPng.byteOffset + transparentPng.byteLength), {
         status: 404,
         headers: {
           'Content-Type': 'image/png',
@@ -120,7 +120,7 @@ export async function GET(
           console.error('Invalid icon data buffer - empty or null');
           // Return a 1x1 transparent PNG instead of JSON
           const transparentPng = Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==', 'base64');
-          return new NextResponse(transparentPng, {
+          return new NextResponse(transparentPng.buffer, {
             status: 500,
             headers: {
               'Content-Type': 'image/png',
@@ -129,7 +129,8 @@ export async function GET(
         }
         
         console.log('Serving icon, buffer length:', buffer.length);
-        return new NextResponse(buffer, {
+        // Convert Buffer to Uint8Array for NextResponse (which accepts BodyInit types)
+        return new NextResponse(new Uint8Array(buffer), {
           headers: {
             'Content-Type': 'image/jpeg',
             'Cache-Control': 'public, max-age=31536000, immutable',
@@ -139,7 +140,7 @@ export async function GET(
         console.error('Error converting icon_data to buffer:', bufferError, bufferError instanceof Error ? bufferError.stack : '');
         // Return a 1x1 transparent PNG instead of JSON
         const transparentPng = Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==', 'base64');
-        return new NextResponse(transparentPng, {
+        return new NextResponse(transparentPng.buffer.slice(transparentPng.byteOffset, transparentPng.byteOffset + transparentPng.byteLength), {
           status: 500,
           headers: {
             'Content-Type': 'image/png',
@@ -151,7 +152,7 @@ export async function GET(
     console.error('No icon_url or icon_data found for icon:', iconId);
     // Return a 1x1 transparent PNG instead of JSON
     const transparentPng = Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==', 'base64');
-    return new NextResponse(transparentPng, {
+    return new NextResponse(transparentPng.buffer.slice(transparentPng.byteOffset, transparentPng.byteOffset + transparentPng.byteLength), {
       status: 404,
       headers: {
         'Content-Type': 'image/png',
