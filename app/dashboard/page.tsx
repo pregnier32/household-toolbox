@@ -347,20 +347,19 @@ export default function Dashboard() {
                           return (
                             <div 
                               key={tool.id} 
-                              onClick={() => handleToolClick(tool)}
-                              className="rounded-2xl border border-slate-800 bg-slate-900/70 p-4 hover:border-emerald-500/50 transition-colors cursor-pointer"
+                              className="rounded-2xl border border-slate-800 bg-slate-900/70 p-4 transition-colors cursor-default"
                             >
                               {iconSrc && (
                                 <div className="mb-3 flex items-center justify-center">
                                   <DynamicIcon 
                                     iconName={iconSrc} 
-                                    size={48} 
+                                    size={60} 
                                     className="text-slate-300"
                                   />
                                 </div>
                               )}
-                              <h3 className="text-sm font-semibold text-slate-100 mb-1">{tool.name}</h3>
-                              <p className="text-xs text-emerald-400 font-medium">${tool.price.toFixed(2)} / month</p>
+                              <h3 className="text-sm font-semibold text-slate-100 mb-1 text-center">{tool.name}</h3>
+                              <p className="text-xs text-emerald-400 font-medium text-center">${tool.price.toFixed(2)} / month</p>
                             </div>
                           );
                         })}
@@ -395,13 +394,13 @@ export default function Dashboard() {
                                 <div className="mb-3 flex items-center justify-center">
                                   <DynamicIcon 
                                     iconName={iconSrc} 
-                                    size={48} 
+                                    size={60} 
                                     className="text-slate-300"
                                   />
                                 </div>
                               )}
-                              <h3 className="text-sm font-semibold text-slate-100 mb-1">{tool.name}</h3>
-                              <p className="text-xs text-emerald-400 font-medium">${tool.price.toFixed(2)} / month</p>
+                              <h3 className="text-sm font-semibold text-slate-100 mb-1 text-center">{tool.name}</h3>
+                              <p className="text-xs text-emerald-400 font-medium text-center">${tool.price.toFixed(2)} / month</p>
                             </div>
                           );
                         })}
@@ -436,13 +435,13 @@ export default function Dashboard() {
                                 <div className="mb-3 flex items-center justify-center">
                                   <DynamicIcon 
                                     iconName={iconSrc} 
-                                    size={48} 
+                                    size={60} 
                                     className="text-slate-300"
                                   />
                                 </div>
                               )}
-                              <h3 className="text-sm font-semibold text-slate-100 mb-1">{tool.name}</h3>
-                              <p className="text-xs text-emerald-400 font-medium">${tool.price.toFixed(2)} / month</p>
+                              <h3 className="text-sm font-semibold text-slate-100 mb-1 text-center">{tool.name}</h3>
+                              <p className="text-xs text-emerald-400 font-medium text-center">${tool.price.toFixed(2)} / month</p>
                             </div>
                           );
                         })}
