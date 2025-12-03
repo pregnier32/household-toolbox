@@ -277,6 +277,7 @@ export default function MyToolsPage() {
     if (tools.length === 0 || billingDay === null) {
       return {
         total: 0,
+        toolSubscriptionsTotal: 0,
         activeTools: [],
         trialToolsEnding: [],
         nextBillingDate: '',
