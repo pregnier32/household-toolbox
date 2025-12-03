@@ -79,7 +79,6 @@ export async function POST(request: NextRequest) {
   try {
     const formData = await request.formData();
     const name = formData.get('name') as string;
-    const toolTip = formData.get('tool_tip') as string | null;
     const description = formData.get('description') as string | null;
     const price = formData.get('price') as string;
     const status = formData.get('status') as string;
@@ -92,14 +91,7 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // Validate that tool tip and description are required and not empty
-    if (!toolTip || !toolTip.trim()) {
-      return NextResponse.json(
-        { error: 'Tool tip is required and cannot be empty' },
-        { status: 400 }
-      );
-    }
-
+    // Validate that description is required and not empty
     if (!description || !description.trim()) {
       return NextResponse.json(
         { error: 'Description is required and cannot be empty' },
@@ -130,7 +122,7 @@ export async function POST(request: NextRequest) {
       .from('tools')
       .insert({
         name: name.trim(),
-        tool_tip: toolTip.trim(),
+        tool_tip: null,
         description: description.trim(),
         price: priceNum,
         status: status,
@@ -167,7 +159,6 @@ export async function PUT(request: NextRequest) {
     const formData = await request.formData();
     const id = formData.get('id') as string;
     const name = formData.get('name') as string | null;
-    const toolTip = formData.get('tool_tip') as string | null;
     const description = formData.get('description') as string | null;
     const price = formData.get('price') as string | null;
     const status = formData.get('status') as string | null;
@@ -178,14 +169,7 @@ export async function PUT(request: NextRequest) {
       return NextResponse.json({ error: 'Tool ID is required' }, { status: 400 });
     }
 
-    // Validate that tool tip and description are required and not empty
-    if (!toolTip || !toolTip.trim()) {
-      return NextResponse.json(
-        { error: 'Tool tip is required and cannot be empty' },
-        { status: 400 }
-      );
-    }
-
+    // Validate that description is required and not empty
     if (!description || !description.trim()) {
       return NextResponse.json(
         { error: 'Description is required and cannot be empty' },
@@ -211,8 +195,9 @@ export async function PUT(request: NextRequest) {
       updateData.name = name.trim();
     }
 
-    // Tool tip and description are always required, so always update them
-    updateData.tool_tip = toolTip.trim();
+    // Description is always required, so always update it
+    // Set tool_tip to null since it's no longer used
+    updateData.tool_tip = null;
     updateData.description = description.trim();
 
     if (price !== null) {
@@ -251,15 +236,24 @@ export async function PUT(request: NextRequest) {
         const iconTypeForStatus = status === 'active' ? 'available' : status;
         
         // Check if icon exists for the new status (or available icon for active status)
-        const { data: existingIcon } = await supabaseServer
+        // Also check for 'default' icon type as fallback since tools may use a single default icon
+        const { data: existingIconForStatus } = await supabaseServer
           .from('tool_icons')
           .select('id')
           .eq('tool_id', id)
           .eq('icon_type', iconTypeForStatus)
           .single();
 
-        // If no icon exists and no icon file is provided, reject the status change
-        if (!existingIcon && !iconFile) {
+        // Also check for 'default' icon type as fallback
+        const { data: existingDefaultIcon } = await supabaseServer
+          .from('tool_icons')
+          .select('id')
+          .eq('tool_id', id)
+          .eq('icon_type', 'default')
+          .single();
+
+        // If no icon exists (neither for the specific status nor default) and no icon file is provided, reject the status change
+        if (!existingIconForStatus && !existingDefaultIcon && !iconFile) {
           return NextResponse.json(
             { error: `Cannot change status to "${status}" without an icon file. Please upload an icon file for ${iconTypeForStatus === 'available' ? 'available' : 'this'} status.` },
             { status: 400 }

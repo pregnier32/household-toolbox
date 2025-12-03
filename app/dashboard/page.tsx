@@ -8,6 +8,7 @@ import { HelpMenu } from '../components/HelpMenu';
 import { AdminMenu } from '../components/AdminMenu';
 import { ToolModal } from '../components/ToolModal';
 import { DynamicIcon } from '../components/DynamicIcon';
+import { PercentOfOrderTool } from '../components/PercentOfOrderTool';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, PieChart, Pie, Cell, Legend } from 'recharts';
 
 type User = {
@@ -46,6 +47,8 @@ type Tool = {
 export default function Dashboard() {
   const [activeTab, setActiveTab] = useState<'tools' | 'dashboard' | 'overview'>('dashboard');
   const [dashboardSubTab, setDashboardSubTab] = useState<'overview' | 'calendar'>('overview');
+  const [activeToolId, setActiveToolId] = useState<string | null>(null);
+  const [openedToolIds, setOpenedToolIds] = useState<Set<string>>(new Set());
   const [user, setUser] = useState<User | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [activeUserCount, setActiveUserCount] = useState<number | null>(null);
@@ -157,6 +160,15 @@ export default function Dashboard() {
   };
 
   const handleToolClick = (tool: Tool) => {
+    // If tool is owned, open it in a sub-tab
+    if (tool.isOwned) {
+      setActiveTab('tools');
+      setActiveToolId(tool.id);
+      // Track that this tool has been opened during the session
+      setOpenedToolIds(prev => new Set(prev).add(tool.id));
+      return;
+    }
+    // Otherwise, show purchase modal
     setSelectedTool(tool);
     setIsModalOpen(true);
     setBuyMessage(null);
@@ -310,6 +322,74 @@ export default function Dashboard() {
         </div>
       )}
 
+      {/* Tools Sub-tabs */}
+      {activeTab === 'tools' && openedToolIds.size > 0 && (
+        <div className="border-b border-slate-800 bg-slate-900/20">
+          <div className="mx-auto flex max-w-7xl px-4 sm:px-6 lg:px-8">
+            <button
+              onClick={() => setActiveToolId(null)}
+              className={`px-6 py-3 text-sm font-medium transition-colors ${
+                activeToolId === null
+                  ? 'border-b-2 border-emerald-500 text-emerald-300'
+                  : 'text-slate-400 hover:text-slate-300'
+              }`}
+            >
+              All Tools
+            </button>
+            {tools
+              .filter(t => t.isOwned === true && openedToolIds.has(t.id))
+              .map((tool) => (
+                <div
+                  key={tool.id}
+                  className="group relative"
+                >
+                  <button
+                    onClick={() => setActiveToolId(tool.id)}
+                    className={`px-6 py-3 text-sm font-medium transition-colors ${
+                      activeToolId === tool.id
+                        ? 'border-b-2 border-emerald-500 text-emerald-300'
+                        : 'text-slate-400 hover:text-slate-300'
+                    }`}
+                  >
+                    {tool.name}
+                  </button>
+                  <button
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      // Remove tool from opened tools
+                      setOpenedToolIds(prev => {
+                        const newSet = new Set(prev);
+                        newSet.delete(tool.id);
+                        return newSet;
+                      });
+                      // If this was the active tool, switch back to All Tools
+                      if (activeToolId === tool.id) {
+                        setActiveToolId(null);
+                      }
+                    }}
+                    className="absolute right-1 top-1/2 -translate-y-1/2 opacity-0 group-hover:opacity-100 transition-opacity p-1 rounded hover:bg-slate-700 text-slate-400 hover:text-slate-200"
+                    aria-label={`Close ${tool.name}`}
+                  >
+                    <svg
+                      className="h-4 w-4"
+                      fill="none"
+                      stroke="currentColor"
+                      viewBox="0 0 24 24"
+                    >
+                      <path
+                        strokeLinecap="round"
+                        strokeLinejoin="round"
+                        strokeWidth={2}
+                        d="M6 18L18 6M6 6l12 12"
+                      />
+                    </svg>
+                  </button>
+                </div>
+              ))}
+          </div>
+        </div>
+      )}
+
       {/* Content */}
       <div className="mx-auto max-w-7xl px-4 py-8 sm:px-6 lg:px-8">
         {activeTab === 'dashboard' && (
@@ -364,137 +444,163 @@ export default function Dashboard() {
 
         {activeTab === 'tools' && (
           <div>
-            <h1 className="text-2xl font-semibold text-slate-50 mb-4">Your Tool Box</h1>
-            {isLoadingTools ? (
-              <p className="text-slate-400">Loading tools...</p>
+            {activeToolId === null ? (
+              <>
+                <h1 className="text-2xl font-semibold text-slate-50 mb-4">Your Tool Box</h1>
+                {isLoadingTools ? (
+                  <p className="text-slate-400">Loading tools...</p>
+                ) : (
+                  <div className="space-y-8">
+                    {/* Active Tools - Tools the user owns */}
+                    <div>
+                      <h2 className="text-lg font-semibold text-slate-100 mb-4">Active</h2>
+                      {tools.filter(t => t.isOwned === true).length > 0 ? (
+                        <div className="grid gap-4 md:grid-cols-4 lg:grid-cols-6">
+                          {tools
+                            .filter(t => t.isOwned === true)
+                            .map((tool) => {
+                              // Use default icon first, then fallback to available/coming_soon for backward compatibility
+                              const icon = tool.icons.default || tool.icons.available || tool.icons.coming_soon;
+                              // Get icon name/URL - if it's a URL (starts with http or /), use it, otherwise use icon name
+                              const iconSrc = icon?.icon_url || (icon?.id ? `/api/tools/icons/${icon.id}` : null);
+                              return (
+                                <div 
+                                  key={tool.id} 
+                                  onClick={() => handleToolClick(tool)}
+                                  className="rounded-2xl border border-slate-800 bg-slate-900/70 p-4 transition-colors cursor-pointer hover:border-emerald-500/50"
+                                >
+                                  {iconSrc && (
+                                    <div className="mb-3 flex items-center justify-center">
+                                      <DynamicIcon 
+                                        iconName={iconSrc} 
+                                        size={60} 
+                                        className="text-slate-300"
+                                      />
+                                    </div>
+                                  )}
+                                  <div className="flex flex-col items-center">
+                                    <h3 className="text-sm font-semibold text-slate-100 mb-1 text-center">{tool.name}</h3>
+                                    {tool.trialStatus === 'trial' && (
+                                      <span className="inline-flex items-center rounded-full bg-amber-500/20 px-2 py-0.5 text-xs font-medium text-amber-300 mb-1">
+                                        Trial
+                                      </span>
+                                    )}
+                                    <p className="text-xs text-emerald-400 font-medium text-center">${tool.price.toFixed(2)} / month</p>
+                                  </div>
+                                </div>
+                              );
+                            })}
+                        </div>
+                      ) : (
+                        <p className="text-slate-400 text-sm">No active tools at this time.</p>
+                      )}
+                    </div>
+
+                    {/* Divider */}
+                    <div className="border-t border-slate-800 my-6"></div>
+
+                    {/* Available Tools - Tools available for purchase that user doesn't own */}
+                    <div>
+                      <h2 className="text-lg font-semibold text-slate-100 mb-4">Available</h2>
+                      {tools.filter(t => t.status === 'available' && !t.isOwned).length > 0 ? (
+                        <div className="grid gap-4 md:grid-cols-4 lg:grid-cols-6">
+                          {tools
+                            .filter(t => t.status === 'available' && !t.isOwned)
+                            .map((tool) => {
+                              // Use default icon first, then fallback to available/coming_soon for backward compatibility
+                              const icon = tool.icons.default || tool.icons.available || tool.icons.coming_soon;
+                              // Get icon name/URL - if it's a URL (starts with http or /), use it, otherwise use icon name
+                              const iconSrc = icon?.icon_url || (icon?.id ? `/api/tools/icons/${icon.id}` : null);
+                              return (
+                                <div 
+                                  key={tool.id} 
+                                  onClick={() => handleToolClick(tool)}
+                                  className="rounded-2xl border border-slate-800 bg-slate-900/70 p-4 hover:border-emerald-500/50 transition-colors cursor-pointer"
+                                >
+                                  {iconSrc && (
+                                    <div className="mb-3 flex items-center justify-center">
+                                      <DynamicIcon 
+                                        iconName={iconSrc} 
+                                        size={60} 
+                                        className="text-slate-300"
+                                      />
+                                    </div>
+                                  )}
+                                  <h3 className="text-sm font-semibold text-slate-100 mb-1 text-center">{tool.name}</h3>
+                                  <p className="text-xs text-emerald-400 font-medium text-center">${tool.price.toFixed(2)} / month</p>
+                                </div>
+                              );
+                            })}
+                        </div>
+                      ) : (
+                        <p className="text-slate-400 text-sm">No available tools at this time.</p>
+                      )}
+                    </div>
+
+                    {/* Divider */}
+                    <div className="border-t border-slate-800 my-6"></div>
+
+                    {/* Coming Soon Tools */}
+                    <div>
+                      <h2 className="text-lg font-semibold text-slate-100 mb-4">Coming Soon</h2>
+                      {tools.filter(t => t.status === 'coming_soon').length > 0 ? (
+                        <div className="grid gap-4 md:grid-cols-4 lg:grid-cols-6">
+                          {tools
+                            .filter(t => t.status === 'coming_soon')
+                            .map((tool) => {
+                              // Use default icon first, then fallback to coming_soon/available for backward compatibility
+                              const icon = tool.icons.default || tool.icons.coming_soon || tool.icons.available;
+                              // Get icon name/URL - if it's a URL (starts with http or /), use it, otherwise use icon name
+                              const iconSrc = icon?.icon_url || (icon?.id ? `/api/tools/icons/${icon.id}` : null);
+                              return (
+                                <div 
+                                  key={tool.id} 
+                                  onClick={() => handleToolClick(tool)}
+                                  className="rounded-2xl border border-slate-800 bg-slate-900/70 p-4 hover:border-emerald-500/50 transition-colors cursor-pointer"
+                                >
+                                  {iconSrc && (
+                                    <div className="mb-3 flex items-center justify-center">
+                                      <DynamicIcon 
+                                        iconName={iconSrc} 
+                                        size={60} 
+                                        className="text-slate-300"
+                                      />
+                                    </div>
+                                  )}
+                                  <h3 className="text-sm font-semibold text-slate-100 mb-1 text-center">{tool.name}</h3>
+                                  <p className="text-xs text-emerald-400 font-medium text-center">${tool.price.toFixed(2)} / month</p>
+                                </div>
+                              );
+                            })}
+                        </div>
+                      ) : (
+                        <p className="text-slate-400 text-sm">No tools coming soon at this time.</p>
+                      )}
+                    </div>
+                  </div>
+                )}
+              </>
             ) : (
-              <div className="space-y-8">
-                {/* Active Tools - Tools the user owns */}
-                <div>
-                  <h2 className="text-lg font-semibold text-slate-100 mb-4">Active</h2>
-                  {tools.filter(t => t.isOwned === true).length > 0 ? (
-                    <div className="grid gap-4 md:grid-cols-4 lg:grid-cols-6">
-                      {tools
-                        .filter(t => t.isOwned === true)
-                        .map((tool) => {
-                          // Use default icon first, then fallback to available/coming_soon for backward compatibility
-                          const icon = tool.icons.default || tool.icons.available || tool.icons.coming_soon;
-                          // Get icon name/URL - if it's a URL (starts with http or /), use it, otherwise use icon name
-                          const iconSrc = icon?.icon_url || (icon?.id ? `/api/tools/icons/${icon.id}` : null);
-                          return (
-                            <div 
-                              key={tool.id} 
-                              className="rounded-2xl border border-slate-800 bg-slate-900/70 p-4 transition-colors cursor-default"
-                            >
-                              {iconSrc && (
-                                <div className="mb-3 flex items-center justify-center">
-                                  <DynamicIcon 
-                                    iconName={iconSrc} 
-                                    size={60} 
-                                    className="text-slate-300"
-                                  />
-                                </div>
-                              )}
-                              <div className="flex flex-col items-center">
-                                <h3 className="text-sm font-semibold text-slate-100 mb-1 text-center">{tool.name}</h3>
-                                {tool.trialStatus === 'trial' && (
-                                  <span className="inline-flex items-center rounded-full bg-amber-500/20 px-2 py-0.5 text-xs font-medium text-amber-300 mb-1">
-                                    Trial
-                                  </span>
-                                )}
-                                <p className="text-xs text-emerald-400 font-medium text-center">${tool.price.toFixed(2)} / month</p>
-                              </div>
-                            </div>
-                          );
-                        })}
-                    </div>
-                  ) : (
-                    <p className="text-slate-400 text-sm">No active tools at this time.</p>
-                  )}
-                </div>
+              // Render tool application based on activeToolId
+              (() => {
+                const activeTool = tools.find(t => t.id === activeToolId);
+                if (!activeTool) {
+                  return <p className="text-slate-400">Tool not found.</p>;
+                }
 
-                {/* Divider */}
-                <div className="border-t border-slate-800 my-6"></div>
+                // Check if this is the "Percent of my Order" tool
+                if (activeTool.name === 'Percent of my Order') {
+                  return <PercentOfOrderTool />;
+                }
 
-                {/* Available Tools - Tools available for purchase that user doesn't own */}
-                <div>
-                  <h2 className="text-lg font-semibold text-slate-100 mb-4">Available</h2>
-                  {tools.filter(t => t.status === 'available' && !t.isOwned).length > 0 ? (
-                    <div className="grid gap-4 md:grid-cols-4 lg:grid-cols-6">
-                      {tools
-                        .filter(t => t.status === 'available' && !t.isOwned)
-                        .map((tool) => {
-                          // Use default icon first, then fallback to available/coming_soon for backward compatibility
-                          const icon = tool.icons.default || tool.icons.available || tool.icons.coming_soon;
-                          // Get icon name/URL - if it's a URL (starts with http or /), use it, otherwise use icon name
-                          const iconSrc = icon?.icon_url || (icon?.id ? `/api/tools/icons/${icon.id}` : null);
-                          return (
-                            <div 
-                              key={tool.id} 
-                              onClick={() => handleToolClick(tool)}
-                              className="rounded-2xl border border-slate-800 bg-slate-900/70 p-4 hover:border-emerald-500/50 transition-colors cursor-pointer"
-                            >
-                              {iconSrc && (
-                                <div className="mb-3 flex items-center justify-center">
-                                  <DynamicIcon 
-                                    iconName={iconSrc} 
-                                    size={60} 
-                                    className="text-slate-300"
-                                  />
-                                </div>
-                              )}
-                              <h3 className="text-sm font-semibold text-slate-100 mb-1 text-center">{tool.name}</h3>
-                              <p className="text-xs text-emerald-400 font-medium text-center">${tool.price.toFixed(2)} / month</p>
-                            </div>
-                          );
-                        })}
-                    </div>
-                  ) : (
-                    <p className="text-slate-400 text-sm">No available tools at this time.</p>
-                  )}
-                </div>
-
-                {/* Divider */}
-                <div className="border-t border-slate-800 my-6"></div>
-
-                {/* Coming Soon Tools */}
-                <div>
-                  <h2 className="text-lg font-semibold text-slate-100 mb-4">Coming Soon</h2>
-                  {tools.filter(t => t.status === 'coming_soon').length > 0 ? (
-                    <div className="grid gap-4 md:grid-cols-4 lg:grid-cols-6">
-                      {tools
-                        .filter(t => t.status === 'coming_soon')
-                        .map((tool) => {
-                          // Use default icon first, then fallback to coming_soon/available for backward compatibility
-                          const icon = tool.icons.default || tool.icons.coming_soon || tool.icons.available;
-                          // Get icon name/URL - if it's a URL (starts with http or /), use it, otherwise use icon name
-                          const iconSrc = icon?.icon_url || (icon?.id ? `/api/tools/icons/${icon.id}` : null);
-                          return (
-                            <div 
-                              key={tool.id} 
-                              onClick={() => handleToolClick(tool)}
-                              className="rounded-2xl border border-slate-800 bg-slate-900/70 p-4 hover:border-emerald-500/50 transition-colors cursor-pointer"
-                            >
-                              {iconSrc && (
-                                <div className="mb-3 flex items-center justify-center">
-                                  <DynamicIcon 
-                                    iconName={iconSrc} 
-                                    size={60} 
-                                    className="text-slate-300"
-                                  />
-                                </div>
-                              )}
-                              <h3 className="text-sm font-semibold text-slate-100 mb-1 text-center">{tool.name}</h3>
-                              <p className="text-xs text-emerald-400 font-medium text-center">${tool.price.toFixed(2)} / month</p>
-                            </div>
-                          );
-                        })}
-                    </div>
-                  ) : (
-                    <p className="text-slate-400 text-sm">No tools coming soon at this time.</p>
-                  )}
-                </div>
-              </div>
+                // Default fallback for other tools
+                return (
+                  <div>
+                    <h1 className="text-2xl font-semibold text-slate-50 mb-4">{activeTool.name}</h1>
+                    <p className="text-slate-400">Tool application coming soon...</p>
+                  </div>
+                );
+              })()
             )}
           </div>
         )}
