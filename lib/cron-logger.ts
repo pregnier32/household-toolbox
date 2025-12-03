@@ -74,8 +74,8 @@ export async function executeWithLogging<T>(
   try {
     const result = await jobFunction();
     
-    // If result is a NextResponse, check if it's an error
-    if (result && typeof result === 'object' && 'status' in result) {
+    // If result is a NextResponse-like object, check if it's an error
+    if (result && typeof result === 'object' && 'status' in result && 'json' in result && typeof (result as any).json === 'function') {
       const response = result as { status: number; json: () => Promise<any> };
       if (response.status >= 400) {
         status = 'error';

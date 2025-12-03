@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { getSession } from '@/lib/session';
 import { supabaseServer } from '@/lib/supabaseServer';
 import { syncUserBillingActive } from '@/lib/billing-sync';
+import { logCronJobExecution } from '@/lib/cron-logger';
 
 /**
  * Admin endpoint to sync billing_active for all users
@@ -22,6 +23,9 @@ export async function GET(request: NextRequest) {
     return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
   }
 
+  const startedAt = new Date().toISOString();
+  const jobName = 'billing-sync-manual';
+
   try {
     const { searchParams } = new URL(request.url);
     const userId = searchParams.get('userId');
@@ -30,11 +34,27 @@ export async function GET(request: NextRequest) {
       // Sync specific user
       const result = await syncUserBillingActive(userId);
       if (!result.success) {
+        await logCronJobExecution({
+          job_name: jobName,
+          status: 'error',
+          message: 'Failed to sync user billing',
+          error_details: result.error,
+          execution_data: { started_at: startedAt, userId, type: 'single_user' },
+        });
+        
         return NextResponse.json(
           { error: 'Failed to sync user', details: result.error },
           { status: 500 }
         );
       }
+      
+      await logCronJobExecution({
+        job_name: jobName,
+        status: 'success',
+        message: 'User billing synced successfully',
+        execution_data: { started_at: startedAt, userId, type: 'single_user' },
+      });
+      
       return NextResponse.json({ 
         message: 'User billing synced successfully',
         userId 
@@ -50,6 +70,15 @@ export async function GET(request: NextRequest) {
     
     if (usersError) {
       console.error('Error fetching users with tools:', usersError);
+      
+      await logCronJobExecution({
+        job_name: jobName,
+        status: 'error',
+        message: 'Failed to fetch users with tools',
+        error_details: usersError.message,
+        execution_data: { started_at: startedAt, type: 'all_users' },
+      });
+      
       return NextResponse.json(
         { error: 'Failed to fetch users', details: usersError.message },
         { status: 500 }
@@ -57,10 +86,19 @@ export async function GET(request: NextRequest) {
     }
     
     if (!usersWithTools || usersWithTools.length === 0) {
-      return NextResponse.json({ 
+      const response = NextResponse.json({ 
         message: 'No users with active tools found',
         count: 0
       });
+      
+      await logCronJobExecution({
+        job_name: jobName,
+        status: 'success',
+        message: 'No users with active tools found',
+        execution_data: { started_at: startedAt, type: 'all_users', total: 0, successful: 0, failed: 0 },
+      });
+      
+      return response;
     }
     
     // Get unique user IDs
@@ -76,7 +114,7 @@ export async function GET(request: NextRequest) {
       r.status === 'rejected' || (r.status === 'fulfilled' && !r.value.success)
     );
     
-    return NextResponse.json({
+    const responseData = {
       message: `Sync completed`,
       total: uniqueUserIds.length,
       successful,
@@ -89,9 +127,35 @@ export async function GET(request: NextRequest) {
             : f.value.error || 'Unknown error'
         }))
       } : undefined
+    };
+    
+    // Log the execution
+    await logCronJobExecution({
+      job_name: jobName,
+      status: failed.length > 0 ? 'warning' : 'success',
+      message: `Sync completed: ${successful} successful, ${failed.length} failed`,
+      error_details: failed.length > 0 ? JSON.stringify(responseData.details) : undefined,
+      execution_data: { 
+        started_at: startedAt, 
+        type: 'all_users',
+        total: uniqueUserIds.length,
+        successful,
+        failed: failed.length,
+      },
     });
+    
+    return NextResponse.json(responseData);
   } catch (error) {
     console.error('Error in sync-all billing API:', error);
+    
+    await logCronJobExecution({
+      job_name: jobName,
+      status: 'error',
+      message: 'Internal server error during billing sync',
+      error_details: error instanceof Error ? error.message : 'Unknown error',
+      execution_data: { started_at: startedAt },
+    });
+    
     return NextResponse.json(
       { 
         error: 'Internal server error',
