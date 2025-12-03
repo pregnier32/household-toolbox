@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getSession } from '@/lib/session';
 import { supabaseServer } from '@/lib/supabaseServer';
+import { syncUserBillingActive } from '@/lib/billing-sync';
 
 // POST - Purchase a tool (add to users_tools table)
 export async function POST(request: NextRequest) {
@@ -84,6 +85,9 @@ export async function POST(request: NextRequest) {
         return NextResponse.json({ error: 'Failed to start trial' }, { status: 500 });
       }
 
+      // Sync billing_active after reactivating tool
+      await syncUserBillingActive(user.id);
+
       return NextResponse.json({ message: 'Trial started', userTool: updatedUserTool });
     }
 
@@ -139,6 +143,10 @@ export async function POST(request: NextRequest) {
       }
 
       newUserTool = fallbackTool;
+      
+      // Sync billing_active after purchasing tool
+      await syncUserBillingActive(user.id);
+      
       return NextResponse.json(
         { message: 'Tool purchased successfully', userTool: newUserTool },
         { status: 201 }
@@ -152,6 +160,9 @@ export async function POST(request: NextRequest) {
         details: insertError.message 
       }, { status: 500 });
     }
+
+    // Sync billing_active after purchasing tool
+    await syncUserBillingActive(user.id);
 
     return NextResponse.json(
       { message: '7-day free trial started!', userTool: newUserTool },

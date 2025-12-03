@@ -10,6 +10,8 @@ export default function SiteMaintenancePage() {
   const [isLoading, setIsLoading] = useState(true);
   const [isSaving, setIsSaving] = useState(false);
   const [isSavingFee, setIsSavingFee] = useState(false);
+  const [isSyncingBilling, setIsSyncingBilling] = useState(false);
+  const [billingSyncResult, setBillingSyncResult] = useState<{ success: boolean; message?: string; count?: number } | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
   const [user, setUser] = useState<{ userStatus?: string } | null>(null);
@@ -95,6 +97,44 @@ export default function SiteMaintenancePage() {
       setError(err instanceof Error ? err.message : 'Failed to update settings');
     } finally {
       setIsSaving(false);
+    }
+  };
+
+  const handleBillingSync = async () => {
+    setIsSyncingBilling(true);
+    setError(null);
+    setSuccess(null);
+    setBillingSyncResult(null);
+
+    try {
+      const response = await fetch('/api/admin/billing/sync-all');
+      const data = await response.json();
+
+      if (!response.ok) {
+        throw new Error(data.error || 'Failed to sync billing');
+      }
+
+      setBillingSyncResult({
+        success: true,
+        message: data.message,
+        count: data.count,
+      });
+      setSuccess(`Billing sync completed: ${data.message}`);
+      
+      // Clear success message after 5 seconds
+      setTimeout(() => {
+        setSuccess(null);
+        setBillingSyncResult(null);
+      }, 5000);
+    } catch (err) {
+      console.error('Error syncing billing:', err);
+      setError(err instanceof Error ? err.message : 'Failed to sync billing');
+      setBillingSyncResult({
+        success: false,
+        message: err instanceof Error ? err.message : 'Unknown error',
+      });
+    } finally {
+      setIsSyncingBilling(false);
     }
   };
 
@@ -320,6 +360,38 @@ export default function SiteMaintenancePage() {
                 </span>
                 {' '}per month
               </p>
+            </div>
+          </div>
+
+          {/* Billing Sync Section */}
+          <div className="mt-8">
+            <h2 className="text-xl font-semibold text-slate-100 mb-4">Billing Sync</h2>
+            <div className="rounded-lg border border-slate-700 bg-slate-800/30 p-6">
+              <p className="text-sm text-slate-300 mb-4">
+                Sync billing records for all users. This will populate the <code className="text-emerald-400">billing_active</code> table 
+                based on current tool subscriptions. Run this after creating the billing tables or when you need to rebuild billing data.
+              </p>
+              <button
+                onClick={handleBillingSync}
+                disabled={isSyncingBilling}
+                className="px-4 py-2 bg-emerald-600 hover:bg-emerald-700 disabled:bg-slate-700 disabled:cursor-not-allowed text-white rounded-lg font-medium transition-colors"
+              >
+                {isSyncingBilling ? 'Syncing...' : 'Sync All Users Billing'}
+              </button>
+              {billingSyncResult && (
+                <div className={`mt-4 p-3 rounded-lg ${
+                  billingSyncResult.success 
+                    ? 'bg-emerald-500/20 border border-emerald-500/50' 
+                    : 'bg-red-500/20 border border-red-500/50'
+                }`}>
+                  <p className={`text-sm ${
+                    billingSyncResult.success ? 'text-emerald-300' : 'text-red-300'
+                  }`}>
+                    {billingSyncResult.message}
+                    {billingSyncResult.count !== undefined && ` (${billingSyncResult.count} users)`}
+                  </p>
+                </div>
+              )}
             </div>
           </div>
         </div>

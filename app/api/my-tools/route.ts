@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getSession } from '@/lib/session';
 import { supabaseServer } from '@/lib/supabaseServer';
+import { removeToolBillingRecords } from '@/lib/billing-sync';
 
 // GET - Fetch current user's active tools with details
 export async function GET() {
@@ -175,6 +176,9 @@ export async function PUT(request: NextRequest) {
       console.error('Error inactivating tool:', updateError);
       return NextResponse.json({ error: 'Failed to inactivate tool' }, { status: 500 });
     }
+
+    // Sync billing_active after inactivating tool
+    await removeToolBillingRecords(user.id, toolId);
 
     return NextResponse.json({ success: true, tool: updatedTool });
   } catch (error) {

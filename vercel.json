@@ -1,0 +1,9 @@
+{
+  "crons": [
+    {
+      "path": "/api/cron/billing-process",
+      "schedule": "0 2 * * *"
+    }
+  ]
+}
+
