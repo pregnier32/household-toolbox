@@ -158,7 +158,8 @@ export async function syncUserBillingActive(userId: string): Promise<{ success: 
         return tool.status === 'active';
       })
       .map(tool => {
-        const toolData = tool.tools as { name: string } | null;
+        const toolData = tool.tools as { name: string }[] | null;
+        const toolName = toolData && toolData.length > 0 ? toolData[0].name : 'Unknown Tool';
         return {
           user_id: userId,
           billing_period_start: start.toISOString().split('T')[0],
@@ -166,7 +167,7 @@ export async function syncUserBillingActive(userId: string): Promise<{ success: 
           billing_date: billingDate.toISOString().split('T')[0],
           item_type: 'tool_subscription' as const,
           tool_id: tool.tool_id,
-          tool_name: toolData?.name || 'Unknown Tool',
+          tool_name: toolName,
           amount: Number(tool.price),
           status: 'pending' as const,
           users_tools_id: tool.id,
