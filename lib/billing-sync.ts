@@ -175,7 +175,18 @@ export async function syncUserBillingActive(userId: string): Promise<{ success: 
       });
     
     // Insert platform fee if applicable
-    const billingRecords = [...toolRecords];
+    const billingRecords: Array<{
+      user_id: string;
+      billing_period_start: string;
+      billing_period_end: string;
+      billing_date: string;
+      item_type: 'tool_subscription' | 'platform_fee';
+      tool_id: string | null;
+      tool_name: string | null;
+      amount: number;
+      status: 'pending';
+      users_tools_id: string | null;
+    }> = [...toolRecords];
     if (shouldChargePlatformFee) {
       billingRecords.push({
         user_id: userId,
