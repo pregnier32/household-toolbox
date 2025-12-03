@@ -307,6 +307,63 @@ export default function SiteMaintenancePage() {
               </svg>
             </div>
           </button>
+
+          {/* Cron Job Logs Card */}
+          <button
+            onClick={() => router.push('/dashboard/admin/cron-logs')}
+            className="rounded-lg border border-slate-800 bg-slate-900/70 p-6 text-left hover:border-emerald-500/50 transition-colors"
+          >
+            <div className="mb-4">
+              <h2 className="text-lg font-semibold text-slate-50 mb-2">Cron Job Logs</h2>
+              <p className="text-sm text-slate-400">
+                View execution history and status of automated jobs
+              </p>
+            </div>
+            <div className="flex items-center justify-between">
+              <span className="text-xs text-slate-400">View logs</span>
+              <svg className="h-5 w-5 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+              </svg>
+            </div>
+          </button>
+
+          {/* Promo Codes Card */}
+          <button
+            onClick={() => router.push('/dashboard/admin/promo-codes')}
+            className="rounded-lg border border-slate-800 bg-slate-900/70 p-6 text-left hover:border-emerald-500/50 transition-colors"
+          >
+            <div className="mb-4">
+              <h2 className="text-lg font-semibold text-slate-50 mb-2">Promo Codes</h2>
+              <p className="text-sm text-slate-400">
+                Create and manage promotional codes for discounts
+              </p>
+            </div>
+            <div className="flex items-center justify-between">
+              <span className="text-xs text-slate-400">Manage codes</span>
+              <svg className="h-5 w-5 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+              </svg>
+            </div>
+          </button>
+
+          {/* Welcome Email Card */}
+          <button
+            onClick={() => router.push('/dashboard/admin/welcome-email')}
+            className="rounded-lg border border-slate-800 bg-slate-900/70 p-6 text-left hover:border-emerald-500/50 transition-colors"
+          >
+            <div className="mb-4">
+              <h2 className="text-lg font-semibold text-slate-50 mb-2">Welcome Email</h2>
+              <p className="text-sm text-slate-400">
+                Edit the welcome email sent to new users
+              </p>
+            </div>
+            <div className="flex items-center justify-between">
+              <span className="text-xs text-slate-400">Edit template</span>
+              <svg className="h-5 w-5 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+              </svg>
+            </div>
+          </button>
         </div>
 
         {/* Modal */}

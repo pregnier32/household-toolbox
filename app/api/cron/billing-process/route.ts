@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import { supabaseServer } from '@/lib/supabaseServer';
 import { syncUserBillingActive } from '@/lib/billing-sync';
+import { logCronJobExecution } from '@/lib/cron-logger';
 
 /**
  * Vercel Cron Job: Process billing records
@@ -23,6 +24,9 @@ export async function GET(request: Request) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   }
 
+  const startedAt = new Date().toISOString();
+  const jobName = 'billing-process';
+
   try {
     const today = new Date().toISOString().split('T')[0];
     
@@ -36,10 +40,20 @@ export async function GET(request: Request) {
     
     if (usersError) {
       console.error('Error fetching users with tools:', usersError);
-      return NextResponse.json(
+      const errorResponse = NextResponse.json(
         { error: 'Failed to fetch users', details: usersError.message },
         { status: 500 }
       );
+      
+      await logCronJobExecution({
+        job_name: jobName,
+        status: 'error',
+        message: 'Failed to fetch users with tools',
+        error_details: usersError.message,
+        execution_data: { started_at: startedAt, today },
+      });
+      
+      return errorResponse;
     }
     
     const uniqueUserIds = usersWithTools ? [...new Set(usersWithTools.map(ut => ut.user_id))] : [];
@@ -68,18 +82,57 @@ export async function GET(request: Request) {
     
     if (fetchError) {
       console.error('Error fetching billing records:', fetchError);
-      return NextResponse.json(
+      const errorResponse = NextResponse.json(
         { error: 'Failed to fetch billing records', details: fetchError.message },
         { status: 500 }
       );
+      
+      await logCronJobExecution({
+        job_name: jobName,
+        status: 'error',
+        message: 'Failed to fetch billing records',
+        error_details: fetchError.message,
+        execution_data: { 
+          started_at: startedAt, 
+          today,
+          sync: {
+            total: uniqueUserIds.length,
+            successful: syncSuccessful,
+            failed: syncFailed.length,
+          },
+        },
+      });
+      
+      return errorResponse;
     }
     
     if (!recordsToProcess || recordsToProcess.length === 0) {
-      return NextResponse.json({ 
+      const response = NextResponse.json({ 
         message: 'No records to process',
         count: 0,
         date: today
       });
+      
+      await logCronJobExecution({
+        job_name: jobName,
+        status: 'success',
+        message: 'No records to process',
+        execution_data: { 
+          started_at: startedAt, 
+          today,
+          sync: {
+            total: uniqueUserIds.length,
+            successful: syncSuccessful,
+            failed: syncFailed.length,
+          },
+          archive: {
+            count: 0,
+            date: today,
+          },
+        },
+      });
+      
+      return response;
     }
     
     // Prepare records for billing_history
@@ -109,10 +162,32 @@ export async function GET(request: Request) {
     
     if (insertError) {
       console.error('Error inserting into billing_history:', insertError);
-      return NextResponse.json(
+      const errorResponse = NextResponse.json(
         { error: 'Failed to insert billing history', details: insertError.message },
         { status: 500 }
       );
+      
+      await logCronJobExecution({
+        job_name: jobName,
+        status: 'error',
+        message: 'Failed to insert billing history',
+        error_details: insertError.message,
+        execution_data: { 
+          started_at: startedAt, 
+          today,
+          sync: {
+            total: uniqueUserIds.length,
+            successful: syncSuccessful,
+            failed: syncFailed.length,
+          },
+          archive: {
+            count: recordsToProcess.length,
+            date: today,
+          },
+        },
+      });
+      
+      return errorResponse;
     }
     
     // Delete from billing_active
@@ -126,7 +201,7 @@ export async function GET(request: Request) {
       console.error('Error deleting from billing_active:', deleteError);
       // Note: Records were already inserted into history, so this is a cleanup issue
       // In production, you might want to handle this differently (e.g., mark as processed instead of delete)
-      return NextResponse.json(
+      const errorResponse = NextResponse.json(
         { 
           error: 'Failed to delete from billing_active', 
           details: deleteError.message,
@@ -134,9 +209,31 @@ export async function GET(request: Request) {
         },
         { status: 500 }
       );
+      
+      await logCronJobExecution({
+        job_name: jobName,
+        status: 'warning',
+        message: 'Records moved to history but failed to delete from active table',
+        error_details: deleteError.message,
+        execution_data: { 
+          started_at: startedAt, 
+          today,
+          sync: {
+            total: uniqueUserIds.length,
+            successful: syncSuccessful,
+            failed: syncFailed.length,
+          },
+          archive: {
+            count: recordsToProcess.length,
+            date: today,
+          },
+        },
+      });
+      
+      return errorResponse;
     }
     
-    return NextResponse.json({
+    const successResponse = NextResponse.json({
       message: `Successfully processed ${recordsToProcess.length} billing records`,
       sync: {
         total: uniqueUserIds.length,
@@ -154,8 +251,40 @@ export async function GET(request: Request) {
         amount: r.amount,
       }))
     });
+    
+    // Log successful execution
+    await logCronJobExecution({
+      job_name: jobName,
+      status: syncFailed.length > 0 ? 'warning' : 'success',
+      message: `Successfully processed ${recordsToProcess.length} billing records`,
+      error_details: syncFailed.length > 0 ? `${syncFailed.length} users failed to sync` : undefined,
+      execution_data: { 
+        started_at: startedAt, 
+        today,
+        sync: {
+          total: uniqueUserIds.length,
+          successful: syncSuccessful,
+          failed: syncFailed.length,
+        },
+        archive: {
+          count: recordsToProcess.length,
+          date: today,
+        },
+      },
+    });
+    
+    return successResponse;
   } catch (error) {
     console.error('Error in billing process cron job:', error);
+    
+    await logCronJobExecution({
+      job_name: jobName,
+      status: 'error',
+      message: 'Internal server error',
+      error_details: error instanceof Error ? error.message : 'Unknown error',
+      execution_data: { started_at: startedAt },
+    });
+    
     return NextResponse.json(
       { 
         error: 'Internal server error',

@@ -75,72 +75,6 @@ export function AdminMenu({ className = '' }: AdminMenuProps) {
           <div className="py-1">
             <button
               onClick={() => {
-                router.push('/dashboard/admin/welcome-email');
-                setIsOpen(false);
-              }}
-              className="flex w-full items-center gap-3 px-4 py-2 text-sm text-slate-300 transition-colors hover:bg-slate-700"
-            >
-              <svg
-                className="h-4 w-4"
-                fill="none"
-                stroke="currentColor"
-                viewBox="0 0 24 24"
-              >
-                <path
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                  strokeWidth={2}
-                  d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z"
-                />
-              </svg>
-              <span>Welcome Email</span>
-            </button>
-            <button
-              onClick={() => {
-                router.push('/dashboard/admin/promo-codes');
-                setIsOpen(false);
-              }}
-              className="flex w-full items-center gap-3 px-4 py-2 text-sm text-slate-300 transition-colors hover:bg-slate-700"
-            >
-              <svg
-                className="h-4 w-4"
-                fill="none"
-                stroke="currentColor"
-                viewBox="0 0 24 24"
-              >
-                <path
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                  strokeWidth={2}
-                  d="M7 7h.01M7 3h5c.512 0 1.024.195 1.414.586l7 7a2 2 0 010 2.828l-7 7a2 2 0 01-2.828 0l-7-7A1.994 1.994 0 013 12V7a4 4 0 014-4z"
-                />
-              </svg>
-              <span>Promo Codes</span>
-            </button>
-            <button
-              onClick={() => {
-                router.push('/dashboard/admin/users');
-                setIsOpen(false);
-              }}
-              className="flex w-full items-center gap-3 px-4 py-2 text-sm text-slate-300 transition-colors hover:bg-slate-700"
-            >
-              <svg
-                className="h-4 w-4"
-                fill="none"
-                stroke="currentColor"
-                viewBox="0 0 24 24"
-              >
-                <path
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                  strokeWidth={2}
-                  d="M12 4.354a4 4 0 110 5.292M15 21H3v-1a6 6 0 0112 0v1zm0 0h6v-1a6 6 0 00-9-5.197M13 7a4 4 0 11-8 0 4 4 0 018 0z"
-                />
-              </svg>
-              <span>Users</span>
-            </button>
-            <button
-              onClick={() => {
                 router.push('/dashboard/admin/site-maintenance');
                 setIsOpen(false);
               }}
@@ -166,6 +100,28 @@ export function AdminMenu({ className = '' }: AdminMenuProps) {
                 />
               </svg>
               <span>Site Maintenance</span>
+            </button>
+            <button
+              onClick={() => {
+                router.push('/dashboard/admin/users');
+                setIsOpen(false);
+              }}
+              className="flex w-full items-center gap-3 px-4 py-2 text-sm text-slate-300 transition-colors hover:bg-slate-700"
+            >
+              <svg
+                className="h-4 w-4"
+                fill="none"
+                stroke="currentColor"
+                viewBox="0 0 24 24"
+              >
+                <path
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  strokeWidth={2}
+                  d="M12 4.354a4 4 0 110 5.292M15 21H3v-1a6 6 0 0112 0v1zm0 0h6v-1a6 6 0 00-9-5.197M13 7a4 4 0 11-8 0 4 4 0 018 0z"
+                />
+              </svg>
+              <span>Users</span>
             </button>
             <button
               onClick={() => {
