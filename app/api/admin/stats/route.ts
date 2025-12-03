@@ -84,7 +84,9 @@ export async function GET() {
     const toolCounts = new Map<string, number>();
     if (toolsData) {
       toolsData.forEach((item) => {
-        const tool = item.tools as { name: string } | null;
+        // Supabase returns related data as an array, even for one-to-one relationships
+        const tools = item.tools as { name: string }[] | null;
+        const tool = tools && tools.length > 0 ? tools[0] : null;
         const toolName = tool?.name || 'Unknown';
         const currentCount = toolCounts.get(toolName) || 0;
         toolCounts.set(toolName, currentCount + 1);
