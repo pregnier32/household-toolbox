@@ -33,6 +33,8 @@ type Tool = {
   created_at: string | null;
   updated_at: string | null;
   isOwned?: boolean;
+  trialStatus?: string | null;
+  trialEndDate?: string | null;
   icons: {
     default?: ToolIcon;
     coming_soon?: ToolIcon;
@@ -131,6 +133,7 @@ export default function Dashboard() {
     setIsModalOpen(false);
     setSelectedTool(null);
     setBuyMessage(null);
+    setIsBuying(false);
   };
 
   const handleBuy = async (toolId: string) => {
@@ -158,6 +161,7 @@ export default function Dashboard() {
       
       // Refresh tools list after successful purchase
       setTimeout(() => {
+        setIsBuying(false);
         loadTools();
         handleCloseModal();
       }, 1500);
@@ -358,8 +362,15 @@ export default function Dashboard() {
                                   />
                                 </div>
                               )}
-                              <h3 className="text-sm font-semibold text-slate-100 mb-1 text-center">{tool.name}</h3>
-                              <p className="text-xs text-emerald-400 font-medium text-center">${tool.price.toFixed(2)} / month</p>
+                              <div className="flex flex-col items-center">
+                                <h3 className="text-sm font-semibold text-slate-100 mb-1 text-center">{tool.name}</h3>
+                                {tool.trialStatus === 'trial' && (
+                                  <span className="inline-flex items-center rounded-full bg-amber-500/20 px-2 py-0.5 text-xs font-medium text-amber-300 mb-1">
+                                    Trial
+                                  </span>
+                                )}
+                                <p className="text-xs text-emerald-400 font-medium text-center">${tool.price.toFixed(2)} / month</p>
+                              </div>
                             </div>
                           );
                         })}

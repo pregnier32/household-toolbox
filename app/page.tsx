@@ -14,6 +14,8 @@ export default function Home() {
   const [success, setSuccess] = useState<string | null>(null);
   const [rememberMe, setRememberMe] = useState(false);
   const [savedEmail, setSavedEmail] = useState<string>('');
+  const [signUpsDisabled, setSignUpsDisabled] = useState(false);
+  const [isCheckingMaintenance, setIsCheckingMaintenance] = useState(true);
   const formRef = useRef<HTMLFormElement>(null);
   const emailInputRef = useRef<HTMLInputElement>(null);
   const router = useRouter();
@@ -31,6 +33,24 @@ export default function Home() {
         }
       }
     }
+  }, []);
+
+  // Check site maintenance setting
+  useEffect(() => {
+    const checkMaintenance = async () => {
+      try {
+        const response = await fetch('/api/site-maintenance');
+        const data = await response.json();
+        setSignUpsDisabled(data.signUpsDisabled || false);
+      } catch (err) {
+        console.error('Error checking site maintenance:', err);
+        // Default to allowing sign ups if there's an error
+        setSignUpsDisabled(false);
+      } finally {
+        setIsCheckingMaintenance(false);
+      }
+    };
+    checkMaintenance();
   }, []);
   return (
     <main className="min-h-screen bg-slate-950 text-slate-100">
@@ -108,19 +128,31 @@ export default function Home() {
               <button
                 type="button"
                 onClick={() => {
-                  setIsSignUp(true);
-                  setError(null);
-                  setSuccess(null);
+                  if (!signUpsDisabled) {
+                    setIsSignUp(true);
+                    setError(null);
+                    setSuccess(null);
+                  }
                 }}
+                disabled={signUpsDisabled || isCheckingMaintenance}
                 className={`flex-1 rounded-md px-3 py-2 text-sm font-medium transition-colors ${
                   isSignUp
                     ? 'bg-emerald-400/20 text-emerald-300'
+                    : signUpsDisabled
+                    ? 'text-slate-500 cursor-not-allowed opacity-50'
                     : 'text-slate-400 hover:text-slate-300'
                 }`}
+                title={signUpsDisabled ? 'New user registration is currently disabled' : ''}
               >
                 Sign Up
               </button>
             </div>
+
+            {signUpsDisabled && isSignUp && (
+              <div className="mb-4 rounded-lg border border-amber-500/50 bg-amber-500/10 px-3 py-2 text-sm text-amber-300">
+                New user registration is currently disabled. Please contact support if you need assistance.
+              </div>
+            )}
 
             {error && (
               <div className="mb-4 rounded-lg border border-red-500/50 bg-red-500/10 px-3 py-2 text-sm text-red-300">
@@ -150,6 +182,13 @@ export default function Home() {
                 const lastName = formData.get('lastName') as string;
 
                 if (isSignUp) {
+                  // Double-check that sign ups are not disabled (client-side validation)
+                  if (signUpsDisabled) {
+                    setIsLoading(false);
+                    setError('New user registration is currently disabled. Please contact support.');
+                    return;
+                  }
+                  
                   const result = await signUp({ email, password, firstName, lastName });
                   setIsLoading(false);
 

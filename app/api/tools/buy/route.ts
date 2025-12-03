@@ -54,19 +54,25 @@ export async function POST(request: NextRequest) {
     }
 
     if (existingUserTool) {
-      // If user already has the tool and it's active, return success
-      if (existingUserTool.status === 'active') {
+      // If user already has the tool and it's active or in trial, return success
+      if (existingUserTool.status === 'active' || existingUserTool.status === 'trial') {
         return NextResponse.json(
           { message: 'You already own this tool', userTool: existingUserTool },
           { status: 200 }
         );
       }
-      // If user has it but it's inactive, reactivate it
+      // If user has it but it's inactive, start a new trial
+      const now = new Date();
+      const trialEndDate = new Date(now);
+      trialEndDate.setDate(trialEndDate.getDate() + 7);
+      
       const { data: updatedUserTool, error: updateError } = await supabaseServer
         .from('users_tools')
         .update({
-          status: 'active',
+          status: 'trial',
           price: tool.price,
+          trial_start_date: now.toISOString(),
+          trial_end_date: trialEndDate.toISOString(),
           updated_at: new Date().toISOString(),
         })
         .eq('id', existingUserTool.id)
@@ -75,31 +81,80 @@ export async function POST(request: NextRequest) {
 
       if (updateError) {
         console.error('Error updating user tool:', updateError);
-        return NextResponse.json({ error: 'Failed to reactivate tool' }, { status: 500 });
+        return NextResponse.json({ error: 'Failed to start trial' }, { status: 500 });
       }
 
-      return NextResponse.json({ message: 'Tool reactivated', userTool: updatedUserTool });
+      return NextResponse.json({ message: 'Trial started', userTool: updatedUserTool });
     }
 
-    // Insert new record into users_tools table
-    const { data: newUserTool, error: insertError } = await supabaseServer
+    // Insert new record into users_tools table with 7-day trial
+    const now = new Date();
+    const trialEndDate = new Date(now);
+    trialEndDate.setDate(trialEndDate.getDate() + 7);
+    
+    // Try to insert with trial fields first
+    let insertData: any = {
+      user_id: user.id,
+      tool_id: toolId,
+      status: 'trial',
+      price: tool.price,
+      trial_start_date: now.toISOString(),
+      trial_end_date: trialEndDate.toISOString(),
+    };
+
+    let { data: newUserTool, error: insertError } = await supabaseServer
       .from('users_tools')
-      .insert({
+      .insert(insertData)
+      .select()
+      .single();
+
+    // If trial columns don't exist or status 'trial' is not allowed, fall back to 'active'
+    if (insertError && (
+      insertError.message?.includes('column') || 
+      insertError.message?.includes('does not exist') ||
+      insertError.message?.includes('check constraint') ||
+      insertError.code === '23514' // Check constraint violation
+    )) {
+      console.log('Trial columns/status not available, creating as active subscription');
+      // Fall back to creating as active (for backward compatibility)
+      insertData = {
         user_id: user.id,
         tool_id: toolId,
         status: 'active',
         price: tool.price,
-      })
-      .select()
-      .single();
+      };
+      
+      const { data: fallbackTool, error: fallbackError } = await supabaseServer
+        .from('users_tools')
+        .insert(insertData)
+        .select()
+        .single();
+
+      if (fallbackError) {
+        console.error('Error inserting user tool:', fallbackError);
+        return NextResponse.json({ 
+          error: 'Failed to purchase tool',
+          details: fallbackError.message 
+        }, { status: 500 });
+      }
+
+      newUserTool = fallbackTool;
+      return NextResponse.json(
+        { message: 'Tool purchased successfully', userTool: newUserTool },
+        { status: 201 }
+      );
+    }
 
     if (insertError) {
       console.error('Error inserting user tool:', insertError);
-      return NextResponse.json({ error: 'Failed to purchase tool' }, { status: 500 });
+      return NextResponse.json({ 
+        error: 'Failed to purchase tool',
+        details: insertError.message 
+      }, { status: 500 });
     }
 
     return NextResponse.json(
-      { message: 'Tool purchased successfully', userTool: newUserTool },
+      { message: '7-day free trial started!', userTool: newUserTool },
       { status: 201 }
     );
   } catch (error) {
