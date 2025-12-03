@@ -1,9 +1,12 @@
 import { NextResponse } from 'next/server';
 import { supabaseServer } from '@/lib/supabaseServer';
+import { syncUserBillingActive } from '@/lib/billing-sync';
 
 /**
  * Vercel Cron Job: Process billing records
- * This endpoint is called nightly to move records from billing_active to billing_history
+ * This endpoint is called nightly to:
+ * 1. Sync all users' billing_active records from their current users_tools
+ * 2. Move processed records from billing_active to billing_history
  * 
  * Configure in vercel.json:
  * {
@@ -22,6 +25,38 @@ export async function GET(request: Request) {
 
   try {
     const today = new Date().toISOString().split('T')[0];
+    
+    // Step 1: Sync all users' billing_active records from their current users_tools
+    // This ensures billing_active is up-to-date before archiving
+    const { data: usersWithTools, error: usersError } = await supabaseServer
+      .from('users_tools')
+      .select('user_id')
+      .in('status', ['active', 'trial'])
+      .order('user_id');
+    
+    if (usersError) {
+      console.error('Error fetching users with tools:', usersError);
+      return NextResponse.json(
+        { error: 'Failed to fetch users', details: usersError.message },
+        { status: 500 }
+      );
+    }
+    
+    const uniqueUserIds = usersWithTools ? [...new Set(usersWithTools.map(ut => ut.user_id))] : [];
+    
+    // Sync each user's billing records
+    const syncResults = await Promise.allSettled(
+      uniqueUserIds.map(userId => syncUserBillingActive(userId))
+    );
+    
+    const syncSuccessful = syncResults.filter(r => r.status === 'fulfilled' && r.value.success).length;
+    const syncFailed = syncResults.filter(r => 
+      r.status === 'rejected' || (r.status === 'fulfilled' && !r.value.success)
+    );
+    
+    if (syncFailed.length > 0) {
+      console.warn(`Failed to sync ${syncFailed.length} users' billing records`);
+    }
     
     // Get all records from billing_active that should be processed
     // (billing_date is today or in the past, and status is pending)
@@ -103,8 +138,15 @@ export async function GET(request: Request) {
     
     return NextResponse.json({
       message: `Successfully processed ${recordsToProcess.length} billing records`,
-      count: recordsToProcess.length,
-      date: today,
+      sync: {
+        total: uniqueUserIds.length,
+        successful: syncSuccessful,
+        failed: syncFailed.length,
+      },
+      archive: {
+        count: recordsToProcess.length,
+        date: today,
+      },
       records: recordsToProcess.map(r => ({
         id: r.id,
         user_id: r.user_id,

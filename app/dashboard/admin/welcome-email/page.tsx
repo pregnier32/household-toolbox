@@ -146,6 +146,25 @@ export default function WelcomeEmailEditor() {
       {/* Content */}
       <div className="mx-auto max-w-5xl px-4 py-8 sm:px-6 lg:px-8">
         <div className="mb-6">
+          <button
+            onClick={() => router.push('/dashboard')}
+            className="mb-4 flex items-center gap-2 text-sm text-slate-400 transition-colors hover:text-slate-300"
+          >
+            <svg
+              className="h-4 w-4"
+              fill="none"
+              stroke="currentColor"
+              viewBox="0 0 24 24"
+            >
+              <path
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                strokeWidth={2}
+                d="M15 19l-7-7 7-7"
+              />
+            </svg>
+            <span>Back to Dashboard</span>
+          </button>
           <h1 className="text-2xl font-semibold text-slate-50 mb-2">
             Welcome Email Editor
           </h1>

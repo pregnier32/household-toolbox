@@ -85,8 +85,8 @@ export async function POST(request: NextRequest) {
         return NextResponse.json({ error: 'Failed to start trial' }, { status: 500 });
       }
 
-      // Sync billing_active after reactivating tool
-      await syncUserBillingActive(user.id);
+      // Note: billing_active will be synced nightly by cron job
+      // No need to sync immediately for performance
 
       return NextResponse.json({ message: 'Trial started', userTool: updatedUserTool });
     }
@@ -144,8 +144,8 @@ export async function POST(request: NextRequest) {
 
       newUserTool = fallbackTool;
       
-      // Sync billing_active after purchasing tool
-      await syncUserBillingActive(user.id);
+      // Note: billing_active will be synced nightly by cron job
+      // No need to sync immediately for performance
       
       return NextResponse.json(
         { message: 'Tool purchased successfully', userTool: newUserTool },
@@ -161,8 +161,8 @@ export async function POST(request: NextRequest) {
       }, { status: 500 });
     }
 
-    // Sync billing_active after purchasing tool
-    await syncUserBillingActive(user.id);
+    // Note: billing_active will be synced nightly by cron job
+    // No need to sync immediately for performance
 
     return NextResponse.json(
       { message: '7-day free trial started!', userTool: newUserTool },
