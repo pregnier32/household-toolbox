@@ -43,6 +43,7 @@ export default function MyToolsPage() {
     toolName: '',
   });
   const [showPreview, setShowPreview] = useState(false);
+  const [platformFee, setPlatformFee] = useState<number>(5.00); // Default to $5.00
   const router = useRouter();
 
   useEffect(() => {
@@ -52,6 +53,8 @@ export default function MyToolsPage() {
       .then((data) => {
         if (data.user) {
           setUser(data.user);
+          // Load platform fee
+          loadPlatformFee();
           // Load user tools
           loadTools();
         } else {
@@ -62,6 +65,19 @@ export default function MyToolsPage() {
         router.push('/');
       });
   }, [router]);
+
+  const loadPlatformFee = async () => {
+    try {
+      const response = await fetch('/api/billing/platform-fee');
+      const data = await response.json();
+      if (response.ok && data.amount) {
+        setPlatformFee(Number(data.amount));
+      }
+    } catch (err) {
+      console.error('Error loading platform fee:', err);
+      // Keep default value of $5.00
+    }
+  };
 
   const loadTools = async () => {
     try {
@@ -199,8 +215,13 @@ export default function MyToolsPage() {
     }
   };
 
-  // Calculate total monthly cost (only for active tools, not trials)
-  const totalMonthlyCost = tools.reduce((sum, tool) => {
+  // Helper function to check if platform fee applies
+  const shouldChargePlatformFee = (toolsList: UserTool[]) => {
+    return toolsList.some(tool => tool.status === 'active' || tool.status === 'trial');
+  };
+
+  // Calculate total monthly cost
+  const toolSubscriptionsCost = tools.reduce((sum, tool) => {
     // During trial, cost is $0
     if (tool.status === 'trial') {
       return sum;
@@ -208,20 +229,45 @@ export default function MyToolsPage() {
     return sum + Number(tool.price);
   }, 0);
 
-  // Calculate billing date from oldest activated date
+  // Add platform fee if user has at least 1 active/trial tool
+  const platformFeeAmount = shouldChargePlatformFee(tools) ? platformFee : 0;
+  const totalMonthlyCost = toolSubscriptionsCost + platformFeeAmount;
+
+  // Calculate billing date from oldest activated date (7 days after activation for trials)
   const getBillingDate = () => {
     if (tools.length === 0) return null;
     
-    // Find the oldest created_at date
-    const oldestDate = tools.reduce((oldest, tool) => {
-      const toolDate = new Date(tool.created_at);
+    // Find the oldest billing date (7 days after activation)
+    const oldestBillingDate = tools.reduce((oldest, tool) => {
+      let toolBillingDate: Date;
+      
+      if (tool.status === 'trial' && tool.trial_end_date) {
+        // For trials, use the trial end date (which is 7 days after activation)
+        toolBillingDate = new Date(tool.trial_end_date);
+      } else {
+        // For active tools, use created_at + 7 days (to account for the trial period that would have ended)
+        const createdDate = new Date(tool.created_at);
+        toolBillingDate = new Date(createdDate);
+        toolBillingDate.setDate(toolBillingDate.getDate() + 7);
+      }
+      
       const oldestDateObj = new Date(oldest);
-      return toolDate < oldestDateObj ? tool.created_at : oldest;
-    }, tools[0].created_at);
+      return toolBillingDate < oldestDateObj ? toolBillingDate : oldest;
+    }, (() => {
+      // Initialize with the first tool's billing date
+      const firstTool = tools[0];
+      if (firstTool.status === 'trial' && firstTool.trial_end_date) {
+        return new Date(firstTool.trial_end_date);
+      } else {
+        const createdDate = new Date(firstTool.created_at);
+        const billingDate = new Date(createdDate);
+        billingDate.setDate(billingDate.getDate() + 7);
+        return billingDate;
+      }
+    })());
     
-    // Extract day of month
-    const date = new Date(oldestDate);
-    return date.getDate();
+    // Extract day of month from the billing date
+    return oldestBillingDate.getDate();
   };
 
   const billingDay = getBillingDate();
@@ -233,36 +279,54 @@ export default function MyToolsPage() {
         total: 0,
         activeTools: [],
         trialToolsEnding: [],
+        nextBillingDate: '',
+        platformFee: 0,
       };
     }
 
-    // Get the next billing date
+    // Calculate the actual next billing date
     const now = new Date();
-    const currentDay = now.getDate();
-    let nextBillingDate = new Date(now.getFullYear(), now.getMonth() + 1, billingDay);
+    const currentYear = now.getFullYear();
+    const currentMonth = now.getMonth();
     
-    // If we've passed this month's billing day, next billing is next month
-    // Otherwise, it's this month
-    if (currentDay >= billingDay) {
-      nextBillingDate = new Date(now.getFullYear(), now.getMonth() + 1, billingDay);
+    // Calculate this month's billing date
+    const thisMonthBilling = new Date(currentYear, currentMonth, billingDay);
+    // Set time to start of day for accurate comparison
+    thisMonthBilling.setHours(0, 0, 0, 0);
+    const nowStartOfDay = new Date(now);
+    nowStartOfDay.setHours(0, 0, 0, 0);
+    
+    // Determine next billing date - always show the NEXT billing cycle
+    let nextBillingDate: Date;
+    if (nowStartOfDay > thisMonthBilling) {
+      // We've passed this month's billing date, so next is next month
+      nextBillingDate = new Date(currentYear, currentMonth + 1, billingDay);
     } else {
-      nextBillingDate = new Date(now.getFullYear(), now.getMonth(), billingDay);
+      // This month's billing date is today or in the future
+      // For preview purposes, show next month's billing
+      nextBillingDate = new Date(currentYear, currentMonth + 1, billingDay);
     }
+    
+    // Set time to start of day for accurate comparison
+    nextBillingDate.setHours(0, 0, 0, 0);
 
     const activeTools: Array<{ name: string; price: number }> = [];
     const trialToolsEnding: Array<{ name: string; price: number; trialEndDate: string; daysUntilEnd: number }> = [];
-    let total = 0;
+    let toolSubscriptionsTotal = 0;
 
     tools.forEach((tool) => {
       if (tool.status === 'active') {
+        // All active tools will be charged on the next billing date
         activeTools.push({
           name: tool.tools?.name || 'Unknown Tool',
           price: Number(tool.price),
         });
-        total += Number(tool.price);
+        toolSubscriptionsTotal += Number(tool.price);
       } else if (tool.status === 'trial' && tool.trial_end_date) {
         const trialEndDate = new Date(tool.trial_end_date);
-        // If trial ends before or on the next billing date, include it
+        trialEndDate.setHours(0, 0, 0, 0);
+        
+        // If trial ends before or on the next billing date, it will be charged
         if (trialEndDate <= nextBillingDate) {
           const daysUntilEnd = Math.ceil((trialEndDate.getTime() - now.getTime()) / (1000 * 60 * 60 * 24));
           trialToolsEnding.push({
@@ -271,15 +335,37 @@ export default function MyToolsPage() {
             trialEndDate: tool.trial_end_date,
             daysUntilEnd: daysUntilEnd > 0 ? daysUntilEnd : 0,
           });
-          total += Number(tool.price);
+          toolSubscriptionsTotal += Number(tool.price);
         }
       }
     });
 
+    // Calculate if platform fee applies (if there will be at least 1 active/trial tool on billing date)
+    // Platform fee applies if:
+    // 1. There are active tools, OR
+    // 2. There are trials that will still be active (not ending before billing date), OR
+    // 3. There are trials ending on or before billing date (they'll become active)
+    const hasActiveTools = activeTools.length > 0;
+    const hasTrialsEnding = trialToolsEnding.length > 0;
+    const hasActiveTrials = tools.some(tool => {
+      if (tool.status === 'trial' && tool.trial_end_date) {
+        const trialEndDate = new Date(tool.trial_end_date);
+        trialEndDate.setHours(0, 0, 0, 0);
+        return trialEndDate > nextBillingDate; // Trial still active on billing date
+      }
+      return false;
+    });
+    
+    const platformFeeApplies = hasActiveTools || hasTrialsEnding || hasActiveTrials;
+    const platformFeeAmount = platformFeeApplies ? platformFee : 0;
+    const total = toolSubscriptionsTotal + platformFeeAmount;
+
     return {
       total,
+      toolSubscriptionsTotal,
       activeTools,
       trialToolsEnding,
+      platformFee: platformFeeAmount,
       nextBillingDate: nextBillingDate.toLocaleDateString('en-US', {
         year: 'numeric',
         month: 'long',
@@ -462,12 +548,26 @@ export default function MyToolsPage() {
               <div className="flex items-center justify-between">
                 <div className="flex-1">
                   <h3 className="text-lg font-semibold text-slate-50">Total Monthly Charge</h3>
-                  <p className="text-sm text-slate-400 mt-1">
-                    Sum of all your active tool subscriptions
-                    {tools.some(t => t.status === 'trial') && (
-                      <span className="text-amber-300"> (trials are free)</span>
+                  <div className="mt-2 space-y-1">
+                    {platformFeeAmount > 0 && (
+                      <p className="text-sm text-slate-300">
+                        Platform Fee: <span className="font-medium text-emerald-300">{formatCurrency(platformFeeAmount)}</span>
+                      </p>
                     )}
-                  </p>
+                    {toolSubscriptionsCost > 0 && (
+                      <p className="text-sm text-slate-300">
+                        Tool Subscriptions: <span className="font-medium text-emerald-300">{formatCurrency(toolSubscriptionsCost)}</span>
+                        {tools.some(t => t.status === 'trial') && (
+                          <span className="text-amber-300 text-xs ml-1">(trials are free)</span>
+                        )}
+                      </p>
+                    )}
+                    {platformFeeAmount === 0 && toolSubscriptionsCost === 0 && (
+                      <p className="text-sm text-slate-400">
+                        All tools are in trial period
+                      </p>
+                    )}
+                  </div>
                   {billingDay !== null && (
                     <p className="text-sm text-slate-300 mt-2">
                       Billing date: <span className="font-semibold text-emerald-300">Day {billingDay}</span> of each month
@@ -621,7 +721,7 @@ export default function MyToolsPage() {
                 </div>
               )}
 
-              {nextMonthPreview.activeTools.length === 0 && nextMonthPreview.trialToolsEnding.length === 0 && (
+              {nextMonthPreview.activeTools.length === 0 && nextMonthPreview.trialToolsEnding.length === 0 && nextMonthPreview.platformFee === 0 && (
                 <div className="mb-4 rounded-lg border border-slate-700 bg-slate-800/30 p-4 text-center">
                   <p className="text-sm text-slate-400">
                     No charges expected next month. All tools are in trial period.
@@ -629,9 +729,36 @@ export default function MyToolsPage() {
                 </div>
               )}
 
+              {/* Platform Fee */}
+              {nextMonthPreview.platformFee > 0 && (
+                <div className="mb-4">
+                  <h3 className="text-sm font-semibold text-slate-300 mb-2">Platform Fee</h3>
+                  <div className="flex items-center justify-between rounded border border-slate-700 bg-slate-800/30 px-3 py-2">
+                    <span className="text-sm text-slate-200">Monthly platform access</span>
+                    <span className="text-sm font-medium text-emerald-400">
+                      {formatCurrency(nextMonthPreview.platformFee)}
+                    </span>
+                  </div>
+                </div>
+              )}
+
               {/* Total */}
               <div className="mt-4 rounded-lg border border-emerald-500/50 bg-emerald-500/10 p-4">
-                <div className="flex items-center justify-between">
+                <div className="space-y-2 mb-3">
+                  {nextMonthPreview.toolSubscriptionsTotal > 0 && (
+                    <div className="flex items-center justify-between text-sm">
+                      <span className="text-slate-300">Tool Subscriptions:</span>
+                      <span className="text-slate-200 font-medium">{formatCurrency(nextMonthPreview.toolSubscriptionsTotal)}</span>
+                    </div>
+                  )}
+                  {nextMonthPreview.platformFee > 0 && (
+                    <div className="flex items-center justify-between text-sm">
+                      <span className="text-slate-300">Platform Fee:</span>
+                      <span className="text-slate-200 font-medium">{formatCurrency(nextMonthPreview.platformFee)}</span>
+                    </div>
+                  )}
+                </div>
+                <div className="flex items-center justify-between border-t border-emerald-500/30 pt-2">
                   <span className="text-lg font-semibold text-slate-50">Projected Total</span>
                   <span className="text-2xl font-bold text-emerald-400">
                     {formatCurrency(nextMonthPreview.total)}
@@ -688,4 +815,5 @@ export default function MyToolsPage() {
     </main>
   );
 }
+
 

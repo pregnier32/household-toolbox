@@ -6,8 +6,10 @@ import Image from 'next/image';
 
 export default function SiteMaintenancePage() {
   const [signUpsDisabled, setSignUpsDisabled] = useState(false);
+  const [platformFee, setPlatformFee] = useState<number>(5.00);
   const [isLoading, setIsLoading] = useState(true);
   const [isSaving, setIsSaving] = useState(false);
+  const [isSavingFee, setIsSavingFee] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
   const [user, setUser] = useState<{ userStatus?: string } | null>(null);
@@ -46,6 +48,7 @@ export default function SiteMaintenancePage() {
       }
 
       setSignUpsDisabled(data.setting?.signUpsDisabled || false);
+      setPlatformFee(data.platformFee || 5.00);
       setIsLoading(false);
     } catch (err) {
       console.error('Error loading settings:', err);
@@ -92,6 +95,43 @@ export default function SiteMaintenancePage() {
       setError(err instanceof Error ? err.message : 'Failed to update settings');
     } finally {
       setIsSaving(false);
+    }
+  };
+
+  const handlePlatformFeeUpdate = async (newFee: number) => {
+    setIsSavingFee(true);
+    setError(null);
+    setSuccess(null);
+
+    try {
+      const response = await fetch('/api/admin/site-maintenance', {
+        method: 'PUT',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          platformFee: newFee,
+        }),
+      });
+
+      const data = await response.json();
+
+      if (!response.ok) {
+        throw new Error(data.error || 'Failed to update platform fee');
+      }
+
+      setPlatformFee(newFee);
+      setSuccess(`Platform fee updated to ${new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' }).format(newFee)}`);
+      
+      // Clear success message after 3 seconds
+      setTimeout(() => {
+        setSuccess(null);
+      }, 3000);
+    } catch (err) {
+      console.error('Error updating platform fee:', err);
+      setError(err instanceof Error ? err.message : 'Failed to update platform fee');
+    } finally {
+      setIsSavingFee(false);
     }
   };
 
@@ -213,6 +253,75 @@ export default function SiteMaintenancePage() {
               </p>
             </div>
           )}
+        </div>
+
+        {/* Platform Fee Card */}
+        <div className="mt-6 rounded-lg border border-slate-800 bg-slate-900/70 p-6">
+          <div className="mb-6">
+            <h2 className="text-lg font-semibold text-slate-50 mb-2">Platform Fee</h2>
+            <p className="text-sm text-slate-400">
+              Set the monthly platform fee charged to users who have at least one active tool subscription
+            </p>
+          </div>
+
+          <div className="space-y-4">
+            <div>
+              <label htmlFor="platformFee" className="block text-sm font-medium text-slate-200 mb-2">
+                Monthly Platform Fee
+              </label>
+              <div className="flex items-center gap-4">
+                <div className="relative flex-1 max-w-xs">
+                  <div className="absolute inset-y-0 left-0 flex items-center pl-3 pointer-events-none">
+                    <span className="text-slate-400 text-sm">$</span>
+                  </div>
+                  <input
+                    type="number"
+                    id="platformFee"
+                    min="0"
+                    step="0.01"
+                    value={platformFee}
+                    onChange={(e) => {
+                      const value = parseFloat(e.target.value);
+                      if (!isNaN(value) && value >= 0) {
+                        setPlatformFee(value);
+                      }
+                    }}
+                    onBlur={(e) => {
+                      const value = parseFloat(e.target.value);
+                      if (!isNaN(value) && value >= 0 && value !== platformFee) {
+                        handlePlatformFeeUpdate(value);
+                      }
+                    }}
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter') {
+                        e.currentTarget.blur();
+                      }
+                    }}
+                    disabled={isSavingFee}
+                    className="block w-full pl-7 pr-3 py-2 border border-slate-700 rounded-lg bg-slate-800 text-slate-100 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:border-transparent disabled:opacity-50 disabled:cursor-not-allowed"
+                    placeholder="5.00"
+                  />
+                </div>
+                {isSavingFee && (
+                  <span className="text-sm text-slate-400">Saving...</span>
+                )}
+              </div>
+              <p className="text-xs text-slate-400 mt-2">
+                This fee is charged monthly to users who have at least one active or trial tool subscription. 
+                Users with no active tools are not charged the platform fee.
+              </p>
+            </div>
+
+            <div className="rounded-lg border border-slate-700 bg-slate-800/30 px-4 py-3">
+              <p className="text-sm text-slate-300">
+                <strong>Current fee:</strong>{' '}
+                <span className="text-emerald-300 font-medium">
+                  {new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' }).format(platformFee)}
+                </span>
+                {' '}per month
+              </p>
+            </div>
+          </div>
         </div>
       </div>
     </main>

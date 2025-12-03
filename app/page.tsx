@@ -76,6 +76,9 @@ export default function Home() {
             <a href="#how-it-works" className="hover:text-emerald-300">
               How it works
             </a>
+            <Link href="/pricing" className="hover:text-emerald-300">
+              Pricing
+            </Link>
             <HelpMenu />
           </nav>
         </header>
@@ -420,7 +423,7 @@ export default function Home() {
         </section>
 
         {/* How it works */}
-        <section id="how-it-works" className="mb-10">
+        <section id="how-it-works" className="mb-16">
           <h2 className="text-xl font-semibold text-slate-50 sm:text-2xl">
             How Household Toolbox works
           </h2>
@@ -465,6 +468,7 @@ export default function Home() {
             </div>
           </div>
         </section>
+
 
         {/* Footer */}
         <footer className="border-t border-slate-800 pt-4 text-xs text-slate-500">
