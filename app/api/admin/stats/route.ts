@@ -65,29 +65,50 @@ export async function GET() {
       : 0;
 
     // Get tools with active or trial status, grouped by tool name
-    const { data: toolsData, error: toolsDataError } = await supabaseServer
+    // First, get all users_tools with their tool_ids
+    const { data: usersToolsData, error: usersToolsError } = await supabaseServer
       .from('users_tools')
-      .select(`
-        tool_id,
-        tools (
-          name
-        )
-      `)
+      .select('tool_id')
       .in('status', ['active', 'trial']);
 
-    if (toolsDataError) {
-      console.error('Error fetching tools by name:', toolsDataError);
+    if (usersToolsError) {
+      console.error('Error fetching users_tools:', usersToolsError);
       return NextResponse.json({ error: 'Failed to fetch stats' }, { status: 500 });
+    }
+
+    // Get unique tool IDs
+    const toolIds = usersToolsData 
+      ? [...new Set(usersToolsData.map(ut => ut.tool_id).filter(Boolean))]
+      : [];
+
+    // Fetch tool names for these tool IDs
+    let toolNameMap = new Map<string, string>();
+    if (toolIds.length > 0) {
+      const { data: toolsData, error: toolsError } = await supabaseServer
+        .from('tools')
+        .select('id, name')
+        .in('id', toolIds);
+
+      if (toolsError) {
+        console.error('Error fetching tools:', toolsError);
+        return NextResponse.json({ error: 'Failed to fetch stats' }, { status: 500 });
+      }
+
+      // Create a map of tool_id to tool_name
+      if (toolsData) {
+        toolsData.forEach((tool) => {
+          toolNameMap.set(tool.id, tool.name);
+        });
+      }
     }
 
     // Group by tool name and count
     const toolCounts = new Map<string, number>();
-    if (toolsData) {
-      toolsData.forEach((item) => {
-        // Supabase returns related data as an array, even for one-to-one relationships
-        const tools = item.tools as { name: string }[] | null;
-        const tool = tools && tools.length > 0 ? tools[0] : null;
-        const toolName = tool?.name || 'Unknown';
+    if (usersToolsData) {
+      usersToolsData.forEach((item) => {
+        const toolName = item.tool_id 
+          ? (toolNameMap.get(item.tool_id) || 'Unknown')
+          : 'Unknown';
         const currentCount = toolCounts.get(toolName) || 0;
         toolCounts.set(toolName, currentCount + 1);
       });
@@ -147,13 +168,72 @@ export async function GET() {
     // Remove monthKey from response
     const responseData = monthsData.map(({ month, count }) => ({ month, count }));
 
+    // Get sum of amounts from billing_active table
+    const { data: billingData, error: billingError } = await supabaseServer
+      .from('billing_active')
+      .select('amount');
+
+    let monthlyRevenue = 0;
+    if (billingError) {
+      console.error('Error fetching billing_active amounts:', billingError);
+    } else if (billingData) {
+      monthlyRevenue = billingData.reduce((sum, record) => {
+        return sum + (parseFloat(record.amount.toString()) || 0);
+      }, 0);
+    }
+
+    // Get sum of amounts from billing_history table (Lifetime Revenue)
+    const { data: billingHistoryData, error: billingHistoryError } = await supabaseServer
+      .from('billing_history')
+      .select('amount');
+
+    let lifetimeRevenue = 0;
+    if (billingHistoryError) {
+      console.error('Error fetching billing_history amounts:', billingHistoryError);
+    } else if (billingHistoryData) {
+      lifetimeRevenue = billingHistoryData.reduce((sum, record) => {
+        return sum + (parseFloat(record.amount.toString()) || 0);
+      }, 0);
+    }
+
+    // Get revenue by day from billing_active table
+    const { data: billingByDateData, error: billingByDateError } = await supabaseServer
+      .from('billing_active')
+      .select('billing_date, amount')
+      .order('billing_date', { ascending: true });
+
+    const revenueByDay: { date: string; revenue: number }[] = [];
+    if (billingByDateError) {
+      console.error('Error fetching billing_active by date:', billingByDateError);
+    } else if (billingByDateData) {
+      // Group by billing_date and sum amounts
+      const dateRevenueMap = new Map<string, number>();
+      billingByDateData.forEach((record) => {
+        if (record.billing_date) {
+          const date = record.billing_date;
+          const amount = parseFloat(record.amount.toString()) || 0;
+          const currentRevenue = dateRevenueMap.get(date) || 0;
+          dateRevenueMap.set(date, currentRevenue + amount);
+        }
+      });
+
+      // Convert to array and format dates
+      revenueByDay.push(...Array.from(dateRevenueMap.entries()).map(([date, revenue]) => ({
+        date: new Date(date).toLocaleDateString('en-US', { month: 'short', day: 'numeric' }),
+        revenue: Math.round(revenue * 100) / 100 // Round to 2 decimal places
+      })));
+    }
+
     return NextResponse.json({ 
       activeUserCount: count || 0,
       guestUserCount: guestCount || 0,
       activeTrialToolsCount: activeTrialToolsCount || 0,
       avgToolsPerAdmin: Math.round(avgToolsPerAdmin * 100) / 100, // Round to 2 decimal places
       usersByMonth: responseData,
-      toolsByName: toolsByName
+      toolsByName: toolsByName,
+      monthlyRevenue: Math.round(monthlyRevenue * 100) / 100, // Round to 2 decimal places
+      lifetimeRevenue: Math.round(lifetimeRevenue * 100) / 100, // Round to 2 decimal places
+      revenueByDay: revenueByDay
     });
   } catch (error) {
     console.error('Error in stats API:', error);

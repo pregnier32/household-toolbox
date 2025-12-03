@@ -54,6 +54,9 @@ export default function Dashboard() {
   const [avgToolsPerAdmin, setAvgToolsPerAdmin] = useState<number | null>(null);
   const [usersByMonth, setUsersByMonth] = useState<{ month: string; count: number }[]>([]);
   const [toolsByName, setToolsByName] = useState<{ name: string; value: number }[]>([]);
+  const [monthlyRevenue, setMonthlyRevenue] = useState<number | null>(null);
+  const [lifetimeRevenue, setLifetimeRevenue] = useState<number | null>(null);
+  const [revenueByDay, setRevenueByDay] = useState<{ date: string; revenue: number }[]>([]);
   const [isLoadingStats, setIsLoadingStats] = useState(false);
   const [tools, setTools] = useState<Tool[]>([]);
   const [isLoadingTools, setIsLoadingTools] = useState(false);
@@ -122,6 +125,15 @@ export default function Dashboard() {
           }
           if (data.toolsByName) {
             setToolsByName(data.toolsByName);
+          }
+          if (data.monthlyRevenue !== undefined) {
+            setMonthlyRevenue(data.monthlyRevenue);
+          }
+          if (data.lifetimeRevenue !== undefined) {
+            setLifetimeRevenue(data.lifetimeRevenue);
+          }
+          if (data.revenueByDay) {
+            setRevenueByDay(data.revenueByDay);
           }
           setIsLoadingStats(false);
         })
@@ -623,6 +635,93 @@ export default function Dashboard() {
                           formatter={(value) => value}
                         />
                       </PieChart>
+                    </ResponsiveContainer>
+                  </div>
+                ) : (
+                  <p className="text-xs text-slate-400">No data available</p>
+                )}
+              </div>
+            </div>
+            <div className="grid gap-4 md:grid-cols-2 mt-4">
+              <div className="rounded-2xl border border-slate-800 bg-slate-900/70 p-6">
+                <p className="text-2xl mb-2">💰</p>
+                <h3 className="text-sm font-semibold text-slate-100 mb-2">Monthly Revenue</h3>
+                {isLoadingStats ? (
+                  <p className="text-xs text-slate-400">Loading...</p>
+                ) : (
+                  <>
+                    <p className="text-3xl font-bold text-emerald-400 mb-1">
+                      {monthlyRevenue !== null 
+                        ? new Intl.NumberFormat('en-US', { 
+                            style: 'currency', 
+                            currency: 'USD',
+                            minimumFractionDigits: 2,
+                            maximumFractionDigits: 2
+                          }).format(monthlyRevenue)
+                        : '—'}
+                    </p>
+                    <p className="text-xs text-slate-400 mb-4">
+                      Total pending revenue from billing_active
+                    </p>
+                    <div className="pt-3 border-t border-slate-800">
+                      <p className="text-2xl font-bold text-emerald-400 mb-1">
+                        {lifetimeRevenue !== null 
+                          ? new Intl.NumberFormat('en-US', { 
+                              style: 'currency', 
+                              currency: 'USD',
+                              minimumFractionDigits: 2,
+                              maximumFractionDigits: 2
+                            }).format(lifetimeRevenue)
+                          : '—'}
+                      </p>
+                      <p className="text-xs text-slate-400">
+                        Lifetime Revenue
+                      </p>
+                    </div>
+                  </>
+                )}
+              </div>
+              <div className="rounded-2xl border border-slate-800 bg-slate-900/70 p-6">
+                <h3 className="text-sm font-semibold text-slate-100 mb-2">Revenue by Day</h3>
+                {isLoadingStats ? (
+                  <p className="text-xs text-slate-400">Loading...</p>
+                ) : revenueByDay.length > 0 ? (
+                  <div className="mt-4">
+                    <ResponsiveContainer width="100%" height={250}>
+                      <BarChart data={revenueByDay}>
+                        <CartesianGrid strokeDasharray="3 3" stroke="#334155" />
+                        <XAxis 
+                          dataKey="date" 
+                          stroke="#94a3b8"
+                          style={{ fontSize: '12px' }}
+                          angle={-45}
+                          textAnchor="end"
+                          height={60}
+                        />
+                        <YAxis 
+                          stroke="#94a3b8"
+                          style={{ fontSize: '12px' }}
+                          tickFormatter={(value) => `$${value.toFixed(0)}`}
+                        />
+                        <Tooltip 
+                          contentStyle={{ 
+                            backgroundColor: '#1e293b', 
+                            border: '1px solid #334155',
+                            borderRadius: '8px',
+                            color: '#e2e8f0'
+                          }}
+                          formatter={(value: number) => [
+                            new Intl.NumberFormat('en-US', { 
+                              style: 'currency', 
+                              currency: 'USD',
+                              minimumFractionDigits: 2,
+                              maximumFractionDigits: 2
+                            }).format(value),
+                            'Revenue'
+                          ]}
+                        />
+                        <Bar dataKey="revenue" fill="#10b981" radius={[4, 4, 0, 0]} />
+                      </BarChart>
                     </ResponsiveContainer>
                   </div>
                 ) : (
