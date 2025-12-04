@@ -13,6 +13,7 @@ type User = {
   user_status: string;
   created_at: string;
   updated_at: string | null;
+  active_tools_count?: number;
 };
 
 type UserFormData = {
@@ -46,6 +47,14 @@ export default function UsersPage() {
     userEmail: '',
   });
   const [isDeleting, setIsDeleting] = useState(false);
+  const [toolsModal, setToolsModal] = useState<{ isOpen: boolean; userId: string | null; userName: string }>({
+    isOpen: false,
+    userId: null,
+    userName: '',
+  });
+  const [userTools, setUserTools] = useState<any[]>([]);
+  const [isLoadingTools, setIsLoadingTools] = useState(false);
+  const [updatingToolId, setUpdatingToolId] = useState<string | null>(null);
   const router = useRouter();
 
   useEffect(() => {
@@ -246,6 +255,90 @@ export default function UsersPage() {
     }
   };
 
+  const handleViewTools = async (userToView: User) => {
+    setToolsModal({
+      isOpen: true,
+      userId: userToView.id,
+      userName: `${userToView.first_name} ${userToView.last_name || ''}`.trim() || userToView.email,
+    });
+    setIsLoadingTools(true);
+    setUserTools([]);
+
+    try {
+      const response = await fetch(`/api/admin/users/${userToView.id}/tools`);
+      const data = await response.json();
+
+      if (!response.ok) {
+        throw new Error(data.error || 'Failed to load user tools');
+      }
+
+      setUserTools(data.tools || []);
+    } catch (err) {
+      console.error('Error loading user tools:', err);
+      setUserTools([]);
+    } finally {
+      setIsLoadingTools(false);
+    }
+  };
+
+  const handleCloseToolsModal = () => {
+    setToolsModal({
+      isOpen: false,
+      userId: null,
+      userName: '',
+    });
+    setUserTools([]);
+    setUpdatingToolId(null);
+  };
+
+  const handleUpdateToolStatus = async (usersToolsId: string, newStatus: string) => {
+    if (!toolsModal.userId) return;
+
+    setUpdatingToolId(usersToolsId);
+    setError(null);
+    setSuccess(null);
+
+    try {
+      const response = await fetch(`/api/admin/users/${toolsModal.userId}/tools`, {
+        method: 'PUT',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          usersToolsId,
+          status: newStatus,
+        }),
+      });
+
+      const data = await response.json();
+
+      if (!response.ok) {
+        throw new Error(data.error || 'Failed to update tool status');
+      }
+
+      setSuccess('Tool status updated successfully');
+      
+      // Update the tool in the local state
+      setUserTools(prevTools => 
+        prevTools.map(tool => 
+          tool.id === usersToolsId 
+            ? { ...tool, status: newStatus, ...data.tool }
+            : tool
+        )
+      );
+      
+      // Clear success message after a delay
+      setTimeout(() => {
+        setSuccess(null);
+      }, 2000);
+    } catch (err) {
+      console.error('Error updating tool status:', err);
+      setError(err instanceof Error ? err.message : 'Failed to update tool status');
+    } finally {
+      setUpdatingToolId(null);
+    }
+  };
+
   if (isLoading) {
     return (
       <main className="min-h-screen bg-slate-950 text-slate-100">
@@ -367,6 +460,9 @@ export default function UsersPage() {
                     User Status
                   </th>
                   <th className="px-6 py-3 text-left text-xs font-medium uppercase tracking-wider text-slate-300">
+                    Active Tools
+                  </th>
+                  <th className="px-6 py-3 text-left text-xs font-medium uppercase tracking-wider text-slate-300">
                     Created
                   </th>
                   <th className="px-6 py-3 text-left text-xs font-medium uppercase tracking-wider text-slate-300">
@@ -377,7 +473,7 @@ export default function UsersPage() {
               <tbody className="divide-y divide-slate-800">
                 {filteredUsers.length === 0 ? (
                   <tr>
-                    <td colSpan={7} className="px-6 py-8 text-center text-sm text-slate-400">
+                    <td colSpan={8} className="px-6 py-8 text-center text-sm text-slate-400">
                       {searchQuery ? 'No users found matching your search.' : 'No users found.'}
                     </td>
                   </tr>
@@ -439,6 +535,9 @@ export default function UsersPage() {
                               className="w-full rounded border border-slate-700 bg-slate-900 px-2 py-1 text-sm text-slate-100 focus:border-emerald-500/50 focus:outline-none"
                             />
                           </td>
+                          <td className="px-6 py-4 text-sm text-slate-300 text-center">
+                            {tableUser.active_tools_count ?? 0}
+                          </td>
                           <td className="px-6 py-4 text-sm text-slate-400">
                             {formatDate(tableUser.created_at)}
                           </td>
@@ -498,24 +597,42 @@ export default function UsersPage() {
                           <td className="px-6 py-4 text-sm text-slate-300">
                             {tableUser.user_status || 'user'}
                           </td>
+                          <td className="px-6 py-4 text-sm text-slate-300 text-center">
+                            {tableUser.active_tools_count ?? 0}
+                          </td>
                           <td className="px-6 py-4 text-sm text-slate-400">
                             {formatDate(tableUser.created_at)}
                           </td>
                           <td className="px-6 py-4">
-                            <div className="flex gap-2">
+                            <div className="flex items-center gap-2">
+                              <button
+                                onClick={() => handleViewTools(tableUser)}
+                                className="text-blue-400 hover:text-blue-300 transition-colors"
+                                title="View user tools"
+                              >
+                                <svg className="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z" />
+                                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+                                </svg>
+                              </button>
                               <button
                                 onClick={() => handleEdit(tableUser)}
-                                className="rounded bg-emerald-500/20 px-3 py-1 text-xs font-medium text-emerald-300 transition-colors hover:bg-emerald-500/30"
+                                className="text-emerald-400 hover:text-emerald-300 transition-colors"
+                                title="Edit user"
                               >
-                                Edit
+                                <svg className="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
+                                </svg>
                               </button>
                               <button
                                 onClick={() => handleDeleteClick(tableUser)}
                                 disabled={user?.id === tableUser.id}
-                                className="rounded bg-red-500/20 px-3 py-1 text-xs font-medium text-red-300 transition-colors hover:bg-red-500/30 disabled:cursor-not-allowed disabled:opacity-50"
+                                className="text-red-400 hover:text-red-300 transition-colors disabled:cursor-not-allowed disabled:opacity-50"
                                 title={user?.id === tableUser.id ? 'Cannot delete your own account' : 'Delete user'}
                               >
-                                Delete
+                                <svg className="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                                </svg>
                               </button>
                             </div>
                           </td>
@@ -535,6 +652,119 @@ export default function UsersPage() {
           {searchQuery && ` matching "${searchQuery}"`}
         </div>
       </div>
+
+      {/* User Tools Modal */}
+      {toolsModal.isOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4" onClick={handleCloseToolsModal}>
+          <div className="w-full max-w-2xl rounded-lg border border-slate-700 bg-slate-900 p-6 shadow-xl" onClick={(e) => e.stopPropagation()}>
+            <div className="flex items-center justify-between mb-4">
+              <h2 className="text-xl font-semibold text-slate-50">
+                Active Tools for {toolsModal.userName}
+              </h2>
+              <button
+                onClick={handleCloseToolsModal}
+                className="text-slate-400 hover:text-slate-300 transition-colors"
+              >
+                <svg className="h-6 w-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                </svg>
+              </button>
+            </div>
+            {error && (
+              <div className="mb-4 rounded-lg border border-red-500/50 bg-red-500/10 px-4 py-3 text-sm text-red-300">
+                {error}
+              </div>
+            )}
+            {success && (
+              <div className="mb-4 rounded-lg border border-emerald-500/50 bg-emerald-500/10 px-4 py-3 text-sm text-emerald-300">
+                {success}
+              </div>
+            )}
+            {isLoadingTools ? (
+              <div className="py-8 text-center text-slate-400">Loading tools...</div>
+            ) : userTools.length === 0 ? (
+              <div className="py-8 text-center text-slate-400">
+                <p>This user has no active tools.</p>
+              </div>
+            ) : (
+              <div className="space-y-3 max-h-96 overflow-y-auto">
+                {userTools.map((userTool: any) => {
+                  const tool = userTool.tools;
+                  const isTrial = userTool.status === 'trial';
+                  const isUpdating = updatingToolId === userTool.id;
+                  return (
+                    <div
+                      key={userTool.id}
+                      className="rounded-lg border border-slate-700 bg-slate-800/50 p-4"
+                    >
+                      <div className="flex items-start justify-between gap-4">
+                        <div className="flex-1">
+                          <div className="flex items-center gap-2 mb-2">
+                            <h3 className="text-sm font-semibold text-slate-100">{tool?.name || 'Unknown Tool'}</h3>
+                            {isTrial && (
+                              <span className="inline-flex rounded-full bg-amber-500/20 px-2 py-0.5 text-xs font-medium text-amber-300">
+                                Trial
+                              </span>
+                            )}
+                            {userTool.status === 'active' && (
+                              <span className="inline-flex rounded-full bg-emerald-500/20 px-2 py-0.5 text-xs font-medium text-emerald-300">
+                                Active
+                              </span>
+                            )}
+                            {userTool.status === 'inactive' && (
+                              <span className="inline-flex rounded-full bg-slate-500/20 px-2 py-0.5 text-xs font-medium text-slate-300">
+                                Inactive
+                              </span>
+                            )}
+                          </div>
+                          {tool?.tool_tip && (
+                            <p className="text-xs text-slate-400 mb-2">{tool.tool_tip}</p>
+                          )}
+                          <div className="flex items-center gap-4 text-xs text-slate-400">
+                            <span>Price: ${userTool.price?.toFixed(2) || tool?.price?.toFixed(2) || '0.00'}/month</span>
+                            {isTrial && userTool.trial_end_date && (
+                              <span>
+                                Trial ends: {new Date(userTool.trial_end_date).toLocaleDateString('en-US', {
+                                  year: 'numeric',
+                                  month: 'short',
+                                  day: 'numeric',
+                                })}
+                              </span>
+                            )}
+                          </div>
+                        </div>
+                        <div className="flex-shrink-0">
+                          <select
+                            value={userTool.status}
+                            onChange={(e) => handleUpdateToolStatus(userTool.id, e.target.value)}
+                            disabled={isUpdating}
+                            className="rounded border border-slate-600 bg-slate-900 px-3 py-1.5 text-xs text-slate-100 focus:border-emerald-500/50 focus:outline-none focus:ring-1 focus:ring-emerald-500/50 disabled:cursor-not-allowed disabled:opacity-50"
+                          >
+                            <option value="active">Active</option>
+                            <option value="trial">Trial</option>
+                            <option value="inactive">Inactive</option>
+                          </select>
+                          {isUpdating && (
+                            <p className="text-xs text-slate-400 mt-1 text-center">Updating...</p>
+                          )}
+                        </div>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+            <div className="mt-6 flex justify-end">
+              <button
+                onClick={handleCloseToolsModal}
+                className="rounded border border-slate-700 bg-slate-800 px-4 py-2 text-sm font-medium text-slate-300 transition-colors hover:bg-slate-700"
+              >
+                Close
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Delete Confirmation Modal */}
       {deleteConfirm.isOpen && (

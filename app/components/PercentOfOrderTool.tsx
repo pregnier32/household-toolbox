@@ -120,6 +120,17 @@ export function PercentOfOrderTool() {
     };
   };
 
+  // Calculate totals
+  const totalWhatYouPaid = boxes.reduce((sum, box) => {
+    const { whatYouPaid } = calculateValues(box);
+    return sum + whatYouPaid;
+  }, 0);
+  
+  const totalDiscountAmount = boxes.reduce((sum, box) => {
+    const { discountAmount } = calculateValues(box);
+    return sum + discountAmount;
+  }, 0);
+
   return (
     <div className="space-y-6">
       <div className="flex items-center justify-between">
@@ -129,24 +140,42 @@ export function PercentOfOrderTool() {
             Enter your order total and discount percentage to calculate what you paid.
           </p>
         </div>
-        <button
-          onClick={addBox}
-          disabled={boxes.length >= 4}
-          className="px-4 py-2 rounded-lg bg-emerald-500 text-slate-950 font-medium hover:bg-emerald-400 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-        >
-          Add Box
-        </button>
+        <div className="flex items-center gap-6">
+          <div className="text-right">
+            <label className="block text-sm font-medium text-slate-300 mb-1 uppercase">
+              Total What You Paid
+            </label>
+            <p className="text-2xl font-bold text-emerald-400">
+              {formatDisplayValue(totalWhatYouPaid.toString())}
+            </p>
+          </div>
+          <div className="text-right">
+            <label className="block text-sm font-medium text-slate-300 mb-1 uppercase">
+              Total Discount Amount
+            </label>
+            <p className="text-xl font-semibold text-emerald-300">
+              {formatDisplayValue(totalDiscountAmount.toString())}
+            </p>
+          </div>
+          <button
+            onClick={addBox}
+            disabled={boxes.length >= 10}
+            className="px-4 py-2 rounded-lg bg-emerald-500 text-slate-950 font-medium hover:bg-emerald-400 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+          >
+            Add Box
+          </button>
+        </div>
       </div>
 
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+      <div className="space-y-6">
         {boxes.map((box) => {
           const { discountAmount, whatYouPaid } = calculateValues(box);
           const hasValidInputs = box.orderTotal && parseFloat(box.orderTotal) > 0 && box.discountPercent && parseFloat(box.discountPercent) > 0;
 
           return (
-            <form
+            <div
               key={box.id}
-              className="relative rounded-2xl border border-slate-800 bg-slate-900/70 p-6 space-y-6"
+              className="relative rounded-2xl border border-slate-800 bg-slate-900/70 p-6"
             >
               {boxes.length > 1 && (
                 <button
@@ -170,74 +199,72 @@ export function PercentOfOrderTool() {
                   </svg>
                 </button>
               )}
-              <div>
-                <label htmlFor={`vendor-${box.id}`} className="block text-sm font-medium text-slate-300 mb-2 uppercase">
-                  Vendor
-                </label>
-                <input
-                  type="text"
-                  id={`vendor-${box.id}`}
-                  value={box.vendor}
-                  onChange={(e) => handleVendorChange(box.id, e.target.value)}
-                  placeholder="Enter vendor name"
-                  className="w-full px-4 py-3 rounded-lg border border-slate-700 bg-slate-900/70 text-slate-100 placeholder-slate-500 focus:border-emerald-500/50 focus:outline-none focus:ring-1 focus:ring-emerald-500/50 text-lg"
-                />
-              </div>
-              <div>
-                <label htmlFor={`orderTotal-${box.id}`} className="block text-sm font-medium text-slate-300 mb-2 uppercase">
-                  Your Order Total
-                </label>
-                <div className="relative">
-                  <span className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 text-lg">$</span>
+              
+              {/* All fields in one horizontal row */}
+              <div className="grid grid-cols-1 md:grid-cols-5 gap-4">
+                <div>
+                  <label htmlFor={`vendor-${box.id}`} className="block text-sm font-medium text-slate-300 mb-2 uppercase">
+                    Vendor
+                  </label>
                   <input
                     type="text"
-                    id={`orderTotal-${box.id}`}
-                    value={box.orderTotal}
-                    onChange={(e) => handleOrderTotalChange(box.id, e.target.value)}
-                    placeholder="0.00"
-                    className="w-full pl-8 pr-4 py-3 rounded-lg border border-slate-700 bg-slate-900/70 text-slate-100 placeholder-slate-500 focus:border-emerald-500/50 focus:outline-none focus:ring-1 focus:ring-emerald-500/50 text-lg"
+                    id={`vendor-${box.id}`}
+                    value={box.vendor}
+                    onChange={(e) => handleVendorChange(box.id, e.target.value)}
+                    placeholder="Enter vendor name"
+                    className="w-full px-4 py-3 rounded-lg border border-slate-700 bg-slate-900/70 text-slate-100 placeholder-slate-500 focus:border-emerald-500/50 focus:outline-none focus:ring-1 focus:ring-emerald-500/50 text-lg"
                   />
                 </div>
-              </div>
-
-              <div>
-                <label htmlFor={`discountPercent-${box.id}`} className="block text-sm font-medium text-slate-300 mb-2 uppercase">
-                  Your Discount %
-                </label>
-                <div className="relative">
-                  <input
-                    type="text"
-                    id={`discountPercent-${box.id}`}
-                    value={box.discountPercent}
-                    onChange={(e) => handleDiscountPercentChange(box.id, e.target.value)}
-                    placeholder="0.00"
-                    className="w-full pl-4 pr-8 py-3 rounded-lg border border-slate-700 bg-slate-900/70 text-slate-100 placeholder-slate-500 focus:border-emerald-500/50 focus:outline-none focus:ring-1 focus:ring-emerald-500/50 text-lg"
-                  />
-                  <span className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 text-lg">%</span>
-                </div>
-              </div>
-
-              {hasValidInputs && (
-                <div className="border-t border-slate-700 pt-6 space-y-4">
-                  <div>
-                    <label className="block text-sm font-medium text-slate-300 mb-2 uppercase">
-                      What you paid
-                    </label>
-                    <p className="text-3xl font-bold text-emerald-400">
-                      {formatDisplayValue(whatYouPaid.toString())}
-                    </p>
-                  </div>
-                  <div className="border-t border-slate-700 pt-4">
-                    <label className="block text-sm font-medium text-slate-300 mb-2 uppercase">
-                      Discount amount
-                    </label>
-                    <p className="text-2xl font-semibold text-emerald-300">
-                      {formatDisplayValue(discountAmount.toString())}
-                    </p>
+                <div>
+                  <label htmlFor={`orderTotal-${box.id}`} className="block text-sm font-medium text-slate-300 mb-2 uppercase">
+                    Your Order Total
+                  </label>
+                  <div className="relative">
+                    <span className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 text-lg">$</span>
+                    <input
+                      type="text"
+                      id={`orderTotal-${box.id}`}
+                      value={box.orderTotal}
+                      onChange={(e) => handleOrderTotalChange(box.id, e.target.value)}
+                      placeholder="0.00"
+                      className="w-full pl-8 pr-4 py-3 rounded-lg border border-slate-700 bg-slate-900/70 text-slate-100 placeholder-slate-500 focus:border-emerald-500/50 focus:outline-none focus:ring-1 focus:ring-emerald-500/50 text-lg"
+                    />
                   </div>
                 </div>
-              )}
-            </form>
+                <div>
+                  <label htmlFor={`discountPercent-${box.id}`} className="block text-sm font-medium text-slate-300 mb-2 uppercase">
+                    Your Discount %
+                  </label>
+                  <div className="relative">
+                    <input
+                      type="text"
+                      id={`discountPercent-${box.id}`}
+                      value={box.discountPercent}
+                      onChange={(e) => handleDiscountPercentChange(box.id, e.target.value)}
+                      placeholder="0.00"
+                      className="w-full pl-4 pr-8 py-3 rounded-lg border border-slate-700 bg-slate-900/70 text-slate-100 placeholder-slate-500 focus:border-emerald-500/50 focus:outline-none focus:ring-1 focus:ring-emerald-500/50 text-lg"
+                    />
+                    <span className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 text-lg">%</span>
+                  </div>
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-slate-300 mb-2 uppercase">
+                    What you paid
+                  </label>
+                  <p className="text-3xl font-bold text-emerald-400">
+                    {hasValidInputs ? formatDisplayValue(whatYouPaid.toString()) : '$0.00'}
+                  </p>
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-slate-300 mb-2 uppercase">
+                    Discount amount
+                  </label>
+                  <p className="text-2xl font-semibold text-emerald-300">
+                    {hasValidInputs ? formatDisplayValue(discountAmount.toString()) : '$0.00'}
+                  </p>
+                </div>
+              </div>
+            </div>
           );
         })}
       </div>

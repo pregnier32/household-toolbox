@@ -35,7 +35,7 @@ export async function GET(request: Request) {
     const { data: usersWithTools, error: usersError } = await supabaseServer
       .from('users_tools')
       .select('user_id')
-      .in('status', ['active', 'trial'])
+      .in('status', ['active', 'trial', 'pending_cancellation'])
       .order('user_id');
     
     if (usersError) {
@@ -231,6 +231,81 @@ export async function GET(request: Request) {
       });
       
       return errorResponse;
+    }
+
+    // After billing is processed, change pending_cancellation tools to inactive
+    // Get all users_tools records that are pending_cancellation and have been billed today
+    const { data: pendingCancellationTools, error: pendingCancelError } = await supabaseServer
+      .from('users_tools')
+      .select('id, user_id')
+      .eq('status', 'pending_cancellation');
+
+    if (pendingCancelError) {
+      console.error('Error fetching pending cancellation tools:', pendingCancelError);
+    } else if (pendingCancellationTools && pendingCancellationTools.length > 0) {
+      // Get unique user IDs
+      const userIdsWithPending = [...new Set(pendingCancellationTools.map(t => t.user_id))];
+      
+      // For each user, check if their billing date has passed
+      const toolsToInactivate: string[] = [];
+      
+      for (const userId of userIdsWithPending) {
+        // Get user's billing day
+        const { data: userTools, error: userToolsError } = await supabaseServer
+          .from('users_tools')
+          .select('created_at, trial_end_date, status')
+          .eq('user_id', userId)
+          .in('status', ['active', 'trial', 'pending_cancellation'])
+          .order('created_at', { ascending: true })
+          .limit(1);
+
+        if (userToolsError || !userTools || userTools.length === 0) continue;
+
+        const oldestTool = userTools[0];
+        let billingDate: Date;
+        
+        if (oldestTool.status === 'trial' && oldestTool.trial_end_date) {
+          billingDate = new Date(oldestTool.trial_end_date);
+        } else {
+          const createdDate = new Date(oldestTool.created_at);
+          billingDate = new Date(createdDate);
+          billingDate.setDate(billingDate.getDate() + 7);
+        }
+        
+        const billingDay = billingDate.getDate();
+        const now = new Date();
+        const currentYear = now.getFullYear();
+        const currentMonth = now.getMonth();
+        const thisMonthBilling = new Date(currentYear, currentMonth, billingDay);
+        thisMonthBilling.setHours(0, 0, 0, 0);
+        const nowStartOfDay = new Date(now);
+        nowStartOfDay.setHours(0, 0, 0, 0);
+
+        // If billing date has passed today, mark tools for inactivation
+        if (nowStartOfDay >= thisMonthBilling) {
+          const userPendingTools = pendingCancellationTools
+            .filter(t => t.user_id === userId)
+            .map(t => t.id);
+          toolsToInactivate.push(...userPendingTools);
+        }
+      }
+
+      // Inactivate all tools that have been billed
+      if (toolsToInactivate.length > 0) {
+        const { error: inactivateError } = await supabaseServer
+          .from('users_tools')
+          .update({
+            status: 'inactive',
+            updated_at: new Date().toISOString(),
+          })
+          .in('id', toolsToInactivate);
+
+        if (inactivateError) {
+          console.error('Error inactivating pending cancellation tools:', inactivateError);
+        } else {
+          console.log(`Inactivated ${toolsToInactivate.length} tools after billing`);
+        }
+      }
     }
     
     const successResponse = NextResponse.json({

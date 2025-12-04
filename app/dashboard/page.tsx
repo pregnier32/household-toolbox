@@ -45,7 +45,7 @@ type Tool = {
 };
 
 export default function Dashboard() {
-  const [activeTab, setActiveTab] = useState<'tools' | 'dashboard' | 'overview'>('dashboard');
+  const [activeTab, setActiveTab] = useState<'tools' | 'dashboard' | 'overview' | 'store'>('dashboard');
   const [dashboardSubTab, setDashboardSubTab] = useState<'overview' | 'calendar'>('overview');
   const [activeToolId, setActiveToolId] = useState<string | null>(null);
   const [openedToolIds, setOpenedToolIds] = useState<Set<string>>(new Set());
@@ -148,8 +148,8 @@ export default function Dashboard() {
   }, [activeTab, isSuperAdmin]);
 
   useEffect(() => {
-    // Fetch tools when Tools tab is active
-    if (activeTab === 'tools') {
+    // Fetch tools when Tools or Store tab is active
+    if (activeTab === 'tools' || activeTab === 'store') {
       loadTools();
     }
   }, [activeTab, loadTools]);
@@ -289,7 +289,17 @@ export default function Dashboard() {
                 : 'text-slate-400 hover:text-slate-300'
             }`}
           >
-            Tools
+            Tool Box
+          </button>
+          <button
+            onClick={() => setActiveTab('store')}
+            className={`px-6 py-4 text-sm font-medium transition-colors ${
+              activeTab === 'store'
+                ? 'border-b-2 border-emerald-500 text-emerald-300'
+                : 'text-slate-400 hover:text-slate-300'
+            }`}
+          >
+            Store
           </button>
         </div>
       </div>
@@ -495,10 +505,40 @@ export default function Dashboard() {
                         <p className="text-slate-400 text-sm">No active tools at this time.</p>
                       )}
                     </div>
+                  </div>
+                )}
+              </>
+            ) : (
+              // Individual tool view
+              <>
+                {tools
+                  .filter(t => t.id === activeToolId)
+                  .map((tool) => (
+                    <div key={tool.id}>
+                      {tool.name === 'Percent of my Order' ? (
+                        <PercentOfOrderTool />
+                      ) : (
+                        <div className="rounded-2xl border border-slate-800 bg-slate-900/70 p-6">
+                          <h2 className="text-xl font-semibold text-slate-50 mb-4">{tool.name}</h2>
+                          <p className="text-slate-400">{tool.description || 'No description available.'}</p>
+                        </div>
+                      )}
+                    </div>
+                  ))}
+              </>
+            )}
+          </div>
+        )}
 
-                    {/* Divider */}
-                    <div className="border-t border-slate-800 my-6"></div>
-
+        {activeTab === 'store' && (
+          <div>
+            {activeToolId === null ? (
+              <>
+                <h1 className="text-2xl font-semibold text-slate-50 mb-4">Shop Household Tools</h1>
+                {isLoadingTools ? (
+                  <p className="text-slate-400">Loading tools...</p>
+                ) : (
+                  <div className="space-y-8">
                     {/* Available Tools - Tools available for purchase that user doesn't own */}
                     <div>
                       <h2 className="text-lg font-semibold text-slate-100 mb-4">Available</h2>
@@ -581,26 +621,23 @@ export default function Dashboard() {
                 )}
               </>
             ) : (
-              // Render tool application based on activeToolId
-              (() => {
-                const activeTool = tools.find(t => t.id === activeToolId);
-                if (!activeTool) {
-                  return <p className="text-slate-400">Tool not found.</p>;
-                }
-
-                // Check if this is the "Percent of my Order" tool
-                if (activeTool.name === 'Percent of my Order') {
-                  return <PercentOfOrderTool />;
-                }
-
-                // Default fallback for other tools
-                return (
-                  <div>
-                    <h1 className="text-2xl font-semibold text-slate-50 mb-4">{activeTool.name}</h1>
-                    <p className="text-slate-400">Tool application coming soon...</p>
-                  </div>
-                );
-              })()
+              // Individual tool view
+              <>
+                {tools
+                  .filter(t => t.id === activeToolId)
+                  .map((tool) => (
+                    <div key={tool.id}>
+                      {tool.name === 'Percent of my Order' ? (
+                        <PercentOfOrderTool />
+                      ) : (
+                        <div className="rounded-2xl border border-slate-800 bg-slate-900/70 p-6">
+                          <h2 className="text-xl font-semibold text-slate-50 mb-4">{tool.name}</h2>
+                          <p className="text-slate-400">{tool.description || 'No description available.'}</p>
+                        </div>
+                      )}
+                    </div>
+                  ))}
+              </>
             )}
           </div>
         )}

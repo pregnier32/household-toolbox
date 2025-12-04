@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getSession } from '@/lib/session';
 import { supabaseServer } from '@/lib/supabaseServer';
+import { getUserBillingDay, calculateBillingPeriod } from '@/lib/billing-sync';
 
 // GET - Fetch current user's active tools with details
 export async function GET() {
@@ -23,7 +24,7 @@ export async function GET() {
           updated_at: now,
         })
         .eq('user_id', user.id)
-        .eq('status', 'trial')
+        .in('status', ['trial', 'pending_cancellation'])
         .lt('trial_end_date', now);
 
       if (expireError && !expireError.message?.includes('column') && !expireError.message?.includes('does not exist')) {
@@ -52,6 +53,7 @@ export async function GET() {
         promo_expiration_date,
         trial_start_date,
         trial_end_date,
+        cancellation_effective_date,
         tools (
           id,
           name,
@@ -63,7 +65,7 @@ export async function GET() {
         )
       `)
       .eq('user_id', user.id)
-      .in('status', ['active', 'trial'])
+      .in('status', ['active', 'trial', 'pending_cancellation'])
       .order('created_at', { ascending: false });
 
     if (errorWithTrial && (errorWithTrial.message?.includes('column') || errorWithTrial.message?.includes('does not exist'))) {
@@ -79,6 +81,7 @@ export async function GET() {
           updated_at,
           promo_code_id,
           promo_expiration_date,
+          cancellation_effective_date,
           tools (
             id,
             name,
@@ -90,7 +93,7 @@ export async function GET() {
           )
         `)
         .eq('user_id', user.id)
-        .eq('status', 'active')
+        .in('status', ['active', 'pending_cancellation'])
         .order('created_at', { ascending: false });
       
       userTools = toolsWithoutTrial;
@@ -144,25 +147,85 @@ export async function PUT(request: NextRequest) {
       return NextResponse.json({ error: 'Tool not found or access denied' }, { status: 404 });
     }
 
-    if (userTool.status !== 'active' && userTool.status !== 'trial') {
+    if (userTool.status !== 'active' && userTool.status !== 'trial' && userTool.status !== 'pending_cancellation') {
       return NextResponse.json(
         { error: 'Tool is already inactive' },
         { status: 400 }
       );
     }
 
-    // If tool is in trial, clear trial dates when inactivating
+    // If already pending cancellation, allow reactivation
+    if (userTool.status === 'pending_cancellation') {
+      const { data: reactivatedTool, error: reactivateError } = await supabaseServer
+        .from('users_tools')
+        .update({
+          status: 'active',
+          updated_at: new Date().toISOString(),
+        })
+        .eq('id', toolId)
+        .eq('user_id', user.id)
+        .select()
+        .single();
+
+      if (reactivateError) {
+        console.error('Error reactivating tool:', reactivateError);
+        return NextResponse.json({ error: 'Failed to reactivate tool' }, { status: 500 });
+      }
+
+      return NextResponse.json({ success: true, tool: reactivatedTool, message: 'Tool reactivated' });
+    }
+
+    // Get user's billing day to calculate next billing date
+    const billingDay = await getUserBillingDay(user.id);
+
+    // If we can't determine billing day, default to inactive (shouldn't happen in normal flow)
+    if (!billingDay) {
+      const updateData: any = {
+        status: 'inactive',
+        updated_at: new Date().toISOString(),
+      };
+
+      if (userTool.status === 'trial') {
+        updateData.trial_start_date = null;
+        updateData.trial_end_date = null;
+      }
+
+      const { data: updatedTool, error: updateError } = await supabaseServer
+        .from('users_tools')
+        .update(updateData)
+        .eq('id', toolId)
+        .eq('user_id', user.id)
+        .select()
+        .single();
+
+      if (updateError) {
+        console.error('Error inactivating tool:', updateError);
+        return NextResponse.json({ error: 'Failed to inactivate tool' }, { status: 500 });
+      }
+
+      return NextResponse.json({ success: true, tool: updatedTool });
+    }
+
+    // Calculate next billing date using billing sync helper
+    const { billingDate: nextBillingDate } = calculateBillingPeriod(billingDay);
+
+    // Set status to pending_cancellation instead of inactive
+    // Tool will remain billable until next billing date
     const updateData: any = {
-      status: 'inactive',
+      status: 'pending_cancellation',
+      cancellation_effective_date: nextBillingDate.toISOString(),
       updated_at: new Date().toISOString(),
     };
 
+    // If tool is in trial, clear trial dates
+    // Note: has_used_trial flag is preserved (not cleared) so user cannot get another trial later
     if (userTool.status === 'trial') {
       updateData.trial_start_date = null;
       updateData.trial_end_date = null;
+      // has_used_trial remains TRUE - user has used their one-time trial
     }
 
-    // Update tool status to inactive
+    // Update tool status to pending_cancellation
     const { data: updatedTool, error: updateError } = await supabaseServer
       .from('users_tools')
       .update(updateData)
@@ -172,14 +235,18 @@ export async function PUT(request: NextRequest) {
       .single();
 
     if (updateError) {
-      console.error('Error inactivating tool:', updateError);
-      return NextResponse.json({ error: 'Failed to inactivate tool' }, { status: 500 });
+      console.error('Error setting pending cancellation:', updateError);
+      return NextResponse.json({ error: 'Failed to set pending cancellation' }, { status: 500 });
     }
 
     // Note: billing_active will be synced nightly by cron job
     // No need to sync immediately for performance
 
-    return NextResponse.json({ success: true, tool: updatedTool });
+    return NextResponse.json({ 
+      success: true, 
+      tool: updatedTool,
+      nextBillingDate: nextBillingDate.toISOString().split('T')[0]
+    });
   } catch (error) {
     console.error('Error in my-tools API:', error);
     return NextResponse.json({ error: 'Internal server error' }, { status: 500 });

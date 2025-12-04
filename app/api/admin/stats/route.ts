@@ -37,11 +37,11 @@ export async function GET() {
       return NextResponse.json({ error: 'Failed to fetch stats' }, { status: 500 });
     }
 
-    // Count tools with active or trial status
+    // Count tools with active, trial, or pending_cancellation status
     const { count: activeTrialToolsCount, error: toolsError } = await supabaseServer
       .from('users_tools')
       .select('*', { count: 'exact', head: true })
-      .in('status', ['active', 'trial']);
+      .in('status', ['active', 'trial', 'pending_cancellation']);
 
     if (toolsError) {
       console.error('Error fetching active/trial tools count:', toolsError);
@@ -64,12 +64,12 @@ export async function GET() {
       ? (activeTrialToolsCount || 0) / adminUserCount 
       : 0;
 
-    // Get tools with active or trial status, grouped by tool name
+    // Get tools with active, trial, or pending_cancellation status, grouped by tool name
     // First, get all users_tools with their tool_ids
     const { data: usersToolsData, error: usersToolsError } = await supabaseServer
       .from('users_tools')
       .select('tool_id')
-      .in('status', ['active', 'trial']);
+      .in('status', ['active', 'trial', 'pending_cancellation']);
 
     if (usersToolsError) {
       console.error('Error fetching users_tools:', usersToolsError);

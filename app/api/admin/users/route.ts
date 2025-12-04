@@ -26,7 +26,31 @@ export async function GET(request: NextRequest) {
       return NextResponse.json({ error: 'Failed to fetch users' }, { status: 500 });
     }
 
-    return NextResponse.json({ users: data || [] });
+    // Fetch tool counts for all users (includes active, trial, and pending_cancellation status)
+    const { data: toolCounts, error: toolCountsError } = await supabaseServer
+      .from('users_tools')
+      .select('user_id')
+      .in('status', ['active', 'trial', 'pending_cancellation']);
+
+    if (toolCountsError) {
+      console.error('Error fetching tool counts:', toolCountsError);
+      // Continue without tool counts if there's an error
+    }
+
+    // Count tools per user
+    const toolCountMap = new Map<string, number>();
+    toolCounts?.forEach((item) => {
+      const count = toolCountMap.get(item.user_id) || 0;
+      toolCountMap.set(item.user_id, count + 1);
+    });
+
+    // Add tool counts to users
+    const usersWithToolCounts = (data || []).map((user) => ({
+      ...user,
+      active_tools_count: toolCountMap.get(user.id) || 0,
+    }));
+
+    return NextResponse.json({ users: usersWithToolCounts });
   } catch (error) {
     console.error('Error in users API:', error);
     return NextResponse.json({ error: 'Internal server error' }, { status: 500 });

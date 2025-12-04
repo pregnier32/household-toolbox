@@ -52,7 +52,7 @@ export async function getUserBillingDay(userId: string): Promise<number | null> 
     .from('users_tools')
     .select('created_at, trial_end_date, status')
     .eq('user_id', userId)
-    .in('status', ['active', 'trial'])
+    .in('status', ['active', 'trial', 'pending_cancellation'])
     .order('created_at', { ascending: true })
     .limit(1);
   
@@ -93,7 +93,8 @@ export async function syncUserBillingActive(userId: string): Promise<{ success: 
     // Calculate billing period
     const { start, end, billingDate } = calculateBillingPeriod(billingDay);
     
-    // Get all active/trial tools for user
+    // Get all active/trial/pending_cancellation tools for user
+    // pending_cancellation tools should still be billed until the billing date
     const { data: userTools, error: toolsError } = await supabaseServer
       .from('users_tools')
       .select(`
@@ -107,7 +108,7 @@ export async function syncUserBillingActive(userId: string): Promise<{ success: 
         )
       `)
       .eq('user_id', userId)
-      .in('status', ['active', 'trial']);
+      .in('status', ['active', 'trial', 'pending_cancellation']);
     
     if (toolsError) {
       console.error('Error fetching user tools:', toolsError);
@@ -134,16 +135,16 @@ export async function syncUserBillingActive(userId: string): Promise<{ success: 
       ? Number(platformFeeSetting.value.amount)
       : 5.00;
     
-    // Check if user should be charged platform fee (has at least one active/trial tool)
+    // Check if user should be charged platform fee (has at least one active/trial/pending_cancellation tool)
     const shouldChargePlatformFee = userTools.length > 0;
     
-    // Start transaction: Delete existing billing_active for this user and period
+    // Delete ALL pending billing_active records for this user before inserting new ones
+    // This prevents duplicates if the billing period calculation changes or if sync runs multiple times
     await supabaseServer
       .from('billing_active')
       .delete()
       .eq('user_id', userId)
-      .eq('billing_period_start', start.toISOString().split('T')[0])
-      .eq('billing_period_end', end.toISOString().split('T')[0]);
+      .eq('status', 'pending');
     
     // Insert tool subscription records
     const toolRecords = userTools
@@ -154,8 +155,8 @@ export async function syncUserBillingActive(userId: string): Promise<{ success: 
           trialEnd.setHours(0, 0, 0, 0);
           return trialEnd <= billingDate;
         }
-        // Include all active tools
-        return tool.status === 'active';
+        // Include all active tools and pending_cancellation tools (they should be billed)
+        return tool.status === 'active' || tool.status === 'pending_cancellation';
       })
       .map(tool => {
         const toolData = tool.tools as { name: string }[] | null;
@@ -203,6 +204,7 @@ export async function syncUserBillingActive(userId: string): Promise<{ success: 
     }
     
     // Insert all billing records
+    // Note: We deleted all pending records above, so this should not create duplicates
     if (billingRecords.length > 0) {
       const { error: insertError } = await supabaseServer
         .from('billing_active')

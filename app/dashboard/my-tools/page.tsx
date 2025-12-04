@@ -14,6 +14,7 @@ type UserTool = {
   promo_expiration_date: string | null;
   trial_start_date: string | null;
   trial_end_date: string | null;
+  cancellation_effective_date: string | null;
   tools: {
     id: string;
     name: string;
@@ -151,6 +152,16 @@ export default function MyToolsPage() {
 
   const handleInactivateClick = () => {
     if (!editMenu.toolId) return;
+    const currentTool = tools.find(t => t.id === editMenu.toolId);
+    const isPendingCancellation = currentTool?.status === 'pending_cancellation';
+    
+    if (isPendingCancellation) {
+      // If it's pending cancellation, reactivate it directly (no confirmation needed)
+      handleInactivateConfirm();
+      return;
+    }
+    
+    // Otherwise, show confirmation for inactivation
     setConfirmInactivate({
       isOpen: true,
       toolId: editMenu.toolId,
@@ -172,9 +183,10 @@ export default function MyToolsPage() {
   };
 
   const handleInactivateConfirm = async () => {
-    if (!confirmInactivate.toolId) return;
+    const toolId = confirmInactivate.toolId || editMenu.toolId;
+    if (!toolId) return;
 
-    setInactivatingId(confirmInactivate.toolId);
+    setInactivatingId(toolId);
     setError(null);
     setSuccess(null);
 
@@ -185,18 +197,31 @@ export default function MyToolsPage() {
           'Content-Type': 'application/json',
         },
         body: JSON.stringify({
-          toolId: confirmInactivate.toolId,
+          toolId: toolId,
         }),
       });
 
       const data = await response.json();
 
       if (!response.ok) {
-        throw new Error(data.error || 'Failed to inactivate tool');
+        throw new Error(data.error || 'Failed to update tool');
       }
 
-      setSuccess('Tool inactivated successfully');
+      const currentTool = tools.find(t => t.id === toolId);
+      const isPendingCancellation = currentTool?.status === 'pending_cancellation';
+      
+      if (isPendingCancellation) {
+        setSuccess('Tool reactivated successfully');
+      } else {
+        setSuccess('Tool will be removed after the next billing cycle');
+      }
+      
       setConfirmInactivate({
+        isOpen: false,
+        toolId: null,
+        toolName: '',
+      });
+      setEditMenu({
         isOpen: false,
         toolId: null,
         toolName: '',
@@ -208,8 +233,8 @@ export default function MyToolsPage() {
         setSuccess(null);
       }, 1500);
     } catch (err) {
-      console.error('Error inactivating tool:', err);
-      setError(err instanceof Error ? err.message : 'Failed to inactivate tool');
+      console.error('Error updating tool:', err);
+      setError(err instanceof Error ? err.message : 'Failed to update tool');
     } finally {
       setInactivatingId(null);
     }
@@ -217,16 +242,21 @@ export default function MyToolsPage() {
 
   // Helper function to check if platform fee applies
   const shouldChargePlatformFee = (toolsList: UserTool[]) => {
-    return toolsList.some(tool => tool.status === 'active' || tool.status === 'trial');
+    return toolsList.some(tool => tool.status === 'active' || tool.status === 'trial' || tool.status === 'pending_cancellation');
   };
 
   // Calculate total monthly cost
   const toolSubscriptionsCost = tools.reduce((sum, tool) => {
     // During trial, cost is $0
+    // pending_cancellation tools should still be charged until billing date
     if (tool.status === 'trial') {
       return sum;
     }
-    return sum + Number(tool.price);
+    // Include active and pending_cancellation tools in cost
+    if (tool.status === 'active' || tool.status === 'pending_cancellation') {
+      return sum + Number(tool.price);
+    }
+    return sum;
   }, 0);
 
   // Add platform fee if user has at least 1 active/trial tool
@@ -317,12 +347,30 @@ export default function MyToolsPage() {
 
     tools.forEach((tool) => {
       if (tool.status === 'active') {
-        // All active tools will be charged on the next billing date
+        // Active tools will be charged on the next billing date
         activeTools.push({
           name: tool.tools?.name || 'Unknown Tool',
           price: Number(tool.price),
         });
         toolSubscriptionsTotal += Number(tool.price);
+      } else if (tool.status === 'pending_cancellation') {
+        // pending_cancellation tools should NOT appear in next month's preview
+        // They will be cancelled after the current billing cycle
+        // Only include them if their cancellation date is AFTER the next billing date
+        // (which shouldn't happen, but handle edge case)
+        if (tool.cancellation_effective_date) {
+          const cancellationDate = new Date(tool.cancellation_effective_date);
+          cancellationDate.setHours(0, 0, 0, 0);
+          // Only include if cancellation is AFTER next billing date (edge case)
+          if (cancellationDate > nextBillingDate) {
+            activeTools.push({
+              name: tool.tools?.name || 'Unknown Tool',
+              price: Number(tool.price),
+            });
+            toolSubscriptionsTotal += Number(tool.price);
+          }
+          // Otherwise, exclude it (normal case - it will be cancelled by next billing)
+        }
       } else if (tool.status === 'trial' && tool.trial_end_date) {
         const trialEndDate = new Date(tool.trial_end_date);
         trialEndDate.setHours(0, 0, 0, 0);
@@ -346,6 +394,7 @@ export default function MyToolsPage() {
     // 1. There are active tools, OR
     // 2. There are trials that will still be active (not ending before billing date), OR
     // 3. There are trials ending on or before billing date (they'll become active)
+    // Note: pending_cancellation tools are excluded from next month's preview
     const hasActiveTools = activeTools.length > 0;
     const hasTrialsEnding = trialToolsEnding.length > 0;
     const hasActiveTrials = tools.some(tool => {
@@ -472,10 +521,7 @@ export default function MyToolsPage() {
                         Activated Date
                       </th>
                       <th className="px-6 py-3 text-left text-xs font-medium uppercase tracking-wider text-slate-300">
-                        Promo Code
-                      </th>
-                      <th className="px-6 py-3 text-left text-xs font-medium uppercase tracking-wider text-slate-300">
-                        Promo Expiration
+                        Notes
                       </th>
                       <th className="px-6 py-3 text-right text-xs font-medium uppercase tracking-wider text-slate-300">
                         Monthly Cost
@@ -488,6 +534,7 @@ export default function MyToolsPage() {
                   <tbody className="divide-y divide-slate-800">
                     {tools.map((tool) => {
                       const isTrial = tool.status === 'trial';
+                      const isPendingCancellation = tool.status === 'pending_cancellation';
                       const daysRemaining = isTrial ? getDaysRemaining(tool.trial_end_date) : null;
                       
                       return (
@@ -502,23 +549,30 @@ export default function MyToolsPage() {
                                   Trial
                                 </span>
                               )}
+                              {isPendingCancellation && (
+                                <span className="inline-flex items-center rounded-full bg-red-500/20 px-2 py-0.5 text-xs font-medium text-red-300">
+                                  Cancelling
+                                </span>
+                              )}
                             </div>
-                            {isTrial && daysRemaining !== null && (
-                              <p className="text-xs text-amber-300/80 mt-1">
-                                {daysRemaining === 0 
-                                  ? 'Trial ends today' 
-                                  : `${daysRemaining} day${daysRemaining !== 1 ? 's' : ''} remaining`}
-                              </p>
-                            )}
                           </td>
                           <td className="px-6 py-4 text-sm text-slate-300">
                             {formatDate(tool.created_at)}
                           </td>
                           <td className="px-6 py-4 text-sm text-slate-300">
-                            {tool.promo_codes?.code || '—'}
-                          </td>
-                          <td className="px-6 py-4 text-sm text-slate-300">
-                            {tool.promo_expiration_date ? formatDate(tool.promo_expiration_date) : '—'}
+                            {isTrial && daysRemaining !== null ? (
+                              <span className="text-amber-300/80">
+                                {daysRemaining === 0 
+                                  ? 'Trial ends today in trial period' 
+                                  : `${daysRemaining} day${daysRemaining !== 1 ? 's' : ''} remaining in trial period`}
+                              </span>
+                            ) : isPendingCancellation && tool.cancellation_effective_date ? (
+                              <span className="text-red-300/80">
+                                Will be removed after {formatDate(tool.cancellation_effective_date)}
+                              </span>
+                            ) : (
+                              <span className="text-slate-400">—</span>
+                            )}
                           </td>
                           <td className="px-6 py-4 text-right text-sm font-medium text-emerald-400">
                             {isTrial ? (
@@ -623,25 +677,58 @@ export default function MyToolsPage() {
                 Manage <span className="font-semibold text-slate-100">{editMenu.toolName}</span>
               </p>
               <div className="space-y-3">
-                <button
-                  onClick={handleInactivateClick}
-                  className="w-full rounded-lg bg-red-500/20 px-4 py-3 text-sm font-medium text-red-300 transition-colors hover:bg-red-500/30 text-left flex items-center gap-3"
-                >
-                  <svg
-                    className="h-5 w-5"
-                    fill="none"
-                    stroke="currentColor"
-                    viewBox="0 0 24 24"
-                  >
-                    <path
-                      strokeLinecap="round"
-                      strokeLinejoin="round"
-                      strokeWidth={2}
-                      d="M18.364 18.364A9 9 0 005.636 5.636m12.728 12.728A9 9 0 015.636 5.636m12.728 12.728L5.636 5.636"
-                    />
-                  </svg>
-                  <span>Inactivate</span>
-                </button>
+                {(() => {
+                  const currentTool = tools.find(t => t.id === editMenu.toolId);
+                  const isPendingCancellation = currentTool?.status === 'pending_cancellation';
+                  
+                  if (isPendingCancellation) {
+                    // Show reactivate option for pending cancellation
+                    return (
+                      <button
+                        onClick={handleInactivateClick}
+                        className="w-full rounded-lg bg-emerald-500/20 px-4 py-3 text-sm font-medium text-emerald-300 transition-colors hover:bg-emerald-500/30 text-left flex items-center gap-3"
+                      >
+                        <svg
+                          className="h-5 w-5"
+                          fill="none"
+                          stroke="currentColor"
+                          viewBox="0 0 24 24"
+                        >
+                          <path
+                            strokeLinecap="round"
+                            strokeLinejoin="round"
+                            strokeWidth={2}
+                            d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"
+                          />
+                        </svg>
+                        <span>Reactivate</span>
+                      </button>
+                    );
+                  } else {
+                    // Show inactivate option for active/trial tools
+                    return (
+                      <button
+                        onClick={handleInactivateClick}
+                        className="w-full rounded-lg bg-red-500/20 px-4 py-3 text-sm font-medium text-red-300 transition-colors hover:bg-red-500/30 text-left flex items-center gap-3"
+                      >
+                        <svg
+                          className="h-5 w-5"
+                          fill="none"
+                          stroke="currentColor"
+                          viewBox="0 0 24 24"
+                        >
+                          <path
+                            strokeLinecap="round"
+                            strokeLinejoin="round"
+                            strokeWidth={2}
+                            d="M18.364 18.364A9 9 0 005.636 5.636m12.728 12.728A9 9 0 015.636 5.636m12.728 12.728L5.636 5.636"
+                          />
+                        </svg>
+                        <span>Inactivate</span>
+                      </button>
+                    );
+                  }
+                })()}
               </div>
             </div>
           </div>
@@ -789,8 +876,35 @@ export default function MyToolsPage() {
                 Are you sure you want to inactivate <span className="font-semibold text-slate-100">{confirmInactivate.toolName}</span>?
               </p>
               <div className="rounded-lg border border-amber-500/50 bg-amber-500/10 p-3 mb-4">
-                <p className="text-sm text-amber-300">
-                  This will stop your subscription for this tool. You can reactivate it later from the Tools page.
+                <p className="text-sm text-amber-300 mb-2">
+                  This tool will remain active and billable until your next billing date.
+                </p>
+                {billingDay !== null && (
+                  <p className="text-xs text-amber-300/80">
+                    It will be removed after {(() => {
+                      const now = new Date();
+                      const currentYear = now.getFullYear();
+                      const currentMonth = now.getMonth();
+                      const thisMonthBilling = new Date(currentYear, currentMonth, billingDay);
+                      thisMonthBilling.setHours(0, 0, 0, 0);
+                      const nowStartOfDay = new Date(now);
+                      nowStartOfDay.setHours(0, 0, 0, 0);
+                      let nextBillingDate: Date;
+                      if (nowStartOfDay >= thisMonthBilling) {
+                        nextBillingDate = new Date(currentYear, currentMonth + 1, billingDay);
+                      } else {
+                        nextBillingDate = thisMonthBilling;
+                      }
+                      return nextBillingDate.toLocaleDateString('en-US', {
+                        year: 'numeric',
+                        month: 'long',
+                        day: 'numeric',
+                      });
+                    })()}.
+                  </p>
+                )}
+                <p className="text-xs text-amber-300/80 mt-2">
+                  You can reactivate it before then from this page.
                 </p>
               </div>
               <div className="flex gap-3 justify-end">

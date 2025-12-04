@@ -40,10 +40,10 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // Check if user already has this tool
+    // Check if user already has this tool (any status - active, trial, inactive, etc.)
     const { data: existingUserTool, error: checkError } = await supabaseServer
       .from('users_tools')
-      .select('id, status')
+      .select('id, status, has_used_trial, trial_start_date')
       .eq('user_id', user.id)
       .eq('tool_id', toolId)
       .single();
@@ -62,36 +62,69 @@ export async function POST(request: NextRequest) {
           { status: 200 }
         );
       }
-      // If user has it but it's inactive, start a new trial
-      const now = new Date();
-      const trialEndDate = new Date(now);
-      trialEndDate.setDate(trialEndDate.getDate() + 7);
       
-      const { data: updatedUserTool, error: updateError } = await supabaseServer
-        .from('users_tools')
-        .update({
-          status: 'trial',
-          price: tool.price,
-          trial_start_date: now.toISOString(),
-          trial_end_date: trialEndDate.toISOString(),
-          updated_at: new Date().toISOString(),
-        })
-        .eq('id', existingUserTool.id)
-        .select()
-        .single();
+      // If user has it but it's inactive, check if they've used their trial
+      // If they have used their trial (has_used_trial = TRUE or trial_start_date IS NOT NULL),
+      // reactivate as 'active' (no new trial)
+      // Otherwise, give them their first trial
+      const hasUsedTrial = existingUserTool.has_used_trial === true || existingUserTool.trial_start_date !== null;
+      
+      if (hasUsedTrial) {
+        // They've used their trial before, reactivate as active (no new trial)
+        const { data: updatedUserTool, error: updateError } = await supabaseServer
+          .from('users_tools')
+          .update({
+            status: 'active',
+            price: tool.price,
+            updated_at: new Date().toISOString(),
+          })
+          .eq('id', existingUserTool.id)
+          .select()
+          .single();
 
-      if (updateError) {
-        console.error('Error updating user tool:', updateError);
-        return NextResponse.json({ error: 'Failed to start trial' }, { status: 500 });
+        if (updateError) {
+          console.error('Error updating user tool:', updateError);
+          return NextResponse.json({ error: 'Failed to reactivate tool' }, { status: 500 });
+        }
+
+        return NextResponse.json({ 
+          message: 'Tool reactivated (trial already used)', 
+          userTool: updatedUserTool 
+        });
+      } else {
+        // They haven't used their trial yet, give them their first trial
+        const now = new Date();
+        const trialEndDate = new Date(now);
+        trialEndDate.setDate(trialEndDate.getDate() + 7);
+        
+        const { data: updatedUserTool, error: updateError } = await supabaseServer
+          .from('users_tools')
+          .update({
+            status: 'trial',
+            price: tool.price,
+            trial_start_date: now.toISOString(),
+            trial_end_date: trialEndDate.toISOString(),
+            has_used_trial: true, // Mark that they've used their trial
+            updated_at: new Date().toISOString(),
+          })
+          .eq('id', existingUserTool.id)
+          .select()
+          .single();
+
+        if (updateError) {
+          console.error('Error updating user tool:', updateError);
+          return NextResponse.json({ error: 'Failed to start trial' }, { status: 500 });
+        }
+
+        return NextResponse.json({ 
+          message: '7-day free trial started!', 
+          userTool: updatedUserTool 
+        });
       }
-
-      // Note: billing_active will be synced nightly by cron job
-      // No need to sync immediately for performance
-
-      return NextResponse.json({ message: 'Trial started', userTool: updatedUserTool });
     }
 
     // Insert new record into users_tools table with 7-day trial
+    // This is their first time purchasing this tool, so they get a trial
     const now = new Date();
     const trialEndDate = new Date(now);
     trialEndDate.setDate(trialEndDate.getDate() + 7);
@@ -104,6 +137,7 @@ export async function POST(request: NextRequest) {
       price: tool.price,
       trial_start_date: now.toISOString(),
       trial_end_date: trialEndDate.toISOString(),
+      has_used_trial: true, // Mark that they've used their trial (first time purchase gets trial)
     };
 
     let { data: newUserTool, error: insertError } = await supabaseServer

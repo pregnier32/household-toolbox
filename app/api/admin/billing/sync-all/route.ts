@@ -61,11 +61,11 @@ export async function GET(request: NextRequest) {
       });
     }
     
-    // Sync all users with active/trial tools
+    // Sync all users with active/trial/pending_cancellation tools
     const { data: usersWithTools, error: usersError } = await supabaseServer
       .from('users_tools')
       .select('user_id')
-      .in('status', ['active', 'trial'])
+      .in('status', ['active', 'trial', 'pending_cancellation'])
       .order('user_id');
     
     if (usersError) {

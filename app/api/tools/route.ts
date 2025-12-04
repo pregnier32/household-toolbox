@@ -62,12 +62,12 @@ export async function GET() {
       .eq('status', 'trial')
       .lt('trial_end_date', now);
 
-    // Fetch user's purchased tools (both active and trial) with trial info
+    // Fetch user's purchased tools (both active and trial and pending_cancellation) with trial info
     const { data: userTools, error: userToolsError } = await supabaseServer
       .from('users_tools')
       .select('tool_id, status, trial_start_date, trial_end_date')
       .eq('user_id', user.id)
-      .in('status', ['active', 'trial']);
+      .in('status', ['active', 'trial', 'pending_cancellation']);
 
     if (userToolsError) {
       console.error('Error fetching user tools:', userToolsError);
