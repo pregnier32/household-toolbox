@@ -3,10 +3,31 @@
 import Image from 'next/image';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
+import { useState, useEffect } from 'react';
 import { HelpMenu } from '../components/HelpMenu';
 
 export default function PrivacyPolicy() {
   const router = useRouter();
+  const [content, setContent] = useState<string | null>(null);
+  const [lastUpdated, setLastUpdated] = useState<string | null>(null);
+  const [isLoading, setIsLoading] = useState(true);
+
+  useEffect(() => {
+    // Fetch content from API
+    fetch('/api/legal?type=privacy')
+      .then((res) => res.json())
+      .then((data) => {
+        if (data.content) {
+          setContent(data.content);
+          setLastUpdated(data.lastUpdated);
+        }
+        setIsLoading(false);
+      })
+      .catch((err) => {
+        console.error('Error loading Privacy Policy:', err);
+        setIsLoading(false);
+      });
+  }, []);
 
   return (
     <main className="min-h-screen bg-slate-950 text-slate-100">
@@ -71,10 +92,20 @@ export default function PrivacyPolicy() {
             Privacy Policy
           </h1>
           <p className="text-sm text-slate-400 mb-8">
-            Last Updated: December 5, 2025
+            {lastUpdated 
+              ? `Last Updated: ${new Date(lastUpdated).toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' })}`
+              : 'Last Updated: December 5, 2025'}
           </p>
 
-          <div className="prose prose-invert max-w-none text-slate-300 space-y-6">
+          {isLoading ? (
+            <div className="py-8 text-center text-slate-400">Loading...</div>
+          ) : content ? (
+            <div 
+              className="prose prose-invert max-w-none text-slate-300 space-y-6"
+              dangerouslySetInnerHTML={{ __html: content }}
+            />
+          ) : (
+            <div className="prose prose-invert max-w-none text-slate-300 space-y-6">
             <p>
               Household Toolbox (&ldquo;Company,&rdquo; &ldquo;we,&rdquo; &ldquo;our,&rdquo; or &ldquo;us&rdquo;) is committed to protecting your privacy. This Privacy Policy explains how we collect, use, store, and protect your information when you use our website, tools, and services (collectively, the &ldquo;Service&rdquo;).
             </p>
@@ -188,7 +219,8 @@ export default function PrivacyPolicy() {
             <h2 className="text-2xl font-semibold text-slate-100 mt-8 mb-4">11. Contact Us</h2>
             <p>If you have questions about this Privacy Policy, contact us:</p>
             <p><strong className="text-emerald-400">support@householdtoolbox.com</strong></p>
-          </div>
+            </div>
+          )}
         </div>
       </div>
     </main>
