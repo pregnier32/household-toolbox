@@ -15,6 +15,7 @@ type ToolIcon = {
 type Tool = {
   id: string;
   name: string;
+  short_name: string | null;
   tool_tip: string | null;
   description: string | null;
   price: number;
@@ -30,6 +31,7 @@ type Tool = {
 
 type ToolFormData = {
   name: string;
+  short_name: string;
   description: string;
   price: string;
   status: string;
@@ -48,6 +50,7 @@ export default function ToolsPage() {
   const [editingId, setEditingId] = useState<string | null>(null);
   const [formData, setFormData] = useState<ToolFormData>({
     name: '',
+    short_name: '',
     description: '',
     price: '0.00',
     status: 'coming_soon',
@@ -100,6 +103,7 @@ export default function ToolsPage() {
     setFormStep(1);
     setFormData({
       name: '',
+      short_name: '',
       description: '',
       price: '0.00',
       status: 'coming_soon',
@@ -115,6 +119,7 @@ export default function ToolsPage() {
     setFormStep(1);
     setFormData({
       name: tool.name,
+      short_name: tool.short_name || '',
       description: tool.description || '',
       price: tool.price.toString(),
       status: tool.status,
@@ -167,6 +172,12 @@ export default function ToolsPage() {
       return;
     }
     
+    // Validate short_name if provided (max 6 characters)
+    if (formData.short_name && formData.short_name.length > 6) {
+      setError('Short name must be 6 characters or less');
+      return;
+    }
+    
     const priceNum = parseFloat(formData.price);
     if (isNaN(priceNum) || priceNum < 0) {
       setError('Price must be a valid non-negative number');
@@ -196,6 +207,8 @@ export default function ToolsPage() {
       }
       
       toolFormData.append('name', formData.name.trim());
+      // Always append short_name, even if empty, so the API can clear it when editing
+      toolFormData.append('short_name', formData.short_name.trim());
       toolFormData.append('description', formData.description.trim());
       toolFormData.append('price', formData.price);
       toolFormData.append('status', formData.status);
@@ -434,6 +447,28 @@ export default function ToolsPage() {
 
                   <div>
                     <label className="block text-sm font-medium text-slate-300 mb-1.5">
+                      Short Name <span className="text-xs text-slate-500">(Internal use, max 6 characters)</span>
+                    </label>
+                    <input
+                      type="text"
+                      value={formData.short_name}
+                      onChange={(e) => {
+                        const value = e.target.value.slice(0, 6); // Limit to 6 characters
+                        setFormData({ ...formData, short_name: value });
+                      }}
+                      maxLength={6}
+                      className="w-full rounded-lg border border-slate-700 bg-slate-900/70 px-3 py-2 text-sm text-slate-100 placeholder-slate-500 focus:border-emerald-500/50 focus:outline-none focus:ring-1 focus:ring-emerald-500/50"
+                      placeholder="e.g., MAINT"
+                    />
+                    {formData.short_name.length > 0 && (
+                      <p className="mt-1 text-xs text-slate-500">
+                        {formData.short_name.length}/6 characters
+                      </p>
+                    )}
+                  </div>
+
+                  <div>
+                    <label className="block text-sm font-medium text-slate-300 mb-1.5">
                       Description <span className="text-red-400">*</span>
                     </label>
                     <textarea
@@ -620,6 +655,9 @@ export default function ToolsPage() {
                       Name
                     </th>
                     <th className="px-4 py-3 text-left text-xs font-medium text-slate-300 uppercase tracking-wider">
+                      Short Name
+                    </th>
+                    <th className="px-4 py-3 text-left text-xs font-medium text-slate-300 uppercase tracking-wider">
                       Price
                     </th>
                     <th className="px-4 py-3 text-left text-xs font-medium text-slate-300 uppercase tracking-wider">
@@ -641,6 +679,9 @@ export default function ToolsPage() {
                         {tool.tool_tip && (
                           <div className="text-xs text-slate-500 mt-0.5 line-clamp-1">{tool.tool_tip}</div>
                         )}
+                      </td>
+                      <td className="px-4 py-3 text-sm text-slate-400">
+                        {tool.short_name || <span className="text-slate-600">—</span>}
                       </td>
                       <td className="px-4 py-3 text-sm text-slate-300">
                         ${tool.price.toFixed(2)} / month

@@ -9,6 +9,7 @@ import { AdminMenu } from '../components/AdminMenu';
 import { ToolModal } from '../components/ToolModal';
 import { DynamicIcon } from '../components/DynamicIcon';
 import { PercentOfOrderTool } from '../components/PercentOfOrderTool';
+import { PetCareScheduleTool } from '../components/PetCareScheduleTool';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, PieChart, Pie, Cell, Legend } from 'recharts';
 
 type User = {
@@ -517,6 +518,8 @@ export default function Dashboard() {
                     <div key={tool.id}>
                       {tool.name === 'Percent of my Order' ? (
                         <PercentOfOrderTool />
+                      ) : tool.name === 'Pet Care Schedule' ? (
+                        <PetCareScheduleTool toolId={tool.id} />
                       ) : (
                         <div className="rounded-2xl border border-slate-800 bg-slate-900/70 p-6">
                           <h2 className="text-xl font-semibold text-slate-50 mb-4">{tool.name}</h2>
@@ -675,6 +678,8 @@ export default function Dashboard() {
                     <div key={tool.id}>
                       {tool.name === 'Percent of my Order' ? (
                         <PercentOfOrderTool />
+                      ) : tool.name === 'Pet Care Schedule' ? (
+                        <PetCareScheduleTool toolId={tool.id} />
                       ) : (
                         <div className="rounded-2xl border border-slate-800 bg-slate-900/70 p-6">
                           <h2 className="text-xl font-semibold text-slate-50 mb-4">{tool.name}</h2>

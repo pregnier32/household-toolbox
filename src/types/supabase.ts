@@ -373,6 +373,7 @@ export type Database = {
           id: string
           name: string
           price: number
+          short_name: string | null
           status: string
           tool_tip: string | null
           updated_at: string | null
@@ -383,6 +384,7 @@ export type Database = {
           id?: string
           name: string
           price?: number
+          short_name?: string | null
           status?: string
           tool_tip?: string | null
           updated_at?: string | null
@@ -393,11 +395,392 @@ export type Database = {
           id?: string
           name?: string
           price?: number
+          short_name?: string | null
           status?: string
           tool_tip?: string | null
           updated_at?: string | null
         }
         Relationships: []
+      }
+      tools_pcs_appointments: {
+        Row: {
+          created_at: string | null
+          date: string
+          id: string
+          is_upcoming: boolean | null
+          notes: string | null
+          pet_id: string
+          time: string | null
+          type: string
+          updated_at: string | null
+          veterinarian: string | null
+        }
+        Insert: {
+          created_at?: string | null
+          date: string
+          id?: string
+          is_upcoming?: boolean | null
+          notes?: string | null
+          pet_id: string
+          time?: string | null
+          type: string
+          updated_at?: string | null
+          veterinarian?: string | null
+        }
+        Update: {
+          created_at?: string | null
+          date?: string
+          id?: string
+          is_upcoming?: boolean | null
+          notes?: string | null
+          pet_id?: string
+          time?: string | null
+          type?: string
+          updated_at?: string | null
+          veterinarian?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "tools_pcs_appointments_pet_id_fkey"
+            columns: ["pet_id"]
+            isOneToOne: false
+            referencedRelation: "tools_pcs_pets"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      tools_pcs_care_plan_items: {
+        Row: {
+          created_at: string | null
+          end_date: string | null
+          frequency: string
+          id: string
+          is_active: boolean | null
+          name: string
+          pet_id: string
+          start_date: string
+          updated_at: string | null
+        }
+        Insert: {
+          created_at?: string | null
+          end_date?: string | null
+          frequency: string
+          id?: string
+          is_active?: boolean | null
+          name: string
+          pet_id: string
+          start_date?: string
+          updated_at?: string | null
+        }
+        Update: {
+          created_at?: string | null
+          end_date?: string | null
+          frequency?: string
+          id?: string
+          is_active?: boolean | null
+          name?: string
+          pet_id?: string
+          start_date?: string
+          updated_at?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "tools_pcs_care_plan_items_pet_id_fkey"
+            columns: ["pet_id"]
+            isOneToOne: false
+            referencedRelation: "tools_pcs_pets"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      tools_pcs_documents: {
+        Row: {
+          created_at: string | null
+          date: string
+          description: string | null
+          file_name: string | null
+          file_size: number | null
+          file_type: string | null
+          file_url: string | null
+          id: string
+          name: string
+          pet_id: string
+          updated_at: string | null
+        }
+        Insert: {
+          created_at?: string | null
+          date: string
+          description?: string | null
+          file_name?: string | null
+          file_size?: number | null
+          file_type?: string | null
+          file_url?: string | null
+          id?: string
+          name: string
+          pet_id: string
+          updated_at?: string | null
+        }
+        Update: {
+          created_at?: string | null
+          date?: string
+          description?: string | null
+          file_name?: string | null
+          file_size?: number | null
+          file_type?: string | null
+          file_url?: string | null
+          id?: string
+          name?: string
+          pet_id?: string
+          updated_at?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "tools_pcs_documents_pet_id_fkey"
+            columns: ["pet_id"]
+            isOneToOne: false
+            referencedRelation: "tools_pcs_pets"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      tools_pcs_food_entries: {
+        Row: {
+          created_at: string | null
+          end_date: string | null
+          id: string
+          is_current: boolean | null
+          name: string
+          pet_id: string
+          rating: number | null
+          start_date: string
+          updated_at: string | null
+        }
+        Insert: {
+          created_at?: string | null
+          end_date?: string | null
+          id?: string
+          is_current?: boolean | null
+          name: string
+          pet_id: string
+          rating?: number | null
+          start_date: string
+          updated_at?: string | null
+        }
+        Update: {
+          created_at?: string | null
+          end_date?: string | null
+          id?: string
+          is_current?: boolean | null
+          name?: string
+          pet_id?: string
+          rating?: number | null
+          start_date?: string
+          updated_at?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "tools_pcs_food_entries_pet_id_fkey"
+            columns: ["pet_id"]
+            isOneToOne: false
+            referencedRelation: "tools_pcs_pets"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      tools_pcs_notes: {
+        Row: {
+          content: string
+          created_at: string | null
+          date: string
+          id: string
+          is_current: boolean | null
+          pet_id: string
+          updated_at: string | null
+        }
+        Insert: {
+          content: string
+          created_at?: string | null
+          date?: string
+          id?: string
+          is_current?: boolean | null
+          pet_id: string
+          updated_at?: string | null
+        }
+        Update: {
+          content?: string
+          created_at?: string | null
+          date?: string
+          id?: string
+          is_current?: boolean | null
+          pet_id?: string
+          updated_at?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "tools_pcs_notes_pet_id_fkey"
+            columns: ["pet_id"]
+            isOneToOne: false
+            referencedRelation: "tools_pcs_pets"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      tools_pcs_pets: {
+        Row: {
+          birthdate: string | null
+          breed: string | null
+          color: string | null
+          created_at: string | null
+          custom_pet_type: string | null
+          id: string
+          microchip_number: string | null
+          name: string
+          pet_type: string | null
+          tool_id: string
+          updated_at: string | null
+          user_id: string
+          weight: string | null
+          where_got_pet: string | null
+        }
+        Insert: {
+          birthdate?: string | null
+          breed?: string | null
+          color?: string | null
+          created_at?: string | null
+          custom_pet_type?: string | null
+          id?: string
+          microchip_number?: string | null
+          name: string
+          pet_type?: string | null
+          tool_id: string
+          updated_at?: string | null
+          user_id: string
+          weight?: string | null
+          where_got_pet?: string | null
+        }
+        Update: {
+          birthdate?: string | null
+          breed?: string | null
+          color?: string | null
+          created_at?: string | null
+          custom_pet_type?: string | null
+          id?: string
+          microchip_number?: string | null
+          name?: string
+          pet_type?: string | null
+          tool_id?: string
+          updated_at?: string | null
+          user_id?: string
+          weight?: string | null
+          where_got_pet?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "tools_pcs_pets_tool_id_fkey"
+            columns: ["tool_id"]
+            isOneToOne: false
+            referencedRelation: "tools"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "tools_pcs_pets_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "users"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      tools_pcs_vaccinations: {
+        Row: {
+          created_at: string | null
+          date: string
+          id: string
+          name: string
+          notes: string | null
+          pet_id: string
+          updated_at: string | null
+          veterinarian: string | null
+        }
+        Insert: {
+          created_at?: string | null
+          date: string
+          id?: string
+          name: string
+          notes?: string | null
+          pet_id: string
+          updated_at?: string | null
+          veterinarian?: string | null
+        }
+        Update: {
+          created_at?: string | null
+          date?: string
+          id?: string
+          name?: string
+          notes?: string | null
+          pet_id?: string
+          updated_at?: string | null
+          veterinarian?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "tools_pcs_vaccinations_pet_id_fkey"
+            columns: ["pet_id"]
+            isOneToOne: false
+            referencedRelation: "tools_pcs_pets"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      tools_pcs_veterinary_records: {
+        Row: {
+          address: string | null
+          clinic_name: string | null
+          created_at: string | null
+          date_added: string
+          email: string | null
+          id: string
+          pet_id: string
+          phone: string | null
+          status: string
+          updated_at: string | null
+          veterinarian_name: string | null
+        }
+        Insert: {
+          address?: string | null
+          clinic_name?: string | null
+          created_at?: string | null
+          date_added?: string
+          email?: string | null
+          id?: string
+          pet_id: string
+          phone?: string | null
+          status?: string
+          updated_at?: string | null
+          veterinarian_name?: string | null
+        }
+        Update: {
+          address?: string | null
+          clinic_name?: string | null
+          created_at?: string | null
+          date_added?: string
+          email?: string | null
+          id?: string
+          pet_id?: string
+          phone?: string | null
+          status?: string
+          updated_at?: string | null
+          veterinarian_name?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "tools_pcs_veterinary_records_pet_id_fkey"
+            columns: ["pet_id"]
+            isOneToOne: false
+            referencedRelation: "tools_pcs_pets"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       users: {
         Row: {

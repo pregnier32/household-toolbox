@@ -79,6 +79,7 @@ export async function POST(request: NextRequest) {
   try {
     const formData = await request.formData();
     const name = formData.get('name') as string;
+    const short_name = formData.get('short_name') as string | null;
     const description = formData.get('description') as string | null;
     const price = formData.get('price') as string;
     const status = formData.get('status') as string;
@@ -89,6 +90,30 @@ export async function POST(request: NextRequest) {
         { error: 'Name and status are required' },
         { status: 400 }
       );
+    }
+
+    // Validate short_name if provided (max 6 characters)
+    if (short_name && short_name.trim().length > 6) {
+      return NextResponse.json(
+        { error: 'Short name must be 6 characters or less' },
+        { status: 400 }
+      );
+    }
+
+    // Check if short_name is unique (if provided)
+    if (short_name && short_name.trim()) {
+      const { data: existingTool } = await supabaseServer
+        .from('tools')
+        .select('id')
+        .eq('short_name', short_name.trim())
+        .single();
+
+      if (existingTool) {
+        return NextResponse.json(
+          { error: 'Short name must be unique. This short name is already in use.' },
+          { status: 400 }
+        );
+      }
     }
 
     // Validate that description is required and not empty
@@ -122,6 +147,7 @@ export async function POST(request: NextRequest) {
       .from('tools')
       .insert({
         name: name.trim(),
+        short_name: short_name?.trim() || null,
         tool_tip: null,
         description: description.trim(),
         price: priceNum,
@@ -132,6 +158,13 @@ export async function POST(request: NextRequest) {
 
     if (insertError) {
       console.error('Error creating tool:', insertError);
+      // Check if it's a unique constraint violation
+      if (insertError.code === '23505' || insertError.message?.includes('unique')) {
+        return NextResponse.json(
+          { error: 'Short name must be unique. This short name is already in use.' },
+          { status: 400 }
+        );
+      }
       return NextResponse.json({ error: 'Failed to create tool' }, { status: 500 });
     }
 
@@ -159,6 +192,7 @@ export async function PUT(request: NextRequest) {
     const formData = await request.formData();
     const id = formData.get('id') as string;
     const name = formData.get('name') as string | null;
+    const short_name = formData.get('short_name') as string | null;
     const description = formData.get('description') as string | null;
     const price = formData.get('price') as string | null;
     const status = formData.get('status') as string | null;
@@ -167,6 +201,33 @@ export async function PUT(request: NextRequest) {
 
     if (!id) {
       return NextResponse.json({ error: 'Tool ID is required' }, { status: 400 });
+    }
+
+    // Validate short_name if provided (max 6 characters)
+    if (short_name !== null && short_name.trim().length > 6) {
+      return NextResponse.json(
+        { error: 'Short name must be 6 characters or less' },
+        { status: 400 }
+      );
+    }
+
+    // Check if short_name is unique (if provided and different from current)
+    if (short_name !== null && short_name.trim()) {
+      const trimmedShortName = short_name.trim();
+      // Check if another tool (not this one) already has this short_name
+      const { data: existingTool } = await supabaseServer
+        .from('tools')
+        .select('id')
+        .eq('short_name', trimmedShortName)
+        .neq('id', id)
+        .single();
+
+      if (existingTool) {
+        return NextResponse.json(
+          { error: 'Short name must be unique. This short name is already in use by another tool.' },
+          { status: 400 }
+        );
+      }
     }
 
     // Validate that description is required and not empty
@@ -193,6 +254,12 @@ export async function PUT(request: NextRequest) {
 
     if (name !== null) {
       updateData.name = name.trim();
+    }
+
+    // Handle short_name - can be set to null/empty to clear it
+    // Always update short_name if it's provided (even if empty string, to clear it)
+    if (short_name !== null && short_name !== undefined) {
+      updateData.short_name = short_name.trim() || null;
     }
 
     // Description is always required, so always update it
@@ -277,6 +344,13 @@ export async function PUT(request: NextRequest) {
 
       if (updateError) {
         console.error('Error updating tool:', updateError);
+        // Check if it's a unique constraint violation
+        if (updateError.code === '23505' || updateError.message?.includes('unique')) {
+          return NextResponse.json(
+            { error: 'Short name must be unique. This short name is already in use by another tool.' },
+            { status: 400 }
+          );
+        }
         return NextResponse.json({ error: 'Failed to update tool' }, { status: 500 });
       }
     }
