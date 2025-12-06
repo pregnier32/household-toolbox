@@ -5,7 +5,7 @@ import { supabaseServer } from '@/lib/supabaseServer';
 // GET - Fetch icon data for a specific tool icon
 export async function GET(
   request: NextRequest,
-  { params }: { params: Promise<{ id: string }> | { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   // Check if user is authenticated
   const user = await getSession();
@@ -15,9 +15,8 @@ export async function GET(
   }
 
   try {
-    // Handle both async and sync params (Next.js 13+ vs 14+)
-    const resolvedParams = await Promise.resolve(params);
-    const iconId = resolvedParams.id;
+    // Await params (Next.js 15+ requires params to be awaited)
+    const { id: iconId } = await params;
 
     if (!iconId) {
       return NextResponse.json({ error: 'Icon ID is required' }, { status: 400 });

@@ -5,7 +5,7 @@ import { supabaseServer } from '@/lib/supabaseServer';
 // PUT - Update a dashboard item
 export async function PUT(
   request: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   const user = await getSession();
 
@@ -14,7 +14,7 @@ export async function PUT(
   }
 
   try {
-    const { id } = params;
+    const { id } = await params;
     const body = await request.json();
 
     // Build update object (only include provided fields)
@@ -80,7 +80,7 @@ export async function PUT(
 // DELETE - Delete a dashboard item
 export async function DELETE(
   request: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   const user = await getSession();
 
@@ -89,7 +89,7 @@ export async function DELETE(
   }
 
   try {
-    const { id } = params;
+    const { id } = await params;
 
     // Delete the item (only if it belongs to the user)
     const { error } = await supabaseServer
