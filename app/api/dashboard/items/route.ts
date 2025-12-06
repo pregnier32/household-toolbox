@@ -55,7 +55,7 @@ export async function GET(request: NextRequest) {
 
     // Order by due_date or scheduled_date
     if (type === 'action_item' || type === 'both') {
-      query = query.order('due_date', { ascending: true, nullsLast: true });
+      query = query.order('due_date', { ascending: true });
     } else {
       query = query.order('scheduled_date', { ascending: true });
     }
