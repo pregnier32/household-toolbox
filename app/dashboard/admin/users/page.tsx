@@ -55,6 +55,10 @@ export default function UsersPage() {
   const [userTools, setUserTools] = useState<any[]>([]);
   const [isLoadingTools, setIsLoadingTools] = useState(false);
   const [updatingToolId, setUpdatingToolId] = useState<string | null>(null);
+  const [customTools, setCustomTools] = useState<any[]>([]);
+  const [isLoadingCustomTools, setIsLoadingCustomTools] = useState(false);
+  const [selectedCustomToolId, setSelectedCustomToolId] = useState<string>('');
+  const [isAssigningTool, setIsAssigningTool] = useState(false);
   const router = useRouter();
 
   useEffect(() => {
@@ -263,7 +267,9 @@ export default function UsersPage() {
     });
     setIsLoadingTools(true);
     setUserTools([]);
+    setSelectedCustomToolId('');
 
+    // Load user tools first
     try {
       const response = await fetch(`/api/admin/users/${userToView.id}/tools`);
       const data = await response.json();
@@ -272,7 +278,30 @@ export default function UsersPage() {
         throw new Error(data.error || 'Failed to load user tools');
       }
 
-      setUserTools(data.tools || []);
+      const loadedUserTools = data.tools || [];
+      setUserTools(loadedUserTools);
+
+      // Load custom tools after user tools are loaded
+      setIsLoadingCustomTools(true);
+      try {
+        const toolsResponse = await fetch('/api/admin/tools');
+        const toolsData = await toolsResponse.json();
+
+        if (!toolsResponse.ok) {
+          throw new Error(toolsData.error || 'Failed to load custom tools');
+        }
+
+        // Filter to only show custom tools that the user doesn't already have
+        const userToolIds = new Set(loadedUserTools.map((ut: any) => ut.tools?.id));
+        const customToolsList = (toolsData.tools || [])
+          .filter((tool: any) => tool.status === 'custom' && !userToolIds.has(tool.id));
+        setCustomTools(customToolsList);
+      } catch (err) {
+        console.error('Error loading custom tools:', err);
+        setCustomTools([]);
+      } finally {
+        setIsLoadingCustomTools(false);
+      }
     } catch (err) {
       console.error('Error loading user tools:', err);
       setUserTools([]);
@@ -289,6 +318,58 @@ export default function UsersPage() {
     });
     setUserTools([]);
     setUpdatingToolId(null);
+    setCustomTools([]);
+    setSelectedCustomToolId('');
+  };
+
+  const handleAssignCustomTool = async () => {
+    if (!toolsModal.userId || !selectedCustomToolId) {
+      setError('Please select a custom tool to assign');
+      return;
+    }
+
+    setIsAssigningTool(true);
+    setError(null);
+    setSuccess(null);
+
+    try {
+      const response = await fetch(`/api/admin/users/${toolsModal.userId}/tools`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          toolId: selectedCustomToolId,
+        }),
+      });
+
+      const data = await response.json();
+
+      if (!response.ok) {
+        throw new Error(data.error || 'Failed to assign tool');
+      }
+
+      setSuccess('Custom tool assigned successfully');
+      setSelectedCustomToolId('');
+      
+      // Reload user tools and update custom tools list
+      const toolsResponse = await fetch(`/api/admin/users/${toolsModal.userId}/tools`);
+      const toolsData = await toolsResponse.json();
+      if (toolsResponse.ok) {
+        const updatedUserTools = toolsData.tools || [];
+        setUserTools(updatedUserTools);
+        
+        // Update custom tools list to remove the assigned tool
+        const userToolIds = new Set(updatedUserTools.map((ut: any) => ut.tools?.id));
+        setCustomTools(prevCustomTools => 
+          prevCustomTools.filter((tool: any) => !userToolIds.has(tool.id))
+        );
+      }
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to assign tool');
+    } finally {
+      setIsAssigningTool(false);
+    }
   };
 
   const handleUpdateToolStatus = async (usersToolsId: string, newStatus: string) => {
@@ -687,7 +768,7 @@ export default function UsersPage() {
                 <p>This user has no active tools.</p>
               </div>
             ) : (
-              <div className="space-y-3 max-h-96 overflow-y-auto">
+              <div className="space-y-3 max-h-96 overflow-y-auto mb-6">
                 {userTools.map((userTool: any) => {
                   const tool = userTool.tools;
                   const isTrial = userTool.status === 'trial';
@@ -752,6 +833,38 @@ export default function UsersPage() {
                     </div>
                   );
                 })}
+              </div>
+            )}
+
+            {/* Assign Custom Tool Section - Always visible when not loading */}
+            {!isLoadingTools && (
+              <div className="border-t border-slate-700 pt-6 mt-6">
+                <h3 className="text-sm font-semibold text-slate-300 mb-3">Assign Custom Tool</h3>
+                <div className="flex gap-3">
+                  <select
+                    value={selectedCustomToolId}
+                    onChange={(e) => setSelectedCustomToolId(e.target.value)}
+                    disabled={isLoadingCustomTools || isAssigningTool}
+                    className="flex-1 rounded border border-slate-600 bg-slate-900 px-3 py-2 text-sm text-slate-100 focus:border-emerald-500/50 focus:outline-none focus:ring-1 focus:ring-emerald-500/50 disabled:cursor-not-allowed disabled:opacity-50"
+                  >
+                    <option value="">Select a custom tool...</option>
+                    {customTools.map((tool) => (
+                      <option key={tool.id} value={tool.id}>
+                        {tool.name} - ${tool.price.toFixed(2)}/month
+                      </option>
+                    ))}
+                  </select>
+                  <button
+                    onClick={handleAssignCustomTool}
+                    disabled={!selectedCustomToolId || isAssigningTool || isLoadingCustomTools}
+                    className="rounded border border-emerald-500/50 bg-emerald-500/10 px-4 py-2 text-sm font-medium text-emerald-300 transition-colors hover:bg-emerald-500/20 disabled:cursor-not-allowed disabled:opacity-50"
+                  >
+                    {isAssigningTool ? 'Assigning...' : 'Assign Tool'}
+                  </button>
+                </div>
+                {customTools.length === 0 && !isLoadingCustomTools && (
+                  <p className="text-xs text-slate-500 mt-2">No custom tools available</p>
+                )}
               </div>
             )}
             <div className="mt-6 flex justify-end">

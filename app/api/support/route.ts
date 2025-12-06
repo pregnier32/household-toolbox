@@ -15,7 +15,7 @@ export async function POST(request: NextRequest) {
     }
 
     // Validate type
-    if (!['question', 'support', 'feature'].includes(type)) {
+    if (!['question', 'support', 'feature', 'custom_tool'].includes(type)) {
       return NextResponse.json(
         { success: false, error: 'Invalid request type' },
         { status: 400 }

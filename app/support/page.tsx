@@ -5,7 +5,7 @@ import { useRouter } from 'next/navigation';
 import { useState } from 'react';
 import { HelpMenu } from '../components/HelpMenu';
 
-type RequestType = 'question' | 'support' | 'feature';
+type RequestType = 'question' | 'support' | 'feature' | 'custom_tool';
 
 export default function Support() {
   const router = useRouter();
@@ -36,6 +36,12 @@ export default function Support() {
       label: 'Recommend a Feature',
       description: 'Have an idea for a new feature?',
       icon: '💡',
+    },
+    {
+      value: 'custom_tool',
+      label: 'Request a Custom Tool',
+      description: 'Need a custom tool built just for you?',
+      icon: '🔧',
     },
   ];
 
@@ -129,7 +135,7 @@ export default function Support() {
           <label className="block text-sm font-medium text-slate-300 mb-4">
             How can we help you?
           </label>
-          <div className="grid gap-4 md:grid-cols-3">
+          <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
             {requestTypeOptions.map((option) => (
               <button
                 key={option.value}

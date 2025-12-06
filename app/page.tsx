@@ -317,13 +317,13 @@ export default function Home() {
             {isSignUp && (
               <p className="mt-4 text-center text-xs text-slate-400">
                 By signing up, you agree to our{' '}
-                <a href="#" className="text-emerald-400 hover:text-emerald-300">
+                <Link href="/terms-of-service" className="text-emerald-400 hover:text-emerald-300">
                   Terms of Service
-                </a>{' '}
+                </Link>{' '}
                 and{' '}
-                <a href="#" className="text-emerald-400 hover:text-emerald-300">
+                <Link href="/privacy-policy" className="text-emerald-400 hover:text-emerald-300">
                   Privacy Policy
-                </a>
+                </Link>
               </p>
             )}
           </div>

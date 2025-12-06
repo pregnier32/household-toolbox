@@ -109,8 +109,8 @@ export function ToolModal({ tool, isOpen, onClose, onBuy, isBuying = false, buyM
           ${tool.price.toFixed(2)} / month
         </p>
 
-        {/* Trial Notice */}
-        {tool.status !== 'coming_soon' && (
+        {/* Trial Notice - Not shown for coming_soon or custom tools */}
+        {tool.status !== 'coming_soon' && tool.status !== 'custom' && (
           <div className="mb-4 rounded-lg border border-amber-500/50 bg-amber-500/10 px-3 py-2">
             <p className="text-sm text-amber-300 text-center">
               <span className="font-semibold">7-day free trial</span> - Start your trial today, no charge until after 7 days

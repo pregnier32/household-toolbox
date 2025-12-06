@@ -12,17 +12,71 @@ export async function GET() {
   }
 
   try {
-    // Fetch all tools (excluding inactive ones for regular users)
+    // Fetch user's purchased tools first to determine which custom tools they have access to
+    const { data: userTools, error: userToolsError } = await supabaseServer
+      .from('users_tools')
+      .select('tool_id, status, trial_start_date, trial_end_date')
+      .eq('user_id', user.id)
+      .in('status', ['active', 'trial', 'pending_cancellation']);
+
+    if (userToolsError) {
+      console.error('Error fetching user tools:', userToolsError);
+      // Continue even if this fails, just won't include custom tools
+    }
+
+    // Get list of tool IDs the user has access to (for custom tools)
+    const accessibleToolIds = new Set(userTools?.map((ut) => ut.tool_id) || []);
+
+    // Fetch all tools (excluding inactive and custom ones for regular users)
+    // Custom tools will be added separately if user has access
     const { data: tools, error: toolsError } = await supabaseServer
       .from('tools')
       .select('*')
       .neq('status', 'inactive')
+      .neq('status', 'custom')
       .order('created_at', { ascending: false });
 
     if (toolsError) {
       console.error('Error fetching tools:', toolsError);
       return NextResponse.json({ error: 'Failed to fetch tools' }, { status: 500 });
     }
+
+    // Fetch custom tools that the user has access to
+    // For superadmins, fetch ALL custom tools; for regular users, only fetch ones they have access to
+    let customTools: any[] = [];
+    if (user.userStatus === 'superadmin') {
+      // Superadmins can see all custom tools
+      const { data: customToolsData, error: customToolsError } = await supabaseServer
+        .from('tools')
+        .select('*')
+        .eq('status', 'custom')
+        .order('created_at', { ascending: false });
+
+      if (customToolsError) {
+        console.error('Error fetching custom tools:', customToolsError);
+        // Continue even if this fails
+      } else {
+        customTools = customToolsData || [];
+      }
+    } else if (accessibleToolIds.size > 0) {
+      // Regular users only see custom tools they have access to
+      const { data: customToolsData, error: customToolsError } = await supabaseServer
+        .from('tools')
+        .select('*')
+        .eq('status', 'custom')
+        .in('id', Array.from(accessibleToolIds))
+        .order('created_at', { ascending: false });
+
+      if (customToolsError) {
+        console.error('Error fetching custom tools:', customToolsError);
+        // Continue even if this fails
+      } else {
+        customTools = customToolsData || [];
+      }
+    }
+
+    // Combine regular tools with accessible custom tools
+    const allTools = [...(tools || []), ...customTools];
 
     // Fetch all tool icons - explicitly select fields we need
     // Note: We don't select icon_data here to avoid large payloads, we'll check if it exists
@@ -62,17 +116,7 @@ export async function GET() {
       .eq('status', 'trial')
       .lt('trial_end_date', now);
 
-    // Fetch user's purchased tools (both active and trial and pending_cancellation) with trial info
-    const { data: userTools, error: userToolsError } = await supabaseServer
-      .from('users_tools')
-      .select('tool_id, status, trial_start_date, trial_end_date')
-      .eq('user_id', user.id)
-      .in('status', ['active', 'trial', 'pending_cancellation']);
-
-    if (userToolsError) {
-      console.error('Error fetching user tools:', userToolsError);
-      // Continue even if this fails, just won't mark tools as owned
-    }
+    // userTools was already fetched above, create maps for owned tools and trial info
 
     // Create maps for owned tools and trial info
     const ownedToolIds = new Set(userTools?.map((ut) => ut.tool_id) || []);
@@ -88,7 +132,7 @@ export async function GET() {
     );
 
     // Attach icons to tools and mark if user owns them, include trial info
-    const toolsWithIcons = tools?.map((tool) => {
+    const toolsWithIcons = allTools?.map((tool) => {
       const trialInfo = trialInfoByToolId.get(tool.id);
       return {
         ...tool,

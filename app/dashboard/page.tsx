@@ -617,6 +617,52 @@ export default function Dashboard() {
                         <p className="text-slate-400 text-sm">No tools coming soon at this time.</p>
                       )}
                     </div>
+
+                    {/* Custom Tools - Only visible to superadmins */}
+                    {isSuperAdmin && (
+                      <>
+                        {/* Divider */}
+                        <div className="border-t border-slate-800 my-6"></div>
+
+                        {/* Custom Tools */}
+                        <div>
+                          <h2 className="text-lg font-semibold text-slate-100 mb-4">Custom</h2>
+                          {tools.filter(t => t.status === 'custom').length > 0 ? (
+                            <div className="grid gap-4 md:grid-cols-4 lg:grid-cols-6">
+                              {tools
+                                .filter(t => t.status === 'custom')
+                                .map((tool) => {
+                                  // Use default icon first, then fallback to available/coming_soon for backward compatibility
+                                  const icon = tool.icons.default || tool.icons.available || tool.icons.coming_soon;
+                                  // Get icon name/URL - if it's a URL (starts with http or /), use it, otherwise use icon name
+                                  const iconSrc = icon?.icon_url || (icon?.id ? `/api/tools/icons/${icon.id}` : null);
+                                  return (
+                                    <div 
+                                      key={tool.id} 
+                                      onClick={() => handleToolClick(tool)}
+                                      className="rounded-2xl border border-slate-800 bg-slate-900/70 p-4 hover:border-emerald-500/50 transition-colors cursor-pointer"
+                                    >
+                                      {iconSrc && (
+                                        <div className="mb-3 flex items-center justify-center">
+                                          <DynamicIcon 
+                                            iconName={iconSrc} 
+                                            size={60} 
+                                            className="text-slate-300"
+                                          />
+                                        </div>
+                                      )}
+                                      <h3 className="text-sm font-semibold text-slate-100 mb-1 text-center">{tool.name}</h3>
+                                      <p className="text-xs text-emerald-400 font-medium text-center">${tool.price.toFixed(2)} / month</p>
+                                    </div>
+                                  );
+                                })}
+                            </div>
+                          ) : (
+                            <p className="text-slate-400 text-sm">No custom tools at this time.</p>
+                          )}
+                        </div>
+                      </>
+                    )}
                   </div>
                 )}
               </>

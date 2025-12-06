@@ -33,7 +33,14 @@ export async function POST(request: NextRequest) {
     }
 
     // Check if tool is available for purchase
+    // Custom tools cannot be purchased directly - they must be assigned by admin
     if (tool.status !== 'available' && tool.status !== 'active') {
+      if (tool.status === 'custom') {
+        return NextResponse.json(
+          { error: 'This is a custom tool and cannot be purchased directly. Please contact support for access.' },
+          { status: 400 }
+        );
+      }
       return NextResponse.json(
         { error: 'This tool is not available for purchase' },
         { status: 400 }

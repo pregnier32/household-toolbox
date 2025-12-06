@@ -39,6 +39,197 @@ export type Database = {
   }
   public: {
     Tables: {
+      billing_active: {
+        Row: {
+          amount: number
+          billing_date: string
+          billing_period_end: string
+          billing_period_start: string
+          created_at: string | null
+          id: string
+          item_type: string
+          status: string
+          tool_id: string | null
+          tool_name: string | null
+          updated_at: string | null
+          user_id: string
+          users_tools_id: string | null
+        }
+        Insert: {
+          amount: number
+          billing_date: string
+          billing_period_end: string
+          billing_period_start: string
+          created_at?: string | null
+          id?: string
+          item_type: string
+          status?: string
+          tool_id?: string | null
+          tool_name?: string | null
+          updated_at?: string | null
+          user_id: string
+          users_tools_id?: string | null
+        }
+        Update: {
+          amount?: number
+          billing_date?: string
+          billing_period_end?: string
+          billing_period_start?: string
+          created_at?: string | null
+          id?: string
+          item_type?: string
+          status?: string
+          tool_id?: string | null
+          tool_name?: string | null
+          updated_at?: string | null
+          user_id?: string
+          users_tools_id?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "billing_active_tool_id_fkey"
+            columns: ["tool_id"]
+            isOneToOne: false
+            referencedRelation: "tools"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "billing_active_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "users"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "billing_active_users_tools_id_fkey"
+            columns: ["users_tools_id"]
+            isOneToOne: false
+            referencedRelation: "users_tools"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      billing_history: {
+        Row: {
+          amount: number
+          billing_date: string
+          billing_period_end: string
+          billing_period_start: string
+          created_at: string
+          id: string
+          invoice_id: string | null
+          item_type: string
+          notes: string | null
+          payment_intent_id: string | null
+          processed_at: string | null
+          status: string
+          tool_id: string | null
+          tool_name: string | null
+          updated_at: string
+          user_id: string
+          users_tools_id: string | null
+        }
+        Insert: {
+          amount: number
+          billing_date: string
+          billing_period_end: string
+          billing_period_start: string
+          created_at: string
+          id?: string
+          invoice_id?: string | null
+          item_type: string
+          notes?: string | null
+          payment_intent_id?: string | null
+          processed_at?: string | null
+          status: string
+          tool_id?: string | null
+          tool_name?: string | null
+          updated_at: string
+          user_id: string
+          users_tools_id?: string | null
+        }
+        Update: {
+          amount?: number
+          billing_date?: string
+          billing_period_end?: string
+          billing_period_start?: string
+          created_at?: string
+          id?: string
+          invoice_id?: string | null
+          item_type?: string
+          notes?: string | null
+          payment_intent_id?: string | null
+          processed_at?: string | null
+          status?: string
+          tool_id?: string | null
+          tool_name?: string | null
+          updated_at?: string
+          user_id?: string
+          users_tools_id?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "billing_history_tool_id_fkey"
+            columns: ["tool_id"]
+            isOneToOne: false
+            referencedRelation: "tools"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "billing_history_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "users"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "billing_history_users_tools_id_fkey"
+            columns: ["users_tools_id"]
+            isOneToOne: false
+            referencedRelation: "users_tools"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      cron_job_logs: {
+        Row: {
+          completed_at: string | null
+          created_at: string
+          duration_ms: number | null
+          error_details: string | null
+          execution_data: Json | null
+          id: string
+          job_name: string
+          message: string | null
+          started_at: string
+          status: string
+        }
+        Insert: {
+          completed_at?: string | null
+          created_at?: string
+          duration_ms?: number | null
+          error_details?: string | null
+          execution_data?: Json | null
+          id?: string
+          job_name: string
+          message?: string | null
+          started_at?: string
+          status: string
+        }
+        Update: {
+          completed_at?: string | null
+          created_at?: string
+          duration_ms?: number | null
+          error_details?: string | null
+          execution_data?: Json | null
+          id?: string
+          job_name?: string
+          message?: string | null
+          started_at?: string
+          status?: string
+        }
+        Relationships: []
+      }
       password_reset_tokens: {
         Row: {
           created_at: string | null
@@ -249,6 +440,76 @@ export type Database = {
           user_status?: string
         }
         Relationships: []
+      }
+      users_tools: {
+        Row: {
+          cancellation_effective_date: string | null
+          created_at: string | null
+          has_used_trial: boolean | null
+          id: string
+          price: number
+          promo_code_id: string | null
+          promo_expiration_date: string | null
+          status: string
+          tool_id: string
+          trial_end_date: string | null
+          trial_start_date: string | null
+          updated_at: string | null
+          user_id: string
+        }
+        Insert: {
+          cancellation_effective_date?: string | null
+          created_at?: string | null
+          has_used_trial?: boolean | null
+          id?: string
+          price: number
+          promo_code_id?: string | null
+          promo_expiration_date?: string | null
+          status?: string
+          tool_id: string
+          trial_end_date?: string | null
+          trial_start_date?: string | null
+          updated_at?: string | null
+          user_id: string
+        }
+        Update: {
+          cancellation_effective_date?: string | null
+          created_at?: string | null
+          has_used_trial?: boolean | null
+          id?: string
+          price?: number
+          promo_code_id?: string | null
+          promo_expiration_date?: string | null
+          status?: string
+          tool_id?: string
+          trial_end_date?: string | null
+          trial_start_date?: string | null
+          updated_at?: string | null
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "users_tools_promo_code_id_fkey"
+            columns: ["promo_code_id"]
+            isOneToOne: false
+            referencedRelation: "promo_codes"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "users_tools_tool_id_fkey"
+            columns: ["tool_id"]
+            isOneToOne: false
+            referencedRelation: "tools"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "users_tools_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "users"
+            referencedColumns: ["id"]
+          },
+        ]
       }
     }
     Views: {

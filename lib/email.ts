@@ -260,7 +260,7 @@ export async function sendWelcomeEmail({ to, firstName }: WelcomeEmailParams): P
 }
 
 type SupportEmailParams = {
-  type: 'question' | 'support' | 'feature';
+  type: 'question' | 'support' | 'feature' | 'custom_tool';
   name: string;
   email: string;
   subject: string;
@@ -286,6 +286,7 @@ export async function sendSupportEmail({ type, name, email, subject, message }: 
       question: 'Question',
       support: 'Support Request',
       feature: 'Feature Recommendation',
+      custom_tool: 'Custom Tool Request',
     };
     
     const typeLabel = typeLabels[type];

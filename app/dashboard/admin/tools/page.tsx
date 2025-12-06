@@ -482,6 +482,7 @@ export default function ToolsPage() {
                     >
                       <option value="coming_soon">Coming Soon</option>
                       <option value="available">Available</option>
+                      <option value="custom">Custom</option>
                       {formData.status === 'active' && (
                         <option value="active">Active</option>
                       )}
@@ -490,6 +491,10 @@ export default function ToolsPage() {
                     {formData.status === 'active' ? (
                       <p className="mt-1 text-xs text-emerald-400">
                         This tool is active. You can change it to Available or Coming Soon.
+                      </p>
+                    ) : formData.status === 'custom' ? (
+                      <p className="mt-1 text-xs text-emerald-400">
+                        Custom tools are only visible to users who have been assigned this tool. Create a users_tools record to grant access.
                       </p>
                     ) : (
                       <p className="mt-1 text-xs text-slate-500">

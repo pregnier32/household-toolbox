@@ -99,11 +99,11 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // Validate status - superadmin can only set to coming_soon, available, or inactive
+    // Validate status - superadmin can only set to coming_soon, available, inactive, or custom
     // Active status is set when users purchase tools
-    if (!['coming_soon', 'available', 'inactive'].includes(status)) {
+    if (!['coming_soon', 'available', 'inactive', 'custom'].includes(status)) {
       return NextResponse.json(
-        { error: 'Invalid status. Must be one of: coming_soon, available, inactive. Active status is set when users purchase tools.' },
+        { error: 'Invalid status. Must be one of: coming_soon, available, inactive, custom. Active status is set when users purchase tools.' },
         { status: 400 }
       );
     }
@@ -213,7 +213,7 @@ export async function PUT(request: NextRequest) {
 
     // Handle status change - require icon if status is not 'inactive'
     if (status !== null && status !== existingTool.status) {
-      // Validate status - superadmin can only set to coming_soon, available, or inactive
+      // Validate status - superadmin can only set to coming_soon, available, inactive, custom, or active
       // Active status is set when users purchase tools
       // Allow keeping existing active status, but not setting new status to active
       if (status === 'active' && existingTool.status !== 'active') {
@@ -222,18 +222,20 @@ export async function PUT(request: NextRequest) {
           { status: 400 }
         );
       }
-      if (!['coming_soon', 'available', 'inactive', 'active'].includes(status)) {
+      if (!['coming_soon', 'available', 'inactive', 'custom', 'active'].includes(status)) {
         return NextResponse.json(
-          { error: 'Invalid status. Must be one of: coming_soon, available, inactive. Active status can only be kept if already set.' },
+          { error: 'Invalid status. Must be one of: coming_soon, available, inactive, custom. Active status can only be kept if already set.' },
           { status: 400 }
         );
       }
 
       // If changing to a non-inactive status, check if icon exists for that status
       // Note: 'active' status uses 'available' icon, so check for 'available' icon if status is 'active'
+      // Custom status can use 'available' or 'default' icon
       if (status !== 'inactive') {
         // Map status to icon type: 'active' status uses 'available' icon
-        const iconTypeForStatus = status === 'active' ? 'available' : status;
+        // Custom status can use 'available' or 'default' icon
+        const iconTypeForStatus = status === 'active' ? 'available' : (status === 'custom' ? 'available' : status);
         
         // Check if icon exists for the new status (or available icon for active status)
         // Also check for 'default' icon type as fallback since tools may use a single default icon
