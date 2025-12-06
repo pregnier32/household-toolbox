@@ -12,6 +12,470 @@ import { PercentOfOrderTool } from '../components/PercentOfOrderTool';
 import { PetCareScheduleTool } from '../components/PetCareScheduleTool';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, PieChart, Pie, Cell, Legend } from 'recharts';
 
+// Calendar Component
+function CalendarView({ 
+  calendarEvents = [], 
+  onMonthChange 
+}: { 
+  calendarEvents?: any[];
+  onMonthChange?: (month: string) => void;
+}) {
+  const [currentDate, setCurrentDate] = useState(new Date());
+  const [pdfTheme, setPdfTheme] = useState<'dark' | 'light'>('dark');
+  const [showPdfPopup, setShowPdfPopup] = useState(false);
+
+  const today = new Date();
+  const year = currentDate.getFullYear();
+  const month = currentDate.getMonth();
+
+  // Get first day of month and number of days
+  const firstDayOfMonth = new Date(year, month, 1);
+  const lastDayOfMonth = new Date(year, month + 1, 0);
+  const daysInMonth = lastDayOfMonth.getDate();
+  const startingDayOfWeek = firstDayOfMonth.getDay();
+
+  // Month and year display
+  const monthNames = [
+    'January', 'February', 'March', 'April', 'May', 'June',
+    'July', 'August', 'September', 'October', 'November', 'December'
+  ];
+  const dayNames = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+
+  // Navigate to previous month
+  const goToPreviousMonth = () => {
+    const newDate = new Date(year, month - 1, 1);
+    setCurrentDate(newDate);
+    const monthStr = `${newDate.getFullYear()}-${String(newDate.getMonth() + 1).padStart(2, '0')}`;
+    if (onMonthChange) {
+      onMonthChange(monthStr);
+    }
+  };
+
+  // Navigate to next month
+  const goToNextMonth = () => {
+    const newDate = new Date(year, month + 1, 1);
+    setCurrentDate(newDate);
+    const monthStr = `${newDate.getFullYear()}-${String(newDate.getMonth() + 1).padStart(2, '0')}`;
+    if (onMonthChange) {
+      onMonthChange(monthStr);
+    }
+  };
+
+  // Navigate to today
+  const goToToday = () => {
+    setCurrentDate(new Date());
+  };
+
+  // Check if a date is today
+  const isToday = (day: number) => {
+    return (
+      day === today.getDate() &&
+      month === today.getMonth() &&
+      year === today.getFullYear()
+    );
+  };
+
+  // Get events for a specific day
+  const getEventsForDay = (day: number) => {
+    if (!calendarEvents || calendarEvents.length === 0) return [];
+    const dayDate = new Date(year, month, day);
+    return calendarEvents.filter((event) => {
+      if (!event.scheduled_date) return false;
+      const eventDate = new Date(event.scheduled_date);
+      return (
+        eventDate.getDate() === dayDate.getDate() &&
+        eventDate.getMonth() === dayDate.getMonth() &&
+        eventDate.getFullYear() === dayDate.getFullYear()
+      );
+    });
+  };
+
+  // Export calendar to PDF
+  const exportToPDF = async (theme: 'dark' | 'light' = pdfTheme) => {
+    // Dynamic import to avoid SSR issues
+    if (typeof window === 'undefined') return;
+    
+    // Load jsPDF from CDN (works around npm installation issues)
+    let jsPDF: any;
+    
+    // Check if already loaded
+    if ((window as any).jspdf?.jsPDF) {
+      jsPDF = (window as any).jspdf.jsPDF;
+    } else {
+      // Load from CDN
+      await new Promise<void>((resolve, reject) => {
+        const script = document.createElement('script');
+        script.src = 'https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js';
+        script.onload = () => {
+          jsPDF = (window as any).jspdf.jsPDF;
+          resolve();
+        };
+        script.onerror = reject;
+        document.head.appendChild(script);
+      });
+    }
+    
+    const pdf = new jsPDF({
+      orientation: 'landscape',
+      unit: 'mm',
+      format: 'a4'
+    });
+
+    // Theme colors
+    const colors = theme === 'dark' ? {
+      background: [15, 23, 42], // slate-950
+      title: [241, 245, 249], // slate-50
+      dayHeader: [148, 163, 184], // slate-400
+      cellBackground: [15, 23, 42], // slate-950
+      cellBorder: [51, 65, 85], // slate-700
+      dayText: [203, 213, 225], // slate-300
+      todayBackground: [16, 185, 129, 0.2], // emerald-500/20
+      todayBorder: [16, 185, 129], // emerald-500
+      todayText: [110, 231, 183], // emerald-300
+    } : {
+      background: [255, 255, 255], // white
+      title: [15, 23, 42], // slate-950
+      dayHeader: [71, 85, 105], // slate-600
+      cellBackground: [255, 255, 255], // white
+      cellBorder: [226, 232, 240], // slate-200
+      dayText: [51, 65, 85], // slate-700
+      todayBackground: [16, 185, 129, 0.1], // emerald-500/10 (lighter for light mode)
+      todayBorder: [16, 185, 129], // emerald-500
+      todayText: [5, 150, 105], // emerald-600 (darker for light mode)
+    };
+
+    // Set background
+    pdf.setFillColor(...colors.background);
+    pdf.rect(0, 0, pdf.internal.pageSize.getWidth(), pdf.internal.pageSize.getHeight(), 'F');
+
+    // Title
+    pdf.setTextColor(...colors.title);
+    pdf.setFontSize(24);
+    pdf.setFont('helvetica', 'bold');
+    const title = `${monthNames[month]} ${year}`;
+    const pageWidth = pdf.internal.pageSize.getWidth();
+    const titleWidth = pdf.getTextWidth(title);
+    pdf.text(title, (pageWidth - titleWidth) / 2, 20);
+
+    // Calendar grid settings
+    const margin = 20;
+    const gridWidth = pageWidth - (margin * 2);
+    const gridHeight = 120;
+    const cellWidth = gridWidth / 7;
+    const cellHeight = gridHeight / 6; // Max 6 rows for a month
+    const startY = 35;
+
+    // Calculate number of rows needed
+    const numRows = Math.ceil((startingDayOfWeek + daysInMonth) / 7);
+
+    // Draw day headers
+    pdf.setFontSize(12);
+    pdf.setFont('helvetica', 'bold');
+    pdf.setTextColor(...colors.dayHeader);
+    dayNames.forEach((day, index) => {
+      const x = margin + (index * cellWidth) + (cellWidth / 2);
+      pdf.text(day, x, startY + 8, { align: 'center' });
+    });
+
+    // Draw grid lines and cells
+    pdf.setDrawColor(...colors.cellBorder);
+    pdf.setLineWidth(0.5);
+
+    // Draw horizontal lines
+    for (let row = 0; row <= numRows; row++) {
+      const y = startY + 12 + (row * cellHeight);
+      pdf.line(margin, y, margin + gridWidth, y);
+    }
+
+    // Draw vertical lines
+    for (let col = 0; col <= 7; col++) {
+      const x = margin + (col * cellWidth);
+      pdf.line(x, startY + 12, x, startY + 12 + (numRows * cellHeight));
+    }
+
+    // Fill cells and add day numbers
+    pdf.setFontSize(10);
+    pdf.setFont('helvetica', 'normal');
+    
+    let dayIndex = 0;
+    for (let row = 0; row < numRows; row++) {
+      for (let col = 0; col < 7; col++) {
+        const x = margin + (col * cellWidth);
+        const y = startY + 12 + (row * cellHeight);
+
+        if (row === 0 && col < startingDayOfWeek) {
+          // Empty cell before month starts
+          pdf.setFillColor(...colors.cellBackground);
+          pdf.rect(x, y, cellWidth, cellHeight, 'F');
+        } else if (dayIndex < daysInMonth) {
+          dayIndex++;
+          const isCurrentDayValue = isToday(dayIndex);
+          
+          // Fill cell background
+          if (isCurrentDayValue) {
+            pdf.setFillColor(...colors.todayBackground);
+          } else {
+            pdf.setFillColor(...colors.cellBackground);
+          }
+          pdf.rect(x, y, cellWidth, cellHeight, 'F');
+
+          // Draw border
+          if (isCurrentDayValue) {
+            pdf.setDrawColor(...colors.todayBorder);
+            pdf.setLineWidth(1);
+          } else {
+            pdf.setDrawColor(...colors.cellBorder);
+            pdf.setLineWidth(0.5);
+          }
+          pdf.rect(x, y, cellWidth, cellHeight);
+
+          // Add day number
+          if (isCurrentDayValue) {
+            pdf.setTextColor(...colors.todayText);
+            pdf.setFont('helvetica', 'bold');
+          } else {
+            pdf.setTextColor(...colors.dayText);
+            pdf.setFont('helvetica', 'normal');
+          }
+          pdf.text(
+            dayIndex.toString(),
+            x + 3,
+            y + 5
+          );
+        } else {
+          // Empty cell after month ends
+          pdf.setFillColor(...colors.cellBackground);
+          pdf.rect(x, y, cellWidth, cellHeight, 'F');
+        }
+      }
+    }
+
+    // Save PDF
+    const themeSuffix = theme === 'light' ? '_Light' : '';
+    const fileName = `${monthNames[month]}_${year}_Calendar${themeSuffix}.pdf`;
+    pdf.save(fileName);
+  };
+
+  // Generate calendar days
+  const calendarDays = [];
+  
+  // Add empty cells for days before the first day of the month
+  for (let i = 0; i < startingDayOfWeek; i++) {
+    calendarDays.push(null);
+  }
+  
+  // Add all days of the month
+  for (let day = 1; day <= daysInMonth; day++) {
+    calendarDays.push(day);
+  }
+
+  return (
+    <div className="rounded-2xl border border-slate-800 bg-slate-900/70 p-6">
+      {/* Calendar Header */}
+      <div className="flex items-center justify-between mb-6">
+        <h2 className="text-xl font-semibold text-slate-50">
+          {monthNames[month]} {year}
+        </h2>
+        <div className="flex items-center gap-2">
+          {/* Print Icon */}
+          <div className="relative">
+            <button
+              onClick={() => setShowPdfPopup(!showPdfPopup)}
+              className="p-2 text-slate-400 hover:text-emerald-300 transition-colors rounded-lg hover:bg-slate-800"
+              title="Export to PDF"
+            >
+              <svg
+                className="w-5 h-5"
+                fill="none"
+                stroke="currentColor"
+                viewBox="0 0 24 24"
+              >
+                <path
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  strokeWidth={2}
+                  d="M17 17h2a2 2 0 002-2v-4a2 2 0 00-2-2H5a2 2 0 00-2 2v4a2 2 0 002 2h2m2 4h6a2 2 0 002-2v-4a2 2 0 00-2-2H9a2 2 0 00-2 2v4a2 2 0 002 2zm8-12V5a2 2 0 00-2-2H9a2 2 0 00-2 2v4h10z"
+                />
+              </svg>
+            </button>
+            
+            {/* PDF Export Popup */}
+            {showPdfPopup && (
+              <>
+                {/* Backdrop */}
+                <div
+                  className="fixed inset-0 z-10"
+                  onClick={() => setShowPdfPopup(false)}
+                />
+                {/* Popup */}
+                <div className="absolute right-0 top-full mt-2 z-20 w-64 rounded-lg border border-slate-700 bg-slate-800 shadow-xl p-4">
+                  <div className="space-y-4">
+                    <div>
+                      <label className="block text-sm font-medium text-slate-300 mb-2">
+                        Theme
+                      </label>
+                      <div className="flex gap-2">
+                        <button
+                          onClick={() => setPdfTheme('dark')}
+                          className={`flex-1 px-3 py-2 text-sm font-medium rounded-lg transition-colors ${
+                            pdfTheme === 'dark'
+                              ? 'bg-emerald-500 text-white'
+                              : 'bg-slate-700 text-slate-300 hover:bg-slate-600'
+                          }`}
+                        >
+                          Dark
+                        </button>
+                        <button
+                          onClick={() => setPdfTheme('light')}
+                          className={`flex-1 px-3 py-2 text-sm font-medium rounded-lg transition-colors ${
+                            pdfTheme === 'light'
+                              ? 'bg-emerald-500 text-white'
+                              : 'bg-slate-700 text-slate-300 hover:bg-slate-600'
+                          }`}
+                        >
+                          Light
+                        </button>
+                      </div>
+                    </div>
+                    <button
+                      onClick={(e) => {
+                        e.preventDefault();
+                        exportToPDF(pdfTheme);
+                        setShowPdfPopup(false);
+                      }}
+                      className="w-full px-4 py-2 text-sm font-medium text-slate-50 bg-emerald-500 hover:bg-emerald-600 transition-colors rounded-lg flex items-center justify-center gap-2"
+                    >
+                      <svg
+                        className="w-4 h-4"
+                        fill="none"
+                        stroke="currentColor"
+                        viewBox="0 0 24 24"
+                      >
+                        <path
+                          strokeLinecap="round"
+                          strokeLinejoin="round"
+                          strokeWidth={2}
+                          d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"
+                        />
+                      </svg>
+                      Export to PDF
+                    </button>
+                  </div>
+                </div>
+              </>
+            )}
+          </div>
+          
+          {/* Today Button */}
+          <button
+            onClick={goToToday}
+            className="px-3 py-1.5 text-sm font-medium text-slate-300 hover:text-emerald-300 transition-colors rounded-lg hover:bg-slate-800"
+          >
+            Today
+          </button>
+          
+          {/* Navigation Arrows */}
+          <button
+            onClick={goToPreviousMonth}
+            className="p-2 text-slate-400 hover:text-emerald-300 transition-colors rounded-lg hover:bg-slate-800"
+            aria-label="Previous month"
+          >
+            <svg
+              className="w-5 h-5"
+              fill="none"
+              stroke="currentColor"
+              viewBox="0 0 24 24"
+            >
+              <path
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                strokeWidth={2}
+                d="M15 19l-7-7 7-7"
+              />
+            </svg>
+          </button>
+          <button
+            onClick={goToNextMonth}
+            className="p-2 text-slate-400 hover:text-emerald-300 transition-colors rounded-lg hover:bg-slate-800"
+            aria-label="Next month"
+          >
+            <svg
+              className="w-5 h-5"
+              fill="none"
+              stroke="currentColor"
+              viewBox="0 0 24 24"
+            >
+              <path
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                strokeWidth={2}
+                d="M9 5l7 7-7 7"
+              />
+            </svg>
+          </button>
+        </div>
+      </div>
+
+      {/* Calendar Grid */}
+      <div className="grid grid-cols-7 gap-2">
+        {/* Day Headers */}
+        {dayNames.map((day) => (
+          <div
+            key={day}
+            className="text-center text-sm font-semibold text-slate-400 py-2"
+          >
+            {day}
+          </div>
+        ))}
+
+        {/* Calendar Days */}
+        {calendarDays.map((day, index) => {
+          if (day === null) {
+            return (
+              <div
+                key={`empty-${index}`}
+                className="aspect-square rounded-lg"
+              />
+            );
+          }
+
+          const isCurrentDay = isToday(day);
+          const dayEvents = getEventsForDay(day);
+
+          return (
+            <div
+              key={day}
+              className={`aspect-square rounded-lg border transition-colors ${
+                isCurrentDay
+                  ? 'bg-emerald-500/20 border-emerald-500 text-emerald-300 font-semibold'
+                  : 'border-slate-700 text-slate-300 hover:border-slate-600 hover:bg-slate-800/50'
+              } flex flex-col items-start justify-start cursor-pointer p-2 relative`}
+            >
+              <span className="text-sm">{day}</span>
+              {dayEvents.length > 0 && (
+                <div className="mt-1 flex flex-wrap gap-1 w-full">
+                  {dayEvents.slice(0, 2).map((event) => (
+                    <div
+                      key={event.id}
+                      className="w-full h-1.5 bg-emerald-500/60 rounded-full"
+                      title={event.title}
+                    />
+                  ))}
+                  {dayEvents.length > 2 && (
+                    <div className="w-full h-1.5 bg-slate-600 rounded-full flex items-center justify-center">
+                      <span className="text-[8px] text-slate-300">+{dayEvents.length - 2}</span>
+                    </div>
+                  )}
+                </div>
+              )}
+            </div>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
 type User = {
   id: string;
   email: string;
@@ -64,6 +528,10 @@ export default function Dashboard() {
   const [isLoadingStats, setIsLoadingStats] = useState(false);
   const [tools, setTools] = useState<Tool[]>([]);
   const [isLoadingTools, setIsLoadingTools] = useState(false);
+  const [actionItems, setActionItems] = useState<any[]>([]);
+  const [isLoadingActionItems, setIsLoadingActionItems] = useState(false);
+  const [calendarEvents, setCalendarEvents] = useState<any[]>([]);
+  const [isLoadingCalendarEvents, setIsLoadingCalendarEvents] = useState(false);
   const [selectedTool, setSelectedTool] = useState<Tool | null>(null);
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [isBuying, setIsBuying] = useState(false);
@@ -154,6 +622,72 @@ export default function Dashboard() {
       loadTools();
     }
   }, [activeTab, loadTools]);
+
+  // Fetch action items when Dashboard Overview tab is active
+  const loadActionItems = useCallback(() => {
+    setIsLoadingActionItems(true);
+    fetch('/api/dashboard/items?type=action_item&status=pending&limit=50')
+      .then((res) => res.json())
+      .then((data) => {
+        if (data.error) {
+          console.error('Error from API:', data.error);
+          setActionItems([]);
+        } else if (data.items) {
+          console.log(`Loaded ${data.items.length} action items`);
+          setActionItems(data.items || []);
+        } else {
+          setActionItems([]);
+        }
+        setIsLoadingActionItems(false);
+      })
+      .catch((error) => {
+        console.error('Error fetching action items:', error);
+        setActionItems([]);
+        setIsLoadingActionItems(false);
+      });
+  }, []);
+
+  useEffect(() => {
+    if (activeTab === 'dashboard' && dashboardSubTab === 'overview') {
+      loadActionItems();
+    }
+  }, [activeTab, dashboardSubTab, loadActionItems]);
+
+  // Fetch calendar events when Calendar tab is active
+  const loadCalendarEvents = useCallback((month?: string) => {
+    setIsLoadingCalendarEvents(true);
+    const monthParam = month || new Date().toISOString().slice(0, 7); // YYYY-MM format
+    fetch(`/api/dashboard/items?type=calendar_event&month=${monthParam}`)
+      .then((res) => res.json())
+      .then((data) => {
+        if (data.error) {
+          console.error('Error from API:', data.error);
+          setCalendarEvents([]);
+        } else if (data.items) {
+          console.log(`Loaded ${data.items.length} calendar events for ${monthParam}`);
+          setCalendarEvents(data.items || []);
+        } else {
+          setCalendarEvents([]);
+        }
+        setIsLoadingCalendarEvents(false);
+      })
+      .catch((error) => {
+        console.error('Error fetching calendar events:', error);
+        setCalendarEvents([]);
+        setIsLoadingCalendarEvents(false);
+      });
+  }, []);
+
+  useEffect(() => {
+    if (activeTab === 'dashboard' && dashboardSubTab === 'calendar') {
+      loadCalendarEvents();
+    }
+  }, [activeTab, dashboardSubTab, loadCalendarEvents]);
+
+  // Handle calendar month changes
+  const handleCalendarMonthChange = useCallback((month: string) => {
+    loadCalendarEvents(month);
+  }, [loadCalendarEvents]);
 
   const handleSignOut = async () => {
     await fetch('/api/auth/signout', { method: 'POST' });
@@ -411,28 +945,79 @@ export default function Dashboard() {
                 <p className="text-slate-400 mb-6">
                   Welcome to your Household Toolbox dashboard. This is your central hub for managing your household.
                 </p>
-                <div className="grid gap-4 md:grid-cols-3">
-                  <div className="rounded-2xl border border-slate-800 bg-slate-900/70 p-6">
-                    <p className="text-2xl mb-2">📊</p>
-                    <h3 className="text-sm font-semibold text-slate-100 mb-2">Overview</h3>
-                    <p className="text-xs text-slate-400">
-                      Get a quick view of what needs your attention this week.
+                <div className="rounded-2xl border border-slate-800 bg-slate-900/70 p-6">
+                  <h3 className="text-lg font-semibold text-slate-100 mb-4">Upcoming Action Items</h3>
+                  {isLoadingActionItems ? (
+                    <p className="text-sm text-slate-400">Loading action items...</p>
+                  ) : actionItems.length === 0 ? (
+                    <p className="text-sm text-slate-400">
+                      No upcoming action items. Items from your tools will appear here.
                     </p>
-                  </div>
-                  <div className="rounded-2xl border border-slate-800 bg-slate-900/70 p-6">
-                    <p className="text-2xl mb-2">🔔</p>
-                    <h3 className="text-sm font-semibold text-slate-100 mb-2">Notifications</h3>
-                    <p className="text-xs text-slate-400">
-                      Stay on top of important reminders and updates.
-                    </p>
-                  </div>
-                  <div className="rounded-2xl border border-slate-800 bg-slate-900/70 p-6">
-                    <p className="text-2xl mb-2">📈</p>
-                    <h3 className="text-sm font-semibold text-slate-100 mb-2">Activity</h3>
-                    <p className="text-xs text-slate-400">
-                      Track your recent activity and progress.
-                    </p>
-                  </div>
+                  ) : (
+                    <div className="space-y-3">
+                      {actionItems.map((item) => {
+                        const dueDate = item.due_date ? new Date(item.due_date) : null;
+                        const isOverdue = dueDate && dueDate < new Date() && item.status === 'pending';
+                        const priorityColors = {
+                          high: 'text-red-400',
+                          medium: 'text-amber-400',
+                          low: 'text-slate-400',
+                        };
+                        
+                        return (
+                          <div
+                            key={item.id}
+                            className={`p-4 rounded-lg border ${
+                              isOverdue
+                                ? 'border-red-500/50 bg-red-500/10'
+                                : 'border-slate-700 bg-slate-800/50'
+                            }`}
+                          >
+                            <div className="flex items-start justify-between">
+                              <div className="flex-1">
+                                <div className="flex items-center gap-2 mb-1">
+                                  <h4 className="text-sm font-semibold text-slate-100">{item.title}</h4>
+                                  {item.priority && (
+                                    <span className={`text-xs ${priorityColors[item.priority as keyof typeof priorityColors]}`}>
+                                      {item.priority.toUpperCase()}
+                                    </span>
+                                  )}
+                                </div>
+                                {item.description && (
+                                  <p className="text-xs text-slate-400 mb-2">{item.description}</p>
+                                )}
+                                {dueDate && (
+                                  <p className={`text-xs ${isOverdue ? 'text-red-400' : 'text-slate-400'}`}>
+                                    Due: {dueDate.toLocaleDateString()} {isOverdue && '(Overdue)'}
+                                  </p>
+                                )}
+                              </div>
+                              <button
+                                onClick={async () => {
+                                  try {
+                                    const response = await fetch(`/api/dashboard/items/${item.id}`, {
+                                      method: 'PUT',
+                                      headers: { 'Content-Type': 'application/json' },
+                                      body: JSON.stringify({ status: 'completed' }),
+                                    });
+                                    if (response.ok) {
+                                      loadActionItems();
+                                    }
+                                  } catch (error) {
+                                    console.error('Error completing item:', error);
+                                  }
+                                }}
+                                className="ml-4 px-3 py-1 text-xs font-medium text-emerald-300 hover:text-emerald-200 hover:bg-emerald-500/20 rounded transition-colors"
+                                title="Mark as completed"
+                              >
+                                Complete
+                              </button>
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  )}
                 </div>
               </div>
             )}
@@ -443,11 +1028,10 @@ export default function Dashboard() {
                 <p className="text-slate-400 mb-6">
                   View and manage your household calendar events and schedules.
                 </p>
-                <div className="rounded-2xl border border-slate-800 bg-slate-900/70 p-6">
-                  <p className="text-slate-400 text-center py-8">
-                    Calendar view coming soon...
-                  </p>
-                </div>
+                <CalendarView 
+                  calendarEvents={calendarEvents} 
+                  onMonthChange={handleCalendarMonthChange}
+                />
               </div>
             )}
           </div>

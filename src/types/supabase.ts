@@ -230,6 +230,62 @@ export type Database = {
         }
         Relationships: []
       }
+      dashboard_items: {
+        Row: {
+          created_at: string
+          description: string | null
+          due_date: string | null
+          id: string
+          metadata: Json | null
+          priority: string | null
+          scheduled_date: string | null
+          status: string
+          title: string
+          tool_id: string
+          type: string
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          description?: string | null
+          due_date?: string | null
+          id?: string
+          metadata?: Json | null
+          priority?: string | null
+          scheduled_date?: string | null
+          status?: string
+          title: string
+          tool_id: string
+          type: string
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          description?: string | null
+          due_date?: string | null
+          id?: string
+          metadata?: Json | null
+          priority?: string | null
+          scheduled_date?: string | null
+          status?: string
+          title?: string
+          tool_id?: string
+          type?: string
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "dashboard_items_tool_id_fkey"
+            columns: ["tool_id"]
+            isOneToOne: false
+            referencedRelation: "tools"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       password_reset_tokens: {
         Row: {
           created_at: string | null
@@ -629,6 +685,7 @@ export type Database = {
         Row: {
           birthdate: string | null
           breed: string | null
+          card_color: string | null
           color: string | null
           created_at: string | null
           custom_pet_type: string | null
@@ -645,6 +702,7 @@ export type Database = {
         Insert: {
           birthdate?: string | null
           breed?: string | null
+          card_color?: string | null
           color?: string | null
           created_at?: string | null
           custom_pet_type?: string | null
@@ -661,6 +719,7 @@ export type Database = {
         Update: {
           birthdate?: string | null
           breed?: string | null
+          card_color?: string | null
           color?: string | null
           created_at?: string | null
           custom_pet_type?: string | null
