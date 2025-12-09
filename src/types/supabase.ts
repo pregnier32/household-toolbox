@@ -284,6 +284,13 @@ export type Database = {
             referencedRelation: "tools"
             referencedColumns: ["id"]
           },
+          {
+            foreignKeyName: "dashboard_items_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "users"
+            referencedColumns: ["id"]
+          },
         ]
       }
       password_reset_tokens: {
@@ -460,6 +467,7 @@ export type Database = {
       }
       tools_pcs_appointments: {
         Row: {
+          add_to_dashboard: boolean | null
           created_at: string | null
           date: string
           id: string
@@ -472,6 +480,7 @@ export type Database = {
           veterinarian: string | null
         }
         Insert: {
+          add_to_dashboard?: boolean | null
           created_at?: string | null
           date: string
           id?: string
@@ -484,6 +493,7 @@ export type Database = {
           veterinarian?: string | null
         }
         Update: {
+          add_to_dashboard?: boolean | null
           created_at?: string | null
           date?: string
           id?: string
@@ -507,34 +517,40 @@ export type Database = {
       }
       tools_pcs_care_plan_items: {
         Row: {
+          add_to_dashboard: boolean | null
           created_at: string | null
           end_date: string | null
           frequency: string
           id: string
           is_active: boolean | null
           name: string
+          notes: string | null
           pet_id: string
           start_date: string
           updated_at: string | null
         }
         Insert: {
+          add_to_dashboard?: boolean | null
           created_at?: string | null
           end_date?: string | null
           frequency: string
           id?: string
           is_active?: boolean | null
           name: string
+          notes?: string | null
           pet_id: string
           start_date?: string
           updated_at?: string | null
         }
         Update: {
+          add_to_dashboard?: boolean | null
           created_at?: string | null
           end_date?: string | null
           frequency?: string
           id?: string
           is_active?: boolean | null
           name?: string
+          notes?: string | null
           pet_id?: string
           start_date?: string
           updated_at?: string | null
@@ -606,6 +622,7 @@ export type Database = {
           id: string
           is_current: boolean | null
           name: string
+          notes: string | null
           pet_id: string
           rating: number | null
           start_date: string
@@ -617,6 +634,7 @@ export type Database = {
           id?: string
           is_current?: boolean | null
           name: string
+          notes?: string | null
           pet_id: string
           rating?: number | null
           start_date: string
@@ -628,6 +646,7 @@ export type Database = {
           id?: string
           is_current?: boolean | null
           name?: string
+          notes?: string | null
           pet_id?: string
           rating?: number | null
           start_date?: string
@@ -799,6 +818,7 @@ export type Database = {
           date_added: string
           email: string | null
           id: string
+          notes: string | null
           pet_id: string
           phone: string | null
           status: string
@@ -812,6 +832,7 @@ export type Database = {
           date_added?: string
           email?: string | null
           id?: string
+          notes?: string | null
           pet_id: string
           phone?: string | null
           status?: string
@@ -825,6 +846,7 @@ export type Database = {
           date_added?: string
           email?: string | null
           id?: string
+          notes?: string | null
           pet_id?: string
           phone?: string | null
           status?: string

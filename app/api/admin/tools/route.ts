@@ -441,6 +441,28 @@ export async function DELETE(request: NextRequest) {
       return NextResponse.json({ error: 'Tool ID is required' }, { status: 400 });
     }
 
+    // Check if any users have this tool active
+    const { data: activeUsers, error: checkError } = await supabaseServer
+      .from('users_tools')
+      .select('id, user_id, status')
+      .eq('tool_id', id)
+      .in('status', ['active', 'trial', 'pending_cancellation']);
+
+    if (checkError) {
+      console.error('Error checking active users:', checkError);
+      return NextResponse.json({ error: 'Failed to check tool usage' }, { status: 500 });
+    }
+
+    if (activeUsers && activeUsers.length > 0) {
+      const activeCount = activeUsers.length;
+      return NextResponse.json(
+        { 
+          error: `Cannot delete tool. ${activeCount} user${activeCount > 1 ? 's have' : ' has'} this tool active. Please deactivate the tool for all users before deleting.` 
+        },
+        { status: 400 }
+      );
+    }
+
     // Delete tool (icons will be cascade deleted due to ON DELETE CASCADE)
     const { error } = await supabaseServer
       .from('tools')

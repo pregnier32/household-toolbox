@@ -454,6 +454,7 @@ export async function POST(request: NextRequest) {
             start_date: f.startDate,
             end_date: f.endDate || null,
             is_current: f.isCurrent || false,
+            notes: f.notes || null,
           }))
         );
       }
@@ -472,29 +473,71 @@ export async function POST(request: NextRequest) {
             address: v.address || null,
             status: v.status || 'Active',
             date_added: v.dateAdded || new Date().toISOString().split('T')[0],
+            notes: v.notes || null,
           }))
         );
       }
     }
 
     if (carePlanItems && Array.isArray(carePlanItems)) {
-      // Delete old dashboard items for care plan items
-      const { data: oldCareItems } = await supabaseServer
-        .from('tools_pcs_care_plan_items')
-        .select('id')
-        .eq('pet_id', finalPetId);
+      // Delete ALL old dashboard items for this pet's care plan items (to prevent duplicates)
+      // First, get all dashboard items for this user and tool
+      const { data: allDashboardItems, error: fetchError } = await supabaseServer
+        .from('dashboard_items')
+        .select('id, metadata')
+        .eq('user_id', user.id)
+        .eq('tool_id', toolId);
       
-      if (oldCareItems) {
-        for (const oldItem of oldCareItems) {
-          await deleteDashboardItemsByReference(user.id, toolId, 'care_plan', oldItem.id);
+      if (!fetchError && allDashboardItems) {
+        // Filter items by petId and referenceType='care_plan' in metadata
+        const itemsToDelete = allDashboardItems.filter((item: any) => {
+          const metadata = item.metadata || {};
+          return metadata.referenceType === 'care_plan' && metadata.petId === finalPetId;
+        });
+
+        if (itemsToDelete.length > 0) {
+          const idsToDelete = itemsToDelete.map((item: any) => item.id);
+          const { error: deleteError } = await supabaseServer
+            .from('dashboard_items')
+            .delete()
+            .in('id', idsToDelete);
+
+          if (deleteError) {
+            console.error('Error deleting dashboard items:', deleteError);
+          } else {
+            console.log(`Deleted ${idsToDelete.length} old dashboard items for pet ${finalPetId} care plan items`);
+          }
         }
       }
 
-      await supabaseServer.from('tools_pcs_care_plan_items').delete().eq('pet_id', finalPetId);
+      // Delete all care plan items for this pet first, and wait for it to complete
+      console.log(`[API] Deleting all care plan items for pet ${finalPetId} before inserting ${carePlanItems.length} items`);
+      const { error: deleteError } = await supabaseServer.from('tools_pcs_care_plan_items').delete().eq('pet_id', finalPetId);
+      if (deleteError) {
+        console.error('Error deleting care plan items:', deleteError);
+        return NextResponse.json({ error: 'Failed to delete existing care plan items' }, { status: 500 });
+      }
+      console.log(`[API] Successfully deleted existing care plan items for pet ${finalPetId}`);
+      
       if (carePlanItems.length > 0) {
         const carePlanData = carePlanItems.map((c: any) => {
           const isActive = c.isActive !== undefined ? c.isActive : true;
-          console.log(`Mapping care plan item: ${c.name}, frequency: ${c.frequency}, isActive: ${isActive}`);
+          const addToDashboard = c.addToDashboard !== undefined ? c.addToDashboard : true;
+          // Handle notes: preserve non-empty strings, convert empty strings to null
+          let notesValue = null;
+          if (c.notes !== undefined && c.notes !== null) {
+            if (typeof c.notes === 'string') {
+              const trimmed = c.notes.trim();
+              notesValue = trimmed.length > 0 ? trimmed : null;
+            } else {
+              notesValue = c.notes;
+            }
+          }
+          console.log(`Mapping care plan item: ${c.name}, frequency: ${c.frequency}, isActive: ${isActive}, addToDashboard: ${addToDashboard}`);
+          console.log(`  - Raw notes value: ${JSON.stringify(c.notes)}, type: ${typeof c.notes}`);
+          console.log(`  - Processed notes value: ${JSON.stringify(notesValue)}`);
+          
+          const priorityValue = (c.priority && ['low', 'medium', 'high'].includes(c.priority)) ? c.priority : 'medium';
           
           return {
             pet_id: finalPetId,
@@ -503,12 +546,30 @@ export async function POST(request: NextRequest) {
             is_active: isActive,
             start_date: c.startDate || new Date().toISOString().split('T')[0],
             end_date: c.endDate || null,
+            notes: notesValue,
+            add_to_dashboard: addToDashboard,
+            priority: priorityValue,
           };
         });
         
         console.log('Inserting care plan items:', JSON.stringify(carePlanData, null, 2));
         
         const insertedCareItems = await supabaseServer.from('tools_pcs_care_plan_items').insert(carePlanData).select();
+        
+        if (insertedCareItems.error) {
+          console.error('Error inserting care plan items:', insertedCareItems.error);
+        }
+        
+        if (insertedCareItems.data) {
+          console.log('Inserted care plan items with notes:', insertedCareItems.data.map((item: any) => ({
+            id: item.id,
+            name: item.name,
+            notes: item.notes,
+            notesType: typeof item.notes
+          })));
+        } else {
+          console.log('No data returned from insert operation');
+        }
         
         if (insertedCareItems.error) {
           console.error('Error inserting care plan items:', insertedCareItems.error);
@@ -521,24 +582,20 @@ export async function POST(request: NextRequest) {
           console.log(`Processing ${insertedCareItems.data.length} care plan items for dashboard items`);
           for (const careItem of insertedCareItems.data) {
             const isActive = careItem.is_active;
+            const addToDashboard = careItem.add_to_dashboard !== undefined ? careItem.add_to_dashboard : true;
             const hasEndDate = careItem.end_date;
             const endDateValid = !hasEndDate || new Date(careItem.end_date) >= new Date();
             
-            console.log(`Care Item: ${careItem.name}, is_active: ${isActive}, end_date: ${careItem.end_date}, endDateValid: ${endDateValid}`);
+            console.log(`Care Item: ${careItem.name}, is_active: ${isActive}, add_to_dashboard: ${addToDashboard}, end_date: ${careItem.end_date}, endDateValid: ${endDateValid}`);
             
-            if (isActive && endDateValid) {
+            if (isActive && endDateValid && addToDashboard) {
               const nextDueDate = calculateNextDueDate(careItem.frequency, careItem.start_date);
               console.log(`Calculated next due date for ${careItem.name}: ${nextDueDate}`);
               
-              // Determine priority based on frequency
-              let priority: 'low' | 'medium' | 'high' = 'medium';
-              if (careItem.frequency === 'Daily' || careItem.frequency === 'Every 2 Days' || careItem.frequency === 'Every 3 Days') {
-                priority = 'high';
-              } else if (careItem.frequency === 'Weekly' || careItem.frequency === 'Every 2 Weeks') {
-                priority = 'medium';
-              } else {
-                priority = 'low';
-              }
+              // Use user-selected priority, default to 'medium' if not set
+              const priority: 'low' | 'medium' | 'high' = (careItem.priority && ['low', 'medium', 'high'].includes(careItem.priority)) 
+                ? careItem.priority 
+                : 'medium';
 
               const dashboardItemData = {
                 title: `${petName} - ${careItem.name}`,
@@ -553,9 +610,11 @@ export async function POST(request: NextRequest) {
                   petName,
                   frequency: careItem.frequency,
                   startDate: careItem.start_date,
+                  notes: careItem.notes || null,
                 },
               };
               
+              console.log(`Care item notes value: ${JSON.stringify(careItem.notes)}`);
               console.log(`Attempting to create dashboard item for care plan item ${careItem.id}:`, JSON.stringify(dashboardItemData, null, 2));
               console.log(`User ID: ${user.id}, Tool ID: ${toolId}`);
               
@@ -590,15 +649,33 @@ export async function POST(request: NextRequest) {
     }
 
     if (appointments && Array.isArray(appointments)) {
-      // Delete old dashboard items for appointments
-      const { data: oldAppointments } = await supabaseServer
-        .from('tools_pcs_appointments')
-        .select('id')
-        .eq('pet_id', finalPetId);
+      // Delete ALL old dashboard items for this pet's appointments (to prevent duplicates)
+      // First, get all dashboard items for this user and tool
+      const { data: allDashboardItems, error: fetchError } = await supabaseServer
+        .from('dashboard_items')
+        .select('id, metadata')
+        .eq('user_id', user.id)
+        .eq('tool_id', toolId);
       
-      if (oldAppointments) {
-        for (const oldAppt of oldAppointments) {
-          await deleteDashboardItemsByReference(user.id, toolId, 'appointment', oldAppt.id);
+      if (!fetchError && allDashboardItems) {
+        // Filter items by petId and referenceType='appointment' in metadata
+        const itemsToDelete = allDashboardItems.filter((item: any) => {
+          const metadata = item.metadata || {};
+          return metadata.referenceType === 'appointment' && metadata.petId === finalPetId;
+        });
+
+        if (itemsToDelete.length > 0) {
+          const idsToDelete = itemsToDelete.map((item: any) => item.id);
+          const { error: deleteError } = await supabaseServer
+            .from('dashboard_items')
+            .delete()
+            .in('id', idsToDelete);
+
+          if (deleteError) {
+            console.error('Error deleting dashboard items:', deleteError);
+          } else {
+            console.log(`Deleted ${idsToDelete.length} old dashboard items for pet ${finalPetId} appointments`);
+          }
         }
       }
 
@@ -610,8 +687,9 @@ export async function POST(request: NextRequest) {
           today.setHours(0, 0, 0, 0);
           appointmentDate.setHours(0, 0, 0, 0);
           const isUpcoming = a.isUpcoming !== undefined ? a.isUpcoming : (appointmentDate >= today);
+          const addToDashboard = a.addToDashboard !== undefined ? a.addToDashboard : true;
           
-          console.log(`Mapping appointment: ${a.type}, date: ${a.date}, isUpcoming: ${isUpcoming}`);
+          console.log(`Mapping appointment: ${a.type}, date: ${a.date}, isUpcoming: ${isUpcoming}, addToDashboard: ${addToDashboard}`);
           
           return {
             pet_id: finalPetId,
@@ -621,6 +699,7 @@ export async function POST(request: NextRequest) {
             veterinarian: a.veterinarian || null,
             notes: a.notes || null,
             is_upcoming: isUpcoming,
+            add_to_dashboard: addToDashboard,
           };
         });
         
@@ -642,11 +721,12 @@ export async function POST(request: NextRequest) {
             const today = new Date();
             today.setHours(0, 0, 0, 0);
             appointmentDate.setHours(0, 0, 0, 0);
+            const addToDashboard = appointment.add_to_dashboard !== undefined ? appointment.add_to_dashboard : true;
             
-            console.log(`Appointment: ${appointment.type}, Date: ${appointment.date}, is_upcoming: ${appointment.is_upcoming}, Date >= Today: ${appointmentDate >= today}`);
+            console.log(`Appointment: ${appointment.type}, Date: ${appointment.date}, is_upcoming: ${appointment.is_upcoming}, add_to_dashboard: ${addToDashboard}, Date >= Today: ${appointmentDate >= today}`);
             
-            // Create calendar event if it's marked as upcoming OR if the date is today or in the future
-            if (appointment.is_upcoming || appointmentDate >= today) {
+            // Create calendar event if it's marked as upcoming OR if the date is today or in the future, AND addToDashboard is true
+            if ((appointment.is_upcoming || appointmentDate >= today) && addToDashboard) {
               // Combine date and time for scheduled_date
               let scheduledDateTime: string;
               if (appointment.time) {

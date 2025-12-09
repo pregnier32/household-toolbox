@@ -18,10 +18,16 @@ export async function GET(request: NextRequest) {
     const limit = searchParams.get('limit');
     const offset = searchParams.get('offset');
 
-    // Build query
+    // Build query with tool information
     let query = supabaseServer
       .from('dashboard_items')
-      .select('*')
+      .select(`
+        *,
+        tools!tool_id (
+          id,
+          name
+        )
+      `)
       .eq('user_id', user.id);
 
     // Filter by type if provided

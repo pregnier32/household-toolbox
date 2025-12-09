@@ -1,0 +1,3 @@
+ALTER TABLE tools_PCS_food_entries
+ADD COLUMN IF NOT EXISTS notes TEXT;
+

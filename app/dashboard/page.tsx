@@ -23,6 +23,7 @@ function CalendarView({
   const [currentDate, setCurrentDate] = useState(new Date());
   const [pdfTheme, setPdfTheme] = useState<'dark' | 'light'>('dark');
   const [showPdfPopup, setShowPdfPopup] = useState(false);
+  const [selectedDay, setSelectedDay] = useState<{ day: number; events: any[] } | null>(null);
 
   const today = new Date();
   const year = currentDate.getFullYear();
@@ -129,9 +130,8 @@ function CalendarView({
       cellBackground: [15, 23, 42], // slate-950
       cellBorder: [51, 65, 85], // slate-700
       dayText: [203, 213, 225], // slate-300
-      todayBackground: [16, 185, 129, 0.2], // emerald-500/20
-      todayBorder: [16, 185, 129], // emerald-500
-      todayText: [110, 231, 183], // emerald-300
+      eventText: [16, 185, 129], // emerald-500
+      eventBackground: [16, 185, 129, 0.2], // emerald-500/20
     } : {
       background: [255, 255, 255], // white
       title: [15, 23, 42], // slate-950
@@ -139,9 +139,8 @@ function CalendarView({
       cellBackground: [255, 255, 255], // white
       cellBorder: [226, 232, 240], // slate-200
       dayText: [51, 65, 85], // slate-700
-      todayBackground: [16, 185, 129, 0.1], // emerald-500/10 (lighter for light mode)
-      todayBorder: [16, 185, 129], // emerald-500
-      todayText: [5, 150, 105], // emerald-600 (darker for light mode)
+      eventText: [5, 150, 105], // emerald-600
+      eventBackground: [16, 185, 129, 0.1], // emerald-500/10
     };
 
     // Set background
@@ -160,13 +159,15 @@ function CalendarView({
     // Calendar grid settings
     const margin = 20;
     const gridWidth = pageWidth - (margin * 2);
-    const gridHeight = 120;
+    const pageHeight = pdf.internal.pageSize.getHeight();
+    const availableHeight = pageHeight - 50; // Leave space for title and margins
+    const gridHeight = availableHeight;
     const cellWidth = gridWidth / 7;
-    const cellHeight = gridHeight / 6; // Max 6 rows for a month
-    const startY = 35;
-
-    // Calculate number of rows needed
+    
+    // Calculate number of rows needed first
     const numRows = Math.ceil((startingDayOfWeek + daysInMonth) / 7);
+    const cellHeight = gridHeight / numRows; // Use actual number of rows
+    const startY = 35;
 
     // Draw day headers
     pdf.setFontSize(12);
@@ -193,7 +194,7 @@ function CalendarView({
       pdf.line(x, startY + 12, x, startY + 12 + (numRows * cellHeight));
     }
 
-    // Fill cells and add day numbers
+    // Fill cells and add day numbers with events
     pdf.setFontSize(10);
     pdf.setFont('helvetica', 'normal');
     
@@ -209,39 +210,65 @@ function CalendarView({
           pdf.rect(x, y, cellWidth, cellHeight, 'F');
         } else if (dayIndex < daysInMonth) {
           dayIndex++;
-          const isCurrentDayValue = isToday(dayIndex);
           
-          // Fill cell background
-          if (isCurrentDayValue) {
-            pdf.setFillColor(...colors.todayBackground);
-          } else {
-            pdf.setFillColor(...colors.cellBackground);
-          }
+          // Get events for this day
+          const dayEvents = getEventsForDay(dayIndex);
+          
+          // Fill cell background (no special highlighting for today)
+          pdf.setFillColor(...colors.cellBackground);
           pdf.rect(x, y, cellWidth, cellHeight, 'F');
 
           // Draw border
-          if (isCurrentDayValue) {
-            pdf.setDrawColor(...colors.todayBorder);
-            pdf.setLineWidth(1);
-          } else {
-            pdf.setDrawColor(...colors.cellBorder);
-            pdf.setLineWidth(0.5);
-          }
+          pdf.setDrawColor(...colors.cellBorder);
+          pdf.setLineWidth(0.5);
           pdf.rect(x, y, cellWidth, cellHeight);
 
           // Add day number
-          if (isCurrentDayValue) {
-            pdf.setTextColor(...colors.todayText);
-            pdf.setFont('helvetica', 'bold');
-          } else {
-            pdf.setTextColor(...colors.dayText);
-            pdf.setFont('helvetica', 'normal');
-          }
+          pdf.setFontSize(10); // Ensure consistent font size for day numbers
+          pdf.setTextColor(...colors.dayText);
+          pdf.setFont('helvetica', 'normal');
           pdf.text(
             dayIndex.toString(),
             x + 3,
             y + 5
           );
+
+          // Add events if any
+          if (dayEvents.length > 0) {
+            pdf.setFontSize(7);
+            pdf.setFont('helvetica', 'normal');
+            pdf.setTextColor(...colors.eventText);
+            
+            // Show up to 5 events, truncate if needed
+            const eventsToShow = dayEvents.slice(0, 5);
+            let eventY = y + 8;
+            
+            eventsToShow.forEach((event, idx) => {
+              if (eventY + 3 > y + cellHeight - 2) return; // Don't overflow cell
+              
+              // Truncate event title to fit in cell
+              let eventTitle = event.title || 'Event';
+              const maxWidth = cellWidth - 6;
+              const textWidth = pdf.getTextWidth(eventTitle);
+              
+              if (textWidth > maxWidth) {
+                // Truncate and add ellipsis
+                while (pdf.getTextWidth(eventTitle + '...') > maxWidth && eventTitle.length > 0) {
+                  eventTitle = eventTitle.slice(0, -1);
+                }
+                eventTitle = eventTitle + '...';
+              }
+              
+              pdf.text(eventTitle, x + 3, eventY);
+              eventY += 3.5;
+            });
+            
+            // If there are more events, show indicator
+            if (dayEvents.length > 5) {
+              pdf.setFontSize(6);
+              pdf.text(`+${dayEvents.length - 5}`, x + 3, eventY);
+            }
+          }
         } else {
           // Empty cell after month ends
           pdf.setFillColor(...colors.cellBackground);
@@ -445,25 +472,32 @@ function CalendarView({
           return (
             <div
               key={day}
+              onClick={() => {
+                if (dayEvents.length > 0) {
+                  setSelectedDay({ day, events: dayEvents });
+                }
+              }}
               className={`aspect-square rounded-lg border transition-colors ${
-                isCurrentDay
-                  ? 'bg-emerald-500/20 border-emerald-500 text-emerald-300 font-semibold'
+                dayEvents.length > 0
+                  ? 'border-slate-600 text-slate-300 hover:border-emerald-500/50 hover:bg-slate-800/50 cursor-pointer'
                   : 'border-slate-700 text-slate-300 hover:border-slate-600 hover:bg-slate-800/50'
-              } flex flex-col items-start justify-start cursor-pointer p-2 relative`}
+              } flex flex-col items-start justify-start p-2 relative`}
             >
               <span className="text-sm">{day}</span>
               {dayEvents.length > 0 && (
-                <div className="mt-1 flex flex-wrap gap-1 w-full">
+                <div className="mt-1 flex flex-col gap-1 w-full">
                   {dayEvents.slice(0, 2).map((event) => (
                     <div
                       key={event.id}
-                      className="w-full h-1.5 bg-emerald-500/60 rounded-full"
+                      className="w-full px-1.5 py-0.5 bg-emerald-500/20 border border-emerald-500/50 rounded text-xs text-emerald-300 truncate"
                       title={event.title}
-                    />
+                    >
+                      {event.title}
+                    </div>
                   ))}
                   {dayEvents.length > 2 && (
-                    <div className="w-full h-1.5 bg-slate-600 rounded-full flex items-center justify-center">
-                      <span className="text-[8px] text-slate-300">+{dayEvents.length - 2}</span>
+                    <div className="w-full px-1.5 py-0.5 bg-slate-700/50 border border-slate-600 rounded text-xs text-slate-400 text-center">
+                      +{dayEvents.length - 2} more
                     </div>
                   )}
                 </div>
@@ -472,6 +506,83 @@ function CalendarView({
           );
         })}
       </div>
+
+      {/* Event Details Popup */}
+      {selectedDay && selectedDay.events.length > 0 && (
+        <>
+          {/* Backdrop */}
+          <div
+            className="fixed inset-0 bg-black/50 z-40"
+            onClick={() => setSelectedDay(null)}
+          />
+          {/* Popup */}
+          <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+            <div className="w-full max-w-md rounded-2xl border border-slate-700 bg-slate-900 shadow-xl p-6 max-h-[80vh] overflow-y-auto">
+              <div className="flex items-center justify-between mb-4">
+                <h3 className="text-lg font-semibold text-slate-100">
+                  {monthNames[month]} {selectedDay.day}, {year}
+                </h3>
+                <button
+                  onClick={() => setSelectedDay(null)}
+                  className="p-1 text-slate-400 hover:text-slate-200 transition-colors rounded"
+                >
+                  <svg
+                    className="w-5 h-5"
+                    fill="none"
+                    stroke="currentColor"
+                    viewBox="0 0 24 24"
+                  >
+                    <path
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                      strokeWidth={2}
+                      d="M6 18L18 6M6 6l12 12"
+                    />
+                  </svg>
+                </button>
+              </div>
+              <div className="space-y-3">
+                {selectedDay.events.map((event) => {
+                  const scheduledDate = event.scheduled_date ? new Date(event.scheduled_date) : null;
+                  const priorityColors = {
+                    high: 'text-red-400',
+                    medium: 'text-amber-400',
+                    low: 'text-slate-400',
+                  };
+                  return (
+                    <div
+                      key={event.id}
+                      className="p-3 rounded-lg border border-slate-700 bg-slate-800/50"
+                    >
+                      <div className="flex items-start justify-between gap-2 mb-2">
+                        <h4 className="text-sm font-semibold text-slate-100 flex-1">{event.title}</h4>
+                        {event.priority && (
+                          <span className={`text-xs font-medium ${priorityColors[event.priority as keyof typeof priorityColors]}`}>
+                            {event.priority.toUpperCase()}
+                          </span>
+                        )}
+                      </div>
+                      {event.description && (
+                        <p className="text-xs text-slate-400 mb-2">{event.description}</p>
+                      )}
+                      {scheduledDate && (
+                        <p className="text-xs text-slate-400 mb-2">
+                          Time: {scheduledDate.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                        </p>
+                      )}
+                      {event.tools && (
+                        <p className="text-xs text-slate-400">
+                          <span className="text-slate-500">From tool:</span> {event.tools.name || 'Unknown Tool'}
+                        </p>
+                      )}
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+          </div>
+        </>
+      )}
     </div>
   );
 }
@@ -536,6 +647,9 @@ export default function Dashboard() {
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [isBuying, setIsBuying] = useState(false);
   const [buyMessage, setBuyMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
+  const [expandedActionItemId, setExpandedActionItemId] = useState<string | null>(null);
+  const [completingItemId, setCompletingItemId] = useState<string | null>(null);
+  const [completeMessage, setCompleteMessage] = useState<{ type: 'success' | 'error'; text: string; itemId: string } | null>(null);
   const router = useRouter();
   
   const isSuperAdmin = user?.userStatus === 'superadmin';
@@ -945,79 +1059,163 @@ export default function Dashboard() {
                 <p className="text-slate-400 mb-6">
                   Welcome to your Household Toolbox dashboard. This is your central hub for managing your household.
                 </p>
-                <div className="rounded-2xl border border-slate-800 bg-slate-900/70 p-6">
-                  <h3 className="text-lg font-semibold text-slate-100 mb-4">Upcoming Action Items</h3>
-                  {isLoadingActionItems ? (
-                    <p className="text-sm text-slate-400">Loading action items...</p>
-                  ) : actionItems.length === 0 ? (
-                    <p className="text-sm text-slate-400">
-                      No upcoming action items. Items from your tools will appear here.
-                    </p>
-                  ) : (
-                    <div className="space-y-3">
-                      {actionItems.map((item) => {
-                        const dueDate = item.due_date ? new Date(item.due_date) : null;
-                        const isOverdue = dueDate && dueDate < new Date() && item.status === 'pending';
-                        const priorityColors = {
-                          high: 'text-red-400',
-                          medium: 'text-amber-400',
-                          low: 'text-slate-400',
-                        };
+                <div className="w-1/2">
+                  <div className="rounded-2xl border border-slate-800 bg-slate-900/70 p-6">
+                    <h3 className="text-lg font-semibold text-slate-100 mb-4">Upcoming Action Items</h3>
+                    {isLoadingActionItems ? (
+                      <p className="text-sm text-slate-400">Loading action items...</p>
+                    ) : actionItems.length === 0 ? (
+                      <p className="text-sm text-slate-400">
+                        No upcoming action items. Items from your tools will appear here.
+                      </p>
+                    ) : (
+                      <div>
+                        {/* Header row */}
+                        <div className="grid grid-cols-[2fr_1fr_auto] gap-4 mb-3 pb-3 border-b border-slate-700">
+                          <div className="text-xs font-semibold text-slate-400 uppercase">Action Item</div>
+                          <div className="text-xs font-semibold text-slate-400 uppercase">Due Date</div>
+                          <div className="w-20"></div>
+                        </div>
                         
-                        return (
-                          <div
-                            key={item.id}
-                            className={`p-4 rounded-lg border ${
-                              isOverdue
-                                ? 'border-red-500/50 bg-red-500/10'
-                                : 'border-slate-700 bg-slate-800/50'
-                            }`}
-                          >
-                            <div className="flex items-start justify-between">
-                              <div className="flex-1">
-                                <div className="flex items-center gap-2 mb-1">
-                                  <h4 className="text-sm font-semibold text-slate-100">{item.title}</h4>
-                                  {item.priority && (
-                                    <span className={`text-xs ${priorityColors[item.priority as keyof typeof priorityColors]}`}>
-                                      {item.priority.toUpperCase()}
-                                    </span>
-                                  )}
+                        {/* Action items */}
+                        <div className="space-y-3">
+                          {actionItems.map((item) => {
+                            const dueDate = item.due_date ? new Date(item.due_date) : null;
+                            const isOverdue = dueDate && dueDate < new Date() && item.status === 'pending';
+                            const isExpanded = expandedActionItemId === item.id;
+                            const priorityBgColors = {
+                              high: 'bg-red-500/10 border-red-500/50',
+                              medium: 'bg-amber-500/10 border-amber-500/50',
+                              low: 'bg-slate-800/50 border-slate-700',
+                            };
+                            
+                            return (
+                              <div
+                                key={item.id}
+                                className={`rounded-lg border transition-colors ${
+                                  isOverdue
+                                    ? 'border-red-500/50 bg-red-500/10'
+                                    : priorityBgColors[item.priority as keyof typeof priorityBgColors] || 'border-slate-700 bg-slate-800/50'
+                                } ${isExpanded ? 'p-4' : 'p-3'}`}
+                              >
+                                {/* Single line view */}
+                                <div className="grid grid-cols-[2fr_1fr_auto] gap-4 items-center">
+                                  <div 
+                                    className="flex items-center gap-2 min-w-0 cursor-pointer"
+                                    onClick={() => {
+                                      setExpandedActionItemId(isExpanded ? null : item.id);
+                                    }}
+                                  >
+                                    <h4 className="text-sm font-semibold text-slate-100">{item.title}</h4>
+                                    <svg
+                                      className={`w-4 h-4 text-slate-400 transition-transform flex-shrink-0 ${isExpanded ? 'rotate-180' : ''}`}
+                                      fill="none"
+                                      stroke="currentColor"
+                                      viewBox="0 0 24 24"
+                                    >
+                                      <path
+                                        strokeLinecap="round"
+                                        strokeLinejoin="round"
+                                        strokeWidth={2}
+                                        d="M19 9l-7 7-7-7"
+                                      />
+                                    </svg>
+                                  </div>
+                                  <div className="text-sm text-slate-300">
+                                    {dueDate ? dueDate.toLocaleDateString() : '—'}
+                                    {isOverdue && (
+                                      <span className="ml-2 text-xs text-red-400">(Overdue)</span>
+                                    )}
+                                  </div>
+                                  <button
+                                    onClick={async (e) => {
+                                      e.stopPropagation();
+                                      setCompletingItemId(item.id);
+                                      setCompleteMessage(null);
+                                      try {
+                                        const response = await fetch(`/api/dashboard/items/${item.id}`, {
+                                          method: 'PUT',
+                                          headers: { 'Content-Type': 'application/json' },
+                                          body: JSON.stringify({ status: 'completed' }),
+                                        });
+                                        if (response.ok) {
+                                          setCompleteMessage({ type: 'success', text: 'Item completed!', itemId: item.id });
+                                          setTimeout(() => {
+                                            loadActionItems();
+                                            setExpandedActionItemId(null);
+                                            setCompletingItemId(null);
+                                            setCompleteMessage(null);
+                                          }, 1000);
+                                        } else {
+                                          const data = await response.json();
+                                          setCompleteMessage({ 
+                                            type: 'error', 
+                                            text: data.error || 'Failed to complete item', 
+                                            itemId: item.id 
+                                          });
+                                          setCompletingItemId(null);
+                                        }
+                                      } catch (error) {
+                                        console.error('Error completing item:', error);
+                                        setCompleteMessage({ 
+                                          type: 'error', 
+                                          text: 'An error occurred', 
+                                          itemId: item.id 
+                                        });
+                                        setCompletingItemId(null);
+                                      }
+                                    }}
+                                    disabled={completingItemId === item.id}
+                                    className={`px-4 py-2 text-sm font-medium rounded transition-colors whitespace-nowrap ${
+                                      completingItemId === item.id
+                                        ? 'text-slate-500 cursor-not-allowed bg-slate-700/50'
+                                        : 'text-emerald-300 hover:text-emerald-200 hover:bg-emerald-500/20'
+                                    }`}
+                                    title="Mark as completed"
+                                  >
+                                    {completingItemId === item.id ? 'Completing...' : 'Complete'}
+                                  </button>
                                 </div>
-                                {item.description && (
-                                  <p className="text-xs text-slate-400 mb-2">{item.description}</p>
-                                )}
-                                {dueDate && (
-                                  <p className={`text-xs ${isOverdue ? 'text-red-400' : 'text-slate-400'}`}>
-                                    Due: {dueDate.toLocaleDateString()} {isOverdue && '(Overdue)'}
-                                  </p>
+                                
+                                {/* Expanded details */}
+                                {isExpanded && (
+                                  <div className="mt-4 pt-4 border-t border-slate-700/50 space-y-2">
+                                    {completeMessage && completeMessage.itemId === item.id && (
+                                      <div className={`p-2 rounded text-xs ${
+                                        completeMessage.type === 'success'
+                                          ? 'bg-emerald-500/20 text-emerald-300 border border-emerald-500/50'
+                                          : 'bg-red-500/20 text-red-300 border border-red-500/50'
+                                      }`}>
+                                        {completeMessage.text}
+                                      </div>
+                                    )}
+                                    {item.tools && (
+                                      <p className="text-sm text-slate-300">
+                                        <span className="text-slate-400">From tool:</span> {item.tools.name || 'Unknown Tool'}
+                                      </p>
+                                    )}
+                                    {item.description && (
+                                      <p className="text-sm text-slate-400">{item.description}</p>
+                                    )}
+                                    {item.priority && (
+                                      <p className="text-sm text-slate-400">
+                                        Priority: {item.priority.toUpperCase()}
+                                      </p>
+                                    )}
+                                    {item.metadata && typeof item.metadata === 'object' && item.metadata.notes && item.metadata.notes.trim() && (
+                                      <p className="text-sm text-slate-300 italic mt-2">
+                                        <span className="text-slate-400">Notes:</span> "{item.metadata.notes}"
+                                      </p>
+                                    )}
+                                  </div>
                                 )}
                               </div>
-                              <button
-                                onClick={async () => {
-                                  try {
-                                    const response = await fetch(`/api/dashboard/items/${item.id}`, {
-                                      method: 'PUT',
-                                      headers: { 'Content-Type': 'application/json' },
-                                      body: JSON.stringify({ status: 'completed' }),
-                                    });
-                                    if (response.ok) {
-                                      loadActionItems();
-                                    }
-                                  } catch (error) {
-                                    console.error('Error completing item:', error);
-                                  }
-                                }}
-                                className="ml-4 px-3 py-1 text-xs font-medium text-emerald-300 hover:text-emerald-200 hover:bg-emerald-500/20 rounded transition-colors"
-                                title="Mark as completed"
-                              >
-                                Complete
-                              </button>
-                            </div>
-                          </div>
-                        );
-                      })}
-                    </div>
-                  )}
+                            );
+                          })}
+                        </div>
+                      </div>
+                    )}
+                  </div>
                 </div>
               </div>
             )}
