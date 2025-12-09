@@ -1177,7 +1177,7 @@ export function PetCareScheduleTool({ toolId }: PetCareScheduleToolProps) {
     setCarePlanItems(updatedItems);
     
     setEditingCareItemId(null);
-    setEditingCareItem({ name: '', frequency: 'Daily', notes: '', addToDashboard: true });
+    setEditingCareItem({ name: '', frequency: 'Daily', notes: '', addToDashboard: true, priority: 'medium' });
     
     // Save to database using the updated items (after state update)
     setTimeout(() => {
