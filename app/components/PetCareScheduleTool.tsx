@@ -997,7 +997,7 @@ export function PetCareScheduleTool({ toolId }: PetCareScheduleToolProps) {
     setColor('');
     setMicrochipNumber('');
     setFoods([]);
-    setCurrentFood({ name: '', rating: null });
+    setCurrentFood({ name: '', rating: null, notes: '' });
     setVeterinaryRecords([]);
     setCarePlanItems([]);
     setVaccinations([]);
