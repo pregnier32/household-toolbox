@@ -1813,7 +1813,7 @@ export function PetCareScheduleTool({ toolId }: PetCareScheduleToolProps) {
         {selectedPetId && (
           <div className="flex items-center gap-3">
             <button
-              onClick={savePetData}
+              onClick={() => savePetData()}
               disabled={isSaving}
               className="px-4 py-2 rounded-lg font-medium transition-colors disabled:opacity-50 disabled:cursor-not-allowed bg-emerald-500 text-slate-950 hover:bg-emerald-400"
             >
@@ -2280,7 +2280,7 @@ export function PetCareScheduleTool({ toolId }: PetCareScheduleToolProps) {
             {/* Save Button for Pet Info */}
             <div className="flex justify-start mt-6">
               <button
-                onClick={savePetData}
+                onClick={() => savePetData()}
                 disabled={isSaving}
                 className="px-6 py-2 rounded-lg font-medium transition-colors disabled:opacity-50 disabled:cursor-not-allowed bg-emerald-500 text-slate-950 hover:bg-emerald-400"
               >
