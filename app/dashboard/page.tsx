@@ -1057,7 +1057,9 @@ export default function Dashboard() {
                               // Use default icon first, then fallback to available/coming_soon for backward compatibility
                               const icon = tool.icons.default || tool.icons.available || tool.icons.coming_soon;
                               // Get icon name/URL - if it's a URL (starts with http or /), use it, otherwise use icon name
-                              const iconSrc = icon?.icon_url || (icon?.id ? `/api/tools/icons/${icon.id}` : null);
+                              // Handle empty strings by checking for truthy and non-empty values
+                              const iconUrl = icon?.icon_url && icon.icon_url.trim() !== '' ? icon.icon_url : null;
+                              const iconSrc = iconUrl || (icon?.id ? `/api/tools/icons/${icon.id}` : null);
                               return (
                                 <div 
                                   key={tool.id} 
@@ -1137,7 +1139,9 @@ export default function Dashboard() {
                               // Use default icon first, then fallback to available/coming_soon for backward compatibility
                               const icon = tool.icons.default || tool.icons.available || tool.icons.coming_soon;
                               // Get icon name/URL - if it's a URL (starts with http or /), use it, otherwise use icon name
-                              const iconSrc = icon?.icon_url || (icon?.id ? `/api/tools/icons/${icon.id}` : null);
+                              // Handle empty strings by checking for truthy and non-empty values
+                              const iconUrl = icon?.icon_url && icon.icon_url.trim() !== '' ? icon.icon_url : null;
+                              const iconSrc = iconUrl || (icon?.id ? `/api/tools/icons/${icon.id}` : null);
                               return (
                                 <div 
                                   key={tool.id} 
@@ -1178,7 +1182,9 @@ export default function Dashboard() {
                               // Use default icon first, then fallback to coming_soon/available for backward compatibility
                               const icon = tool.icons.default || tool.icons.coming_soon || tool.icons.available;
                               // Get icon name/URL - if it's a URL (starts with http or /), use it, otherwise use icon name
-                              const iconSrc = icon?.icon_url || (icon?.id ? `/api/tools/icons/${icon.id}` : null);
+                              // Handle empty strings by checking for truthy and non-empty values
+                              const iconUrl = icon?.icon_url && icon.icon_url.trim() !== '' ? icon.icon_url : null;
+                              const iconSrc = iconUrl || (icon?.id ? `/api/tools/icons/${icon.id}` : null);
                               return (
                                 <div 
                                   key={tool.id} 
@@ -1222,7 +1228,9 @@ export default function Dashboard() {
                                   // Use default icon first, then fallback to available/coming_soon for backward compatibility
                                   const icon = tool.icons.default || tool.icons.available || tool.icons.coming_soon;
                                   // Get icon name/URL - if it's a URL (starts with http or /), use it, otherwise use icon name
-                                  const iconSrc = icon?.icon_url || (icon?.id ? `/api/tools/icons/${icon.id}` : null);
+                                  // Handle empty strings by checking for truthy and non-empty values
+                                  const iconUrl = icon?.icon_url && icon.icon_url.trim() !== '' ? icon.icon_url : null;
+                                  const iconSrc = iconUrl || (icon?.id ? `/api/tools/icons/${icon.id}` : null);
                                   return (
                                     <div 
                                       key={tool.id} 

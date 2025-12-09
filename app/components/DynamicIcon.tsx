@@ -12,13 +12,44 @@ type DynamicIconProps = {
 
 // Helper function to get icon component by name
 function getIconComponent(iconName: string): LucideIcon | null {
+  // Trim whitespace
+  const trimmedName = iconName.trim();
+  
+  // First, try the icon name as-is (in case it's already in PascalCase)
+  if (LucideIcons[trimmedName as keyof typeof LucideIcons]) {
+    return LucideIcons[trimmedName as keyof typeof LucideIcons] as LucideIcon;
+  }
+  
+  // If it's already PascalCase but didn't match, try with first letter capitalized
+  const capitalized = trimmedName.charAt(0).toUpperCase() + trimmedName.slice(1);
+  if (LucideIcons[capitalized as keyof typeof LucideIcons]) {
+    return LucideIcons[capitalized as keyof typeof LucideIcons] as LucideIcon;
+  }
+  
   // Convert kebab-case or snake_case to PascalCase
-  const pascalName = iconName
+  const pascalName = trimmedName
     .split(/[-_]/)
     .map(word => word.charAt(0).toUpperCase() + word.slice(1).toLowerCase())
     .join('') as keyof typeof LucideIcons;
   
-  return (LucideIcons[pascalName] as LucideIcon) || null;
+  // Try the converted name
+  if (LucideIcons[pascalName as keyof typeof LucideIcons]) {
+    return LucideIcons[pascalName as keyof typeof LucideIcons] as LucideIcon;
+  }
+  
+  // Handle camelCase (e.g., "stickyNote" -> "StickyNote")
+  // Split on capital letters and convert to PascalCase
+  const camelCaseMatch = trimmedName.match(/[A-Z]?[a-z]+|[A-Z]+(?=[A-Z]|$)/g);
+  if (camelCaseMatch && camelCaseMatch.length > 1) {
+    const fromCamelCase = camelCaseMatch
+      .map(word => word.charAt(0).toUpperCase() + word.slice(1).toLowerCase())
+      .join('');
+    if (LucideIcons[fromCamelCase as keyof typeof LucideIcons]) {
+      return LucideIcons[fromCamelCase as keyof typeof LucideIcons] as LucideIcon;
+    }
+  }
+  
+  return null;
 }
 
 export function DynamicIcon({ iconName, size = 24, className = '', fallback }: DynamicIconProps) {
@@ -45,6 +76,13 @@ export function DynamicIcon({ iconName, size = 24, className = '', fallback }: D
   
   if (IconComponent) {
     return <IconComponent size={size} className={className} />;
+  }
+
+  // Icon not found - log for debugging in development
+  if (process.env.NODE_ENV === 'development') {
+    console.warn(`Icon not found: "${iconName}" (trimmed: "${iconName.trim()}"). Available icons include:`, 
+      Object.keys(LucideIcons).filter(k => k.toLowerCase().includes(iconName.trim().toLowerCase().slice(0, 3))).slice(0, 5)
+    );
   }
 
   // Icon not found, show fallback or nothing
