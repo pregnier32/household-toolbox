@@ -526,6 +526,7 @@ export type Database = {
           name: string
           notes: string | null
           pet_id: string
+          priority: string | null
           start_date: string
           updated_at: string | null
         }
@@ -539,6 +540,7 @@ export type Database = {
           name: string
           notes?: string | null
           pet_id: string
+          priority?: string | null
           start_date?: string
           updated_at?: string | null
         }
@@ -552,6 +554,7 @@ export type Database = {
           name?: string
           notes?: string | null
           pet_id?: string
+          priority?: string | null
           start_date?: string
           updated_at?: string | null
         }
@@ -859,6 +862,91 @@ export type Database = {
             columns: ["pet_id"]
             isOneToOne: false
             referencedRelation: "tools_pcs_pets"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      tools_st_subscriptions: {
+        Row: {
+          add_reminder_to_calendar: boolean | null
+          amount: number
+          billed_date: string | null
+          calendar_reminder_id: string | null
+          category: string
+          created_at: string | null
+          date_added: string
+          date_inactivated: string | null
+          day_of_month: number | null
+          frequency: string
+          id: string
+          is_active: boolean | null
+          name: string
+          notes: string | null
+          renewal_date: string | null
+          tool_id: string
+          updated_at: string | null
+          user_id: string
+        }
+        Insert: {
+          add_reminder_to_calendar?: boolean | null
+          amount: number
+          billed_date?: string | null
+          calendar_reminder_id?: string | null
+          category: string
+          created_at?: string | null
+          date_added?: string
+          date_inactivated?: string | null
+          day_of_month?: number | null
+          frequency: string
+          id?: string
+          is_active?: boolean | null
+          name: string
+          notes?: string | null
+          renewal_date?: string | null
+          tool_id: string
+          updated_at?: string | null
+          user_id: string
+        }
+        Update: {
+          add_reminder_to_calendar?: boolean | null
+          amount?: number
+          billed_date?: string | null
+          calendar_reminder_id?: string | null
+          category?: string
+          created_at?: string | null
+          date_added?: string
+          date_inactivated?: string | null
+          day_of_month?: number | null
+          frequency?: string
+          id?: string
+          is_active?: boolean | null
+          name?: string
+          notes?: string | null
+          renewal_date?: string | null
+          tool_id?: string
+          updated_at?: string | null
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "tools_st_subscriptions_calendar_reminder_id_fkey"
+            columns: ["calendar_reminder_id"]
+            isOneToOne: false
+            referencedRelation: "dashboard_items"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "tools_st_subscriptions_tool_id_fkey"
+            columns: ["tool_id"]
+            isOneToOne: false
+            referencedRelation: "tools"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "tools_st_subscriptions_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "users"
             referencedColumns: ["id"]
           },
         ]

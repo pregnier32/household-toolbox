@@ -56,6 +56,7 @@ export default function ToolsPage() {
     status: 'coming_soon',
   });
   const [iconSelection, setIconSelection] = useState<string>('');
+  const [statusFilter, setStatusFilter] = useState<string>('all');
   const router = useRouter();
 
   useEffect(() => {
@@ -381,6 +382,26 @@ export default function ToolsPage() {
           </div>
         )}
 
+        {/* Status Filter */}
+        <div className="mb-4 flex items-center gap-4">
+          <label className="text-sm font-medium text-slate-300">Filter by Status:</label>
+          <select
+            value={statusFilter}
+            onChange={(e) => setStatusFilter(e.target.value)}
+            className="rounded-lg border border-slate-700 bg-slate-900/70 px-3 py-2 text-sm text-slate-100 focus:border-emerald-500/50 focus:outline-none focus:ring-1 focus:ring-emerald-500/50"
+          >
+            <option value="all">All Statuses</option>
+            <option value="active">Active</option>
+            <option value="available">Available</option>
+            <option value="coming_soon">Coming Soon</option>
+            <option value="custom">Custom</option>
+            <option value="inactive">Inactive</option>
+          </select>
+          <span className="text-sm text-slate-400">
+            ({statusFilter === 'all' ? tools.length : tools.filter(t => t.status === statusFilter).length} {statusFilter === 'all' ? 'total' : 'filtered'} tools)
+          </span>
+        </div>
+
         {/* Form Modal */}
         {showForm && (
           <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
@@ -641,38 +662,47 @@ export default function ToolsPage() {
         )}
 
         {/* Tools List */}
-        {tools.length === 0 ? (
-          <div className="rounded-lg border border-slate-800 bg-slate-900/50 p-8 text-center">
-            <p className="text-slate-400">No tools found. Create your first one!</p>
-          </div>
-        ) : (
-          <div className="rounded-lg border border-slate-800 bg-slate-900/50 overflow-hidden">
-            <div className="overflow-x-auto">
-              <table className="w-full">
-                <thead className="bg-slate-800/50">
-                  <tr>
-                    <th className="px-4 py-3 text-left text-xs font-medium text-slate-300 uppercase tracking-wider">
-                      Name
-                    </th>
-                    <th className="px-4 py-3 text-left text-xs font-medium text-slate-300 uppercase tracking-wider">
-                      Short Name
-                    </th>
-                    <th className="px-4 py-3 text-left text-xs font-medium text-slate-300 uppercase tracking-wider">
-                      Price
-                    </th>
-                    <th className="px-4 py-3 text-left text-xs font-medium text-slate-300 uppercase tracking-wider">
-                      Status
-                    </th>
-                    <th className="px-4 py-3 text-left text-xs font-medium text-slate-300 uppercase tracking-wider">
-                      Icons
-                    </th>
-                    <th className="px-4 py-3 text-right text-xs font-medium text-slate-300 uppercase tracking-wider">
-                      Actions
-                    </th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-slate-800">
-                  {tools.map((tool) => (
+        {(() => {
+          const filteredTools = statusFilter === 'all' 
+            ? tools 
+            : tools.filter(tool => tool.status === statusFilter);
+          
+          return filteredTools.length === 0 ? (
+            <div className="rounded-lg border border-slate-800 bg-slate-900/50 p-8 text-center">
+              <p className="text-slate-400">
+                {tools.length === 0 
+                  ? 'No tools found. Create your first one!' 
+                  : `No tools found with status "${formatStatus(statusFilter)}".`}
+              </p>
+            </div>
+          ) : (
+            <div className="rounded-lg border border-slate-800 bg-slate-900/50 overflow-hidden">
+              <div className="overflow-x-auto">
+                <table className="w-full">
+                  <thead className="bg-slate-800/50">
+                    <tr>
+                      <th className="px-4 py-3 text-left text-xs font-medium text-slate-300 uppercase tracking-wider">
+                        Name
+                      </th>
+                      <th className="px-4 py-3 text-left text-xs font-medium text-slate-300 uppercase tracking-wider">
+                        Short Name
+                      </th>
+                      <th className="px-4 py-3 text-left text-xs font-medium text-slate-300 uppercase tracking-wider">
+                        Price
+                      </th>
+                      <th className="px-4 py-3 text-left text-xs font-medium text-slate-300 uppercase tracking-wider">
+                        Status
+                      </th>
+                      <th className="px-4 py-3 text-left text-xs font-medium text-slate-300 uppercase tracking-wider">
+                        Icons
+                      </th>
+                      <th className="px-4 py-3 text-right text-xs font-medium text-slate-300 uppercase tracking-wider">
+                        Actions
+                      </th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-slate-800">
+                    {filteredTools.map((tool) => (
                     <tr key={tool.id} className="hover:bg-slate-800/30">
                       <td className="px-4 py-3 text-sm">
                         <div className="font-medium text-slate-100">{tool.name}</div>
@@ -731,13 +761,14 @@ export default function ToolsPage() {
                           </button>
                         </div>
                       </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
             </div>
-          </div>
-        )}
+          );
+        })()}
       </div>
     </main>
   );
