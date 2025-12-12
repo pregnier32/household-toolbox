@@ -1068,6 +1068,7 @@ export function SubscriptionTrackerTool({ toolId }: SubscriptionTrackerToolProps
                         dayOfMonth: '',
                         billedDate: '',
                         renewalDate: '',
+                        addReminderToCalendar: false,
                         notes: ''
                       });
                       setShowCustomCategory(false);
