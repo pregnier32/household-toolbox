@@ -123,6 +123,40 @@ export async function POST(request: NextRequest) {
           return NextResponse.json({ error: 'Failed to start trial' }, { status: 500 });
         }
 
+        // Set billing_date on users table if this is their first tool
+        const { data: userData } = await supabaseServer
+          .from('users')
+          .select('billing_date')
+          .eq('id', user.id)
+          .single();
+
+        if (!userData?.billing_date) {
+          // Check if this is their first tool
+          const { data: allUserTools } = await supabaseServer
+            .from('users_tools')
+            .select('id')
+            .eq('user_id', user.id)
+            .in('status', ['active', 'trial'])
+            .limit(2);
+
+          // If they only have 1 tool (the one we just updated), this is their first tool
+          if (allUserTools && allUserTools.length === 1) {
+            // Set billing_date to 8 days from now (7-day trial + 1 day)
+            const billingDate = new Date(now);
+            billingDate.setDate(billingDate.getDate() + 8);
+            
+            const { error: billingDateError } = await supabaseServer
+              .from('users')
+              .update({ billing_date: billingDate.toISOString().split('T')[0] })
+              .eq('id', user.id);
+
+            if (billingDateError) {
+              console.error('Error setting billing_date:', billingDateError);
+              // Don't fail the request, just log the error
+            }
+          }
+        }
+
         return NextResponse.json({ 
           message: '7-day free trial started!', 
           userTool: updatedUserTool 
@@ -200,6 +234,41 @@ export async function POST(request: NextRequest) {
         error: 'Failed to purchase tool',
         details: insertError.message 
       }, { status: 500 });
+    }
+
+    // Set billing_date on users table if this is their first tool
+    // Check if user already has billing_date set
+    const { data: userData } = await supabaseServer
+      .from('users')
+      .select('billing_date')
+      .eq('id', user.id)
+      .single();
+
+    if (!userData?.billing_date) {
+      // Check if this is their first tool (they should only have this one now)
+      const { data: allUserTools } = await supabaseServer
+        .from('users_tools')
+        .select('id')
+        .eq('user_id', user.id)
+        .in('status', ['active', 'trial'])
+        .limit(2); // Get up to 2 to check if there's more than 1
+
+      // If they only have 1 tool (the one we just created), this is their first tool
+      if (allUserTools && allUserTools.length === 1) {
+        // Set billing_date to 8 days from now (7-day trial + 1 day)
+        const billingDate = new Date(now);
+        billingDate.setDate(billingDate.getDate() + 8);
+        
+        const { error: billingDateError } = await supabaseServer
+          .from('users')
+          .update({ billing_date: billingDate.toISOString().split('T')[0] })
+          .eq('id', user.id);
+
+        if (billingDateError) {
+          console.error('Error setting billing_date:', billingDateError);
+          // Don't fail the request, just log the error
+        }
+      }
     }
 
     // Note: billing_active will be synced nightly by cron job

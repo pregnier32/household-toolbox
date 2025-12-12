@@ -32,6 +32,7 @@ export default function MyToolsPage() {
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
   const [user, setUser] = useState<{ id?: string } | null>(null);
+  const [userBillingDate, setUserBillingDate] = useState<string | null>(null);
   const [inactivatingId, setInactivatingId] = useState<string | null>(null);
   const [editMenu, setEditMenu] = useState<{ isOpen: boolean; toolId: string | null; toolName: string }>({
     isOpen: false,
@@ -91,6 +92,7 @@ export default function MyToolsPage() {
       }
 
       setTools(data.tools || []);
+      setUserBillingDate(data.billing_date || null);
       setIsLoading(false);
     } catch (err) {
       console.error('Error loading tools:', err);
@@ -263,8 +265,15 @@ export default function MyToolsPage() {
   const platformFeeAmount = shouldChargePlatformFee(tools) ? platformFee : 0;
   const totalMonthlyCost = toolSubscriptionsCost + platformFeeAmount;
 
-  // Calculate billing date from oldest activated date (7 days after activation for trials)
+  // Get billing day from users table (primary source) or calculate from tools (fallback)
   const getBillingDate = () => {
+    // First, try to use billing_date from users table
+    if (userBillingDate) {
+      const billingDate = new Date(userBillingDate);
+      return billingDate.getDate();
+    }
+    
+    // Fallback: calculate from oldest tool (for backward compatibility)
     if (tools.length === 0) return null;
     
     // Find the oldest billing date (7 days after activation)
@@ -301,6 +310,66 @@ export default function MyToolsPage() {
   };
 
   const billingDay = getBillingDate();
+
+  // Calculate the next billing date from the stored billing_date
+  const getNextBillingDate = (): string | null => {
+    if (!userBillingDate) {
+      // Fallback: calculate from billing day if no stored date
+      if (billingDay === null) return null;
+      
+      const now = new Date();
+      const currentYear = now.getFullYear();
+      const currentMonth = now.getMonth();
+      const thisMonthBilling = new Date(currentYear, currentMonth, billingDay);
+      thisMonthBilling.setHours(0, 0, 0, 0);
+      const nowStartOfDay = new Date(now);
+      nowStartOfDay.setHours(0, 0, 0, 0);
+      
+      let nextBillingDate: Date;
+      if (nowStartOfDay >= thisMonthBilling) {
+        nextBillingDate = new Date(currentYear, currentMonth + 1, billingDay);
+      } else {
+        nextBillingDate = thisMonthBilling;
+      }
+      
+      return nextBillingDate.toLocaleDateString('en-US', { 
+        month: 'long', 
+        day: 'numeric', 
+        year: 'numeric' 
+      });
+    }
+
+    // Use the stored billing_date from database
+    const storedDate = new Date(userBillingDate);
+    const storedDay = storedDate.getDate();
+    const now = new Date();
+    const currentYear = now.getFullYear();
+    const currentMonth = now.getMonth();
+    
+    // Calculate this month's billing date
+    const thisMonthBilling = new Date(currentYear, currentMonth, storedDay);
+    thisMonthBilling.setHours(0, 0, 0, 0);
+    const nowStartOfDay = new Date(now);
+    nowStartOfDay.setHours(0, 0, 0, 0);
+    
+    // Determine next billing date
+    let nextBillingDate: Date;
+    if (nowStartOfDay >= thisMonthBilling) {
+      // We've passed this month's billing date, so next is next month
+      nextBillingDate = new Date(currentYear, currentMonth + 1, storedDay);
+    } else {
+      // This month's billing date is in the future
+      nextBillingDate = thisMonthBilling;
+    }
+    
+    return nextBillingDate.toLocaleDateString('en-US', { 
+      month: 'long', 
+      day: 'numeric', 
+      year: 'numeric' 
+    });
+  };
+
+  const nextBillingDateDisplay = getNextBillingDate();
 
   // Calculate next month's billing preview
   const calculateNextMonthBilling = () => {
@@ -623,9 +692,9 @@ export default function MyToolsPage() {
                       </p>
                     )}
                   </div>
-                  {billingDay !== null && (
+                  {nextBillingDateDisplay && (
                     <p className="text-sm text-slate-300 mt-2">
-                      Billing date: <span className="font-semibold text-emerald-300">Day {billingDay}</span> of each month
+                      Billing date: <span className="font-semibold text-emerald-300">{nextBillingDateDisplay}</span>
                     </p>
                   )}
                 </div>

@@ -113,8 +113,8 @@ export default function Pricing() {
                     Pay only for the tools you use
                   </p>
                   <p className="text-xs text-slate-400 mt-1">
-                    Each tool has its own monthly subscription fee. Most tools range from{' '}
-                    <span className="font-semibold text-emerald-300">$1 - $3</span> per month, making it incredibly affordable. 
+                    Each tool has its own monthly subscription fee. All tools are{' '}
+                    <span className="font-semibold text-emerald-300">$1</span> per month, making it incredibly affordable. 
                     Activate only the tools you need, and you'll only be charged for those. No need to pay for features you don't use.
                   </p>
                 </div>
@@ -192,18 +192,18 @@ export default function Pricing() {
                   </span>
                 </div>
                 <div className="flex justify-between text-slate-300">
-                  <span>Active Tool Subscriptions (most tools $1-$3/month)</span>
-                  <span className="font-medium text-slate-200">$2-$6</span>
+                  <span>Active Tool Subscriptions ($1 per tool/month)</span>
+                  <span className="font-medium text-slate-200">$2-$3</span>
                 </div>
                 <div className="flex justify-between text-slate-300 pt-2 border-t border-slate-700">
                   <span className="font-medium text-slate-100">Total Monthly Cost</span>
                   <span className="font-semibold text-emerald-300">
-                    {new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' }).format(platformFee + 2)} - {new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' }).format(platformFee + 6)}
+                    {new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' }).format(platformFee + 2)} - {new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' }).format(platformFee + 3)}
                   </span>
                 </div>
               </div>
               <p className="text-xs text-slate-400 mt-4">
-                *Example assumes 2-3 tools at typical pricing. Tool prices range from $1-$3 per month. 
+                *Example assumes 2-3 tools. All tools are $1 per month. 
                 View individual tools in your dashboard to see specific pricing. All prices are per month, 
                 billed on the same date each month. You only pay for tools you actively use.
               </p>

@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server';
 import { supabaseServer } from '@/lib/supabaseServer';
-import { syncUserBillingActive } from '@/lib/billing-sync';
+import { syncUserBillingActive, getUserBillingDay } from '@/lib/billing-sync';
 import { logCronJobExecution } from '@/lib/cron-logger';
 
 /**
@@ -250,29 +250,10 @@ export async function GET(request: Request) {
       const toolsToInactivate: string[] = [];
       
       for (const userId of userIdsWithPending) {
-        // Get user's billing day
-        const { data: userTools, error: userToolsError } = await supabaseServer
-          .from('users_tools')
-          .select('created_at, trial_end_date, status')
-          .eq('user_id', userId)
-          .in('status', ['active', 'trial', 'pending_cancellation'])
-          .order('created_at', { ascending: true })
-          .limit(1);
-
-        if (userToolsError || !userTools || userTools.length === 0) continue;
-
-        const oldestTool = userTools[0];
-        let billingDate: Date;
+        // Get user's billing day using the centralized function
+        const billingDay = await getUserBillingDay(userId);
         
-        if (oldestTool.status === 'trial' && oldestTool.trial_end_date) {
-          billingDate = new Date(oldestTool.trial_end_date);
-        } else {
-          const createdDate = new Date(oldestTool.created_at);
-          billingDate = new Date(createdDate);
-          billingDate.setDate(billingDate.getDate() + 7);
-        }
-        
-        const billingDay = billingDate.getDate();
+        if (!billingDay) continue;
         const now = new Date();
         const currentYear = now.getFullYear();
         const currentMonth = now.getMonth();

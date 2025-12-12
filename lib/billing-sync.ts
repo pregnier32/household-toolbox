@@ -45,9 +45,25 @@ export function calculateBillingPeriod(billingDay: number, referenceDate?: Date)
 }
 
 /**
- * Get user's billing day from their oldest active/trial tool
+ * Get user's billing day from users table (primary source) or calculate from oldest tool (fallback)
+ * The billing_date is stored on the users table and is set when they activate their first tool.
+ * It never changes once set.
  */
 export async function getUserBillingDay(userId: string): Promise<number | null> {
+  // First, try to get from users table (primary source of truth)
+  const { data: user, error: userError } = await supabaseServer
+    .from('users')
+    .select('billing_date')
+    .eq('id', userId)
+    .single();
+  
+  if (!userError && user?.billing_date) {
+    const billingDate = new Date(user.billing_date);
+    return billingDate.getDate();
+  }
+  
+  // Fallback: calculate from oldest tool (for existing users without billing_date set)
+  // This maintains backward compatibility during migration
   const { data: tools, error } = await supabaseServer
     .from('users_tools')
     .select('created_at, trial_end_date, status')

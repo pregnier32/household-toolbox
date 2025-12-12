@@ -1280,7 +1280,6 @@ export default function Dashboard() {
                                         Trial
                                       </span>
                                     )}
-                                    <p className="text-xs text-emerald-400 font-medium text-center">${tool.price.toFixed(2)} / month</p>
                                   </div>
                                 </div>
                               );
@@ -1356,7 +1355,6 @@ export default function Dashboard() {
                                     </div>
                                   )}
                                   <h3 className="text-sm font-semibold text-slate-100 mb-1 text-center">{tool.name}</h3>
-                                  <p className="text-xs text-emerald-400 font-medium text-center">${tool.price.toFixed(2)} / month</p>
                                 </div>
                               );
                             })}
@@ -1399,7 +1397,6 @@ export default function Dashboard() {
                                     </div>
                                   )}
                                   <h3 className="text-sm font-semibold text-slate-100 mb-1 text-center">{tool.name}</h3>
-                                  <p className="text-xs text-emerald-400 font-medium text-center">${tool.price.toFixed(2)} / month</p>
                                 </div>
                               );
                             })}
@@ -1445,7 +1442,6 @@ export default function Dashboard() {
                                         </div>
                                       )}
                                       <h3 className="text-sm font-semibold text-slate-100 mb-1 text-center">{tool.name}</h3>
-                                      <p className="text-xs text-emerald-400 font-medium text-center">${tool.price.toFixed(2)} / month</p>
                                     </div>
                                   );
                                 })}

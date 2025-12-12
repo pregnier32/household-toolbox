@@ -111,7 +111,17 @@ export async function GET() {
       }, { status: 500 });
     }
 
-    return NextResponse.json({ tools: userTools || [] });
+    // Get user's billing_date from users table
+    const { data: userData } = await supabaseServer
+      .from('users')
+      .select('billing_date')
+      .eq('id', user.id)
+      .single();
+
+    return NextResponse.json({ 
+      tools: userTools || [],
+      billing_date: userData?.billing_date || null
+    });
   } catch (error) {
     console.error('Error in my-tools API:', error);
     return NextResponse.json({ error: 'Internal server error' }, { status: 500 });

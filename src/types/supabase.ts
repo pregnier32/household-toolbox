@@ -866,6 +866,7 @@ export type Database = {
       users: {
         Row: {
           active: string
+          billing_date: string | null
           created_at: string
           email: string
           first_name: string
@@ -879,6 +880,7 @@ export type Database = {
         }
         Insert: {
           active: string
+          billing_date?: string | null
           created_at?: string
           email: string
           first_name: string
@@ -892,6 +894,7 @@ export type Database = {
         }
         Update: {
           active?: string
+          billing_date?: string | null
           created_at?: string
           email?: string
           first_name?: string
