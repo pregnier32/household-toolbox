@@ -272,6 +272,11 @@ export async function GET(request: NextRequest) {
       console.log(`Event "${event.title}" (${event.date}, ${event.frequency}) expanded to ${occurrences.length} occurrences for ${monthParam}`);
       
       for (const occurrence of occurrences) {
+        // Handle tools_ce_categories as either array or single object
+        const category = Array.isArray(event.tools_ce_categories) 
+          ? event.tools_ce_categories[0] 
+          : event.tools_ce_categories;
+        
         allOccurrences.push({
           id: `${event.id}-${occurrence.scheduled_date}`, // Unique ID for this occurrence
           title: occurrence.title,
@@ -282,8 +287,8 @@ export async function GET(request: NextRequest) {
           status: 'pending',
           metadata: {
             ...occurrence.metadata,
-            categoryName: event.tools_ce_categories?.name,
-            categoryColor: event.tools_ce_categories?.card_color,
+            categoryName: category?.name,
+            categoryColor: category?.card_color,
           },
           tools: event.tool_id ? { id: event.tool_id, name: 'Calendar Events' } : undefined,
         });
