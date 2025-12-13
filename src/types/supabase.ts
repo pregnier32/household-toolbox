@@ -527,6 +527,7 @@ export type Database = {
           id: string
           is_active: boolean | null
           notes: string | null
+          time: string | null
           title: string
           tool_id: string
           updated_at: string | null
@@ -545,6 +546,7 @@ export type Database = {
           id?: string
           is_active?: boolean | null
           notes?: string | null
+          time?: string | null
           title: string
           tool_id: string
           updated_at?: string | null
@@ -563,6 +565,7 @@ export type Database = {
           id?: string
           is_active?: boolean | null
           notes?: string | null
+          time?: string | null
           title?: string
           tool_id?: string
           updated_at?: string | null
@@ -585,6 +588,206 @@ export type Database = {
           },
           {
             foreignKeyName: "tools_ce_events_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "users"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      tools_id_document_tags: {
+        Row: {
+          created_at: string | null
+          document_id: string
+          id: string
+          tag_id: string
+        }
+        Insert: {
+          created_at?: string | null
+          document_id: string
+          id?: string
+          tag_id: string
+        }
+        Update: {
+          created_at?: string | null
+          document_id?: string
+          id?: string
+          tag_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "tools_id_document_tags_document_id_fkey"
+            columns: ["document_id"]
+            isOneToOne: false
+            referencedRelation: "tools_id_documents"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "tools_id_document_tags_tag_id_fkey"
+            columns: ["tag_id"]
+            isOneToOne: false
+            referencedRelation: "tools_id_tags"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      tools_id_documents: {
+        Row: {
+          created_at: string | null
+          date_added: string
+          date_inactivated: string | null
+          document_name: string
+          download_password_hash: string | null
+          effective_date: string | null
+          file_name: string | null
+          file_size: number | null
+          file_type: string | null
+          file_url: string | null
+          id: string
+          is_active: boolean | null
+          note: string | null
+          requires_password_for_download: boolean | null
+          tool_id: string
+          updated_at: string | null
+          uploaded_date: string
+          user_id: string
+        }
+        Insert: {
+          created_at?: string | null
+          date_added?: string
+          date_inactivated?: string | null
+          document_name: string
+          download_password_hash?: string | null
+          effective_date?: string | null
+          file_name?: string | null
+          file_size?: number | null
+          file_type?: string | null
+          file_url?: string | null
+          id?: string
+          is_active?: boolean | null
+          note?: string | null
+          requires_password_for_download?: boolean | null
+          tool_id: string
+          updated_at?: string | null
+          uploaded_date: string
+          user_id: string
+        }
+        Update: {
+          created_at?: string | null
+          date_added?: string
+          date_inactivated?: string | null
+          document_name?: string
+          download_password_hash?: string | null
+          effective_date?: string | null
+          file_name?: string | null
+          file_size?: number | null
+          file_type?: string | null
+          file_url?: string | null
+          id?: string
+          is_active?: boolean | null
+          note?: string | null
+          requires_password_for_download?: boolean | null
+          tool_id?: string
+          updated_at?: string | null
+          uploaded_date?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "tools_id_documents_tool_id_fkey"
+            columns: ["tool_id"]
+            isOneToOne: false
+            referencedRelation: "tools"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "tools_id_documents_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "users"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      tools_id_security_questions: {
+        Row: {
+          answer_hash: string
+          created_at: string | null
+          document_id: string
+          id: string
+          question_id: string
+          updated_at: string | null
+        }
+        Insert: {
+          answer_hash: string
+          created_at?: string | null
+          document_id: string
+          id?: string
+          question_id: string
+          updated_at?: string | null
+        }
+        Update: {
+          answer_hash?: string
+          created_at?: string | null
+          document_id?: string
+          id?: string
+          question_id?: string
+          updated_at?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "tools_id_security_questions_document_id_fkey"
+            columns: ["document_id"]
+            isOneToOne: false
+            referencedRelation: "tools_id_documents"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      tools_id_tags: {
+        Row: {
+          created_at: string | null
+          date_added: string
+          date_inactivated: string | null
+          id: string
+          is_active: boolean | null
+          name: string
+          tool_id: string
+          updated_at: string | null
+          user_id: string
+        }
+        Insert: {
+          created_at?: string | null
+          date_added?: string
+          date_inactivated?: string | null
+          id?: string
+          is_active?: boolean | null
+          name: string
+          tool_id: string
+          updated_at?: string | null
+          user_id: string
+        }
+        Update: {
+          created_at?: string | null
+          date_added?: string
+          date_inactivated?: string | null
+          id?: string
+          is_active?: boolean | null
+          name?: string
+          tool_id?: string
+          updated_at?: string | null
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "tools_id_tags_tool_id_fkey"
+            columns: ["tool_id"]
+            isOneToOne: false
+            referencedRelation: "tools"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "tools_id_tags_user_id_fkey"
             columns: ["user_id"]
             isOneToOne: false
             referencedRelation: "users"
