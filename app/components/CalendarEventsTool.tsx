@@ -667,6 +667,7 @@ export function CalendarEventsTool({ toolId }: CalendarEventsToolProps) {
     setEditingEvent({
       title: event.title,
       date: event.date,
+      time: event.time || null,
       frequency: event.frequency,
       notes: event.notes || '',
       addToDashboard: event.addToDashboard,
@@ -755,6 +756,7 @@ export function CalendarEventsTool({ toolId }: CalendarEventsToolProps) {
       setEditingEvent({
         title: '',
         date: '',
+        time: null,
         frequency: 'One Time',
         notes: '',
         addToDashboard: true,
