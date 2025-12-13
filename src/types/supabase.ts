@@ -465,6 +465,133 @@ export type Database = {
         }
         Relationships: []
       }
+      tools_ce_categories: {
+        Row: {
+          card_color: string | null
+          created_at: string | null
+          id: string
+          is_default: boolean | null
+          name: string
+          tool_id: string
+          updated_at: string | null
+          user_id: string
+        }
+        Insert: {
+          card_color?: string | null
+          created_at?: string | null
+          id?: string
+          is_default?: boolean | null
+          name: string
+          tool_id: string
+          updated_at?: string | null
+          user_id: string
+        }
+        Update: {
+          card_color?: string | null
+          created_at?: string | null
+          id?: string
+          is_default?: boolean | null
+          name?: string
+          tool_id?: string
+          updated_at?: string | null
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "tools_ce_categories_tool_id_fkey"
+            columns: ["tool_id"]
+            isOneToOne: false
+            referencedRelation: "tools"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "tools_ce_categories_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "users"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      tools_ce_events: {
+        Row: {
+          add_to_dashboard: boolean | null
+          category_id: string
+          created_at: string | null
+          date: string
+          date_inactivated: string | null
+          day_of_month: number | null
+          days_of_week: Json | null
+          end_date: string | null
+          frequency: string
+          id: string
+          is_active: boolean | null
+          notes: string | null
+          title: string
+          tool_id: string
+          updated_at: string | null
+          user_id: string
+        }
+        Insert: {
+          add_to_dashboard?: boolean | null
+          category_id: string
+          created_at?: string | null
+          date: string
+          date_inactivated?: string | null
+          day_of_month?: number | null
+          days_of_week?: Json | null
+          end_date?: string | null
+          frequency: string
+          id?: string
+          is_active?: boolean | null
+          notes?: string | null
+          title: string
+          tool_id: string
+          updated_at?: string | null
+          user_id: string
+        }
+        Update: {
+          add_to_dashboard?: boolean | null
+          category_id?: string
+          created_at?: string | null
+          date?: string
+          date_inactivated?: string | null
+          day_of_month?: number | null
+          days_of_week?: Json | null
+          end_date?: string | null
+          frequency?: string
+          id?: string
+          is_active?: boolean | null
+          notes?: string | null
+          title?: string
+          tool_id?: string
+          updated_at?: string | null
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "tools_ce_events_category_id_fkey"
+            columns: ["category_id"]
+            isOneToOne: false
+            referencedRelation: "tools_ce_categories"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "tools_ce_events_tool_id_fkey"
+            columns: ["tool_id"]
+            isOneToOne: false
+            referencedRelation: "tools"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "tools_ce_events_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "users"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       tools_pcs_appointments: {
         Row: {
           add_to_dashboard: boolean | null

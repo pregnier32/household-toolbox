@@ -11,6 +11,7 @@ import { DynamicIcon } from '../components/DynamicIcon';
 import { PercentOfOrderTool } from '../components/PercentOfOrderTool';
 import { PetCareScheduleTool } from '../components/PetCareScheduleTool';
 import { SubscriptionTrackerTool } from '../components/SubscriptionTrackerTool';
+import { CalendarEventsTool } from '../components/CalendarEventsTool';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, PieChart, Pie, Cell, Legend } from 'recharts';
 
 // Calendar Component
@@ -769,28 +770,39 @@ export default function Dashboard() {
   }, [activeTab, dashboardSubTab, loadActionItems]);
 
   // Fetch calendar events when Calendar tab is active
-  const loadCalendarEvents = useCallback((month?: string) => {
+  const loadCalendarEvents = useCallback(async (month?: string) => {
     setIsLoadingCalendarEvents(true);
     const monthParam = month || new Date().toISOString().slice(0, 7); // YYYY-MM format
-    fetch(`/api/dashboard/items?type=calendar_event&month=${monthParam}`)
-      .then((res) => res.json())
-      .then((data) => {
-        if (data.error) {
-          console.error('Error from API:', data.error);
-          setCalendarEvents([]);
-        } else if (data.items) {
-          console.log(`Loaded ${data.items.length} calendar events for ${monthParam}`);
-          setCalendarEvents(data.items || []);
-        } else {
-          setCalendarEvents([]);
-        }
-        setIsLoadingCalendarEvents(false);
-      })
-      .catch((error) => {
-        console.error('Error fetching calendar events:', error);
-        setCalendarEvents([]);
-        setIsLoadingCalendarEvents(false);
+    
+    try {
+      // Fetch calendar events from Calendar Events tool (with expansion)
+      const calendarEventsResponse = await fetch(`/api/dashboard/items/calendar-events?month=${monthParam}`);
+      const calendarEventsData = await calendarEventsResponse.json();
+      const calendarEventsItems = calendarEventsData.items || [];
+
+      // Also fetch calendar events from dashboard_items (for other tools like Pet Care Schedule)
+      const dashboardItemsResponse = await fetch(`/api/dashboard/items?type=calendar_event&month=${monthParam}`);
+      const dashboardItemsData = await dashboardItemsResponse.json();
+      const dashboardItems = dashboardItemsData.items || [];
+
+      // Combine both sources
+      const allEvents = [...calendarEventsItems, ...dashboardItems];
+
+      // Sort by scheduled_date
+      allEvents.sort((a, b) => {
+        const dateA = new Date(a.scheduled_date || a.due_date || 0).getTime();
+        const dateB = new Date(b.scheduled_date || b.due_date || 0).getTime();
+        return dateA - dateB;
       });
+
+      console.log(`Loaded ${allEvents.length} calendar events for ${monthParam} (${calendarEventsItems.length} from Calendar Events tool, ${dashboardItems.length} from other tools)`);
+      setCalendarEvents(allEvents);
+    } catch (error) {
+      console.error('Error fetching calendar events:', error);
+      setCalendarEvents([]);
+    } finally {
+      setIsLoadingCalendarEvents(false);
+    }
   }, []);
 
   useEffect(() => {
@@ -1306,6 +1318,8 @@ export default function Dashboard() {
                         <PetCareScheduleTool toolId={tool.id} />
                       ) : tool.name === 'Subscription Tracker' ? (
                         <SubscriptionTrackerTool toolId={tool.id} />
+                      ) : tool.name === 'Calendar Events' ? (
+                        <CalendarEventsTool toolId={tool.id} />
                       ) : (
                         <div className="rounded-2xl border border-slate-800 bg-slate-900/70 p-6">
                           <h2 className="text-xl font-semibold text-slate-50 mb-4">{tool.name}</h2>
@@ -1471,6 +1485,8 @@ export default function Dashboard() {
                         <PetCareScheduleTool toolId={tool.id} />
                       ) : tool.name === 'Subscription Tracker' ? (
                         <SubscriptionTrackerTool toolId={tool.id} />
+                      ) : tool.name === 'Calendar Events' ? (
+                        <CalendarEventsTool toolId={tool.id} />
                       ) : (
                         <div className="rounded-2xl border border-slate-800 bg-slate-900/70 p-6">
                           <h2 className="text-xl font-semibold text-slate-50 mb-4">{tool.name}</h2>
