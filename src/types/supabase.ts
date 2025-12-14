@@ -795,6 +795,191 @@ export type Database = {
           },
         ]
       }
+      tools_note_note_tags: {
+        Row: {
+          created_at: string | null
+          id: string
+          note_id: string
+          tag_id: string
+        }
+        Insert: {
+          created_at?: string | null
+          id?: string
+          note_id: string
+          tag_id: string
+        }
+        Update: {
+          created_at?: string | null
+          id?: string
+          note_id?: string
+          tag_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "tools_note_note_tags_note_id_fkey"
+            columns: ["note_id"]
+            isOneToOne: false
+            referencedRelation: "tools_note_notes"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "tools_note_note_tags_tag_id_fkey"
+            columns: ["tag_id"]
+            isOneToOne: false
+            referencedRelation: "tools_note_tags"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      tools_note_notes: {
+        Row: {
+          created_at: string | null
+          created_date: string
+          date_added: string
+          date_inactivated: string | null
+          id: string
+          is_active: boolean | null
+          note: string
+          note_name: string
+          requires_password_for_view: boolean | null
+          tool_id: string
+          updated_at: string | null
+          user_id: string
+          view_password_hash: string | null
+        }
+        Insert: {
+          created_at?: string | null
+          created_date: string
+          date_added?: string
+          date_inactivated?: string | null
+          id?: string
+          is_active?: boolean | null
+          note: string
+          note_name: string
+          requires_password_for_view?: boolean | null
+          tool_id: string
+          updated_at?: string | null
+          user_id: string
+          view_password_hash?: string | null
+        }
+        Update: {
+          created_at?: string | null
+          created_date?: string
+          date_added?: string
+          date_inactivated?: string | null
+          id?: string
+          is_active?: boolean | null
+          note?: string
+          note_name?: string
+          requires_password_for_view?: boolean | null
+          tool_id?: string
+          updated_at?: string | null
+          user_id?: string
+          view_password_hash?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "tools_note_notes_tool_id_fkey"
+            columns: ["tool_id"]
+            isOneToOne: false
+            referencedRelation: "tools"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "tools_note_notes_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "users"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      tools_note_security_questions: {
+        Row: {
+          answer_hash: string
+          created_at: string | null
+          id: string
+          note_id: string
+          question_id: string
+          updated_at: string | null
+        }
+        Insert: {
+          answer_hash: string
+          created_at?: string | null
+          id?: string
+          note_id: string
+          question_id: string
+          updated_at?: string | null
+        }
+        Update: {
+          answer_hash?: string
+          created_at?: string | null
+          id?: string
+          note_id?: string
+          question_id?: string
+          updated_at?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "tools_note_security_questions_note_id_fkey"
+            columns: ["note_id"]
+            isOneToOne: false
+            referencedRelation: "tools_note_notes"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      tools_note_tags: {
+        Row: {
+          created_at: string | null
+          date_added: string
+          date_inactivated: string | null
+          id: string
+          is_active: boolean | null
+          name: string
+          tool_id: string
+          updated_at: string | null
+          user_id: string
+        }
+        Insert: {
+          created_at?: string | null
+          date_added?: string
+          date_inactivated?: string | null
+          id?: string
+          is_active?: boolean | null
+          name: string
+          tool_id: string
+          updated_at?: string | null
+          user_id: string
+        }
+        Update: {
+          created_at?: string | null
+          date_added?: string
+          date_inactivated?: string | null
+          id?: string
+          is_active?: boolean | null
+          name?: string
+          tool_id?: string
+          updated_at?: string | null
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "tools_note_tags_tool_id_fkey"
+            columns: ["tool_id"]
+            isOneToOne: false
+            referencedRelation: "tools"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "tools_note_tags_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "users"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       tools_pcs_appointments: {
         Row: {
           add_to_dashboard: boolean | null
