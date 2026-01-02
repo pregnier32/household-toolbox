@@ -23,15 +23,15 @@ type Subscription = {
 };
 
 const DEFAULT_CATEGORIES = [
-  'Media',
-  'IT',
-  'Home',
-  'Food',
   'Auto',
-  'Health',
   'Education',
-  'Retail',
   'Finance',
+  'Food',
+  'Health',
+  'Home',
+  'IT',
+  'Media',
+  'Retail',
   'Software',
   'Other'
 ];
@@ -747,12 +747,25 @@ export function SubscriptionTrackerTool({ toolId }: SubscriptionTrackerToolProps
     }
     yPos += 5;
 
+    // Category Breakdown Section
+    const categoryData = calculateCategoryBreakdown();
+    if (categoryData.length > 0) {
+      addSectionHeader('Monthly Spend by Category');
+      categoryData.forEach((category) => {
+        checkNewPage(8);
+        addText(`${category.name}: $${category.value.toFixed(2)}`, 10, false, 10);
+        yPos += 1;
+      });
+    }
+
     // Subscriptions Section
     const subscriptionsToExport = includeHistory ? subscriptions : activeSubs;
-    if (subscriptionsToExport.length > 0) {
+    // Sort subscriptions alphabetically by name
+    const sortedSubscriptions = [...subscriptionsToExport].sort((a, b) => a.name.localeCompare(b.name));
+    if (sortedSubscriptions.length > 0) {
       addSectionHeader(includeHistory ? 'All Subscriptions' : 'Active Subscriptions');
       
-      subscriptionsToExport.forEach((subscription) => {
+      sortedSubscriptions.forEach((subscription) => {
         checkNewPage(20);
         
         addText(subscription.name, 11, true, 10);
@@ -798,25 +811,14 @@ export function SubscriptionTrackerTool({ toolId }: SubscriptionTrackerToolProps
       });
     }
 
-    // Category Breakdown Section
-    const categoryData = calculateCategoryBreakdown();
-    if (categoryData.length > 0) {
-      addSectionHeader('Monthly Spend by Category');
-      categoryData.forEach((category) => {
-        checkNewPage(8);
-        addText(`${category.name}: $${category.value.toFixed(2)}`, 10, false, 10);
-        yPos += 1;
-      });
-    }
-
     // Save PDF
     const fileName = `Subscription_Report_${new Date().toISOString().split('T')[0]}.pdf`;
     pdf.save(fileName);
     setShowExportPopup(false);
   };
 
-  const activeSubscriptions = subscriptions.filter(sub => sub.isActive);
-  const inactiveSubscriptions = subscriptions.filter(sub => !sub.isActive);
+  const activeSubscriptions = subscriptions.filter(sub => sub.isActive).sort((a, b) => a.name.localeCompare(b.name));
+  const inactiveSubscriptions = subscriptions.filter(sub => !sub.isActive).sort((a, b) => a.name.localeCompare(b.name));
   const categoryData = calculateCategoryBreakdown();
 
   // Colors for pie chart
