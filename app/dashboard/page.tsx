@@ -654,6 +654,9 @@ export default function Dashboard() {
   const [expandedActionItemId, setExpandedActionItemId] = useState<string | null>(null);
   const [completingItemId, setCompletingItemId] = useState<string | null>(null);
   const [completeMessage, setCompleteMessage] = useState<{ type: 'success' | 'error'; text: string; itemId: string } | null>(null);
+  const [dashboardKpis, setDashboardKpis] = useState<any[]>([]);
+  const [isLoadingKpis, setIsLoadingKpis] = useState(false);
+  const [subscriptionTrackerMonthlySpend, setSubscriptionTrackerMonthlySpend] = useState<number | null>(null);
   const router = useRouter();
   
   const isSuperAdmin = user?.userStatus === 'superadmin';
@@ -741,7 +744,59 @@ export default function Dashboard() {
     }
   }, [activeTab, loadTools]);
 
-  // Fetch action items when Dashboard Overview tab is active
+  // Load dashboard KPIs
+  const loadDashboardKpis = useCallback(async () => {
+    setIsLoadingKpis(true);
+    try {
+      const response = await fetch('/api/dashboard/kpis');
+      if (response.ok) {
+        const data = await response.json();
+        setDashboardKpis(data.kpis || []);
+        
+        // Check if subscription tracker KPI is enabled
+        const subscriptionKpi = data.kpis?.find((kpi: any) => 
+          kpi.kpi_key === 'subscription_tracker_total_monthly_spend' && kpi.is_enabled
+        );
+        
+        if (subscriptionKpi) {
+          // Fetch the actual subscription data to calculate monthly spend
+          const subscriptionTool = tools.find(t => t.name === 'Subscription Tracker');
+          if (subscriptionTool && subscriptionTool.isOwned) {
+            try {
+              const subResponse = await fetch(`/api/tools/subscription-tracker?toolId=${subscriptionTool.id}`);
+              if (subResponse.ok) {
+                const subData = await subResponse.json();
+                const subscriptions = subData.subscriptions || [];
+                const activeSubscriptions = subscriptions.filter((sub: any) => sub.is_active !== false);
+                
+                // Calculate monthly spend
+                const monthlySpend = activeSubscriptions.reduce((total: number, sub: any) => {
+                  let monthlyAmount = parseFloat(sub.amount);
+                  if (sub.frequency === 'annual') {
+                    monthlyAmount = monthlyAmount / 12;
+                  } else if (sub.frequency === 'quarterly') {
+                    monthlyAmount = monthlyAmount / 3;
+                  }
+                  return total + monthlyAmount;
+                }, 0);
+                
+                setSubscriptionTrackerMonthlySpend(monthlySpend);
+              }
+            } catch (error) {
+              console.error('Error fetching subscription data for KPI:', error);
+            }
+          }
+        } else {
+          setSubscriptionTrackerMonthlySpend(null);
+        }
+      }
+    } catch (error) {
+      console.error('Error loading dashboard KPIs:', error);
+    } finally {
+      setIsLoadingKpis(false);
+    }
+  }, [tools]);
+
   const loadActionItems = useCallback(() => {
     setIsLoadingActionItems(true);
     fetch('/api/dashboard/items?type=action_item&status=pending&limit=50')
@@ -770,6 +825,12 @@ export default function Dashboard() {
       loadActionItems();
     }
   }, [activeTab, dashboardSubTab, loadActionItems]);
+  
+  useEffect(() => {
+    if (activeTab === 'dashboard' && dashboardSubTab === 'overview' && tools.length > 0) {
+      loadDashboardKpis();
+    }
+  }, [activeTab, dashboardSubTab, tools, loadDashboardKpis]);
 
   // Fetch calendar events when Calendar tab is active
   const loadCalendarEvents = useCallback(async (month?: string) => {
@@ -925,8 +986,11 @@ export default function Dashboard() {
         <div className="mx-auto flex max-w-7xl px-4 sm:px-6 lg:px-8">
           {isSuperAdmin && (
             <button
-              onClick={() => setActiveTab('overview')}
-              className={`px-6 py-4 text-sm font-medium transition-colors ${
+              onClick={() => {
+              setActiveTab('overview');
+              setActiveToolId(null);
+            }}
+              className={`px-4 py-2 text-sm font-medium transition-colors ${
                 activeTab === 'overview'
                   ? 'border-b-2 border-emerald-500 text-emerald-300'
                   : 'text-slate-400 hover:text-slate-300'
@@ -936,8 +1000,11 @@ export default function Dashboard() {
             </button>
           )}
           <button
-            onClick={() => setActiveTab('dashboard')}
-            className={`px-6 py-4 text-sm font-medium transition-colors ${
+            onClick={() => {
+              setActiveTab('dashboard');
+              setActiveToolId(null);
+            }}
+            className={`px-4 py-2 text-sm font-medium transition-colors ${
               activeTab === 'dashboard'
                 ? 'border-b-2 border-emerald-500 text-emerald-300'
                 : 'text-slate-400 hover:text-slate-300'
@@ -946,8 +1013,11 @@ export default function Dashboard() {
             Dashboard
           </button>
           <button
-            onClick={() => setActiveTab('tools')}
-            className={`px-6 py-4 text-sm font-medium transition-colors ${
+            onClick={() => {
+              setActiveTab('tools');
+              // Don't clear activeToolId here - allow tools to stay open when switching back to tools tab
+            }}
+            className={`px-4 py-2 text-sm font-medium transition-colors ${
               activeTab === 'tools'
                 ? 'border-b-2 border-emerald-500 text-emerald-300'
                 : 'text-slate-400 hover:text-slate-300'
@@ -956,8 +1026,11 @@ export default function Dashboard() {
             Tool Box
           </button>
           <button
-            onClick={() => setActiveTab('store')}
-            className={`px-6 py-4 text-sm font-medium transition-colors ${
+            onClick={() => {
+              setActiveTab('store');
+              setActiveToolId(null);
+            }}
+            className={`px-4 py-2 text-sm font-medium transition-colors ${
               activeTab === 'store'
                 ? 'border-b-2 border-emerald-500 text-emerald-300'
                 : 'text-slate-400 hover:text-slate-300'
@@ -974,7 +1047,7 @@ export default function Dashboard() {
           <div className="mx-auto flex max-w-7xl px-4 sm:px-6 lg:px-8">
             <button
               onClick={() => setDashboardSubTab('overview')}
-              className={`px-6 py-3 text-sm font-medium transition-colors ${
+              className={`px-4 py-2 text-sm font-medium transition-colors ${
                 dashboardSubTab === 'overview'
                   ? 'border-b-2 border-emerald-500 text-emerald-300'
                   : 'text-slate-400 hover:text-slate-300'
@@ -984,7 +1057,7 @@ export default function Dashboard() {
             </button>
             <button
               onClick={() => setDashboardSubTab('calendar')}
-              className={`px-6 py-3 text-sm font-medium transition-colors ${
+              className={`px-4 py-2 text-sm font-medium transition-colors ${
                 dashboardSubTab === 'calendar'
                   ? 'border-b-2 border-emerald-500 text-emerald-300'
                   : 'text-slate-400 hover:text-slate-300'
@@ -1002,7 +1075,7 @@ export default function Dashboard() {
           <div className="mx-auto flex max-w-7xl px-4 sm:px-6 lg:px-8">
             <button
               onClick={() => setActiveToolId(null)}
-              className={`px-6 py-3 text-sm font-medium transition-colors ${
+              className={`px-4 py-2 text-sm font-medium transition-colors ${
                 activeToolId === null
                   ? 'border-b-2 border-emerald-500 text-emerald-300'
                   : 'text-slate-400 hover:text-slate-300'
@@ -1019,7 +1092,7 @@ export default function Dashboard() {
                 >
                   <button
                     onClick={() => setActiveToolId(tool.id)}
-                    className={`px-6 py-3 text-sm font-medium transition-colors ${
+                    className={`px-4 py-2 text-sm font-medium transition-colors ${
                       activeToolId === tool.id
                         ? 'border-b-2 border-emerald-500 text-emerald-300'
                         : 'text-slate-400 hover:text-slate-300'
@@ -1074,6 +1147,22 @@ export default function Dashboard() {
                 <p className="text-slate-400 mb-6">
                   Welcome to your Household Toolbox dashboard. This is your central hub for managing your household.
                 </p>
+                
+                {/* Dashboard KPIs */}
+                {dashboardKpis.length > 0 && (
+                  <div className="mb-6 grid gap-4 md:grid-cols-2 lg:grid-cols-3">
+                    {subscriptionTrackerMonthlySpend !== null && (
+                      <div className="rounded-2xl border border-slate-800 bg-slate-900/70 p-6">
+                        <h3 className="text-lg font-semibold text-slate-50 mb-2">Total Monthly Spend</h3>
+                        <div className="text-3xl font-semibold text-emerald-400 mb-2">
+                          ${subscriptionTrackerMonthlySpend.toFixed(2)}
+                        </div>
+                        <p className="text-xs text-slate-400">From Subscription Tracker</p>
+                      </div>
+                    )}
+                  </div>
+                )}
+                
                 <div className="w-1/2">
                   <div className="rounded-2xl border border-slate-800 bg-slate-900/70 p-6">
                     <h3 className="text-lg font-semibold text-slate-100 mb-4">Upcoming Action Items</h3>
@@ -1521,14 +1610,14 @@ export default function Dashboard() {
                   <p className="text-xs text-slate-400">Loading...</p>
                 ) : (
                   <>
-                    <p className="text-3xl font-bold text-emerald-400 mb-1">
+                    <p className="text-3xl font-semibold text-emerald-400 mb-1">
                       {activeUserCount !== null ? activeUserCount : '—'}
                     </p>
                     <p className="text-xs text-slate-400 mb-4">
                       Users with active status
                     </p>
                     <div className="pt-3 border-t border-slate-800">
-                      <p className="text-2xl font-bold text-purple-400 mb-1">
+                      <p className="text-2xl font-semibold text-purple-400 mb-1">
                         {guestUserCount !== null ? guestUserCount : '—'}
                       </p>
                       <p className="text-xs text-slate-400">
@@ -1583,14 +1672,14 @@ export default function Dashboard() {
                   <p className="text-xs text-slate-400">Loading...</p>
                 ) : (
                   <>
-                    <p className="text-3xl font-bold text-emerald-400 mb-1">
+                    <p className="text-3xl font-semibold text-emerald-400 mb-1">
                       {activeTrialToolsCount !== null ? activeTrialToolsCount : '—'}
                     </p>
                     <p className="text-xs text-slate-400 mb-4">
                       Tools with active or trial status
                     </p>
                     <div className="pt-3 border-t border-slate-800">
-                      <p className="text-2xl font-bold text-emerald-400 mb-1">
+                      <p className="text-2xl font-semibold text-emerald-400 mb-1">
                         {avgToolsPerAdmin !== null ? avgToolsPerAdmin.toFixed(2) : '—'}
                       </p>
                       <p className="text-xs text-slate-400">
@@ -1661,7 +1750,7 @@ export default function Dashboard() {
                   <p className="text-xs text-slate-400">Loading...</p>
                 ) : (
                   <>
-                    <p className="text-3xl font-bold text-emerald-400 mb-1">
+                    <p className="text-3xl font-semibold text-emerald-400 mb-1">
                       {monthlyRevenue !== null 
                         ? new Intl.NumberFormat('en-US', { 
                             style: 'currency', 
@@ -1675,7 +1764,7 @@ export default function Dashboard() {
                       Total pending revenue from billing_active
                     </p>
                     <div className="pt-3 border-t border-slate-800">
-                      <p className="text-2xl font-bold text-emerald-400 mb-1">
+                      <p className="text-2xl font-semibold text-emerald-400 mb-1">
                         {lifetimeRevenue !== null 
                           ? new Intl.NumberFormat('en-US', { 
                               style: 'currency', 

@@ -63,13 +63,13 @@ export default function WaitlistForm() {
             onChange={(e) => setEmail(e.target.value)}
             disabled={status === 'loading'}
             placeholder="Enter your email to join the waitlist"
-            className="w-full rounded-xl border border-slate-600 bg-slate-900/70 px-4 py-3 text-sm text-slate-100 placeholder:text-slate-500 outline-none ring-emerald-400/50 transition focus:border-emerald-400 focus:ring disabled:opacity-50 disabled:cursor-not-allowed"
+            className="w-full rounded-lg border border-slate-700 bg-slate-900/70 px-3 py-2 text-sm text-slate-100 placeholder-slate-500 focus:border-emerald-500/50 focus:outline-none focus:ring-1 focus:ring-emerald-500/50 disabled:opacity-50 disabled:cursor-not-allowed"
           />
         </div>
         <button
           type="submit"
           disabled={status === 'loading'}
-          className="rounded-xl bg-emerald-400 px-5 py-3 text-sm font-semibold text-slate-950 shadow-lg shadow-emerald-500/30 transition hover:bg-emerald-300 disabled:opacity-50 disabled:cursor-not-allowed"
+          className="rounded-lg bg-emerald-500 px-4 py-2.5 text-sm font-semibold text-slate-950 transition-colors hover:bg-emerald-400 focus:outline-none focus:ring-2 focus:ring-emerald-500/50 focus:ring-offset-2 focus:ring-offset-slate-900 disabled:cursor-not-allowed disabled:opacity-50"
         >
           {status === 'loading' ? 'Joining...' : 'Join the waitlist'}
         </button>

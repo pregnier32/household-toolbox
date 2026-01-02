@@ -1285,7 +1285,7 @@ export function ImportantDocumentsTool({ toolId }: ImportantDocumentsToolProps) 
                   value={searchQuery}
                   onChange={(e) => setSearchQuery(e.target.value)}
                   placeholder="Search by document name or note..."
-                  className="w-full px-4 py-2 rounded-lg border border-slate-700 bg-slate-900/70 text-slate-100 placeholder-slate-500 focus:border-emerald-500/50 focus:outline-none focus:ring-1 focus:ring-emerald-500/50"
+                  className="w-full px-3 py-2 rounded-lg border border-slate-700 bg-slate-900/70 text-slate-100 placeholder-slate-500 focus:border-emerald-500/50 focus:outline-none focus:ring-1 focus:ring-emerald-500/50"
                 />
               </div>
               <div>
@@ -1311,7 +1311,7 @@ export function ImportantDocumentsTool({ toolId }: ImportantDocumentsToolProps) 
             <div className="flex justify-start">
               <button
                 onClick={() => setIsAdding(true)}
-                className="px-4 py-2 rounded-lg bg-emerald-500 text-slate-950 font-medium hover:bg-emerald-400 transition-colors"
+                className="px-4 py-2.5 rounded-lg bg-emerald-500 text-slate-950 font-semibold hover:bg-emerald-400 transition-colors focus:outline-none focus:ring-2 focus:ring-emerald-500/50 focus:ring-offset-2 focus:ring-offset-slate-900"
               >
                 + Add New Document
               </button>
@@ -1330,7 +1330,7 @@ export function ImportantDocumentsTool({ toolId }: ImportantDocumentsToolProps) 
                       value={newDocument.documentName}
                       onChange={(e) => setNewDocument({ ...newDocument, documentName: e.target.value })}
                       placeholder="e.g., Home Insurance Policy 2024"
-                      className="w-full px-4 py-2 rounded-lg border border-slate-700 bg-slate-900/70 text-slate-100 placeholder-slate-500 focus:border-emerald-500/50 focus:outline-none focus:ring-1 focus:ring-emerald-500/50"
+                      className="w-full px-3 py-2 rounded-lg border border-slate-700 bg-slate-900/70 text-slate-100 placeholder-slate-500 focus:border-emerald-500/50 focus:outline-none focus:ring-1 focus:ring-emerald-500/50"
                     />
                   </div>
                   <div>
@@ -1413,7 +1413,7 @@ export function ImportantDocumentsTool({ toolId }: ImportantDocumentsToolProps) 
                     onChange={(e) => setNewDocument({ ...newDocument, note: e.target.value })}
                     placeholder="Add any additional notes..."
                     rows={3}
-                    className="w-full px-4 py-2 rounded-lg border border-slate-700 bg-slate-900/70 text-slate-100 placeholder-slate-500 focus:border-emerald-500/50 focus:outline-none focus:ring-1 focus:ring-emerald-500/50 resize-none"
+                    className="w-full px-3 py-2 rounded-lg border border-slate-700 bg-slate-900/70 text-slate-100 placeholder-slate-500 focus:border-emerald-500/50 focus:outline-none focus:ring-1 focus:ring-emerald-500/50 resize-none"
                   />
                 </div>
                 <div className="md:col-span-2">
@@ -1569,7 +1569,7 @@ export function ImportantDocumentsTool({ toolId }: ImportantDocumentsToolProps) 
                       (newDocument.requiresPasswordForDownload && (!newDocument.downloadPassword.trim() || newDocument.downloadPassword !== newDocument.confirmPassword)) ||
                       (newDocument.requiresPasswordForDownload && newDocument.securityQuestions.filter(q => q.questionId && q.answer.trim()).length !== 3)
                     }
-                    className="px-4 py-2 rounded-lg bg-emerald-500 text-slate-950 font-medium hover:bg-emerald-400 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                    className="px-4 py-2.5 rounded-lg bg-emerald-500 text-slate-950 font-semibold hover:bg-emerald-400 transition-colors focus:outline-none focus:ring-2 focus:ring-emerald-500/50 focus:ring-offset-2 focus:ring-offset-slate-900 disabled:cursor-not-allowed disabled:opacity-50"
                   >
                     Add Document
                   </button>
@@ -1704,7 +1704,7 @@ export function ImportantDocumentsTool({ toolId }: ImportantDocumentsToolProps) 
                             value={editingDocument.note}
                             onChange={(e) => setEditingDocument({ ...editingDocument, note: e.target.value })}
                             rows={3}
-                            className="w-full px-4 py-2 rounded-lg border border-slate-700 bg-slate-900/70 text-slate-100 placeholder-slate-500 focus:border-emerald-500/50 focus:outline-none focus:ring-1 focus:ring-emerald-500/50 resize-none"
+                            className="w-full px-3 py-2 rounded-lg border border-slate-700 bg-slate-900/70 text-slate-100 placeholder-slate-500 focus:border-emerald-500/50 focus:outline-none focus:ring-1 focus:ring-emerald-500/50 resize-none"
                           />
                         </div>
                         <div className="md:col-span-2">
@@ -1804,7 +1804,7 @@ export function ImportantDocumentsTool({ toolId }: ImportantDocumentsToolProps) 
                               (editingDocument.requiresPasswordForDownload && editingDocument.downloadPassword.trim() && editingDocument.downloadPassword !== editingDocument.confirmPassword) ||
                               (editingDocument.requiresPasswordForDownload && !editingDocument.downloadPassword.trim() && (!document.requiresPasswordForDownload || !document.downloadPassword))
                             }
-                            className="px-4 py-2 rounded-lg bg-emerald-500 text-slate-950 font-medium hover:bg-emerald-400 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                            className="px-4 py-2.5 rounded-lg bg-emerald-500 text-slate-950 font-semibold hover:bg-emerald-400 transition-colors focus:outline-none focus:ring-2 focus:ring-emerald-500/50 focus:ring-offset-2 focus:ring-offset-slate-900 disabled:cursor-not-allowed disabled:opacity-50"
                           >
                             Save
                           </button>
@@ -1987,7 +1987,7 @@ export function ImportantDocumentsTool({ toolId }: ImportantDocumentsToolProps) 
             <div className="flex justify-start">
               <button
                 onClick={() => setIsAddingTag(true)}
-                className="px-4 py-2 rounded-lg bg-emerald-500 text-slate-950 font-medium hover:bg-emerald-400 transition-colors"
+                className="px-4 py-2.5 rounded-lg bg-emerald-500 text-slate-950 font-semibold hover:bg-emerald-400 transition-colors focus:outline-none focus:ring-2 focus:ring-emerald-500/50 focus:ring-offset-2 focus:ring-offset-slate-900"
               >
                 + Add New Tag
               </button>
@@ -2059,7 +2059,7 @@ export function ImportantDocumentsTool({ toolId }: ImportantDocumentsToolProps) 
                         <button
                           onClick={saveTagEdit}
                           disabled={!editingTagName.trim()}
-                          className="px-3 py-2 rounded-lg bg-emerald-500 text-slate-950 font-medium hover:bg-emerald-400 transition-colors disabled:opacity-50 disabled:cursor-not-allowed text-sm"
+                          className="px-4 py-2.5 rounded-lg bg-emerald-500 text-slate-950 font-semibold hover:bg-emerald-400 transition-colors focus:outline-none focus:ring-2 focus:ring-emerald-500/50 focus:ring-offset-2 focus:ring-offset-slate-900 disabled:cursor-not-allowed disabled:opacity-50 text-sm"
                         >
                           Save
                         </button>
@@ -2277,7 +2277,7 @@ export function ImportantDocumentsTool({ toolId }: ImportantDocumentsToolProps) 
                 <button
                   onClick={confirmDownloadWithPassword}
                   disabled={!downloadPasswordInput.trim() || isLoading}
-                  className="flex-1 px-4 py-2 rounded-lg bg-emerald-500 text-slate-950 font-medium hover:bg-emerald-400 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                  className="flex-1 px-4 py-2.5 rounded-lg bg-emerald-500 text-slate-950 font-semibold hover:bg-emerald-400 transition-colors focus:outline-none focus:ring-2 focus:ring-emerald-500/50 focus:ring-offset-2 focus:ring-offset-slate-900 disabled:cursor-not-allowed disabled:opacity-50"
                 >
                   Download
                 </button>
@@ -2352,7 +2352,7 @@ export function ImportantDocumentsTool({ toolId }: ImportantDocumentsToolProps) 
                     <button
                       onClick={handleVerifySecurityAnswers}
                       disabled={securityAnswers.some(a => !a.answer.trim()) || isLoading}
-                      className="flex-1 px-4 py-2 rounded-lg bg-emerald-500 text-slate-950 font-medium hover:bg-emerald-400 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                      className="flex-1 px-4 py-2.5 rounded-lg bg-emerald-500 text-slate-950 font-semibold hover:bg-emerald-400 transition-colors focus:outline-none focus:ring-2 focus:ring-emerald-500/50 focus:ring-offset-2 focus:ring-offset-slate-900 disabled:cursor-not-allowed disabled:opacity-50"
                     >
                       Verify Answers
                     </button>
@@ -2450,7 +2450,7 @@ export function ImportantDocumentsTool({ toolId }: ImportantDocumentsToolProps) 
                     <button
                       onClick={handleResetPassword}
                       disabled={!newPassword.trim() || newPassword !== confirmNewPassword || isLoading}
-                      className="flex-1 px-4 py-2 rounded-lg bg-emerald-500 text-slate-950 font-medium hover:bg-emerald-400 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                      className="flex-1 px-4 py-2.5 rounded-lg bg-emerald-500 text-slate-950 font-semibold hover:bg-emerald-400 transition-colors focus:outline-none focus:ring-2 focus:ring-emerald-500/50 focus:ring-offset-2 focus:ring-offset-slate-900 disabled:cursor-not-allowed disabled:opacity-50"
                     >
                       Reset Password
                     </button>

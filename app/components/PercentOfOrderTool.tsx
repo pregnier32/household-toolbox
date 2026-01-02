@@ -145,7 +145,7 @@ export function PercentOfOrderTool() {
             <label className="block text-sm font-medium text-slate-300 mb-1 uppercase">
               Total What You Paid
             </label>
-            <p className="text-2xl font-bold text-emerald-400">
+            <p className="text-2xl font-semibold text-emerald-400">
               {formatDisplayValue(totalWhatYouPaid.toString())}
             </p>
           </div>
@@ -160,7 +160,7 @@ export function PercentOfOrderTool() {
           <button
             onClick={addBox}
             disabled={boxes.length >= 10}
-            className="px-4 py-2 rounded-lg bg-emerald-500 text-slate-950 font-medium hover:bg-emerald-400 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+            className="px-4 py-2.5 rounded-lg bg-emerald-500 text-slate-950 font-semibold hover:bg-emerald-400 transition-colors focus:outline-none focus:ring-2 focus:ring-emerald-500/50 focus:ring-offset-2 focus:ring-offset-slate-900 disabled:cursor-not-allowed disabled:opacity-50"
           >
             Add Box
           </button>
@@ -251,7 +251,7 @@ export function PercentOfOrderTool() {
                   <label className="block text-sm font-medium text-slate-300 mb-2 uppercase">
                     What you paid
                   </label>
-                  <p className="text-3xl font-bold text-emerald-400">
+                  <p className="text-3xl font-semibold text-emerald-400">
                     {hasValidInputs ? formatDisplayValue(whatYouPaid.toString()) : '$0.00'}
                   </p>
                 </div>

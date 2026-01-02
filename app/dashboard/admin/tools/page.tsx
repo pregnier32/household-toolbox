@@ -667,7 +667,12 @@ export default function ToolsPage() {
             ? tools 
             : tools.filter(tool => tool.status === statusFilter);
           
-          return filteredTools.length === 0 ? (
+          // Sort tools alphabetically by name
+          const sortedTools = [...filteredTools].sort((a, b) => 
+            a.name.localeCompare(b.name)
+          );
+          
+          return sortedTools.length === 0 ? (
             <div className="rounded-lg border border-slate-800 bg-slate-900/50 p-8 text-center">
               <p className="text-slate-400">
                 {tools.length === 0 
@@ -702,7 +707,7 @@ export default function ToolsPage() {
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-slate-800">
-                    {filteredTools.map((tool) => (
+                    {sortedTools.map((tool) => (
                     <tr key={tool.id} className="hover:bg-slate-800/30">
                       <td className="px-4 py-3 text-sm">
                         <div className="font-medium text-slate-100">{tool.name}</div>

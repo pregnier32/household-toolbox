@@ -571,7 +571,7 @@ export default function MyToolsPage() {
             <p className="text-slate-400">You don't have any active tools yet.</p>
             <button
               onClick={() => router.push('/dashboard')}
-              className="mt-4 rounded-lg bg-emerald-500 px-4 py-2 text-sm font-medium text-slate-950 transition-colors hover:bg-emerald-400"
+              className="mt-4 rounded-lg bg-emerald-500 px-4 py-2.5 text-sm font-semibold text-slate-950 transition-colors hover:bg-emerald-400 focus:outline-none focus:ring-2 focus:ring-emerald-500/50 focus:ring-offset-2 focus:ring-offset-slate-900"
             >
               Browse Tools
             </button>
@@ -700,7 +700,7 @@ export default function MyToolsPage() {
                 </div>
                 <div className="flex items-end gap-4">
                   <div className="text-right">
-                    <p className="text-3xl font-bold text-emerald-400">
+                    <p className="text-3xl font-semibold text-emerald-400">
                       {formatCurrency(totalMonthlyCost)}
                     </p>
                     <p className="text-xs text-slate-400 mt-1">per month</p>
@@ -917,7 +917,7 @@ export default function MyToolsPage() {
                 </div>
                 <div className="flex items-center justify-between border-t border-emerald-500/30 pt-2">
                   <span className="text-lg font-semibold text-slate-50">Projected Total</span>
-                  <span className="text-2xl font-bold text-emerald-400">
+                  <span className="text-2xl font-semibold text-emerald-400">
                     {formatCurrency(nextMonthPreview.total)}
                   </span>
                 </div>

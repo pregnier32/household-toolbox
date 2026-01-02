@@ -103,7 +103,7 @@ export default function Home() {
             </p>
 
             {/* Coming Soon Message */}
-            <div className="mt-8 inline-flex items-center rounded-xl border border-emerald-400/30 bg-emerald-400/10 px-6 py-4">
+            <div className="mt-8 inline-flex items-center rounded-lg border border-emerald-400/30 bg-emerald-400/10 px-6 py-4">
               <p className="text-lg font-semibold text-emerald-200">
                 Coming Soon in 2026
               </p>
@@ -120,7 +120,7 @@ export default function Home() {
                   setError(null);
                   setSuccess(null);
                 }}
-                className={`flex-1 rounded-md px-3 py-2 text-sm font-medium transition-colors ${
+                className={`flex-1 rounded-lg px-3 py-2 text-sm font-medium transition-colors ${
                   !isSignUp
                     ? 'bg-emerald-400/20 text-emerald-300'
                     : 'text-slate-400 hover:text-slate-300'
@@ -138,7 +138,7 @@ export default function Home() {
                   }
                 }}
                 disabled={signUpsDisabled || isCheckingMaintenance}
-                className={`flex-1 rounded-md px-3 py-2 text-sm font-medium transition-colors ${
+                className={`flex-1 rounded-lg px-3 py-2 text-sm font-medium transition-colors ${
                   isSignUp
                     ? 'bg-emerald-400/20 text-emerald-300'
                     : signUpsDisabled

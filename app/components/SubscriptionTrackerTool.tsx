@@ -83,6 +83,10 @@ export function SubscriptionTrackerTool({ toolId }: SubscriptionTrackerToolProps
   const [showHistory, setShowHistory] = useState(false);
   const [deleteConfirmId, setDeleteConfirmId] = useState<string | null>(null);
   const [deleteConfirmText, setDeleteConfirmText] = useState('');
+  
+  // KPI dashboard preference
+  const [showKpiOnDashboard, setShowKpiOnDashboard] = useState(false);
+  const [isLoadingKpiPreference, setIsLoadingKpiPreference] = useState(false);
 
   // Load subscriptions from API
   useEffect(() => {
@@ -124,6 +128,62 @@ export function SubscriptionTrackerTool({ toolId }: SubscriptionTrackerToolProps
 
     loadSubscriptions();
   }, [toolId]);
+
+  // Load KPI dashboard preference
+  useEffect(() => {
+    const loadKpiPreference = async () => {
+      if (!toolId) return;
+      
+      try {
+        const response = await fetch(`/api/dashboard/kpis?toolId=${toolId}&kpiKey=subscription_tracker_total_monthly_spend`);
+        if (response.ok) {
+          const data = await response.json();
+          // Check if there's an enabled KPI preference
+          const enabledKpi = data.kpis?.find((kpi: any) => 
+            kpi.kpi_key === 'subscription_tracker_total_monthly_spend' && kpi.is_enabled
+          );
+          setShowKpiOnDashboard(!!enabledKpi);
+        }
+      } catch (error) {
+        console.error('Error loading KPI preference:', error);
+      }
+    };
+
+    loadKpiPreference();
+  }, [toolId]);
+
+  // Handle KPI dashboard toggle
+  const handleKpiDashboardToggle = async (enabled: boolean) => {
+    if (!toolId) return;
+    
+    setIsLoadingKpiPreference(true);
+    try {
+      const response = await fetch('/api/dashboard/kpis', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          toolId,
+          kpiKey: 'subscription_tracker_total_monthly_spend',
+          isEnabled: enabled
+        }),
+      });
+
+      if (response.ok) {
+        setShowKpiOnDashboard(enabled);
+      } else {
+        const error = await response.json();
+        console.error('Error saving KPI preference:', error);
+        alert('Failed to save preference. Please try again.');
+      }
+    } catch (error) {
+      console.error('Error saving KPI preference:', error);
+      alert('Failed to save preference. Please try again.');
+    } finally {
+      setIsLoadingKpiPreference(false);
+    }
+  };
 
   // Calculate monthly spend
   const calculateMonthlySpend = () => {
@@ -879,7 +939,7 @@ export function SubscriptionTrackerTool({ toolId }: SubscriptionTrackerToolProps
             <div className="flex justify-start">
               <button
                 onClick={() => setIsAdding(true)}
-                className="px-4 py-2 rounded-lg bg-emerald-500 text-slate-950 font-medium hover:bg-emerald-400 transition-colors"
+                className="px-4 py-2.5 rounded-lg bg-emerald-500 text-slate-950 font-semibold hover:bg-emerald-400 transition-colors focus:outline-none focus:ring-2 focus:ring-emerald-500/50 focus:ring-offset-2 focus:ring-offset-slate-900"
               >
                 + Add New Subscription
               </button>
@@ -898,7 +958,7 @@ export function SubscriptionTrackerTool({ toolId }: SubscriptionTrackerToolProps
                       value={newSubscription.name}
                       onChange={(e) => setNewSubscription({ ...newSubscription, name: e.target.value })}
                       placeholder="e.g., Netflix, Spotify"
-                      className="w-full px-4 py-2 rounded-lg border border-slate-700 bg-slate-900/70 text-slate-100 placeholder-slate-500 focus:border-emerald-500/50 focus:outline-none focus:ring-1 focus:ring-emerald-500/50"
+                      className="w-full px-3 py-2 rounded-lg border border-slate-700 bg-slate-900/70 text-slate-100 placeholder-slate-500 focus:border-emerald-500/50 focus:outline-none focus:ring-1 focus:ring-emerald-500/50"
                     />
                   </div>
                   <div>
@@ -921,7 +981,7 @@ export function SubscriptionTrackerTool({ toolId }: SubscriptionTrackerToolProps
                         value={newSubscription.customCategory}
                         onChange={(e) => setNewSubscription({ ...newSubscription, customCategory: e.target.value })}
                         placeholder="Enter custom category"
-                        className="w-full mt-2 px-4 py-2 rounded-lg border border-slate-700 bg-slate-900/70 text-slate-100 placeholder-slate-500 focus:border-emerald-500/50 focus:outline-none focus:ring-1 focus:ring-emerald-500/50"
+                        className="w-full mt-2 px-3 py-2 rounded-lg border border-slate-700 bg-slate-900/70 text-slate-100 placeholder-slate-500 focus:border-emerald-500/50 focus:outline-none focus:ring-1 focus:ring-emerald-500/50"
                       />
                     )}
                   </div>
@@ -969,7 +1029,7 @@ export function SubscriptionTrackerTool({ toolId }: SubscriptionTrackerToolProps
                       value={newSubscription.amount}
                       onChange={(e) => setNewSubscription({ ...newSubscription, amount: e.target.value })}
                       placeholder="0.00"
-                      className="w-full px-4 py-2 rounded-lg border border-slate-700 bg-slate-900/70 text-slate-100 placeholder-slate-500 focus:border-emerald-500/50 focus:outline-none focus:ring-1 focus:ring-emerald-500/50"
+                      className="w-full px-3 py-2 rounded-lg border border-slate-700 bg-slate-900/70 text-slate-100 placeholder-slate-500 focus:border-emerald-500/50 focus:outline-none focus:ring-1 focus:ring-emerald-500/50"
                     />
                   </div>
                   {newSubscription.frequency === 'annual' ? (
@@ -1027,7 +1087,7 @@ export function SubscriptionTrackerTool({ toolId }: SubscriptionTrackerToolProps
                         value={newSubscription.dayOfMonth}
                         onChange={(e) => setNewSubscription({ ...newSubscription, dayOfMonth: e.target.value })}
                         placeholder="1-31"
-                        className="w-full px-4 py-2 rounded-lg border border-slate-700 bg-slate-900/70 text-slate-100 placeholder-slate-500 focus:border-emerald-500/50 focus:outline-none focus:ring-1 focus:ring-emerald-500/50"
+                        className="w-full px-3 py-2 rounded-lg border border-slate-700 bg-slate-900/70 text-slate-100 placeholder-slate-500 focus:border-emerald-500/50 focus:outline-none focus:ring-1 focus:ring-emerald-500/50"
                       />
                     </div>
                   )}
@@ -1041,7 +1101,7 @@ export function SubscriptionTrackerTool({ toolId }: SubscriptionTrackerToolProps
                     onChange={(e) => setNewSubscription({ ...newSubscription, notes: e.target.value })}
                     placeholder="Add any additional notes..."
                     rows={3}
-                    className="w-full px-4 py-2 rounded-lg border border-slate-700 bg-slate-900/70 text-slate-100 placeholder-slate-500 focus:border-emerald-500/50 focus:outline-none focus:ring-1 focus:ring-emerald-500/50 resize-none"
+                    className="w-full px-3 py-2 rounded-lg border border-slate-700 bg-slate-900/70 text-slate-100 placeholder-slate-500 focus:border-emerald-500/50 focus:outline-none focus:ring-1 focus:ring-emerald-500/50 resize-none"
                   />
                 </div>
                 <div className="flex gap-2">
@@ -1054,7 +1114,7 @@ export function SubscriptionTrackerTool({ toolId }: SubscriptionTrackerToolProps
                       (showCustomCategory && !newSubscription.customCategory.trim()) ||
                       (newSubscription.frequency === 'annual' ? !newSubscription.billedDate : !newSubscription.dayOfMonth)
                     }
-                    className="px-4 py-2 rounded-lg bg-emerald-500 text-slate-950 font-medium hover:bg-emerald-400 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                    className="px-4 py-2.5 rounded-lg bg-emerald-500 text-slate-950 font-semibold hover:bg-emerald-400 transition-colors focus:outline-none focus:ring-2 focus:ring-emerald-500/50 focus:ring-offset-2 focus:ring-offset-slate-900 disabled:cursor-not-allowed disabled:opacity-50"
                   >
                     Add Subscription
                   </button>
@@ -1130,7 +1190,7 @@ export function SubscriptionTrackerTool({ toolId }: SubscriptionTrackerToolProps
                                 value={editingSubscription.customCategory}
                                 onChange={(e) => setEditingSubscription({ ...editingSubscription, customCategory: e.target.value })}
                                 placeholder="Enter custom category"
-                                className="w-full mt-2 px-4 py-2 rounded-lg border border-slate-700 bg-slate-900/70 text-slate-100 placeholder-slate-500 focus:border-emerald-500/50 focus:outline-none focus:ring-1 focus:ring-emerald-500/50"
+                                className="w-full mt-2 px-3 py-2 rounded-lg border border-slate-700 bg-slate-900/70 text-slate-100 placeholder-slate-500 focus:border-emerald-500/50 focus:outline-none focus:ring-1 focus:ring-emerald-500/50"
                               />
                             )}
                           </div>
@@ -1247,7 +1307,7 @@ export function SubscriptionTrackerTool({ toolId }: SubscriptionTrackerToolProps
                             value={editingSubscription.notes}
                             onChange={(e) => setEditingSubscription({ ...editingSubscription, notes: e.target.value })}
                             rows={3}
-                            className="w-full px-4 py-2 rounded-lg border border-slate-700 bg-slate-900/70 text-slate-100 placeholder-slate-500 focus:border-emerald-500/50 focus:outline-none focus:ring-1 focus:ring-emerald-500/50 resize-none"
+                            className="w-full px-3 py-2 rounded-lg border border-slate-700 bg-slate-900/70 text-slate-100 placeholder-slate-500 focus:border-emerald-500/50 focus:outline-none focus:ring-1 focus:ring-emerald-500/50 resize-none"
                           />
                         </div>
                         <div className="flex gap-2">
@@ -1260,7 +1320,7 @@ export function SubscriptionTrackerTool({ toolId }: SubscriptionTrackerToolProps
                               (showCustomCategoryEdit && !editingSubscription.customCategory.trim()) ||
                               (editingSubscription.frequency === 'annual' ? !editingSubscription.billedDate : !editingSubscription.dayOfMonth)
                             }
-                            className="px-4 py-2 rounded-lg bg-emerald-500 text-slate-950 font-medium hover:bg-emerald-400 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                            className="px-4 py-2.5 rounded-lg bg-emerald-500 text-slate-950 font-semibold hover:bg-emerald-400 transition-colors focus:outline-none focus:ring-2 focus:ring-emerald-500/50 focus:ring-offset-2 focus:ring-offset-slate-900 disabled:cursor-not-allowed disabled:opacity-50"
                           >
                             Save
                           </button>
@@ -1431,8 +1491,28 @@ export function SubscriptionTrackerTool({ toolId }: SubscriptionTrackerToolProps
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
           {/* Total Monthly Spend KPI */}
           <div className="rounded-2xl border border-slate-800 bg-slate-900/70 p-6">
-            <h3 className="text-lg font-semibold text-slate-50 mb-4">Total Monthly Spend</h3>
-            <div className="text-4xl font-bold text-emerald-400">
+            <div className="flex items-center justify-between mb-4">
+              <h3 className="text-lg font-semibold text-slate-50">Total Monthly Spend</h3>
+              <div className="flex items-center gap-2">
+                <label className="text-xs text-slate-400">Show on Dashboard</label>
+                <button
+                  type="button"
+                  onClick={() => handleKpiDashboardToggle(!showKpiOnDashboard)}
+                  disabled={isLoadingKpiPreference}
+                  className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors focus:outline-none focus:ring-2 focus:ring-emerald-500/50 focus:ring-offset-2 focus:ring-offset-slate-900 disabled:opacity-50 disabled:cursor-not-allowed ${
+                    showKpiOnDashboard ? 'bg-emerald-500' : 'bg-slate-700'
+                  }`}
+                  aria-label="Toggle KPI on dashboard"
+                >
+                  <span
+                    className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${
+                      showKpiOnDashboard ? 'translate-x-6' : 'translate-x-1'
+                    }`}
+                  />
+                </button>
+              </div>
+            </div>
+            <div className="text-4xl font-semibold text-emerald-400">
               ${calculateMonthlySpend().toFixed(2)}
             </div>
             <p className="text-sm text-slate-400 mt-2 mb-4">
@@ -1512,7 +1592,7 @@ export function SubscriptionTrackerTool({ toolId }: SubscriptionTrackerToolProps
             </p>
             <button
               onClick={() => setShowExportPopup(true)}
-              className="px-6 py-3 rounded-lg bg-emerald-500 text-slate-950 font-medium hover:bg-emerald-400 transition-colors"
+              className="px-4 py-2.5 rounded-lg bg-emerald-500 text-slate-950 font-semibold hover:bg-emerald-400 transition-colors focus:outline-none focus:ring-2 focus:ring-emerald-500/50 focus:ring-offset-2 focus:ring-offset-slate-900"
             >
               Generate PDF Report
             </button>
@@ -1553,7 +1633,7 @@ export function SubscriptionTrackerTool({ toolId }: SubscriptionTrackerToolProps
               <div className="flex gap-3 pt-4">
                 <button
                   onClick={exportToPDF}
-                  className="flex-1 px-4 py-2 rounded-lg bg-emerald-500 text-slate-950 font-medium hover:bg-emerald-400 transition-colors"
+                  className="flex-1 px-4 py-2.5 rounded-lg bg-emerald-500 text-slate-950 font-semibold hover:bg-emerald-400 transition-colors focus:outline-none focus:ring-2 focus:ring-emerald-500/50 focus:ring-offset-2 focus:ring-offset-slate-900"
                 >
                   Export to PDF
                 </button>

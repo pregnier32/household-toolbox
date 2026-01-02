@@ -1003,7 +1003,7 @@ export default function SiteMaintenancePage() {
                         <button
                           onClick={() => handleSaveLegalDocument('terms')}
                           disabled={isSavingLegal || !termsContent.trim()}
-                          className="rounded bg-emerald-500 px-4 py-2 text-sm font-medium text-slate-950 transition-colors hover:bg-emerald-400 disabled:cursor-not-allowed disabled:opacity-50"
+                          className="rounded-lg bg-emerald-500 px-4 py-2.5 text-sm font-semibold text-slate-950 transition-colors hover:bg-emerald-400 focus:outline-none focus:ring-2 focus:ring-emerald-500/50 focus:ring-offset-2 focus:ring-offset-slate-900 disabled:cursor-not-allowed disabled:opacity-50"
                         >
                           {isSavingLegal ? 'Saving...' : 'Save Changes'}
                         </button>
@@ -1076,7 +1076,7 @@ export default function SiteMaintenancePage() {
                         <button
                           onClick={() => handleSaveLegalDocument('privacy')}
                           disabled={isSavingLegal || !privacyContent.trim()}
-                          className="rounded bg-emerald-500 px-4 py-2 text-sm font-medium text-slate-950 transition-colors hover:bg-emerald-400 disabled:cursor-not-allowed disabled:opacity-50"
+                          className="rounded-lg bg-emerald-500 px-4 py-2.5 text-sm font-semibold text-slate-950 transition-colors hover:bg-emerald-400 focus:outline-none focus:ring-2 focus:ring-emerald-500/50 focus:ring-offset-2 focus:ring-offset-slate-900 disabled:cursor-not-allowed disabled:opacity-50"
                         >
                           {isSavingLegal ? 'Saving...' : 'Save Changes'}
                         </button>

@@ -2027,7 +2027,7 @@ export function PetCareScheduleTool({ toolId }: PetCareScheduleToolProps) {
                 value={newPetName}
                 onChange={(e) => setNewPetName(e.target.value)}
                 placeholder="Enter pet name"
-                className="w-full px-4 py-2 rounded-lg border border-slate-700 bg-slate-900/70 text-slate-100 placeholder-slate-500 focus:border-emerald-500/50 focus:outline-none focus:ring-1 focus:ring-emerald-500/50"
+                className="w-full px-3 py-2 rounded-lg border border-slate-700 bg-slate-900/70 text-slate-100 placeholder-slate-500 focus:border-emerald-500/50 focus:outline-none focus:ring-1 focus:ring-emerald-500/50"
                 onKeyDown={(e) => {
                   if (e.key === 'Enter') {
                     createNewPet();
@@ -2188,7 +2188,7 @@ export function PetCareScheduleTool({ toolId }: PetCareScheduleToolProps) {
                   value={petName}
                   onChange={(e) => setPetName(e.target.value)}
                   placeholder="Enter pet's name"
-                  className="w-full px-4 py-2 rounded-lg border border-slate-700 bg-slate-900/70 text-slate-100 placeholder-slate-500 focus:border-emerald-500/50 focus:outline-none focus:ring-1 focus:ring-emerald-500/50"
+                  className="w-full px-3 py-2 rounded-lg border border-slate-700 bg-slate-900/70 text-slate-100 placeholder-slate-500 focus:border-emerald-500/50 focus:outline-none focus:ring-1 focus:ring-emerald-500/50"
                 />
               </div>
               <div>
@@ -2212,7 +2212,7 @@ export function PetCareScheduleTool({ toolId }: PetCareScheduleToolProps) {
                     onChange={(e) => setCustomPetType(e.target.value)}
                     onBlur={handleCustomPetTypeBlur}
                     placeholder="Enter custom pet type"
-                    className="w-full mt-2 px-4 py-2 rounded-lg border border-slate-700 bg-slate-900/70 text-slate-100 placeholder-slate-500 focus:border-emerald-500/50 focus:outline-none focus:ring-1 focus:ring-emerald-500/50"
+                    className="w-full mt-2 px-3 py-2 rounded-lg border border-slate-700 bg-slate-900/70 text-slate-100 placeholder-slate-500 focus:border-emerald-500/50 focus:outline-none focus:ring-1 focus:ring-emerald-500/50"
                   />
                 )}
               </div>
@@ -2232,7 +2232,7 @@ export function PetCareScheduleTool({ toolId }: PetCareScheduleToolProps) {
                   value={breed}
                   onChange={(e) => setBreed(e.target.value)}
                   placeholder="Enter breed"
-                  className="w-full px-4 py-2 rounded-lg border border-slate-700 bg-slate-900/70 text-slate-100 placeholder-slate-500 focus:border-emerald-500/50 focus:outline-none focus:ring-1 focus:ring-emerald-500/50"
+                  className="w-full px-3 py-2 rounded-lg border border-slate-700 bg-slate-900/70 text-slate-100 placeholder-slate-500 focus:border-emerald-500/50 focus:outline-none focus:ring-1 focus:ring-emerald-500/50"
                 />
               </div>
               <div>
@@ -2242,7 +2242,7 @@ export function PetCareScheduleTool({ toolId }: PetCareScheduleToolProps) {
                   value={whereGotPet}
                   onChange={(e) => setWhereGotPet(e.target.value)}
                   placeholder="e.g., Animal shelter, breeder, pet store"
-                  className="w-full px-4 py-2 rounded-lg border border-slate-700 bg-slate-900/70 text-slate-100 placeholder-slate-500 focus:border-emerald-500/50 focus:outline-none focus:ring-1 focus:ring-emerald-500/50"
+                  className="w-full px-3 py-2 rounded-lg border border-slate-700 bg-slate-900/70 text-slate-100 placeholder-slate-500 focus:border-emerald-500/50 focus:outline-none focus:ring-1 focus:ring-emerald-500/50"
                 />
               </div>
               <div>
@@ -2252,7 +2252,7 @@ export function PetCareScheduleTool({ toolId }: PetCareScheduleToolProps) {
                   value={weight}
                   onChange={(e) => setWeight(e.target.value)}
                   placeholder="e.g., 25 lbs or 11 kg"
-                  className="w-full px-4 py-2 rounded-lg border border-slate-700 bg-slate-900/70 text-slate-100 placeholder-slate-500 focus:border-emerald-500/50 focus:outline-none focus:ring-1 focus:ring-emerald-500/50"
+                  className="w-full px-3 py-2 rounded-lg border border-slate-700 bg-slate-900/70 text-slate-100 placeholder-slate-500 focus:border-emerald-500/50 focus:outline-none focus:ring-1 focus:ring-emerald-500/50"
                 />
               </div>
               <div>
@@ -2262,7 +2262,7 @@ export function PetCareScheduleTool({ toolId }: PetCareScheduleToolProps) {
                   value={color}
                   onChange={(e) => setColor(e.target.value)}
                   placeholder="Enter color or markings"
-                  className="w-full px-4 py-2 rounded-lg border border-slate-700 bg-slate-900/70 text-slate-100 placeholder-slate-500 focus:border-emerald-500/50 focus:outline-none focus:ring-1 focus:ring-emerald-500/50"
+                  className="w-full px-3 py-2 rounded-lg border border-slate-700 bg-slate-900/70 text-slate-100 placeholder-slate-500 focus:border-emerald-500/50 focus:outline-none focus:ring-1 focus:ring-emerald-500/50"
                 />
               </div>
               <div>
@@ -2272,7 +2272,7 @@ export function PetCareScheduleTool({ toolId }: PetCareScheduleToolProps) {
                   value={microchipNumber}
                   onChange={(e) => setMicrochipNumber(e.target.value)}
                   placeholder="Enter microchip number"
-                  className="w-full px-4 py-2 rounded-lg border border-slate-700 bg-slate-900/70 text-slate-100 placeholder-slate-500 focus:border-emerald-500/50 focus:outline-none focus:ring-1 focus:ring-emerald-500/50"
+                  className="w-full px-3 py-2 rounded-lg border border-slate-700 bg-slate-900/70 text-slate-100 placeholder-slate-500 focus:border-emerald-500/50 focus:outline-none focus:ring-1 focus:ring-emerald-500/50"
                 />
               </div>
             </div>
@@ -2305,7 +2305,7 @@ export function PetCareScheduleTool({ toolId }: PetCareScheduleToolProps) {
                     value={currentFood.name}
                     onChange={(e) => setCurrentFood({ ...currentFood, name: e.target.value })}
                     placeholder="Enter food name/brand"
-                    className="w-full px-4 py-2 rounded-lg border border-slate-700 bg-slate-900/70 text-slate-100 placeholder-slate-500 focus:border-emerald-500/50 focus:outline-none focus:ring-1 focus:ring-emerald-500/50"
+                    className="w-full px-3 py-2 rounded-lg border border-slate-700 bg-slate-900/70 text-slate-100 placeholder-slate-500 focus:border-emerald-500/50 focus:outline-none focus:ring-1 focus:ring-emerald-500/50"
                   />
                 </div>
                 <div>
@@ -2320,7 +2320,7 @@ export function PetCareScheduleTool({ toolId }: PetCareScheduleToolProps) {
                   onChange={(e) => setCurrentFood({ ...currentFood, notes: e.target.value })}
                   placeholder="Add any additional notes about this food..."
                   rows={3}
-                  className="w-full px-4 py-2 rounded-lg border border-slate-700 bg-slate-900/70 text-slate-100 placeholder-slate-500 focus:border-emerald-500/50 focus:outline-none focus:ring-1 focus:ring-emerald-500/50 resize-none"
+                  className="w-full px-3 py-2 rounded-lg border border-slate-700 bg-slate-900/70 text-slate-100 placeholder-slate-500 focus:border-emerald-500/50 focus:outline-none focus:ring-1 focus:ring-emerald-500/50 resize-none"
                 />
               </div>
               <button
@@ -2365,7 +2365,7 @@ export function PetCareScheduleTool({ toolId }: PetCareScheduleToolProps) {
                             onChange={(e) => setEditingFood({ ...editingFood, notes: e.target.value })}
                             placeholder="Add any additional notes about this food..."
                             rows={3}
-                            className="w-full px-4 py-2 rounded-lg border border-slate-700 bg-slate-900/70 text-slate-100 placeholder-slate-500 focus:border-emerald-500/50 focus:outline-none focus:ring-1 focus:ring-emerald-500/50 resize-none"
+                            className="w-full px-3 py-2 rounded-lg border border-slate-700 bg-slate-900/70 text-slate-100 placeholder-slate-500 focus:border-emerald-500/50 focus:outline-none focus:ring-1 focus:ring-emerald-500/50 resize-none"
                           />
                         </div>
                         <div className="flex gap-2">
@@ -2463,7 +2463,7 @@ export function PetCareScheduleTool({ toolId }: PetCareScheduleToolProps) {
                             onChange={(e) => setEditingFood({ ...editingFood, notes: e.target.value })}
                             placeholder="Add any additional notes about this food..."
                             rows={3}
-                            className="w-full px-4 py-2 rounded-lg border border-slate-700 bg-slate-900/70 text-slate-100 placeholder-slate-500 focus:border-emerald-500/50 focus:outline-none focus:ring-1 focus:ring-emerald-500/50 resize-none"
+                            className="w-full px-3 py-2 rounded-lg border border-slate-700 bg-slate-900/70 text-slate-100 placeholder-slate-500 focus:border-emerald-500/50 focus:outline-none focus:ring-1 focus:ring-emerald-500/50 resize-none"
                           />
                         </div>
                         <div className="flex gap-2">
@@ -2536,7 +2536,7 @@ export function PetCareScheduleTool({ toolId }: PetCareScheduleToolProps) {
                   value={newVetRecord.veterinarianName}
                   onChange={(e) => setNewVetRecord({ ...newVetRecord, veterinarianName: e.target.value })}
                   placeholder="Dr. Smith"
-                  className="w-full px-4 py-2 rounded-lg border border-slate-700 bg-slate-900/70 text-slate-100 placeholder-slate-500 focus:border-emerald-500/50 focus:outline-none focus:ring-1 focus:ring-emerald-500/50"
+                  className="w-full px-3 py-2 rounded-lg border border-slate-700 bg-slate-900/70 text-slate-100 placeholder-slate-500 focus:border-emerald-500/50 focus:outline-none focus:ring-1 focus:ring-emerald-500/50"
                 />
               </div>
               <div>
@@ -2546,7 +2546,7 @@ export function PetCareScheduleTool({ toolId }: PetCareScheduleToolProps) {
                   value={newVetRecord.clinicName}
                   onChange={(e) => setNewVetRecord({ ...newVetRecord, clinicName: e.target.value })}
                   placeholder="Animal Hospital"
-                  className="w-full px-4 py-2 rounded-lg border border-slate-700 bg-slate-900/70 text-slate-100 placeholder-slate-500 focus:border-emerald-500/50 focus:outline-none focus:ring-1 focus:ring-emerald-500/50"
+                  className="w-full px-3 py-2 rounded-lg border border-slate-700 bg-slate-900/70 text-slate-100 placeholder-slate-500 focus:border-emerald-500/50 focus:outline-none focus:ring-1 focus:ring-emerald-500/50"
                 />
               </div>
               <div>
@@ -2556,7 +2556,7 @@ export function PetCareScheduleTool({ toolId }: PetCareScheduleToolProps) {
                   value={newVetRecord.phone}
                   onChange={(e) => setNewVetRecord({ ...newVetRecord, phone: e.target.value })}
                   placeholder="(555) 123-4567"
-                  className="w-full px-4 py-2 rounded-lg border border-slate-700 bg-slate-900/70 text-slate-100 placeholder-slate-500 focus:border-emerald-500/50 focus:outline-none focus:ring-1 focus:ring-emerald-500/50"
+                  className="w-full px-3 py-2 rounded-lg border border-slate-700 bg-slate-900/70 text-slate-100 placeholder-slate-500 focus:border-emerald-500/50 focus:outline-none focus:ring-1 focus:ring-emerald-500/50"
                 />
               </div>
               <div>
@@ -2566,7 +2566,7 @@ export function PetCareScheduleTool({ toolId }: PetCareScheduleToolProps) {
                   value={newVetRecord.email}
                   onChange={(e) => setNewVetRecord({ ...newVetRecord, email: e.target.value })}
                   placeholder="vet@example.com"
-                  className="w-full px-4 py-2 rounded-lg border border-slate-700 bg-slate-900/70 text-slate-100 placeholder-slate-500 focus:border-emerald-500/50 focus:outline-none focus:ring-1 focus:ring-emerald-500/50"
+                  className="w-full px-3 py-2 rounded-lg border border-slate-700 bg-slate-900/70 text-slate-100 placeholder-slate-500 focus:border-emerald-500/50 focus:outline-none focus:ring-1 focus:ring-emerald-500/50"
                 />
               </div>
               <div className="md:col-span-2">
@@ -2576,7 +2576,7 @@ export function PetCareScheduleTool({ toolId }: PetCareScheduleToolProps) {
                   value={newVetRecord.address}
                   onChange={(e) => setNewVetRecord({ ...newVetRecord, address: e.target.value })}
                   placeholder="123 Main St, City, State ZIP"
-                  className="w-full px-4 py-2 rounded-lg border border-slate-700 bg-slate-900/70 text-slate-100 placeholder-slate-500 focus:border-emerald-500/50 focus:outline-none focus:ring-1 focus:ring-emerald-500/50"
+                  className="w-full px-3 py-2 rounded-lg border border-slate-700 bg-slate-900/70 text-slate-100 placeholder-slate-500 focus:border-emerald-500/50 focus:outline-none focus:ring-1 focus:ring-emerald-500/50"
                 />
               </div>
               <div>
@@ -2597,7 +2597,7 @@ export function PetCareScheduleTool({ toolId }: PetCareScheduleToolProps) {
                   onChange={(e) => setNewVetRecord({ ...newVetRecord, notes: e.target.value })}
                   placeholder="Add any additional notes about this veterinary contact..."
                   rows={3}
-                  className="w-full px-4 py-2 rounded-lg border border-slate-700 bg-slate-900/70 text-slate-100 placeholder-slate-500 focus:border-emerald-500/50 focus:outline-none focus:ring-1 focus:ring-emerald-500/50 resize-none"
+                  className="w-full px-3 py-2 rounded-lg border border-slate-700 bg-slate-900/70 text-slate-100 placeholder-slate-500 focus:border-emerald-500/50 focus:outline-none focus:ring-1 focus:ring-emerald-500/50 resize-none"
                 />
               </div>
             </div>
@@ -2627,7 +2627,7 @@ export function PetCareScheduleTool({ toolId }: PetCareScheduleToolProps) {
                                 value={editingVetRecord.veterinarianName}
                                 onChange={(e) => setEditingVetRecord({ ...editingVetRecord, veterinarianName: e.target.value })}
                                 placeholder="Dr. Smith"
-                                className="w-full px-4 py-2 rounded-lg border border-slate-700 bg-slate-900/70 text-slate-100 placeholder-slate-500 focus:border-emerald-500/50 focus:outline-none focus:ring-1 focus:ring-emerald-500/50"
+                                className="w-full px-3 py-2 rounded-lg border border-slate-700 bg-slate-900/70 text-slate-100 placeholder-slate-500 focus:border-emerald-500/50 focus:outline-none focus:ring-1 focus:ring-emerald-500/50"
                               />
                             </div>
                             <div>
@@ -2637,7 +2637,7 @@ export function PetCareScheduleTool({ toolId }: PetCareScheduleToolProps) {
                                 value={editingVetRecord.clinicName}
                                 onChange={(e) => setEditingVetRecord({ ...editingVetRecord, clinicName: e.target.value })}
                                 placeholder="Animal Hospital"
-                                className="w-full px-4 py-2 rounded-lg border border-slate-700 bg-slate-900/70 text-slate-100 placeholder-slate-500 focus:border-emerald-500/50 focus:outline-none focus:ring-1 focus:ring-emerald-500/50"
+                                className="w-full px-3 py-2 rounded-lg border border-slate-700 bg-slate-900/70 text-slate-100 placeholder-slate-500 focus:border-emerald-500/50 focus:outline-none focus:ring-1 focus:ring-emerald-500/50"
                               />
                             </div>
                             <div>
@@ -2647,7 +2647,7 @@ export function PetCareScheduleTool({ toolId }: PetCareScheduleToolProps) {
                                 value={editingVetRecord.phone}
                                 onChange={(e) => setEditingVetRecord({ ...editingVetRecord, phone: e.target.value })}
                                 placeholder="(555) 123-4567"
-                                className="w-full px-4 py-2 rounded-lg border border-slate-700 bg-slate-900/70 text-slate-100 placeholder-slate-500 focus:border-emerald-500/50 focus:outline-none focus:ring-1 focus:ring-emerald-500/50"
+                                className="w-full px-3 py-2 rounded-lg border border-slate-700 bg-slate-900/70 text-slate-100 placeholder-slate-500 focus:border-emerald-500/50 focus:outline-none focus:ring-1 focus:ring-emerald-500/50"
                               />
                             </div>
                             <div>
@@ -2657,7 +2657,7 @@ export function PetCareScheduleTool({ toolId }: PetCareScheduleToolProps) {
                                 value={editingVetRecord.email}
                                 onChange={(e) => setEditingVetRecord({ ...editingVetRecord, email: e.target.value })}
                                 placeholder="vet@example.com"
-                                className="w-full px-4 py-2 rounded-lg border border-slate-700 bg-slate-900/70 text-slate-100 placeholder-slate-500 focus:border-emerald-500/50 focus:outline-none focus:ring-1 focus:ring-emerald-500/50"
+                                className="w-full px-3 py-2 rounded-lg border border-slate-700 bg-slate-900/70 text-slate-100 placeholder-slate-500 focus:border-emerald-500/50 focus:outline-none focus:ring-1 focus:ring-emerald-500/50"
                               />
                             </div>
                             <div className="md:col-span-2">
@@ -2667,7 +2667,7 @@ export function PetCareScheduleTool({ toolId }: PetCareScheduleToolProps) {
                                 value={editingVetRecord.address}
                                 onChange={(e) => setEditingVetRecord({ ...editingVetRecord, address: e.target.value })}
                                 placeholder="123 Main St, City, State ZIP"
-                                className="w-full px-4 py-2 rounded-lg border border-slate-700 bg-slate-900/70 text-slate-100 placeholder-slate-500 focus:border-emerald-500/50 focus:outline-none focus:ring-1 focus:ring-emerald-500/50"
+                                className="w-full px-3 py-2 rounded-lg border border-slate-700 bg-slate-900/70 text-slate-100 placeholder-slate-500 focus:border-emerald-500/50 focus:outline-none focus:ring-1 focus:ring-emerald-500/50"
                               />
                             </div>
                             <div>
@@ -2688,7 +2688,7 @@ export function PetCareScheduleTool({ toolId }: PetCareScheduleToolProps) {
                                 onChange={(e) => setEditingVetRecord({ ...editingVetRecord, notes: e.target.value })}
                                 placeholder="Add any additional notes about this veterinary contact..."
                                 rows={3}
-                                className="w-full px-4 py-2 rounded-lg border border-slate-700 bg-slate-900/70 text-slate-100 placeholder-slate-500 focus:border-emerald-500/50 focus:outline-none focus:ring-1 focus:ring-emerald-500/50 resize-none"
+                                className="w-full px-3 py-2 rounded-lg border border-slate-700 bg-slate-900/70 text-slate-100 placeholder-slate-500 focus:border-emerald-500/50 focus:outline-none focus:ring-1 focus:ring-emerald-500/50 resize-none"
                               />
                             </div>
                           </div>
@@ -2788,7 +2788,7 @@ export function PetCareScheduleTool({ toolId }: PetCareScheduleToolProps) {
                                 value={editingVetRecord.veterinarianName}
                                 onChange={(e) => setEditingVetRecord({ ...editingVetRecord, veterinarianName: e.target.value })}
                                 placeholder="Dr. Smith"
-                                className="w-full px-4 py-2 rounded-lg border border-slate-700 bg-slate-900/70 text-slate-100 placeholder-slate-500 focus:border-emerald-500/50 focus:outline-none focus:ring-1 focus:ring-emerald-500/50"
+                                className="w-full px-3 py-2 rounded-lg border border-slate-700 bg-slate-900/70 text-slate-100 placeholder-slate-500 focus:border-emerald-500/50 focus:outline-none focus:ring-1 focus:ring-emerald-500/50"
                               />
                             </div>
                             <div>
@@ -2798,7 +2798,7 @@ export function PetCareScheduleTool({ toolId }: PetCareScheduleToolProps) {
                                 value={editingVetRecord.clinicName}
                                 onChange={(e) => setEditingVetRecord({ ...editingVetRecord, clinicName: e.target.value })}
                                 placeholder="Animal Hospital"
-                                className="w-full px-4 py-2 rounded-lg border border-slate-700 bg-slate-900/70 text-slate-100 placeholder-slate-500 focus:border-emerald-500/50 focus:outline-none focus:ring-1 focus:ring-emerald-500/50"
+                                className="w-full px-3 py-2 rounded-lg border border-slate-700 bg-slate-900/70 text-slate-100 placeholder-slate-500 focus:border-emerald-500/50 focus:outline-none focus:ring-1 focus:ring-emerald-500/50"
                               />
                             </div>
                             <div>
@@ -2808,7 +2808,7 @@ export function PetCareScheduleTool({ toolId }: PetCareScheduleToolProps) {
                                 value={editingVetRecord.phone}
                                 onChange={(e) => setEditingVetRecord({ ...editingVetRecord, phone: e.target.value })}
                                 placeholder="(555) 123-4567"
-                                className="w-full px-4 py-2 rounded-lg border border-slate-700 bg-slate-900/70 text-slate-100 placeholder-slate-500 focus:border-emerald-500/50 focus:outline-none focus:ring-1 focus:ring-emerald-500/50"
+                                className="w-full px-3 py-2 rounded-lg border border-slate-700 bg-slate-900/70 text-slate-100 placeholder-slate-500 focus:border-emerald-500/50 focus:outline-none focus:ring-1 focus:ring-emerald-500/50"
                               />
                             </div>
                             <div>
@@ -2818,7 +2818,7 @@ export function PetCareScheduleTool({ toolId }: PetCareScheduleToolProps) {
                                 value={editingVetRecord.email}
                                 onChange={(e) => setEditingVetRecord({ ...editingVetRecord, email: e.target.value })}
                                 placeholder="vet@example.com"
-                                className="w-full px-4 py-2 rounded-lg border border-slate-700 bg-slate-900/70 text-slate-100 placeholder-slate-500 focus:border-emerald-500/50 focus:outline-none focus:ring-1 focus:ring-emerald-500/50"
+                                className="w-full px-3 py-2 rounded-lg border border-slate-700 bg-slate-900/70 text-slate-100 placeholder-slate-500 focus:border-emerald-500/50 focus:outline-none focus:ring-1 focus:ring-emerald-500/50"
                               />
                             </div>
                             <div className="md:col-span-2">
@@ -2828,7 +2828,7 @@ export function PetCareScheduleTool({ toolId }: PetCareScheduleToolProps) {
                                 value={editingVetRecord.address}
                                 onChange={(e) => setEditingVetRecord({ ...editingVetRecord, address: e.target.value })}
                                 placeholder="123 Main St, City, State ZIP"
-                                className="w-full px-4 py-2 rounded-lg border border-slate-700 bg-slate-900/70 text-slate-100 placeholder-slate-500 focus:border-emerald-500/50 focus:outline-none focus:ring-1 focus:ring-emerald-500/50"
+                                className="w-full px-3 py-2 rounded-lg border border-slate-700 bg-slate-900/70 text-slate-100 placeholder-slate-500 focus:border-emerald-500/50 focus:outline-none focus:ring-1 focus:ring-emerald-500/50"
                               />
                             </div>
                             <div>
@@ -2849,7 +2849,7 @@ export function PetCareScheduleTool({ toolId }: PetCareScheduleToolProps) {
                                 onChange={(e) => setEditingVetRecord({ ...editingVetRecord, notes: e.target.value })}
                                 placeholder="Add any additional notes about this veterinary contact..."
                                 rows={3}
-                                className="w-full px-4 py-2 rounded-lg border border-slate-700 bg-slate-900/70 text-slate-100 placeholder-slate-500 focus:border-emerald-500/50 focus:outline-none focus:ring-1 focus:ring-emerald-500/50 resize-none"
+                                className="w-full px-3 py-2 rounded-lg border border-slate-700 bg-slate-900/70 text-slate-100 placeholder-slate-500 focus:border-emerald-500/50 focus:outline-none focus:ring-1 focus:ring-emerald-500/50 resize-none"
                               />
                             </div>
                           </div>
@@ -2946,7 +2946,7 @@ export function PetCareScheduleTool({ toolId }: PetCareScheduleToolProps) {
                   value={newCareItem.name}
                   onChange={(e) => setNewCareItem({ ...newCareItem, name: e.target.value })}
                   placeholder="e.g., Nail trimming, Grooming, Exercise"
-                  className="w-full px-4 py-2 rounded-lg border border-slate-700 bg-slate-900/70 text-slate-100 placeholder-slate-500 focus:border-emerald-500/50 focus:outline-none focus:ring-1 focus:ring-emerald-500/50"
+                  className="w-full px-3 py-2 rounded-lg border border-slate-700 bg-slate-900/70 text-slate-100 placeholder-slate-500 focus:border-emerald-500/50 focus:outline-none focus:ring-1 focus:ring-emerald-500/50"
                 />
               </div>
               <div>
@@ -3020,7 +3020,7 @@ export function PetCareScheduleTool({ toolId }: PetCareScheduleToolProps) {
                               value={editingCareItem.name}
                               onChange={(e) => setEditingCareItem({ ...editingCareItem, name: e.target.value })}
                               placeholder="e.g., Nail trimming, Grooming, Exercise"
-                              className="w-full px-4 py-2 rounded-lg border border-slate-700 bg-slate-900/70 text-slate-100 placeholder-slate-500 focus:border-emerald-500/50 focus:outline-none focus:ring-1 focus:ring-emerald-500/50"
+                              className="w-full px-3 py-2 rounded-lg border border-slate-700 bg-slate-900/70 text-slate-100 placeholder-slate-500 focus:border-emerald-500/50 focus:outline-none focus:ring-1 focus:ring-emerald-500/50"
                             />
                           </div>
                           <div>
@@ -3055,7 +3055,7 @@ export function PetCareScheduleTool({ toolId }: PetCareScheduleToolProps) {
                             onChange={(e) => setEditingCareItem({ ...editingCareItem, notes: e.target.value })}
                             placeholder="Add any additional notes about this care item..."
                             rows={3}
-                            className="w-full px-4 py-2 rounded-lg border border-slate-700 bg-slate-900/70 text-slate-100 placeholder-slate-500 focus:border-emerald-500/50 focus:outline-none focus:ring-1 focus:ring-emerald-500/50 resize-none"
+                            className="w-full px-3 py-2 rounded-lg border border-slate-700 bg-slate-900/70 text-slate-100 placeholder-slate-500 focus:border-emerald-500/50 focus:outline-none focus:ring-1 focus:ring-emerald-500/50 resize-none"
                           />
                         </div>
                         <div className="flex items-center gap-2">
@@ -3146,7 +3146,7 @@ export function PetCareScheduleTool({ toolId }: PetCareScheduleToolProps) {
                               value={editingCareItem.name}
                               onChange={(e) => setEditingCareItem({ ...editingCareItem, name: e.target.value })}
                               placeholder="e.g., Nail trimming, Grooming, Exercise"
-                              className="w-full px-4 py-2 rounded-lg border border-slate-700 bg-slate-900/70 text-slate-100 placeholder-slate-500 focus:border-emerald-500/50 focus:outline-none focus:ring-1 focus:ring-emerald-500/50"
+                              className="w-full px-3 py-2 rounded-lg border border-slate-700 bg-slate-900/70 text-slate-100 placeholder-slate-500 focus:border-emerald-500/50 focus:outline-none focus:ring-1 focus:ring-emerald-500/50"
                             />
                           </div>
                           <div>
@@ -3181,7 +3181,7 @@ export function PetCareScheduleTool({ toolId }: PetCareScheduleToolProps) {
                             onChange={(e) => setEditingCareItem({ ...editingCareItem, notes: e.target.value })}
                             placeholder="Add any additional notes about this care item..."
                             rows={3}
-                            className="w-full px-4 py-2 rounded-lg border border-slate-700 bg-slate-900/70 text-slate-100 placeholder-slate-500 focus:border-emerald-500/50 focus:outline-none focus:ring-1 focus:ring-emerald-500/50 resize-none"
+                            className="w-full px-3 py-2 rounded-lg border border-slate-700 bg-slate-900/70 text-slate-100 placeholder-slate-500 focus:border-emerald-500/50 focus:outline-none focus:ring-1 focus:ring-emerald-500/50 resize-none"
                           />
                         </div>
                         <div className="flex items-center gap-2">
@@ -3273,7 +3273,7 @@ export function PetCareScheduleTool({ toolId }: PetCareScheduleToolProps) {
                   value={newVaccination.name}
                   onChange={(e) => setNewVaccination({ ...newVaccination, name: e.target.value })}
                   placeholder="e.g., Rabies, DHPP, FVRCP"
-                  className="w-full px-4 py-2 rounded-lg border border-slate-700 bg-slate-900/70 text-slate-100 placeholder-slate-500 focus:border-emerald-500/50 focus:outline-none focus:ring-1 focus:ring-emerald-500/50"
+                  className="w-full px-3 py-2 rounded-lg border border-slate-700 bg-slate-900/70 text-slate-100 placeholder-slate-500 focus:border-emerald-500/50 focus:outline-none focus:ring-1 focus:ring-emerald-500/50"
                 />
               </div>
               <div>
@@ -3292,7 +3292,7 @@ export function PetCareScheduleTool({ toolId }: PetCareScheduleToolProps) {
                   value={newVaccination.veterinarian}
                   onChange={(e) => setNewVaccination({ ...newVaccination, veterinarian: e.target.value })}
                   placeholder="Veterinarian name"
-                  className="w-full px-4 py-2 rounded-lg border border-slate-700 bg-slate-900/70 text-slate-100 placeholder-slate-500 focus:border-emerald-500/50 focus:outline-none focus:ring-1 focus:ring-emerald-500/50"
+                  className="w-full px-3 py-2 rounded-lg border border-slate-700 bg-slate-900/70 text-slate-100 placeholder-slate-500 focus:border-emerald-500/50 focus:outline-none focus:ring-1 focus:ring-emerald-500/50"
                 />
               </div>
               <div>
@@ -3302,7 +3302,7 @@ export function PetCareScheduleTool({ toolId }: PetCareScheduleToolProps) {
                   value={newVaccination.notes}
                   onChange={(e) => setNewVaccination({ ...newVaccination, notes: e.target.value })}
                   placeholder="Additional notes"
-                  className="w-full px-4 py-2 rounded-lg border border-slate-700 bg-slate-900/70 text-slate-100 placeholder-slate-500 focus:border-emerald-500/50 focus:outline-none focus:ring-1 focus:ring-emerald-500/50"
+                  className="w-full px-3 py-2 rounded-lg border border-slate-700 bg-slate-900/70 text-slate-100 placeholder-slate-500 focus:border-emerald-500/50 focus:outline-none focus:ring-1 focus:ring-emerald-500/50"
                 />
               </div>
             </div>
@@ -3332,7 +3332,7 @@ export function PetCareScheduleTool({ toolId }: PetCareScheduleToolProps) {
                                 value={editingVaccination.name}
                                 onChange={(e) => setEditingVaccination({ ...editingVaccination, name: e.target.value })}
                                 placeholder="e.g., Rabies, DHPP, FVRCP"
-                                className="w-full px-4 py-2 rounded-lg border border-slate-700 bg-slate-900/70 text-slate-100 placeholder-slate-500 focus:border-emerald-500/50 focus:outline-none focus:ring-1 focus:ring-emerald-500/50"
+                                className="w-full px-3 py-2 rounded-lg border border-slate-700 bg-slate-900/70 text-slate-100 placeholder-slate-500 focus:border-emerald-500/50 focus:outline-none focus:ring-1 focus:ring-emerald-500/50"
                               />
                             </div>
                             <div>
@@ -3351,7 +3351,7 @@ export function PetCareScheduleTool({ toolId }: PetCareScheduleToolProps) {
                                 value={editingVaccination.veterinarian}
                                 onChange={(e) => setEditingVaccination({ ...editingVaccination, veterinarian: e.target.value })}
                                 placeholder="Veterinarian name"
-                                className="w-full px-4 py-2 rounded-lg border border-slate-700 bg-slate-900/70 text-slate-100 placeholder-slate-500 focus:border-emerald-500/50 focus:outline-none focus:ring-1 focus:ring-emerald-500/50"
+                                className="w-full px-3 py-2 rounded-lg border border-slate-700 bg-slate-900/70 text-slate-100 placeholder-slate-500 focus:border-emerald-500/50 focus:outline-none focus:ring-1 focus:ring-emerald-500/50"
                               />
                             </div>
                             <div>
@@ -3361,7 +3361,7 @@ export function PetCareScheduleTool({ toolId }: PetCareScheduleToolProps) {
                                 value={editingVaccination.notes}
                                 onChange={(e) => setEditingVaccination({ ...editingVaccination, notes: e.target.value })}
                                 placeholder="Additional notes"
-                                className="w-full px-4 py-2 rounded-lg border border-slate-700 bg-slate-900/70 text-slate-100 placeholder-slate-500 focus:border-emerald-500/50 focus:outline-none focus:ring-1 focus:ring-emerald-500/50"
+                                className="w-full px-3 py-2 rounded-lg border border-slate-700 bg-slate-900/70 text-slate-100 placeholder-slate-500 focus:border-emerald-500/50 focus:outline-none focus:ring-1 focus:ring-emerald-500/50"
                               />
                             </div>
                           </div>
@@ -3448,7 +3448,7 @@ export function PetCareScheduleTool({ toolId }: PetCareScheduleToolProps) {
                   value={newAppointment.type}
                   onChange={(e) => setNewAppointment({ ...newAppointment, type: e.target.value })}
                   placeholder="e.g., Annual checkup, Vaccination, Surgery"
-                  className="w-full px-4 py-2 rounded-lg border border-slate-700 bg-slate-900/70 text-slate-100 placeholder-slate-500 focus:border-emerald-500/50 focus:outline-none focus:ring-1 focus:ring-emerald-500/50"
+                  className="w-full px-3 py-2 rounded-lg border border-slate-700 bg-slate-900/70 text-slate-100 placeholder-slate-500 focus:border-emerald-500/50 focus:outline-none focus:ring-1 focus:ring-emerald-500/50"
                 />
               </div>
               <div>
@@ -3458,7 +3458,7 @@ export function PetCareScheduleTool({ toolId }: PetCareScheduleToolProps) {
                   value={newAppointment.veterinarian}
                   onChange={(e) => setNewAppointment({ ...newAppointment, veterinarian: e.target.value })}
                   placeholder="Veterinarian name"
-                  className="w-full px-4 py-2 rounded-lg border border-slate-700 bg-slate-900/70 text-slate-100 placeholder-slate-500 focus:border-emerald-500/50 focus:outline-none focus:ring-1 focus:ring-emerald-500/50"
+                  className="w-full px-3 py-2 rounded-lg border border-slate-700 bg-slate-900/70 text-slate-100 placeholder-slate-500 focus:border-emerald-500/50 focus:outline-none focus:ring-1 focus:ring-emerald-500/50"
                 />
               </div>
               <div className="md:col-span-2">
@@ -3468,7 +3468,7 @@ export function PetCareScheduleTool({ toolId }: PetCareScheduleToolProps) {
                   onChange={(e) => setNewAppointment({ ...newAppointment, notes: e.target.value })}
                   placeholder="Additional notes about the appointment"
                   rows={3}
-                  className="w-full px-4 py-2 rounded-lg border border-slate-700 bg-slate-900/70 text-slate-100 placeholder-slate-500 focus:border-emerald-500/50 focus:outline-none focus:ring-1 focus:ring-emerald-500/50"
+                  className="w-full px-3 py-2 rounded-lg border border-slate-700 bg-slate-900/70 text-slate-100 placeholder-slate-500 focus:border-emerald-500/50 focus:outline-none focus:ring-1 focus:ring-emerald-500/50"
                 />
               </div>
             </div>
@@ -3577,7 +3577,7 @@ export function PetCareScheduleTool({ toolId }: PetCareScheduleToolProps) {
                   value={newDocument.name}
                   onChange={(e) => setNewDocument({ ...newDocument, name: e.target.value })}
                   placeholder="e.g., Vaccination Record, Medical Report"
-                  className="w-full px-4 py-2 rounded-lg border border-slate-700 bg-slate-900/70 text-slate-100 placeholder-slate-500 focus:border-emerald-500/50 focus:outline-none focus:ring-1 focus:ring-emerald-500/50"
+                  className="w-full px-3 py-2 rounded-lg border border-slate-700 bg-slate-900/70 text-slate-100 placeholder-slate-500 focus:border-emerald-500/50 focus:outline-none focus:ring-1 focus:ring-emerald-500/50"
                 />
               </div>
               <div>
@@ -3596,7 +3596,7 @@ export function PetCareScheduleTool({ toolId }: PetCareScheduleToolProps) {
                   onChange={(e) => setNewDocument({ ...newDocument, description: e.target.value })}
                   placeholder="Describe the document"
                   rows={3}
-                  className="w-full px-4 py-2 rounded-lg border border-slate-700 bg-slate-900/70 text-slate-100 placeholder-slate-500 focus:border-emerald-500/50 focus:outline-none focus:ring-1 focus:ring-emerald-500/50"
+                  className="w-full px-3 py-2 rounded-lg border border-slate-700 bg-slate-900/70 text-slate-100 placeholder-slate-500 focus:border-emerald-500/50 focus:outline-none focus:ring-1 focus:ring-emerald-500/50"
                 />
               </div>
               <div className="md:col-span-2">
@@ -3634,7 +3634,7 @@ export function PetCareScheduleTool({ toolId }: PetCareScheduleToolProps) {
                                 value={editingDocument.name}
                                 onChange={(e) => setEditingDocument({ ...editingDocument, name: e.target.value })}
                                 placeholder="e.g., Vaccination Record, Medical Report"
-                                className="w-full px-4 py-2 rounded-lg border border-slate-700 bg-slate-900/70 text-slate-100 placeholder-slate-500 focus:border-emerald-500/50 focus:outline-none focus:ring-1 focus:ring-emerald-500/50"
+                                className="w-full px-3 py-2 rounded-lg border border-slate-700 bg-slate-900/70 text-slate-100 placeholder-slate-500 focus:border-emerald-500/50 focus:outline-none focus:ring-1 focus:ring-emerald-500/50"
                               />
                             </div>
                             <div>
@@ -3653,7 +3653,7 @@ export function PetCareScheduleTool({ toolId }: PetCareScheduleToolProps) {
                                 onChange={(e) => setEditingDocument({ ...editingDocument, description: e.target.value })}
                                 placeholder="Describe the document"
                                 rows={3}
-                                className="w-full px-4 py-2 rounded-lg border border-slate-700 bg-slate-900/70 text-slate-100 placeholder-slate-500 focus:border-emerald-500/50 focus:outline-none focus:ring-1 focus:ring-emerald-500/50 resize-none"
+                                className="w-full px-3 py-2 rounded-lg border border-slate-700 bg-slate-900/70 text-slate-100 placeholder-slate-500 focus:border-emerald-500/50 focus:outline-none focus:ring-1 focus:ring-emerald-500/50 resize-none"
                               />
                             </div>
                           </div>
@@ -3762,7 +3762,7 @@ export function PetCareScheduleTool({ toolId }: PetCareScheduleToolProps) {
                             onChange={(e) => setEditingNote({ content: e.target.value })}
                             placeholder="Enter a note about your pet..."
                             rows={4}
-                            className="w-full px-4 py-2 rounded-lg border border-slate-700 bg-slate-900/70 text-slate-100 placeholder-slate-500 focus:border-emerald-500/50 focus:outline-none focus:ring-1 focus:ring-emerald-500/50 resize-none"
+                            className="w-full px-3 py-2 rounded-lg border border-slate-700 bg-slate-900/70 text-slate-100 placeholder-slate-500 focus:border-emerald-500/50 focus:outline-none focus:ring-1 focus:ring-emerald-500/50 resize-none"
                           />
                           <div className="flex gap-2">
                             <button
@@ -3830,7 +3830,7 @@ export function PetCareScheduleTool({ toolId }: PetCareScheduleToolProps) {
                             onChange={(e) => setEditingNote({ content: e.target.value })}
                             placeholder="Enter a note about your pet..."
                             rows={4}
-                            className="w-full px-4 py-2 rounded-lg border border-slate-700 bg-slate-900/70 text-slate-100 placeholder-slate-500 focus:border-emerald-500/50 focus:outline-none focus:ring-1 focus:ring-emerald-500/50 resize-none"
+                            className="w-full px-3 py-2 rounded-lg border border-slate-700 bg-slate-900/70 text-slate-100 placeholder-slate-500 focus:border-emerald-500/50 focus:outline-none focus:ring-1 focus:ring-emerald-500/50 resize-none"
                           />
                           <div className="flex gap-2">
                             <button

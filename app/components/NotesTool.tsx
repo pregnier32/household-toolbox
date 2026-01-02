@@ -1284,7 +1284,7 @@ export function NotesTool({ toolId }: NotesToolProps) {
                   value={searchQuery}
                   onChange={(e) => setSearchQuery(e.target.value)}
                   placeholder="Search by note name or content..."
-                  className="w-full px-4 py-2 rounded-lg border border-slate-700 bg-slate-900/70 text-slate-100 placeholder-slate-500 focus:border-emerald-500/50 focus:outline-none focus:ring-1 focus:ring-emerald-500/50"
+                  className="w-full px-3 py-2 rounded-lg border border-slate-700 bg-slate-900/70 text-slate-100 placeholder-slate-500 focus:border-emerald-500/50 focus:outline-none focus:ring-1 focus:ring-emerald-500/50"
                 />
               </div>
               <div>
@@ -1310,7 +1310,7 @@ export function NotesTool({ toolId }: NotesToolProps) {
             <div className="flex justify-start">
               <button
                 onClick={() => setIsAdding(true)}
-                className="px-4 py-2 rounded-lg bg-emerald-500 text-slate-950 font-medium hover:bg-emerald-400 transition-colors"
+                className="px-4 py-2.5 rounded-lg bg-emerald-500 text-slate-950 font-semibold hover:bg-emerald-400 transition-colors focus:outline-none focus:ring-2 focus:ring-emerald-500/50 focus:ring-offset-2 focus:ring-offset-slate-900"
               >
                 + Add New Note
               </button>
@@ -1329,7 +1329,7 @@ export function NotesTool({ toolId }: NotesToolProps) {
                       value={newNote.noteName}
                       onChange={(e) => setNewNote({ ...newNote, noteName: e.target.value })}
                       placeholder="e.g., Meeting Notes - Jan 15"
-                      className="w-full px-4 py-2 rounded-lg border border-slate-700 bg-slate-900/70 text-slate-100 placeholder-slate-500 focus:border-emerald-500/50 focus:outline-none focus:ring-1 focus:ring-emerald-500/50"
+                      className="w-full px-3 py-2 rounded-lg border border-slate-700 bg-slate-900/70 text-slate-100 placeholder-slate-500 focus:border-emerald-500/50 focus:outline-none focus:ring-1 focus:ring-emerald-500/50"
                     />
                   </div>
                   <div>
@@ -1353,7 +1353,7 @@ export function NotesTool({ toolId }: NotesToolProps) {
                     onChange={(e) => setNewNote({ ...newNote, note: e.target.value })}
                     placeholder="Enter your note content..."
                     rows={6}
-                    className="w-full px-4 py-2 rounded-lg border border-slate-700 bg-slate-900/70 text-slate-100 placeholder-slate-500 focus:border-emerald-500/50 focus:outline-none focus:ring-1 focus:ring-emerald-500/50 resize-none"
+                    className="w-full px-3 py-2 rounded-lg border border-slate-700 bg-slate-900/70 text-slate-100 placeholder-slate-500 focus:border-emerald-500/50 focus:outline-none focus:ring-1 focus:ring-emerald-500/50 resize-none"
                   />
                 </div>
                 <div>
@@ -1539,7 +1539,7 @@ export function NotesTool({ toolId }: NotesToolProps) {
                       (newNote.requiresPasswordForView && (!newNote.viewPassword.trim() || newNote.viewPassword !== newNote.confirmPassword)) ||
                       (newNote.requiresPasswordForView && newNote.securityQuestions.filter(q => q.questionId && q.answer.trim()).length !== 3)
                     }
-                    className="px-4 py-2 rounded-lg bg-emerald-500 text-slate-950 font-medium hover:bg-emerald-400 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                    className="px-4 py-2.5 rounded-lg bg-emerald-500 text-slate-950 font-semibold hover:bg-emerald-400 transition-colors focus:outline-none focus:ring-2 focus:ring-emerald-500/50 focus:ring-offset-2 focus:ring-offset-slate-900 disabled:cursor-not-allowed disabled:opacity-50"
                   >
                     Add Note
                   </button>
@@ -1617,7 +1617,7 @@ export function NotesTool({ toolId }: NotesToolProps) {
                             value={editingNote.note}
                             onChange={(e) => setEditingNote({ ...editingNote, note: e.target.value })}
                             rows={6}
-                            className="w-full px-4 py-2 rounded-lg border border-slate-700 bg-slate-900/70 text-slate-100 placeholder-slate-500 focus:border-emerald-500/50 focus:outline-none focus:ring-1 focus:ring-emerald-500/50 resize-none"
+                            className="w-full px-3 py-2 rounded-lg border border-slate-700 bg-slate-900/70 text-slate-100 placeholder-slate-500 focus:border-emerald-500/50 focus:outline-none focus:ring-1 focus:ring-emerald-500/50 resize-none"
                           />
                         </div>
                         <div>
@@ -1749,7 +1749,7 @@ export function NotesTool({ toolId }: NotesToolProps) {
                               (editingNote.requiresPasswordForView && editingNote.viewPassword.trim() && editingNote.viewPassword !== '••••••••' && editingNote.viewPassword !== editingNote.confirmPassword) ||
                               (editingNote.requiresPasswordForView && !editingNote.viewPassword.trim() && (!note.requiresPasswordForView || !note.viewPassword))
                             }
-                            className="px-4 py-2 rounded-lg bg-emerald-500 text-slate-950 font-medium hover:bg-emerald-400 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                            className="px-4 py-2.5 rounded-lg bg-emerald-500 text-slate-950 font-semibold hover:bg-emerald-400 transition-colors focus:outline-none focus:ring-2 focus:ring-emerald-500/50 focus:ring-offset-2 focus:ring-offset-slate-900 disabled:cursor-not-allowed disabled:opacity-50"
                           >
                             Save
                           </button>
@@ -1917,7 +1917,7 @@ export function NotesTool({ toolId }: NotesToolProps) {
             <div className="flex justify-start">
               <button
                 onClick={() => setIsAddingTag(true)}
-                className="px-4 py-2 rounded-lg bg-emerald-500 text-slate-950 font-medium hover:bg-emerald-400 transition-colors"
+                className="px-4 py-2.5 rounded-lg bg-emerald-500 text-slate-950 font-semibold hover:bg-emerald-400 transition-colors focus:outline-none focus:ring-2 focus:ring-emerald-500/50 focus:ring-offset-2 focus:ring-offset-slate-900"
               >
                 + Add New Tag
               </button>
@@ -1989,7 +1989,7 @@ export function NotesTool({ toolId }: NotesToolProps) {
                         <button
                           onClick={saveTagEdit}
                           disabled={!editingTagName.trim()}
-                          className="px-3 py-2 rounded-lg bg-emerald-500 text-slate-950 font-medium hover:bg-emerald-400 transition-colors disabled:opacity-50 disabled:cursor-not-allowed text-sm"
+                          className="px-4 py-2.5 rounded-lg bg-emerald-500 text-slate-950 font-semibold hover:bg-emerald-400 transition-colors focus:outline-none focus:ring-2 focus:ring-emerald-500/50 focus:ring-offset-2 focus:ring-offset-slate-900 disabled:cursor-not-allowed disabled:opacity-50 text-sm"
                         >
                           Save
                         </button>
@@ -2215,7 +2215,7 @@ export function NotesTool({ toolId }: NotesToolProps) {
                 <button
                   onClick={confirmViewWithPassword}
                   disabled={!viewPasswordInput.trim() || isLoading}
-                  className="flex-1 px-4 py-2 rounded-lg bg-emerald-500 text-slate-950 font-medium hover:bg-emerald-400 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                  className="flex-1 px-4 py-2.5 rounded-lg bg-emerald-500 text-slate-950 font-semibold hover:bg-emerald-400 transition-colors focus:outline-none focus:ring-2 focus:ring-emerald-500/50 focus:ring-offset-2 focus:ring-offset-slate-900 disabled:cursor-not-allowed disabled:opacity-50"
                 >
                   {passwordAction === 'edit' ? 'Edit Note' :
                    passwordAction === 'inactivate' ? 'Inactivate Note' :
@@ -2293,7 +2293,7 @@ export function NotesTool({ toolId }: NotesToolProps) {
                     <button
                       onClick={handleVerifySecurityAnswers}
                       disabled={securityAnswers.some(a => !a.answer.trim()) || isLoading}
-                      className="flex-1 px-4 py-2 rounded-lg bg-emerald-500 text-slate-950 font-medium hover:bg-emerald-400 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                      className="flex-1 px-4 py-2.5 rounded-lg bg-emerald-500 text-slate-950 font-semibold hover:bg-emerald-400 transition-colors focus:outline-none focus:ring-2 focus:ring-emerald-500/50 focus:ring-offset-2 focus:ring-offset-slate-900 disabled:cursor-not-allowed disabled:opacity-50"
                     >
                       Verify Answers
                     </button>
@@ -2391,7 +2391,7 @@ export function NotesTool({ toolId }: NotesToolProps) {
                     <button
                       onClick={handleResetPassword}
                       disabled={!newPassword.trim() || newPassword !== confirmNewPassword || isLoading}
-                      className="flex-1 px-4 py-2 rounded-lg bg-emerald-500 text-slate-950 font-medium hover:bg-emerald-400 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                      className="flex-1 px-4 py-2.5 rounded-lg bg-emerald-500 text-slate-950 font-semibold hover:bg-emerald-400 transition-colors focus:outline-none focus:ring-2 focus:ring-emerald-500/50 focus:ring-offset-2 focus:ring-offset-slate-900 disabled:cursor-not-allowed disabled:opacity-50"
                     >
                       Reset Password
                     </button>
