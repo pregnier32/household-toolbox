@@ -1381,6 +1381,268 @@ export type Database = {
           },
         ]
       }
+      tools_rh_headers: {
+        Row: {
+          card_color: string | null
+          category_type: string
+          created_at: string | null
+          id: string
+          is_default: boolean | null
+          name: string
+          tool_id: string
+          updated_at: string | null
+          user_id: string
+        }
+        Insert: {
+          card_color?: string | null
+          category_type: string
+          created_at?: string | null
+          id?: string
+          is_default?: boolean | null
+          name: string
+          tool_id: string
+          updated_at?: string | null
+          user_id: string
+        }
+        Update: {
+          card_color?: string | null
+          category_type?: string
+          created_at?: string | null
+          id?: string
+          is_default?: boolean | null
+          name?: string
+          tool_id?: string
+          updated_at?: string | null
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "tools_rh_headers_tool_id_fkey"
+            columns: ["tool_id"]
+            isOneToOne: false
+            referencedRelation: "tools"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "tools_rh_headers_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "users"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      tools_rh_items: {
+        Row: {
+          area: string
+          category_type: string
+          created_at: string | null
+          id: string
+          is_default: boolean | null
+          name: string
+          tool_id: string
+          updated_at: string | null
+          user_id: string
+        }
+        Insert: {
+          area: string
+          category_type: string
+          created_at?: string | null
+          id?: string
+          is_default?: boolean | null
+          name: string
+          tool_id: string
+          updated_at?: string | null
+          user_id: string
+        }
+        Update: {
+          area?: string
+          category_type?: string
+          created_at?: string | null
+          id?: string
+          is_default?: boolean | null
+          name?: string
+          tool_id?: string
+          updated_at?: string | null
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "tools_rh_items_tool_id_fkey"
+            columns: ["tool_id"]
+            isOneToOne: false
+            referencedRelation: "tools"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "tools_rh_items_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "users"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      tools_rh_records: {
+        Row: {
+          agent_contact_info: string | null
+          amount_insurance_paid: string | null
+          claim_notes: string | null
+          claim_number: string | null
+          cost: string | null
+          created_at: string | null
+          date: string
+          description: string | null
+          header_id: string
+          id: string
+          insurance_carrier: string | null
+          item_name: string
+          manual_link: string | null
+          notes: string | null
+          odometer_reading: string | null
+          receipt_file_name: string | null
+          receipt_file_url: string | null
+          service_provider: string | null
+          submitted_to_insurance: boolean | null
+          tool_id: string
+          type: string
+          updated_at: string | null
+          user_id: string
+          warranty_dashboard_item_id: string | null
+          warranty_end_date: string | null
+          warranty_file_name: string | null
+          warranty_file_url: string | null
+        }
+        Insert: {
+          agent_contact_info?: string | null
+          amount_insurance_paid?: string | null
+          claim_notes?: string | null
+          claim_number?: string | null
+          cost?: string | null
+          created_at?: string | null
+          date: string
+          description?: string | null
+          header_id: string
+          id?: string
+          insurance_carrier?: string | null
+          item_name: string
+          manual_link?: string | null
+          notes?: string | null
+          odometer_reading?: string | null
+          receipt_file_name?: string | null
+          receipt_file_url?: string | null
+          service_provider?: string | null
+          submitted_to_insurance?: boolean | null
+          tool_id: string
+          type: string
+          updated_at?: string | null
+          user_id: string
+          warranty_dashboard_item_id?: string | null
+          warranty_end_date?: string | null
+          warranty_file_name?: string | null
+          warranty_file_url?: string | null
+        }
+        Update: {
+          agent_contact_info?: string | null
+          amount_insurance_paid?: string | null
+          claim_notes?: string | null
+          claim_number?: string | null
+          cost?: string | null
+          created_at?: string | null
+          date?: string
+          description?: string | null
+          header_id?: string
+          id?: string
+          insurance_carrier?: string | null
+          item_name?: string
+          manual_link?: string | null
+          notes?: string | null
+          odometer_reading?: string | null
+          receipt_file_name?: string | null
+          receipt_file_url?: string | null
+          service_provider?: string | null
+          submitted_to_insurance?: boolean | null
+          tool_id?: string
+          type?: string
+          updated_at?: string | null
+          user_id?: string
+          warranty_dashboard_item_id?: string | null
+          warranty_end_date?: string | null
+          warranty_file_name?: string | null
+          warranty_file_url?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "tools_rh_records_header_id_fkey"
+            columns: ["header_id"]
+            isOneToOne: false
+            referencedRelation: "tools_rh_headers"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "tools_rh_records_tool_id_fkey"
+            columns: ["tool_id"]
+            isOneToOne: false
+            referencedRelation: "tools"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "tools_rh_records_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "users"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "tools_rh_records_warranty_dashboard_item_id_fkey"
+            columns: ["warranty_dashboard_item_id"]
+            isOneToOne: false
+            referencedRelation: "dashboard_items"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      tools_rh_repair_pictures: {
+        Row: {
+          created_at: string | null
+          display_order: number | null
+          file_name: string | null
+          file_size: number | null
+          file_type: string | null
+          file_url: string
+          id: string
+          record_id: string
+        }
+        Insert: {
+          created_at?: string | null
+          display_order?: number | null
+          file_name?: string | null
+          file_size?: number | null
+          file_type?: string | null
+          file_url: string
+          id?: string
+          record_id: string
+        }
+        Update: {
+          created_at?: string | null
+          display_order?: number | null
+          file_name?: string | null
+          file_size?: number | null
+          file_type?: string | null
+          file_url?: string
+          id?: string
+          record_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "tools_rh_repair_pictures_record_id_fkey"
+            columns: ["record_id"]
+            isOneToOne: false
+            referencedRelation: "tools_rh_records"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       tools_st_subscriptions: {
         Row: {
           add_reminder_to_calendar: boolean | null
@@ -1459,6 +1721,51 @@ export type Database = {
           },
           {
             foreignKeyName: "tools_st_subscriptions_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "users"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      user_dashboard_kpis: {
+        Row: {
+          created_at: string
+          id: string
+          is_enabled: boolean
+          kpi_key: string
+          tool_id: string
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          is_enabled?: boolean
+          kpi_key: string
+          tool_id: string
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          is_enabled?: boolean
+          kpi_key?: string
+          tool_id?: string
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "user_dashboard_kpis_tool_id_fkey"
+            columns: ["tool_id"]
+            isOneToOne: false
+            referencedRelation: "tools"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "user_dashboard_kpis_user_id_fkey"
             columns: ["user_id"]
             isOneToOne: false
             referencedRelation: "users"

@@ -167,6 +167,29 @@ className="rounded-lg p-1 text-slate-400 hover:bg-slate-800 hover:text-slate-200
 - **Use For**: Close buttons, icon-only actions
 - **Include**: `aria-label` for accessibility
 
+### Add New Record Button
+```tsx
+<button
+  onClick={startAddingRecord}
+  className="px-4 py-2.5 rounded-lg bg-emerald-500 text-slate-950 font-semibold hover:bg-emerald-400 transition-colors focus:outline-none focus:ring-2 focus:ring-emerald-500/50 focus:ring-offset-2 focus:ring-offset-slate-900"
+>
+  + Add New [Item Name]
+</button>
+```
+- **Use For**: Adding new records/items in tool apps (e.g., "+ Add New Subscription", "+ Add New Record")
+- **Styling**: 
+  - Emerald green background (`bg-emerald-500`) with dark text (`text-slate-950`)
+  - Font weight: `font-semibold` (not `font-medium`)
+  - Padding: `px-4 py-2.5`
+- **Text Format**: Always prefix with "+" followed by "Add New [Item Name]"
+  - Examples: "+ Add New Subscription", "+ Add New Record", "+ Add New Pet"
+- **Positioning**: 
+  - Place below navigation tabs and above search/filter boxes
+  - Use `flex justify-start` for left alignment
+  - Container: `<div className="flex justify-start">`
+- **Visibility**: Hide the button when the add form is open (`{!isAdding && (...)}`)
+- **States**: Same hover and focus patterns as primary button
+
 ### Button Guidelines
 - Always include loading/disabled states for async actions
 - Use `transition-colors` for smooth hover effects
@@ -205,6 +228,41 @@ className="rounded-lg p-1 text-slate-400 hover:bg-slate-800 hover:text-slate-200
 ```
 - Same styling as text input
 - Use `px-4` for better visual alignment with options
+
+### Grouped/Hierarchical Select Dropdown
+For dropdowns that need to display items organized by categories or areas (e.g., Repair Items grouped by Area):
+```tsx
+<select
+  value={selectedValue}
+  onChange={(e) => setSelectedValue(e.target.value)}
+  className="w-full rounded-lg border border-slate-700 bg-slate-900/70 px-3 py-2 text-sm text-slate-100 focus:border-emerald-500/50 focus:outline-none focus:ring-1 focus:ring-emerald-500/50"
+>
+  <option value="">Select an item...</option>
+  {getUniqueAreas().map((area) => {
+    const areaItems = getItemsByArea(area);
+    return (
+      <optgroup key={area} label={area}>
+        {areaItems.map((item) => (
+          <option key={item.id} value={item.name}>
+            {item.name}
+          </option>
+        ))}
+      </optgroup>
+    );
+  })}
+</select>
+```
+- **Use For**: Dropdowns that need hierarchical organization (e.g., items grouped by area, category, or type)
+- **Structure**: 
+  - Use `<optgroup>` with `label` attribute for the parent category/area (left-justified)
+  - Use `<option>` elements inside each `<optgroup>` for items (automatically indented by browser)
+- **Styling**: Same as standard select dropdown
+- **Default Option**: Include a default "Select an item..." option with empty value
+- **Conditional Display**: Only show grouped dropdown when applicable (e.g., for Home categories), otherwise use standard text input
+- **Implementation Pattern**:
+  - Create helper functions: `getUniqueAreas()` to get unique parent categories
+  - Create helper functions: `getItemsByArea(area)` to filter items by area
+  - Map through areas, then map through items within each area
 
 ### Checkbox
 ```tsx
@@ -263,11 +321,184 @@ className="rounded-lg p-1 text-slate-400 hover:bg-slate-800 hover:text-slate-200
 - **Tab**: `px-4 py-2 text-sm font-medium transition-colors`
 - **Active Tab**: `border-b-2 border-emerald-500 text-emerald-300`
 - **Inactive Tab**: `text-slate-400 hover:text-slate-300`
+- **Export Tab Naming**: When tools have a tab for viewing/exporting all records across categories, it should be named **"Export"** (not "Reports" or other variations). This ensures consistency across all tools (e.g., Pet Care Schedule, Repair History).
+
+### Export Tab UI Pattern
+
+For tools that include an Export tab, use this consistent UI pattern to provide a clean, focused export experience:
+
+#### Export Tab Content
+```tsx
+{activeTab === 'export' && (
+  <div className="space-y-6">
+    <div className="rounded-2xl border border-slate-800 bg-slate-900/70 p-6">
+      <h3 className="text-lg font-semibold text-slate-50 mb-4">Export [Tool Name] Report</h3>
+      <p className="text-slate-300 mb-4">
+        Generate a comprehensive PDF report of all your [data type]. The report will include all [specific details], summary statistics, and category breakdown.
+      </p>
+      <button
+        onClick={() => setShowExportPopup(true)}
+        className="px-4 py-2.5 rounded-lg bg-emerald-500 text-slate-950 font-semibold hover:bg-emerald-400 transition-colors focus:outline-none focus:ring-2 focus:ring-emerald-500/50 focus:ring-offset-2 focus:ring-offset-slate-900"
+      >
+        Generate PDF Report
+      </button>
+    </div>
+  </div>
+)}
+```
+
+#### Structure Requirements
+- **Container**: Single card (`rounded-2xl border border-slate-800 bg-slate-900/70 p-6`)
+- **Heading**: `text-lg font-semibold text-slate-50 mb-4`
+  - Format: "Export [Tool Name] Report" (e.g., "Export Subscription Report", "Export Repair History Report")
+- **Description**: `text-slate-300 mb-4`
+  - Should explain what the report includes (all records, summary statistics, category breakdown, etc.)
+- **Button**: Primary emerald button with "Generate PDF Report" text
+  - Styling: `px-4 py-2.5 rounded-lg bg-emerald-500 text-slate-950 font-semibold`
+  - Opens export popup modal
+
+#### Export Popup Modal
+```tsx
+{showExportPopup && (
+  <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
+    <div className="bg-slate-800 rounded-2xl border border-slate-700 p-6 max-w-md w-full mx-4">
+      <div className="flex items-center justify-between mb-4">
+        <h3 className="text-lg font-semibold text-slate-50">Export Options</h3>
+        <button
+          onClick={() => setShowExportPopup(false)}
+          className="text-slate-400 hover:text-slate-200 transition-colors"
+        >
+          <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+          </svg>
+        </button>
+      </div>
+      
+      <div className="space-y-4">
+        {/* Optional: Export options (checkboxes, filters, etc.) */}
+        
+        <div className="flex gap-3 pt-4">
+          <button
+            onClick={exportToPDF}
+            className="flex-1 px-4 py-2.5 rounded-lg bg-emerald-500 text-slate-950 font-semibold hover:bg-emerald-400 transition-colors focus:outline-none focus:ring-2 focus:ring-emerald-500/50 focus:ring-offset-2 focus:ring-offset-slate-900"
+          >
+            Export to PDF
+          </button>
+          <button
+            onClick={() => setShowExportPopup(false)}
+            className="px-4 py-2 rounded-lg bg-slate-700 text-slate-200 hover:bg-slate-600 transition-colors"
+          >
+            Cancel
+          </button>
+        </div>
+      </div>
+    </div>
+  </div>
+)}
+```
+
+#### Modal Requirements
+- **Overlay**: `fixed inset-0 bg-black/50 flex items-center justify-center z-50`
+- **Container**: `bg-slate-800 rounded-2xl border border-slate-700 p-6 max-w-md w-full mx-4`
+- **Header**: 
+  - Title: "Export Options"
+  - Close button (X icon) in top-right
+- **Actions**:
+  - Primary: "Export to PDF" button (emerald, full width with `flex-1`)
+  - Secondary: "Cancel" button (slate, standard width)
+- **Optional Options**: Can include checkboxes or filters for export customization (e.g., "Include inactive items")
+
+#### State Management
+- **Popup State**: `const [showExportPopup, setShowExportPopup] = useState(false)`
+- **Export Function**: Implement `exportToPDF` function to handle actual PDF generation
+
+#### Implementation Guidelines
+- Keep the Export tab content simple and focused—no search/filter boxes or record listings
+- The Export tab should be a clean interface that directs users to generate a report
+- All export functionality should be contained within the popup modal
+- Use consistent button styling matching the primary button pattern
+- Ensure the modal is keyboard accessible (Escape to close, tab navigation)
 
 ### Card Patterns
 - **Standard Card**: `rounded-2xl border border-slate-800 bg-slate-900/70 p-4` or `p-6`
 - **Nested Card**: `rounded-lg border border-slate-700 bg-slate-800/50 p-4`
 - **Card Header**: Use `mb-4` for spacing below header
+
+### Header/Category Management Patterns
+
+For tools that use header/category records (e.g., Pet Care Schedule, Repair History), follow this consistent pattern for edit and delete functionality:
+
+#### Header Card Display
+- **Card Styling**: Use colored borders and backgrounds based on `card_color` property
+  - Border: `borderColor: header.card_color || '#10b981'`
+  - Background (selected): `${header.card_color}15` (15% opacity)
+  - Background (unselected): `${header.card_color}08` (8% opacity)
+  - Text color: `color: header.card_color || '#10b981'`
+- **Selected State**: Add `shadow-lg` class when selected
+- **Click to Select**: Clicking the card selects it and loads its data
+
+#### Three-Dot Menu
+- **Menu Button**: Positioned absolutely in top-right corner of card
+  ```tsx
+  className="absolute top-1 right-1 p-1 rounded hover:bg-slate-700/50 transition-colors"
+  ```
+- **Menu Icon**: Vertical ellipsis (three dots) SVG
+- **Menu Popup**: 
+  - Position: `absolute top-10 right-0 z-50`
+  - Container: `bg-slate-800 border border-slate-700 rounded-lg shadow-lg min-w-[160px] py-1`
+  - Menu Items: `w-full px-4 py-2 text-left text-sm text-slate-200 hover:bg-slate-700 transition-colors flex items-center gap-2`
+
+#### Edit Functionality
+- **Menu Option**: "Edit" with pencil icon
+- **Edit Mode**: Inline editing replaces the card display
+  - Container: `px-4 py-3 rounded-lg border border-slate-600 bg-slate-800 min-w-[200px]`
+  - Border color: Use `editingHeaderColor` for border and background
+  - Fields:
+    - Name input: `flex-1 px-2 py-1 rounded border border-slate-600 bg-slate-900 text-slate-100 text-sm`
+    - Color picker: `h-6 w-12 rounded border border-slate-600 cursor-pointer`
+  - Actions: Save and Cancel buttons
+- **Save Button**: `flex-1 px-2 py-1 rounded bg-emerald-500 text-slate-950 text-xs font-medium hover:bg-emerald-400`
+- **Cancel Button**: `px-2 py-1 rounded border border-slate-600 bg-slate-700 text-slate-200 text-xs hover:bg-slate-600`
+
+#### Delete Functionality
+- **Menu Option**: "Delete" with trash icon, styled in red
+  - `text-red-400 hover:bg-slate-700`
+- **Confirmation Modal**: Required for all delete operations
+  - **Overlay**: `fixed inset-0 bg-black/50 flex items-center justify-center z-50`
+  - **Container**: `rounded-2xl border border-slate-800 bg-slate-900 p-6 max-w-md w-full mx-4`
+  - **Warning Box**: Prominent red warning box at top
+    ```tsx
+    className="rounded-lg border border-red-500/50 bg-red-500/10 px-4 py-3 mb-4"
+    ```
+    - Warning text: `text-red-300 font-semibold` with ⚠️ emoji
+    - Details: `text-red-200 text-sm` explaining what will be deleted
+  - **Confirmation Input**: 
+    - Placeholder: "Type 'delete' to confirm"
+    - Styling: Standard input with red focus border
+    - Validation: Button disabled until user types exactly "delete" (case-insensitive)
+  - **Delete Button**: 
+    - `bg-red-600 text-white hover:bg-red-700`
+    - Disabled state: `disabled:opacity-50 disabled:cursor-not-allowed`
+    - Disabled until confirmation text matches
+  - **Cancel Button**: Standard secondary button styling
+- **Keyboard Support**: Escape key closes the modal
+
+#### Implementation Requirements
+- All header/category records should support:
+  - Custom `card_color` property (default: `#10b981`)
+  - Edit name and color together in one form
+  - Delete with confirmation modal requiring "delete" to be typed
+- State management:
+  - `editingHeaderId`: Tracks which header is being edited
+  - `editingHeaderName`: Current name being edited
+  - `editingHeaderColor`: Current color being edited
+  - `deleteConfirmHeaderId`: Tracks which header deletion is being confirmed
+  - `deleteConfirmText`: Text input for confirmation
+  - `menuOpenHeaderId`: Tracks which menu is open (for click-outside-to-close)
+
+#### Click Outside to Close
+- When menu is open, add overlay: `fixed inset-0 z-40` that closes menu on click
+- This prevents menu from staying open when clicking elsewhere
 
 ### Loading States
 - **Button Loading**: Show "Processing...", "Saving...", or "Loading..." text
@@ -358,6 +589,136 @@ className="rounded-lg p-1 text-slate-400 hover:bg-slate-800 hover:text-slate-200
 - Maintain consistent focus order
 - Use sufficient color contrast (WCAG AA minimum)
 - Provide clear error messages and recovery paths
+
+---
+
+## Database Standards
+
+### Performance Optimizations
+
+#### Foreign Key Indexes
+All foreign key columns must have covering indexes to ensure optimal query performance, especially for JOIN operations and DELETE CASCADE operations.
+
+**Migration File**: `supabase/add-performance-indexes.sql`
+
+**Standard Pattern**:
+- For foreign keys that can be NULL: Use partial indexes with `WHERE column IS NOT NULL`
+- For foreign keys that are NOT NULL: Use standard indexes
+
+**Example**:
+```sql
+-- For nullable foreign keys
+CREATE INDEX IF NOT EXISTS idx_table_name_fkey_column 
+  ON table_name(fkey_column) 
+  WHERE fkey_column IS NOT NULL;
+
+-- For non-nullable foreign keys
+CREATE INDEX IF NOT EXISTS idx_table_name_fkey_column 
+  ON table_name(fkey_column);
+```
+
+**Tables with Foreign Key Indexes** (13 total):
+- `billing_active.tool_id`
+- `billing_history.tool_id`
+- `tools_ce_categories.tool_id`
+- `tools_ce_events.tool_id`
+- `tools_id_documents.tool_id`
+- `tools_id_tags.tool_id`
+- `tools_note_notes.tool_id`
+- `tools_note_tags.tool_id`
+- `tools_pcs_pets.tool_id`
+- `tools_rh_headers.tool_id`
+- `tools_rh_items.tool_id`
+- `tools_rh_records.tool_id`
+- `tools_st_subscriptions.tool_id`
+- `user_dashboard_kpis.tool_id`
+
+#### RLS Policy Performance
+All Row Level Security (RLS) policies must use optimized `auth.uid()` calls to prevent re-evaluation for each row.
+
+**Migration File**: `supabase/optimize-rls-policies.sql`
+
+**Standard Pattern**:
+- ❌ **Incorrect**: `auth.uid() = user_id`
+- ✅ **Correct**: `(select auth.uid()) = user_id`
+
+**Why**: Wrapping `auth.uid()` in a subquery prevents PostgreSQL from re-evaluating the function for each row, significantly improving query performance at scale.
+
+**Example**:
+```sql
+-- Optimized RLS policy
+CREATE POLICY "Users can view their own records" ON table_name
+  FOR SELECT
+  TO authenticated
+  USING ((select auth.uid()) = user_id);
+```
+
+**Special Cases**:
+- For tables without `user_id` columns (e.g., junction tables, security_questions), use EXISTS subqueries:
+```sql
+CREATE POLICY "Users can view their own items" ON junction_table
+  FOR SELECT
+  TO authenticated
+  USING (
+    EXISTS (
+      SELECT 1 FROM parent_table
+      WHERE parent_table.id = junction_table.parent_id
+      AND parent_table.user_id = (select auth.uid())
+    )
+  );
+```
+
+**Total Policies Optimized**: 103 RLS policies across all tables
+
+### Security Standards
+
+#### Function Search Path
+All database functions must have an explicit `search_path` set to prevent search path injection attacks.
+
+**Migration File**: `supabase/fix-function-search-path.sql`
+
+**Standard Pattern**:
+```sql
+CREATE OR REPLACE FUNCTION function_name()
+RETURNS TRIGGER
+LANGUAGE plpgsql
+SET search_path = public, pg_catalog
+AS $$
+BEGIN
+  -- Function body
+END;
+$$;
+```
+
+**Why**: Functions without an explicit `search_path` are vulnerable to search path injection attacks where malicious users could potentially manipulate which schemas are searched first.
+
+**Required for All Functions**:
+- All trigger functions (e.g., `update_*_updated_at()`)
+- All custom functions
+- All stored procedures
+
+**Total Functions Secured**: 28 functions
+
+**Function Categories**:
+- Billing functions (1)
+- Calendar Events functions (2)
+- Dashboard functions (1)
+- Important Documents functions (3)
+- Notes functions (3)
+- Pet Care Schedule functions (8)
+- Repair History functions (3)
+- Subscription Tracker functions (1)
+- User Dashboard KPIs functions (1)
+- Users functions (1)
+- Additional functions (4): promo_codes, tools, tool_icons, users_tools
+
+### Database Migration Guidelines
+
+1. **Always add indexes for foreign keys** when creating new tables
+2. **Always use optimized RLS policies** with `(select auth.uid())` pattern
+3. **Always set search_path** on all function definitions
+4. **Test migrations** in development before applying to production
+5. **Document any special cases** in migration file comments
 
 ---
 

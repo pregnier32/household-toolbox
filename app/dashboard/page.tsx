@@ -14,6 +14,7 @@ import { SubscriptionTrackerTool } from '../components/SubscriptionTrackerTool';
 import { CalendarEventsTool } from '../components/CalendarEventsTool';
 import { ImportantDocumentsTool } from '../components/ImportantDocumentsTool';
 import { NotesTool } from '../components/NotesTool';
+import { RepairHistoryTool } from '../components/RepairHistoryTool';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, PieChart, Pie, Cell, Legend } from 'recharts';
 
 // Calendar Component
@@ -1415,6 +1416,8 @@ export default function Dashboard() {
                         <ImportantDocumentsTool toolId={tool.id} />
                       ) : tool.name === 'Notes' ? (
                         <NotesTool toolId={tool.id} />
+                      ) : tool.name === 'Repair History' ? (
+                        <RepairHistoryTool toolId={tool.id} />
                       ) : (
                         <div className="rounded-2xl border border-slate-800 bg-slate-900/70 p-6">
                           <h2 className="text-xl font-semibold text-slate-50 mb-4">{tool.name}</h2>
@@ -1586,6 +1589,8 @@ export default function Dashboard() {
                         <ImportantDocumentsTool toolId={tool.id} />
                       ) : tool.name === 'Notes' ? (
                         <NotesTool toolId={tool.id} />
+                      ) : tool.name === 'Repair History' ? (
+                        <RepairHistoryTool toolId={tool.id} />
                       ) : (
                         <div className="rounded-2xl border border-slate-800 bg-slate-900/70 p-6">
                           <h2 className="text-xl font-semibold text-slate-50 mb-4">{tool.name}</h2>
