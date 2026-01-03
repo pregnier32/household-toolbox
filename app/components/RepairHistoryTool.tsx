@@ -1946,7 +1946,7 @@ export function RepairHistoryTool({ toolId }: RepairHistoryToolProps) {
                     </div>
                   ) : (
                     filteredRecords.map((record) => (
-                      editingRecordId === record.id ? (
+                      editingRecordId === record.id && editingRecord ? (
                         // Edit mode
                         <div key={record.id} className="rounded-2xl border border-slate-800 bg-slate-900/70 p-6">
                           <h3 className="text-lg font-semibold text-slate-50 mb-4">Edit Record</h3>
@@ -1987,7 +1987,7 @@ export function RepairHistoryTool({ toolId }: RepairHistoryToolProps) {
                                       );
                                     })}
                                   </select>
-                                ) : (
+                                ) : editingRecord ? (
                                   <input
                                     type="text"
                                     value={editingRecord.itemName}
@@ -1995,7 +1995,7 @@ export function RepairHistoryTool({ toolId }: RepairHistoryToolProps) {
                                     placeholder="e.g., Washing Machine"
                                     className="w-full rounded-lg border border-slate-700 bg-slate-900/70 px-3 py-2 text-sm text-slate-100 placeholder-slate-500 focus:border-emerald-500/50 focus:outline-none focus:ring-1 focus:ring-emerald-500/50"
                                   />
-                                )}
+                                ) : null}
                               </div>
                             </div>
                             <div>
