@@ -240,31 +240,53 @@ export async function GET(request: NextRequest) {
     if (!resource || resource === 'items') {
       const categoryType = searchParams.get('categoryType'); // 'Home' or 'Auto'
       
-      let itemsQuery = supabaseServer
-        .from('tools_rh_items')
-        .select('*')
-        .eq('user_id', user.id)
-        .eq('tool_id', toolId);
-
-      if (categoryType) {
-        itemsQuery = itemsQuery.eq('category_type', categoryType);
-      }
-
       if (itemId) {
-        itemsQuery = itemsQuery.eq('id', itemId).single();
+        // Fetch single item
+        let singleItemQuery = supabaseServer
+          .from('tools_rh_items')
+          .select('*')
+          .eq('id', itemId)
+          .eq('user_id', user.id)
+          .eq('tool_id', toolId);
+
+        if (categoryType) {
+          singleItemQuery = singleItemQuery.eq('category_type', categoryType);
+        }
+
+        const { data: item, error: itemError } = await singleItemQuery.single();
+
+        if (itemError) {
+          console.error('Error fetching item:', itemError);
+          return NextResponse.json({ error: 'Failed to fetch item' }, { status: 500 });
+        }
+
+        if (resource === 'items') {
+          return NextResponse.json({ items: item ? [item] : [] });
+        }
       } else {
+        // Fetch multiple items
+        let itemsQuery = supabaseServer
+          .from('tools_rh_items')
+          .select('*')
+          .eq('user_id', user.id)
+          .eq('tool_id', toolId);
+
+        if (categoryType) {
+          itemsQuery = itemsQuery.eq('category_type', categoryType);
+        }
+
         itemsQuery = itemsQuery.order('area', { ascending: true }).order('name', { ascending: true });
-      }
 
-      const { data: items, error: itemsError } = await itemsQuery;
+        const { data: items, error: itemsError } = await itemsQuery;
 
-      if (itemsError) {
-        console.error('Error fetching items:', itemsError);
-        return NextResponse.json({ error: 'Failed to fetch items' }, { status: 500 });
-      }
+        if (itemsError) {
+          console.error('Error fetching items:', itemsError);
+          return NextResponse.json({ error: 'Failed to fetch items' }, { status: 500 });
+        }
 
-      if (resource === 'items') {
-        return NextResponse.json({ items: items || [] });
+        if (resource === 'items') {
+          return NextResponse.json({ items: items || [] });
+        }
       }
     }
 
