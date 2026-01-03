@@ -137,63 +137,27 @@ export async function GET(request: NextRequest) {
 
     // Fetch records
     if (!resource || resource === 'records') {
-      let recordsQuery = supabaseServer
-        .from('tools_rh_records')
-        .select('*')
-        .eq('user_id', user.id)
-        .eq('tool_id', toolId);
-
-      if (headerId) {
-        recordsQuery = recordsQuery.eq('header_id', headerId);
-      }
-
       if (recordId) {
-        recordsQuery = recordsQuery.eq('id', recordId).single();
-      } else {
-        recordsQuery = recordsQuery.order('date', { ascending: false });
-      }
-
-      const { data: records, error: recordsError } = await recordsQuery;
-
-      if (recordsError) {
-        console.error('Error fetching records:', recordsError);
-        return NextResponse.json({ error: 'Failed to fetch records' }, { status: 500 });
-      }
-
-      // Fetch repair pictures for records
-      if (records && !recordId && Array.isArray(records)) {
-        const recordIds = records.map(r => r.id);
-        const { data: pictures } = await supabaseServer
-          .from('tools_rh_repair_pictures')
+        // Fetch single record
+        let singleRecordQuery = supabaseServer
+          .from('tools_rh_records')
           .select('*')
-          .in('record_id', recordIds)
-          .order('display_order', { ascending: true });
+          .eq('id', recordId)
+          .eq('user_id', user.id)
+          .eq('tool_id', toolId);
 
-        const picturesMap: Record<string, any[]> = {};
-        pictures?.forEach(pic => {
-          if (!picturesMap[pic.record_id]) {
-            picturesMap[pic.record_id] = [];
-          }
-          picturesMap[pic.record_id].push({
-            id: pic.id,
-            fileUrl: pic.file_url,
-            fileName: pic.file_name,
-            fileSize: pic.file_size,
-            fileType: pic.file_type,
-            displayOrder: pic.display_order
-          });
-        });
-
-        const recordsWithPictures = records.map(record => ({
-          ...record,
-          repairPictures: picturesMap[record.id] || []
-        }));
-
-        if (resource === 'records') {
-          return NextResponse.json({ records: recordsWithPictures });
+        if (headerId) {
+          singleRecordQuery = singleRecordQuery.eq('header_id', headerId);
         }
-      } else if (records && recordId) {
-        // Single record - fetch its pictures
+
+        const { data: record, error: recordError } = await singleRecordQuery.single();
+
+        if (recordError) {
+          console.error('Error fetching record:', recordError);
+          return NextResponse.json({ error: 'Failed to fetch record' }, { status: 500 });
+        }
+
+        // Fetch repair pictures for single record
         const { data: pictures } = await supabaseServer
           .from('tools_rh_repair_pictures')
           .select('*')
@@ -201,7 +165,7 @@ export async function GET(request: NextRequest) {
           .order('display_order', { ascending: true });
 
         const recordWithPictures = {
-          ...records,
+          ...record,
           repairPictures: pictures?.map(pic => ({
             id: pic.id,
             fileUrl: pic.file_url,
@@ -214,6 +178,60 @@ export async function GET(request: NextRequest) {
 
         if (resource === 'records') {
           return NextResponse.json({ record: recordWithPictures });
+        }
+      } else {
+        // Fetch multiple records
+        let recordsQuery = supabaseServer
+          .from('tools_rh_records')
+          .select('*')
+          .eq('user_id', user.id)
+          .eq('tool_id', toolId);
+
+        if (headerId) {
+          recordsQuery = recordsQuery.eq('header_id', headerId);
+        }
+
+        recordsQuery = recordsQuery.order('date', { ascending: false });
+
+        const { data: records, error: recordsError } = await recordsQuery;
+
+        if (recordsError) {
+          console.error('Error fetching records:', recordsError);
+          return NextResponse.json({ error: 'Failed to fetch records' }, { status: 500 });
+        }
+
+        // Fetch repair pictures for records
+        if (records && Array.isArray(records)) {
+          const recordIds = records.map(r => r.id);
+          const { data: pictures } = await supabaseServer
+            .from('tools_rh_repair_pictures')
+            .select('*')
+            .in('record_id', recordIds)
+            .order('display_order', { ascending: true });
+
+          const picturesMap: Record<string, any[]> = {};
+          pictures?.forEach(pic => {
+            if (!picturesMap[pic.record_id]) {
+              picturesMap[pic.record_id] = [];
+            }
+            picturesMap[pic.record_id].push({
+              id: pic.id,
+              fileUrl: pic.file_url,
+              fileName: pic.file_name,
+              fileSize: pic.file_size,
+              fileType: pic.file_type,
+              displayOrder: pic.display_order
+            });
+          });
+
+          const recordsWithPictures = records.map(record => ({
+            ...record,
+            repairPictures: picturesMap[record.id] || []
+          }));
+
+          if (resource === 'records') {
+            return NextResponse.json({ records: recordsWithPictures });
+          }
         }
       }
     }
