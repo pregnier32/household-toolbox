@@ -595,6 +595,201 @@ export type Database = {
           },
         ]
       }
+      tools_hcah_default_headers: {
+        Row: {
+          card_color: string | null
+          created_at: string | null
+          display_order: number
+          id: string
+          name: string
+          updated_at: string | null
+        }
+        Insert: {
+          card_color?: string | null
+          created_at?: string | null
+          display_order?: number
+          id?: string
+          name: string
+          updated_at?: string | null
+        }
+        Update: {
+          card_color?: string | null
+          created_at?: string | null
+          display_order?: number
+          id?: string
+          name?: string
+          updated_at?: string | null
+        }
+        Relationships: []
+      }
+      tools_hcah_documents: {
+        Row: {
+          created_at: string | null
+          display_order: number | null
+          file_name: string | null
+          file_size: number | null
+          file_type: string | null
+          file_url: string
+          id: string
+          record_id: string
+        }
+        Insert: {
+          created_at?: string | null
+          display_order?: number | null
+          file_name?: string | null
+          file_size?: number | null
+          file_type?: string | null
+          file_url: string
+          id?: string
+          record_id: string
+        }
+        Update: {
+          created_at?: string | null
+          display_order?: number | null
+          file_name?: string | null
+          file_size?: number | null
+          file_type?: string | null
+          file_url?: string
+          id?: string
+          record_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "tools_hcah_documents_record_id_fkey"
+            columns: ["record_id"]
+            isOneToOne: false
+            referencedRelation: "tools_hcah_records"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      tools_hcah_headers: {
+        Row: {
+          card_color: string | null
+          created_at: string | null
+          id: string
+          name: string
+          tool_id: string
+          updated_at: string | null
+          user_id: string
+        }
+        Insert: {
+          card_color?: string | null
+          created_at?: string | null
+          id?: string
+          name: string
+          tool_id: string
+          updated_at?: string | null
+          user_id: string
+        }
+        Update: {
+          card_color?: string | null
+          created_at?: string | null
+          id?: string
+          name?: string
+          tool_id?: string
+          updated_at?: string | null
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "tools_hcah_headers_tool_id_fkey"
+            columns: ["tool_id"]
+            isOneToOne: false
+            referencedRelation: "tools"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "tools_hcah_headers_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "users"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      tools_hcah_records: {
+        Row: {
+          appointment_date: string
+          care_facility: string | null
+          created_at: string | null
+          current_amount_due: string | null
+          header_id: string
+          id: string
+          insurance_paid: string | null
+          is_upcoming: boolean
+          post_visit_notes: string | null
+          pre_visit_notes: string | null
+          provider_info: string | null
+          reason_for_visit: string | null
+          show_on_dashboard_calendar: boolean | null
+          tool_id: string
+          total_billed: string | null
+          updated_at: string | null
+          user_id: string
+        }
+        Insert: {
+          appointment_date: string
+          care_facility?: string | null
+          created_at?: string | null
+          current_amount_due?: string | null
+          header_id: string
+          id?: string
+          insurance_paid?: string | null
+          is_upcoming?: boolean
+          post_visit_notes?: string | null
+          pre_visit_notes?: string | null
+          provider_info?: string | null
+          reason_for_visit?: string | null
+          show_on_dashboard_calendar?: boolean | null
+          tool_id: string
+          total_billed?: string | null
+          updated_at?: string | null
+          user_id: string
+        }
+        Update: {
+          appointment_date?: string
+          care_facility?: string | null
+          created_at?: string | null
+          current_amount_due?: string | null
+          header_id?: string
+          id?: string
+          insurance_paid?: string | null
+          is_upcoming?: boolean
+          post_visit_notes?: string | null
+          pre_visit_notes?: string | null
+          provider_info?: string | null
+          reason_for_visit?: string | null
+          show_on_dashboard_calendar?: boolean | null
+          tool_id?: string
+          total_billed?: string | null
+          updated_at?: string | null
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "tools_hcah_records_header_id_fkey"
+            columns: ["header_id"]
+            isOneToOne: false
+            referencedRelation: "tools_hcah_headers"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "tools_hcah_records_tool_id_fkey"
+            columns: ["tool_id"]
+            isOneToOne: false
+            referencedRelation: "tools"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "tools_hcah_records_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "users"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       tools_id_document_tags: {
         Row: {
           created_at: string | null
@@ -1380,6 +1575,66 @@ export type Database = {
             referencedColumns: ["id"]
           },
         ]
+      }
+      tools_rh_default_headers: {
+        Row: {
+          card_color: string | null
+          category_type: string
+          created_at: string | null
+          display_order: number | null
+          id: string
+          name: string
+          updated_at: string | null
+        }
+        Insert: {
+          card_color?: string | null
+          category_type: string
+          created_at?: string | null
+          display_order?: number | null
+          id?: string
+          name: string
+          updated_at?: string | null
+        }
+        Update: {
+          card_color?: string | null
+          category_type?: string
+          created_at?: string | null
+          display_order?: number | null
+          id?: string
+          name?: string
+          updated_at?: string | null
+        }
+        Relationships: []
+      }
+      tools_rh_default_items: {
+        Row: {
+          area: string
+          category_type: string
+          created_at: string | null
+          display_order: number | null
+          id: string
+          name: string
+          updated_at: string | null
+        }
+        Insert: {
+          area: string
+          category_type: string
+          created_at?: string | null
+          display_order?: number | null
+          id?: string
+          name: string
+          updated_at?: string | null
+        }
+        Update: {
+          area?: string
+          category_type?: string
+          created_at?: string | null
+          display_order?: number | null
+          id?: string
+          name?: string
+          updated_at?: string | null
+        }
+        Relationships: []
       }
       tools_rh_headers: {
         Row: {

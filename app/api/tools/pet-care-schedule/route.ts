@@ -2,6 +2,61 @@ import { NextRequest, NextResponse } from 'next/server';
 import { getSession } from '@/lib/session';
 import { supabaseServer } from '@/lib/supabaseServer';
 
+// Constants
+const MAX_FILE_SIZE = 10 * 1024 * 1024; // 10MB in bytes
+
+// Helper function to upload file to Supabase Storage
+async function uploadFile(
+  file: File,
+  userId: string,
+  bucketName: string,
+  folder: string
+): Promise<{ url: string; fileName: string; fileSize: number; fileType: string } | null> {
+  try {
+    if (file.size > MAX_FILE_SIZE) {
+      throw new Error(`File size cannot exceed ${MAX_FILE_SIZE / 1024 / 1024}MB`);
+    }
+
+    const sanitizedFileName = file.name.replace(/[^a-zA-Z0-9.-]/g, '_');
+    const storageFileName = `${folder}/${userId}/${Date.now()}-${sanitizedFileName}`;
+    
+    const arrayBuffer = await file.arrayBuffer();
+    const buffer = Buffer.from(arrayBuffer);
+    
+    const { data: uploadData, error: uploadError } = await supabaseServer
+      .storage
+      .from(bucketName)
+      .upload(storageFileName, buffer, {
+        contentType: file.type,
+        upsert: false
+      });
+    
+    if (uploadError) {
+      console.error('Error uploading file:', uploadError);
+      // Check if bucket doesn't exist
+      if (uploadError.message?.includes('Bucket not found') || uploadError.message?.includes('does not exist')) {
+        throw new Error(`Storage bucket '${bucketName}' does not exist. Please create it in Supabase Storage.`);
+      }
+      throw new Error(`Failed to upload file: ${uploadError.message}`);
+    }
+    
+    const { data: urlData } = supabaseServer
+      .storage
+      .from(bucketName)
+      .getPublicUrl(storageFileName);
+    
+    return {
+      url: urlData.publicUrl,
+      fileName: file.name,
+      fileSize: file.size,
+      fileType: file.type
+    };
+  } catch (error: any) {
+    console.error('Error in uploadFile:', error);
+    throw error; // Re-throw to be caught by the caller
+  }
+}
+
 // Helper function to calculate next due date based on frequency
 function calculateNextDueDate(frequency: string, startDate: string): string {
   const start = new Date(startDate);
@@ -781,18 +836,45 @@ export async function POST(request: NextRequest) {
     if (documents && Array.isArray(documents)) {
       await supabaseServer.from('tools_pcs_documents').delete().eq('pet_id', finalPetId);
       if (documents.length > 0) {
-        await supabaseServer.from('tools_pcs_documents').insert(
-          documents.map((d: any) => ({
-            pet_id: finalPetId,
-            name: d.name,
-            date: d.date,
-            description: d.description || null,
-            file_url: d.file_url || null,
-            file_name: d.file_name || null,
-            file_size: d.file_size || null,
-            file_type: d.file_type || null,
-          }))
+        // Upload files and prepare document data
+        const documentsToInsert = await Promise.all(
+          documents.map(async (d: any, index: number) => {
+            let fileUrl = d.file_url || null;
+            let fileName = d.file_name || null;
+            let fileSize = d.file_size || null;
+            let fileType = d.file_type || null;
+
+            // If there's a new file to upload
+            const file = documentFiles.get(index.toString());
+            if (file && file.size > 0) {
+              try {
+                const uploadResult = await uploadFile(file, user.id, 'pet-care-schedule', 'documents');
+                if (uploadResult) {
+                  fileUrl = uploadResult.url;
+                  fileName = uploadResult.fileName;
+                  fileSize = uploadResult.fileSize;
+                  fileType = uploadResult.fileType;
+                }
+              } catch (error: any) {
+                console.error(`Failed to upload document file for ${d.name}:`, error);
+                // Continue without file URL if upload fails
+              }
+            }
+
+            return {
+              pet_id: finalPetId,
+              name: d.name,
+              date: d.date,
+              description: d.description || null,
+              file_url: fileUrl,
+              file_name: fileName,
+              file_size: fileSize,
+              file_type: fileType,
+            };
+          })
         );
+
+        await supabaseServer.from('tools_pcs_documents').insert(documentsToInsert);
       }
     }
 

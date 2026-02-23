@@ -5,6 +5,90 @@ import { supabaseServer } from '@/lib/supabaseServer';
 // Constants
 const MAX_FILE_SIZE = 10 * 1024 * 1024; // 10MB in bytes
 
+// Helper function to copy defaults from defaults table to user tables
+async function copyDefaultsToUser(userId: string, toolId: string) {
+  try {
+    // Check if user already has headers (if so, defaults already copied)
+    const { data: existingHeaders } = await supabaseServer
+      .from('tools_rh_headers')
+      .select('id')
+      .eq('user_id', userId)
+      .eq('tool_id', toolId)
+      .limit(1);
+
+    if (existingHeaders && existingHeaders.length > 0) {
+      // Defaults already copied
+      return;
+    }
+
+    // Copy default headers
+    const { data: defaultHeaders, error: headersError } = await supabaseServer
+      .from('tools_rh_default_headers')
+      .select('*')
+      .order('display_order', { ascending: true });
+
+    if (headersError) {
+      console.error('Error fetching default headers:', headersError);
+      return;
+    }
+
+    if (defaultHeaders && defaultHeaders.length > 0) {
+      const headersToInsert = defaultHeaders.map(header => ({
+        user_id: userId,
+        tool_id: toolId,
+        name: header.name,
+        card_color: header.card_color,
+        category_type: header.category_type,
+        is_default: true,
+      }));
+
+      const { error: insertHeadersError } = await supabaseServer
+        .from('tools_rh_headers')
+        .insert(headersToInsert);
+
+      if (insertHeadersError) {
+        console.error('Error copying default headers:', insertHeadersError);
+        return;
+      }
+    }
+
+    // Copy default items
+    const { data: defaultItems, error: itemsError } = await supabaseServer
+      .from('tools_rh_default_items')
+      .select('*')
+      .order('category_type', { ascending: true })
+      .order('area', { ascending: true })
+      .order('display_order', { ascending: true });
+
+    if (itemsError) {
+      console.error('Error fetching default items:', itemsError);
+      return;
+    }
+
+    if (defaultItems && defaultItems.length > 0) {
+      const itemsToInsert = defaultItems.map(item => ({
+        user_id: userId,
+        tool_id: toolId,
+        category_type: item.category_type,
+        name: item.name,
+        area: item.area,
+        is_default: true,
+      }));
+
+      const { error: insertItemsError } = await supabaseServer
+        .from('tools_rh_items')
+        .insert(itemsToInsert);
+
+      if (insertItemsError) {
+        console.error('Error copying default items:', insertItemsError);
+        return;
+      }
+    }
+  } catch (error) {
+    console.error('Error copying defaults to user:', error);
+  }
+}
+
 // Helper function to create dashboard item (calendar event for warranty)
 async function createDashboardItem(
   userId: string,
@@ -76,7 +160,11 @@ async function uploadFile(
     
     if (uploadError) {
       console.error('Error uploading file:', uploadError);
-      return null;
+      // Check if bucket doesn't exist
+      if (uploadError.message?.includes('Bucket not found') || uploadError.message?.includes('does not exist')) {
+        throw new Error(`Storage bucket '${bucketName}' does not exist. Please create it in Supabase Storage.`);
+      }
+      throw new Error(`Failed to upload file: ${uploadError.message}`);
     }
     
     const { data: urlData } = supabaseServer
@@ -92,7 +180,7 @@ async function uploadFile(
     };
   } catch (error: any) {
     console.error('Error in uploadFile:', error);
-    return null;
+    throw error; // Re-throw to be caught by the caller
   }
 }
 
@@ -128,6 +216,26 @@ export async function GET(request: NextRequest) {
       if (headersError) {
         console.error('Error fetching headers:', headersError);
         return NextResponse.json({ error: 'Failed to fetch headers' }, { status: 500 });
+      }
+
+      // If no headers exist, copy defaults from defaults table
+      if ((!headers || headers.length === 0) && resource === 'headers') {
+        await copyDefaultsToUser(user.id, toolId);
+        
+        // Reload headers after copying defaults
+        const { data: reloadedHeaders, error: reloadError } = await supabaseServer
+          .from('tools_rh_headers')
+          .select('*')
+          .eq('user_id', user.id)
+          .eq('tool_id', toolId)
+          .order('created_at', { ascending: true });
+
+        if (reloadError) {
+          console.error('Error reloading headers after copying defaults:', reloadError);
+          return NextResponse.json({ error: 'Failed to fetch headers' }, { status: 500 });
+        }
+
+        return NextResponse.json({ headers: reloadedHeaders || [] });
       }
 
       if (resource === 'headers') {
@@ -391,6 +499,26 @@ export async function POST(request: NextRequest) {
       }
 
       if (action === 'create') {
+        // Check if a header with the same name and category_type already exists
+        const { data: existingHeader } = await supabaseServer
+          .from('tools_rh_headers')
+          .select('id')
+          .eq('user_id', user.id)
+          .eq('tool_id', toolId)
+          .eq('name', name.trim())
+          .eq('category_type', categoryType)
+          .maybeSingle();
+
+        if (existingHeader) {
+          // Header already exists, return it instead of creating a duplicate
+          const { data: header } = await supabaseServer
+            .from('tools_rh_headers')
+            .select('*')
+            .eq('id', existingHeader.id)
+            .single();
+          return NextResponse.json({ success: true, header });
+        }
+
         const { data, error } = await supabaseServer
           .from('tools_rh_headers')
           .insert({
@@ -447,19 +575,29 @@ export async function POST(request: NextRequest) {
 
       // Upload receipt if provided
       if (receiptFile && receiptFile.size > 0) {
-        const uploadResult = await uploadFile(receiptFile, user.id, 'repair-history', 'receipts');
-        if (uploadResult) {
-          receiptFileUrl = uploadResult.url;
-          receiptFileName = uploadResult.fileName;
+        try {
+          const uploadResult = await uploadFile(receiptFile, user.id, 'repair-history', 'receipts');
+          if (uploadResult) {
+            receiptFileUrl = uploadResult.url;
+            receiptFileName = uploadResult.fileName;
+          }
+        } catch (error: any) {
+          console.error('Failed to upload receipt file:', receiptFile.name, error);
+          return NextResponse.json({ error: error.message || 'Failed to upload receipt file. Please ensure the storage bucket exists.' }, { status: 500 });
         }
       }
 
       // Upload warranty if provided
       if (warrantyFile && warrantyFile.size > 0) {
-        const uploadResult = await uploadFile(warrantyFile, user.id, 'repair-history', 'warranties');
-        if (uploadResult) {
-          warrantyFileUrl = uploadResult.url;
-          warrantyFileName = uploadResult.fileName;
+        try {
+          const uploadResult = await uploadFile(warrantyFile, user.id, 'repair-history', 'warranties');
+          if (uploadResult) {
+            warrantyFileUrl = uploadResult.url;
+            warrantyFileName = uploadResult.fileName;
+          }
+        } catch (error: any) {
+          console.error('Failed to upload warranty file:', warrantyFile.name, error);
+          return NextResponse.json({ error: error.message || 'Failed to upload warranty file. Please ensure the storage bucket exists.' }, { status: 500 });
         }
       }
 
@@ -626,18 +764,23 @@ export async function POST(request: NextRequest) {
         for (let i = 0; i < repairPictures.length; i++) {
           const picture = repairPictures[i];
           if (picture && picture.size > 0) {
-            const uploadResult = await uploadFile(picture, user.id, 'repair-history', 'pictures');
-            if (uploadResult) {
-              await supabaseServer
-                .from('tools_rh_repair_pictures')
-                .insert({
-                  record_id: finalRecordId,
-                  file_url: uploadResult.url,
-                  file_name: uploadResult.fileName,
-                  file_size: uploadResult.fileSize,
-                  file_type: uploadResult.fileType,
-                  display_order: i
-                });
+            try {
+              const uploadResult = await uploadFile(picture, user.id, 'repair-history', 'pictures');
+              if (uploadResult) {
+                await supabaseServer
+                  .from('tools_rh_repair_pictures')
+                  .insert({
+                    record_id: finalRecordId,
+                    file_url: uploadResult.url,
+                    file_name: uploadResult.fileName,
+                    file_size: uploadResult.fileSize,
+                    file_type: uploadResult.fileType,
+                    display_order: i
+                  });
+              }
+            } catch (error: any) {
+              console.error('Failed to upload repair picture:', picture.name, error);
+              // Continue with other pictures even if one fails
             }
           }
         }
@@ -659,8 +802,8 @@ export async function POST(request: NextRequest) {
           .delete()
           .eq('id', itemId)
           .eq('user_id', user.id)
-          .eq('tool_id', toolId)
-          .eq('is_default', false); // Only allow deletion of user-created items
+          .eq('tool_id', toolId);
+          // Allow deletion of both default and user-created items
 
         if (error) {
           console.error('Error deleting item:', error);
@@ -681,7 +824,7 @@ export async function POST(request: NextRequest) {
           .eq('id', itemId)
           .eq('user_id', user.id)
           .eq('tool_id', toolId)
-          .eq('is_default', false) // Only allow updating user-created items
+          // Allow updating both default and user-created items
           .select()
           .single();
 

@@ -229,6 +229,55 @@ className="rounded-lg p-1 text-slate-400 hover:bg-slate-800 hover:text-slate-200
 - Same styling as text input
 - Use `px-4` for better visual alignment with options
 
+### File Input
+For file upload inputs, use a custom styled approach that replaces the default browser "Choose File" button with an icon and custom label:
+```tsx
+<div className="relative">
+  <input
+    ref={fileInputRef}
+    type="file"
+    id="file-input-id"
+    onChange={(e) => handleFileChange(e)}
+    className="absolute inset-0 w-full h-full opacity-0 cursor-pointer"
+    accept="image/*,.pdf"
+  />
+  <label
+    htmlFor="file-input-id"
+    className="flex items-center gap-2 w-full rounded-lg border border-slate-700 bg-slate-900/70 px-3 py-2 text-sm text-slate-100 hover:bg-slate-800 transition-colors cursor-pointer"
+  >
+    <svg className="w-5 h-5 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+    </svg>
+    <span className="text-slate-300">
+      {selectedFile ? selectedFile.name : 'Select file'}
+    </span>
+  </label>
+</div>
+```
+- **Structure**: 
+  - Wrap input and label in a `relative` container
+  - Hide the default file input with `opacity-0` and position it absolutely
+  - Use a custom `label` element as the visible clickable area
+  - Associate label with input using `htmlFor` and `id` attributes
+- **Icon**: 
+  - Use a document icon (SVG) for general file uploads
+  - Use an image/gallery icon for image-only uploads: `<path d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />`
+- **Styling**: 
+  - Label: `flex items-center gap-2` for icon and text alignment
+  - Icon: `w-5 h-5 text-slate-400` for consistent sizing and color
+  - Text: `text-slate-300` for the file name or placeholder text
+  - Hover: `hover:bg-slate-800` for visual feedback
+- **Multiple Files**: 
+  - For multiple file inputs, show count: `{files.length > 0 ? `${files.length} file${files.length > 1 ? 's' : ''} selected` : 'Select files'}`
+  - For image uploads: `{images.length > 0 ? `${images.length} image${images.length > 1 ? 's' : ''} selected` : 'Select images'}`
+- **Display Selected File**: 
+  - Show the selected file name when a file is chosen
+  - Show placeholder text ("Select file", "Select images", etc.) when no file is selected
+- **Accessibility**: 
+  - Always use `htmlFor` and `id` to associate label with input
+  - Include `accept` attribute to specify allowed file types
+  - Use descriptive placeholder text
+
 ### Grouped/Hierarchical Select Dropdown
 For dropdowns that need to display items organized by categories or areas (e.g., Repair Items grouped by Area):
 ```tsx
@@ -426,7 +475,43 @@ For tools that include an Export tab, use this consistent UI pattern to provide 
 
 ### Header/Category Management Patterns
 
-For tools that use header/category records (e.g., Pet Care Schedule, Repair History), follow this consistent pattern for edit and delete functionality:
+For tools that use header/category records (e.g., Pet Care Schedule, Repair History, Healthcare Appts & History), use the following layout and patterns so that all such tools look and behave consistently.
+
+#### Tool Header Layout (Page Structure)
+
+Use this structure at the top of the tool so the header selector matches across applications:
+
+1. **Title and description**
+   - **Title**: `text-2xl font-semibold text-slate-50 mb-2` (e.g. "Pet Care Schedule", "Healthcare Appts & History")
+   - **Description**: `text-slate-400 text-sm` — one line explaining what the tool does (e.g. "Manage all aspects of your pet's care..." or "Track upcoming appointments and healthcare history for each family member.")
+
+2. **Selector container**
+   - **Wrapper**: Single rounded card that holds the entire selector area
+     ```tsx
+     className="rounded-2xl border border-slate-800 bg-slate-900/70 p-4"
+     ```
+   - **Label**: Prompt above the cards, e.g. "Select your Pet" or "Select family member"
+     ```tsx
+     <label className="block text-sm font-medium text-slate-300 mb-3">Select your [Entity]</label>
+     ```
+
+3. **Cards and Add button row**
+   - **Row**: `flex items-center gap-3 flex-wrap` so header cards and the add button sit on one line.
+   - **Header cards**: Individual selectable cards (see Header Card Display below). Use `min-w-[120px]` so card size is consistent.
+   - **Add button**: Square-ish button with a "+" icon only, same height as the cards:
+     ```tsx
+     className="px-4 py-3 rounded-lg border border-slate-700 bg-slate-800/50 text-slate-300 hover:border-emerald-500/50 hover:bg-emerald-500/10 hover:text-emerald-300 transition-all duration-200 flex items-center justify-center min-w-[60px]"
+     ```
+     - Icon: Plus SVG `h-6 w-6`, e.g. path "M12 4v16m8-8H4"
+     - **Title**: Use `title="Add New [Entity]"` for accessibility.
+
+4. **Add-new form (inline)**
+   - When the user is adding a new header/category, show the form **inside the same selector container** (not below it), so the layout stays one cohesive block.
+   - Use a row layout: `flex items-end gap-2 flex-wrap`
+   - Include: name input (`flex-1 min-w-[200px]`), color picker (optional), Create button (primary), Cancel button (secondary).
+   - Toggle between "cards + Add button" and "add-new form" with a single boolean (e.g. `isCreatingNewHeader`); do not show both at once.
+
+**Reference**: Pet Care Schedule ("Select your Pet") and Healthcare Appts & History ("Select family member") both use this layout.
 
 #### Header Card Display
 - **Card Styling**: Use colored borders and backgrounds based on `card_color` property
@@ -518,6 +603,7 @@ For tools that use header/category records (e.g., Pet Care Schedule, Repair Hist
 - **Lists**: Use consistent spacing (`space-y-4`) between items
 - **Tables**: Use card-based layouts rather than traditional tables for better mobile experience
 - **Status Indicators**: Use color-coded badges or borders
+- **Date Display**: Whenever a date is displayed to the user (e.g. in lists, cards, summaries), show it in **MM/DD/YYYY** format. Use a small helper to convert from stored values (e.g. `YYYY-MM-DD` from `<input type="date">`) to display format, e.g. `2/26/2026` not `2026-02-26`. Form inputs may continue to use the native date picker and ISO date strings internally; only the visible text shown to the user should be MM/DD/YYYY.
 
 ### Navigation
 - **Breadcrumbs**: Not currently used, but if needed, use `text-sm text-slate-400` with `hover:text-emerald-300` links
@@ -669,6 +755,106 @@ CREATE POLICY "Users can view their own items" ON junction_table
 ```
 
 **Total Policies Optimized**: 103 RLS policies across all tables
+
+### Storage Buckets and Policies
+
+#### Storage Bucket Setup
+When creating storage buckets for file uploads, follow this standardized pattern:
+
+**Bucket Configuration**:
+- **Name**: Use kebab-case (e.g., `repair-history`, `pet-care-schedule`, `important-documents`)
+- **Public**: `true` (or `false` if using signed URLs)
+- **File Size Limit**: `10MB`
+- **Allowed MIME Types**: `image/*`, `application/pdf`
+
+**Folder Structure**:
+Files are organized by user ID in subfolders:
+```
+{bucket-name}/{userId}/{timestamp}-{filename}
+```
+Example: `repair-history/receipts/{userId}/1734567890123-Test_Document.pdf`
+
+#### Storage Policy Pattern
+All storage buckets must have Row Level Security (RLS) policies to ensure users can only access their own files.
+
+**Policy Naming Convention**:
+Use bucket-specific policy names to avoid conflicts:
+```
+"{bucket-name}: Users can upload to their own folder"
+"{bucket-name}: Users can read their own files"
+"{bucket-name}: Users can update their own files"
+"{bucket-name}: Users can delete their own files"
+```
+
+**Standard Policy Template**:
+```sql
+-- Drop existing policies if they exist (to allow re-running this script)
+DROP POLICY IF EXISTS "{bucket-name}: Users can upload to their own folder" ON storage.objects;
+DROP POLICY IF EXISTS "{bucket-name}: Users can read their own files" ON storage.objects;
+DROP POLICY IF EXISTS "{bucket-name}: Users can update their own files" ON storage.objects;
+DROP POLICY IF EXISTS "{bucket-name}: Users can delete their own files" ON storage.objects;
+
+-- Policy: Allow authenticated users to upload files to their own folder
+CREATE POLICY "{bucket-name}: Users can upload to their own folder"
+ON storage.objects
+FOR INSERT
+TO authenticated
+WITH CHECK (
+  bucket_id = '{bucket-name}' AND
+  (storage.foldername(name))[1] = auth.uid()::text
+);
+
+-- Policy: Allow authenticated users to read their own files
+CREATE POLICY "{bucket-name}: Users can read their own files"
+ON storage.objects
+FOR SELECT
+TO authenticated
+USING (
+  bucket_id = '{bucket-name}' AND
+  (storage.foldername(name))[1] = auth.uid()::text
+);
+
+-- Policy: Allow authenticated users to update their own files
+CREATE POLICY "{bucket-name}: Users can update their own files"
+ON storage.objects
+FOR UPDATE
+TO authenticated
+USING (
+  bucket_id = '{bucket-name}' AND
+  (storage.foldername(name))[1] = auth.uid()::text
+)
+WITH CHECK (
+  bucket_id = '{bucket-name}' AND
+  (storage.foldername(name))[1] = auth.uid()::text
+);
+
+-- Policy: Allow authenticated users to delete their own files
+CREATE POLICY "{bucket-name}: Users can delete their own files"
+ON storage.objects
+FOR DELETE
+TO authenticated
+USING (
+  bucket_id = '{bucket-name}' AND
+  (storage.foldername(name))[1] = auth.uid()::text
+);
+```
+
+**Implementation Steps**:
+1. Create the storage bucket in Supabase Dashboard > Storage
+2. Create a SQL script file: `supabase/create-{bucket-name}-storage-bucket.sql`
+3. Include bucket creation instructions and the policy template
+4. Run the SQL script in Supabase SQL Editor to apply policies
+
+**Current Storage Buckets**:
+- `repair-history` - Stores receipts, warranties, and repair pictures
+- `pet-care-schedule` - Stores pet documents
+- `important-documents` - Stores important documents (warranties, policies, records)
+
+**Why These Policies Matter**:
+- **Security**: Ensures users can only access files in their own folder (`{userId}/...`)
+- **Defense in Depth**: Provides protection even if client-side access is added later
+- **Consistency**: All buckets follow the same security pattern
+- **Idempotent**: Scripts can be safely re-run (DROP IF EXISTS before CREATE)
 
 ### Security Standards
 

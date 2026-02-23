@@ -207,6 +207,40 @@ const DEFAULT_AUTO_ITEMS: Omit<Item, 'id'>[] = [
 ];
 
 export function RepairHistoryTool({ toolId }: RepairHistoryToolProps) {
+  // Helper function to format currency
+  const formatCurrency = (value: string): string => {
+    // Remove all non-numeric characters except decimal point
+    const numericValue = value.replace(/[^0-9.]/g, '');
+    
+    // Handle multiple decimal points
+    const parts = numericValue.split('.');
+    if (parts.length > 2) {
+      return parts[0] + '.' + parts.slice(1).join('');
+    }
+    
+    // Limit to 2 decimal places
+    if (parts[1] && parts[1].length > 2) {
+      return parts[0] + '.' + parts[1].substring(0, 2);
+    }
+    
+    return numericValue;
+  };
+
+  const formatCurrencyDisplay = (value: string): string => {
+    if (!value) return '';
+    // Remove currency symbols and formatting for parsing
+    const numericValue = value.replace(/[^0-9.]/g, '');
+    if (!numericValue) return '';
+    const numValue = parseFloat(numericValue);
+    if (isNaN(numValue)) return '';
+    return new Intl.NumberFormat('en-US', {
+      style: 'currency',
+      currency: 'USD',
+      minimumFractionDigits: 2,
+      maximumFractionDigits: 2,
+    }).format(numValue);
+  };
+
   // Header management
   const [headers, setHeaders] = useState<HeaderRecord[]>([]);
   const [selectedHeaderId, setSelectedHeaderId] = useState<string | null>(null);
@@ -273,8 +307,10 @@ export function RepairHistoryTool({ toolId }: RepairHistoryToolProps) {
   const [isAddingItem, setIsAddingItem] = useState(false);
   const [newItemName, setNewItemName] = useState('');
   const [newItemArea, setNewItemArea] = useState('');
+  const [isCreatingNewArea, setIsCreatingNewArea] = useState(false);
   const [editingItemId, setEditingItemId] = useState<string | null>(null);
   const [editingItemName, setEditingItemName] = useState('');
+  const [editingItemArea, setEditingItemArea] = useState('');
   const [deleteConfirmItemId, setDeleteConfirmItemId] = useState<string | null>(null);
   const [deleteConfirmItemText, setDeleteConfirmItemText] = useState('');
   const [expandedAreas, setExpandedAreas] = useState<Set<string>>(new Set());
@@ -290,39 +326,15 @@ export function RepairHistoryTool({ toolId }: RepairHistoryToolProps) {
   const editWarrantyFileInputRef = useRef<HTMLInputElement>(null);
   const editRepairPicturesInputRef = useRef<HTMLInputElement>(null);
 
-  // Initialize default headers on mount
+  // Load items when selected header changes
   useEffect(() => {
-    if (headers.length === 0 && !isLoading) {
-      const defaultColors = ['#10b981', '#3b82f6', '#8b5cf6']; // emerald, blue, purple
-      const defaultHeaders: HeaderRecord[] = DEFAULT_HEADERS.map((name, index) => ({
-        id: `default-${index}`,
-        name,
-        isDefault: true,
-        card_color: defaultColors[index] || '#10b981',
-        categoryType: name === 'Home' ? 'Home' : 'Auto',
-      }));
-      setHeaders(defaultHeaders);
-      // Auto-select first header
-      if (defaultHeaders.length > 0) {
-        setSelectedHeaderId(defaultHeaders[0].id);
-      }
-    }
-  }, [headers.length, isLoading]);
-
-  // Initialize default items based on selected header category type
-  useEffect(() => {
-    if (selectedHeaderId) {
+    if (selectedHeaderId && headers.length > 0 && toolId) {
       const header = headers.find(h => h.id === selectedHeaderId);
       if (header) {
-        const defaultItemsList = header.categoryType === 'Home' ? DEFAULT_ITEMS : DEFAULT_AUTO_ITEMS;
-        const defaultItems: Item[] = defaultItemsList.map((item, index) => ({
-          id: `${header.categoryType.toLowerCase()}-item-${index}`,
-          ...item,
-        }));
-        setItems(defaultItems);
+        loadItems(header.categoryType);
       }
     }
-  }, [selectedHeaderId, headers]);
+  }, [selectedHeaderId, headers, toolId]);
 
   // Load headers from API
   const loadHeaders = async () => {
@@ -341,45 +353,22 @@ export function RepairHistoryTool({ toolId }: RepairHistoryToolProps) {
           categoryType: h.category_type as 'Home' | 'Auto',
         }));
         
-        // If no headers exist, create default ones
-        if (transformedHeaders.length === 0) {
-          const defaultColors = ['#10b981', '#3b82f6', '#8b5cf6']; // emerald, blue, purple
-          for (let i = 0; i < DEFAULT_HEADERS.length; i++) {
-            const name = DEFAULT_HEADERS[i];
-            const formData = new FormData();
-            formData.append('toolId', toolId);
-            formData.append('resource', 'header');
-            formData.append('action', 'create');
-            formData.append('name', name);
-            formData.append('cardColor', defaultColors[i] || '#10b981');
-            formData.append('categoryType', name === 'Home' ? 'Home' : 'Auto');
-            
-            await fetch('/api/tools/repair-history', {
-              method: 'POST',
-              body: formData,
-            });
+        // Deduplicate headers: keep only the first occurrence of each name/categoryType combination
+        const seen = new Map<string, boolean>();
+        const uniqueHeaders: HeaderRecord[] = [];
+        for (const header of transformedHeaders) {
+          const key = `${header.name}-${header.categoryType}`;
+          if (!seen.has(key)) {
+            seen.set(key, true);
+            uniqueHeaders.push(header);
           }
-          // Reload headers after creating defaults
-          const reloadResponse = await fetch(`/api/tools/repair-history?toolId=${toolId}&resource=headers`);
-          if (reloadResponse.ok) {
-            const reloadData = await reloadResponse.json();
-            const reloadedHeaders: HeaderRecord[] = (reloadData.headers || []).map((h: any) => ({
-              id: h.id,
-              name: h.name,
-              isDefault: h.is_default || false,
-              card_color: h.card_color || '#10b981',
-              categoryType: h.category_type as 'Home' | 'Auto',
-            }));
-            setHeaders(reloadedHeaders);
-            if (reloadedHeaders.length > 0 && !selectedHeaderId) {
-              setSelectedHeaderId(reloadedHeaders[0].id);
-            }
-          }
-        } else {
-          setHeaders(transformedHeaders);
-          if (transformedHeaders.length > 0 && !selectedHeaderId) {
-            setSelectedHeaderId(transformedHeaders[0].id);
-          }
+        }
+        
+        // Headers are now copied from defaults table automatically by the API
+        // No need to create defaults here
+        setHeaders(uniqueHeaders);
+        if (uniqueHeaders.length > 0 && !selectedHeaderId) {
+          setSelectedHeaderId(uniqueHeaders[0].id);
         }
       } else {
         console.error('Failed to load headers');
@@ -456,38 +445,14 @@ export function RepairHistoryTool({ toolId }: RepairHistoryToolProps) {
           isDefault: item.is_default || false,
         }));
         
-        // Merge with default items if needed
-        const defaultItemsList = categoryType === 'Home' ? DEFAULT_ITEMS : DEFAULT_AUTO_ITEMS;
-        const defaultItems: Item[] = defaultItemsList.map((item, index) => ({
-          id: `default-${categoryType}-${index}`,
-          ...item,
-        }));
-        
-        // Combine default and user items, removing duplicates by name
-        const itemMap = new Map<string, Item>();
-        defaultItems.forEach(item => itemMap.set(item.name, item));
-        transformedItems.forEach(item => itemMap.set(item.name, item));
-        
-        setItems(Array.from(itemMap.values()));
+        setItems(transformedItems);
       } else {
         console.error('Failed to load items');
-        // Fallback to default items
-        const defaultItemsList = categoryType === 'Home' ? DEFAULT_ITEMS : DEFAULT_AUTO_ITEMS;
-        const defaultItems: Item[] = defaultItemsList.map((item, index) => ({
-          id: `default-${categoryType}-${index}`,
-          ...item,
-        }));
-        setItems(defaultItems);
+        setItems([]);
       }
     } catch (error) {
       console.error('Error loading items:', error);
-      // Fallback to default items
-      const defaultItemsList = categoryType === 'Home' ? DEFAULT_ITEMS : DEFAULT_AUTO_ITEMS;
-      const defaultItems: Item[] = defaultItemsList.map((item, index) => ({
-        id: `default-${categoryType}-${index}`,
-        ...item,
-      }));
-      setItems(defaultItems);
+      setItems([]);
     }
   };
 
@@ -502,16 +467,6 @@ export function RepairHistoryTool({ toolId }: RepairHistoryToolProps) {
       loadHistoryRecords(selectedHeaderId);
     }
   }, [selectedHeaderId, toolId]);
-
-  // Load items when selected header changes
-  useEffect(() => {
-    if (selectedHeaderId && headers.length > 0 && toolId) {
-      const header = headers.find(h => h.id === selectedHeaderId);
-      if (header) {
-        loadItems(header.categoryType);
-      }
-    }
-  }, [selectedHeaderId, headers, toolId]);
 
   // Header management functions
   const createNewHeader = async () => {
@@ -994,12 +949,14 @@ export function RepairHistoryTool({ toolId }: RepairHistoryToolProps) {
     setIsAddingItem(true);
     setNewItemName('');
     setNewItemArea('');
+    setIsCreatingNewArea(false);
   };
 
   const cancelAddingItem = () => {
     setIsAddingItem(false);
     setNewItemName('');
     setNewItemArea('');
+    setIsCreatingNewArea(false);
   };
 
   const saveNewItem = async () => {
@@ -1035,6 +992,7 @@ export function RepairHistoryTool({ toolId }: RepairHistoryToolProps) {
         setIsAddingItem(false);
         setNewItemName('');
         setNewItemArea('');
+        setIsCreatingNewArea(false);
         setSaveMessage({ type: 'success', text: 'Item added successfully!' });
         setTimeout(() => setSaveMessage(null), 3000);
       } else {
@@ -1052,11 +1010,13 @@ export function RepairHistoryTool({ toolId }: RepairHistoryToolProps) {
   const startEditingItem = (item: Item) => {
     setEditingItemId(item.id);
     setEditingItemName(item.name);
+    setEditingItemArea(item.area);
   };
 
   const cancelEditingItem = () => {
     setEditingItemId(null);
     setEditingItemName('');
+    setEditingItemArea('');
   };
 
   const saveItemEdit = async () => {
@@ -1068,8 +1028,8 @@ export function RepairHistoryTool({ toolId }: RepairHistoryToolProps) {
       return;
     }
     
-    if (!editingItemName.trim()) {
-      setSaveMessage({ type: 'error', text: 'Item name cannot be empty' });
+    if (!editingItemName.trim() || !editingItemArea.trim()) {
+      setSaveMessage({ type: 'error', text: 'Item name and area are required' });
       return;
     }
 
@@ -1080,6 +1040,7 @@ export function RepairHistoryTool({ toolId }: RepairHistoryToolProps) {
         throw new Error('Item not found');
       }
 
+
       const formData = new FormData();
       formData.append('toolId', toolId);
       formData.append('resource', 'item');
@@ -1087,7 +1048,7 @@ export function RepairHistoryTool({ toolId }: RepairHistoryToolProps) {
       formData.append('itemId', editingItemId);
       formData.append('categoryType', selectedHeader.categoryType);
       formData.append('name', editingItemName.trim());
-      formData.append('area', editingItem.area);
+      formData.append('area', editingItemArea.trim());
 
       const response = await fetch('/api/tools/repair-history', {
         method: 'POST',
@@ -1099,11 +1060,19 @@ export function RepairHistoryTool({ toolId }: RepairHistoryToolProps) {
         await loadItems(selectedHeader.categoryType);
         setEditingItemId(null);
         setEditingItemName('');
+        setEditingItemArea('');
         setSaveMessage({ type: 'success', text: 'Item updated successfully!' });
         setTimeout(() => setSaveMessage(null), 3000);
       } else {
-        const errorData = await response.json();
-        throw new Error(errorData.error || 'Failed to update item');
+        let errorMessage = 'Failed to update item';
+        try {
+          const errorData = await response.json();
+          errorMessage = errorData.error || errorMessage;
+        } catch (e) {
+          // If response is not JSON, use status text
+          errorMessage = response.statusText || errorMessage;
+        }
+        throw new Error(errorMessage);
       }
     } catch (error) {
       console.error('Error updating item:', error);
@@ -1689,8 +1658,22 @@ export function RepairHistoryTool({ toolId }: RepairHistoryToolProps) {
                         <input
                           type="text"
                           value={newRecord.cost}
-                          onChange={(e) => setNewRecord({ ...newRecord, cost: e.target.value })}
-                          placeholder="e.g., $150.00"
+                          onChange={(e) => {
+                            const formatted = formatCurrency(e.target.value);
+                            setNewRecord({ ...newRecord, cost: formatted });
+                          }}
+                          onBlur={(e) => {
+                            if (e.target.value) {
+                              const formatted = formatCurrencyDisplay(e.target.value);
+                              setNewRecord({ ...newRecord, cost: formatted });
+                            }
+                          }}
+                          onFocus={(e) => {
+                            // Remove formatting on focus for easier editing
+                            const numericValue = e.target.value.replace(/[^0-9.]/g, '');
+                            setNewRecord({ ...newRecord, cost: numericValue });
+                          }}
+                          placeholder="e.g., 150.00"
                           className="w-full rounded-lg border border-slate-700 bg-slate-900/70 px-3 py-2 text-sm text-slate-100 placeholder-slate-500 focus:border-emerald-500/50 focus:outline-none focus:ring-1 focus:ring-emerald-500/50"
                         />
                       </div>
@@ -1805,25 +1788,53 @@ export function RepairHistoryTool({ toolId }: RepairHistoryToolProps) {
                       <label className="block text-xs font-medium text-slate-300 mb-1.5">
                         Receipt
                       </label>
-                      <input
-                        ref={receiptFileInputRef}
-                        type="file"
-                        onChange={(e) => setNewRecord({ ...newRecord, receiptFile: e.target.files?.[0] || null })}
-                        className="w-full rounded-lg border border-slate-700 bg-slate-900/70 px-3 py-2 text-sm text-slate-100 focus:border-emerald-500/50 focus:outline-none focus:ring-1 focus:ring-emerald-500/50"
-                        accept="image/*,.pdf"
-                      />
+                      <div className="relative">
+                        <input
+                          ref={receiptFileInputRef}
+                          type="file"
+                          id="receipt-file-input"
+                          onChange={(e) => setNewRecord({ ...newRecord, receiptFile: e.target.files?.[0] || null })}
+                          className="absolute inset-0 w-full h-full opacity-0 cursor-pointer"
+                          accept="image/*,.pdf"
+                        />
+                        <label
+                          htmlFor="receipt-file-input"
+                          className="flex items-center gap-2 w-full rounded-lg border border-slate-700 bg-slate-900/70 px-3 py-2 text-sm text-slate-100 hover:bg-slate-800 transition-colors cursor-pointer"
+                        >
+                          <svg className="w-5 h-5 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                          </svg>
+                          <span className="text-slate-300">
+                            {newRecord.receiptFile ? newRecord.receiptFile.name : 'Select file'}
+                          </span>
+                        </label>
+                      </div>
                     </div>
                     <div>
                       <label className="block text-xs font-medium text-slate-300 mb-1.5">
                         Warranty
                       </label>
-                      <input
-                        ref={warrantyFileInputRef}
-                        type="file"
-                        onChange={(e) => setNewRecord({ ...newRecord, warrantyFile: e.target.files?.[0] || null })}
-                        className="w-full rounded-lg border border-slate-700 bg-slate-900/70 px-3 py-2 text-sm text-slate-100 focus:border-emerald-500/50 focus:outline-none focus:ring-1 focus:ring-emerald-500/50"
-                        accept="image/*,.pdf"
-                      />
+                      <div className="relative">
+                        <input
+                          ref={warrantyFileInputRef}
+                          type="file"
+                          id="warranty-file-input"
+                          onChange={(e) => setNewRecord({ ...newRecord, warrantyFile: e.target.files?.[0] || null })}
+                          className="absolute inset-0 w-full h-full opacity-0 cursor-pointer"
+                          accept="image/*,.pdf"
+                        />
+                        <label
+                          htmlFor="warranty-file-input"
+                          className="flex items-center gap-2 w-full rounded-lg border border-slate-700 bg-slate-900/70 px-3 py-2 text-sm text-slate-100 hover:bg-slate-800 transition-colors cursor-pointer"
+                        >
+                          <svg className="w-5 h-5 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                          </svg>
+                          <span className="text-slate-300">
+                            {newRecord.warrantyFile ? newRecord.warrantyFile.name : 'Select file'}
+                          </span>
+                        </label>
+                      </div>
                     </div>
                     <div>
                       <label className="block text-xs font-medium text-slate-300 mb-1.5">
@@ -1856,17 +1867,33 @@ export function RepairHistoryTool({ toolId }: RepairHistoryToolProps) {
                       <label className="block text-xs font-medium text-slate-300 mb-1.5">
                         Repair Pictures
                       </label>
-                      <input
-                        ref={repairPicturesInputRef}
-                        type="file"
-                        multiple
-                        accept="image/*"
-                        onChange={(e) => {
-                          const files = Array.from(e.target.files || []);
-                          setNewRecord({ ...newRecord, repairPictures: [...newRecord.repairPictures, ...files] });
-                        }}
-                        className="w-full rounded-lg border border-slate-700 bg-slate-900/70 px-3 py-2 text-sm text-slate-100 focus:border-emerald-500/50 focus:outline-none focus:ring-1 focus:ring-emerald-500/50"
-                      />
+                      <div className="relative">
+                        <input
+                          ref={repairPicturesInputRef}
+                          type="file"
+                          id="repair-pictures-input"
+                          multiple
+                          accept="image/*"
+                          onChange={(e) => {
+                            const files = Array.from(e.target.files || []);
+                            setNewRecord({ ...newRecord, repairPictures: [...newRecord.repairPictures, ...files] });
+                          }}
+                          className="absolute inset-0 w-full h-full opacity-0 cursor-pointer"
+                        />
+                        <label
+                          htmlFor="repair-pictures-input"
+                          className="flex items-center gap-2 w-full rounded-lg border border-slate-700 bg-slate-900/70 px-3 py-2 text-sm text-slate-100 hover:bg-slate-800 transition-colors cursor-pointer"
+                        >
+                          <svg className="w-5 h-5 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
+                          </svg>
+                          <span className="text-slate-300">
+                            {newRecord.repairPictures.length > 0 
+                              ? `${newRecord.repairPictures.length} image${newRecord.repairPictures.length > 1 ? 's' : ''} selected`
+                              : 'Select images'}
+                          </span>
+                        </label>
+                      </div>
                       {newRecord.repairPictures.length > 0 && (
                         <div className="mt-4 grid grid-cols-2 md:grid-cols-3 gap-4">
                           {newRecord.repairPictures.map((file, index) => (
@@ -2151,13 +2178,27 @@ export function RepairHistoryTool({ toolId }: RepairHistoryToolProps) {
                                   Current: {editingRecord.receiptFileName || 'Receipt file'}
                                 </div>
                               )}
-                              <input
-                                ref={editReceiptFileInputRef}
-                                type="file"
-                                onChange={(e) => setEditingRecord({ ...editingRecord, receiptFile: e.target.files?.[0] || null })}
-                                className="w-full rounded-lg border border-slate-700 bg-slate-900/70 px-3 py-2 text-sm text-slate-100 focus:border-emerald-500/50 focus:outline-none focus:ring-1 focus:ring-emerald-500/50"
-                                accept="image/*,.pdf"
-                              />
+                              <div className="relative">
+                                <input
+                                  ref={editReceiptFileInputRef}
+                                  type="file"
+                                  id="edit-receipt-file-input"
+                                  onChange={(e) => setEditingRecord({ ...editingRecord, receiptFile: e.target.files?.[0] || null })}
+                                  className="absolute inset-0 w-full h-full opacity-0 cursor-pointer"
+                                  accept="image/*,.pdf"
+                                />
+                                <label
+                                  htmlFor="edit-receipt-file-input"
+                                  className="flex items-center gap-2 w-full rounded-lg border border-slate-700 bg-slate-900/70 px-3 py-2 text-sm text-slate-100 hover:bg-slate-800 transition-colors cursor-pointer"
+                                >
+                                  <svg className="w-5 h-5 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15.172 7l-6.586 6.586a2 2 0 102.828 2.828l6.414-6.586a4 4 0 00-5.656-5.656l-6.415 6.585a6 6 0 108.486 8.486L20.5 13" />
+                                  </svg>
+                                  <span className="text-slate-300">
+                                    {editingRecord.receiptFile ? editingRecord.receiptFile.name : 'Select file'}
+                                  </span>
+                                </label>
+                              </div>
                             </div>
                             <div>
                               <label className="block text-xs font-medium text-slate-300 mb-1.5">
@@ -2168,13 +2209,27 @@ export function RepairHistoryTool({ toolId }: RepairHistoryToolProps) {
                                   Current: {editingRecord.warrantyFileName || 'Warranty file'}
                                 </div>
                               )}
-                              <input
-                                ref={editWarrantyFileInputRef}
-                                type="file"
-                                onChange={(e) => setEditingRecord({ ...editingRecord, warrantyFile: e.target.files?.[0] || null })}
-                                className="w-full rounded-lg border border-slate-700 bg-slate-900/70 px-3 py-2 text-sm text-slate-100 focus:border-emerald-500/50 focus:outline-none focus:ring-1 focus:ring-emerald-500/50"
-                                accept="image/*,.pdf"
-                              />
+                              <div className="relative">
+                                <input
+                                  ref={editWarrantyFileInputRef}
+                                  type="file"
+                                  id="edit-warranty-file-input"
+                                  onChange={(e) => setEditingRecord({ ...editingRecord, warrantyFile: e.target.files?.[0] || null })}
+                                  className="absolute inset-0 w-full h-full opacity-0 cursor-pointer"
+                                  accept="image/*,.pdf"
+                                />
+                                <label
+                                  htmlFor="edit-warranty-file-input"
+                                  className="flex items-center gap-2 w-full rounded-lg border border-slate-700 bg-slate-900/70 px-3 py-2 text-sm text-slate-100 hover:bg-slate-800 transition-colors cursor-pointer"
+                                >
+                                  <svg className="w-5 h-5 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15.172 7l-6.586 6.586a2 2 0 102.828 2.828l6.414-6.586a4 4 0 00-5.656-5.656l-6.415 6.585a6 6 0 108.486 8.486L20.5 13" />
+                                  </svg>
+                                  <span className="text-slate-300">
+                                    {editingRecord.warrantyFile ? editingRecord.warrantyFile.name : 'Select file'}
+                                  </span>
+                                </label>
+                              </div>
                             </div>
                             <div>
                               <label className="block text-xs font-medium text-slate-300 mb-1.5">
@@ -2207,18 +2262,34 @@ export function RepairHistoryTool({ toolId }: RepairHistoryToolProps) {
                               <label className="block text-xs font-medium text-slate-300 mb-1.5">
                                 Repair Pictures
                               </label>
-                              <input
-                                ref={editRepairPicturesInputRef}
-                                type="file"
-                                multiple
-                                accept="image/*"
-                                onChange={(e) => {
-                                  if (!editingRecord) return;
-                                  const files = Array.from(e.target.files || []);
-                                  setEditingRecord({ ...editingRecord, repairPictures: [...(editingRecord.repairPictures || []), ...files] });
-                                }}
-                                className="w-full rounded-lg border border-slate-700 bg-slate-900/70 px-3 py-2 text-sm text-slate-100 focus:border-emerald-500/50 focus:outline-none focus:ring-1 focus:ring-emerald-500/50"
-                              />
+                              <div className="relative">
+                                <input
+                                  ref={editRepairPicturesInputRef}
+                                  type="file"
+                                  id="edit-repair-pictures-input"
+                                  multiple
+                                  accept="image/*"
+                                  onChange={(e) => {
+                                    if (!editingRecord) return;
+                                    const files = Array.from(e.target.files || []);
+                                    setEditingRecord({ ...editingRecord, repairPictures: [...(editingRecord.repairPictures || []), ...files] });
+                                  }}
+                                  className="absolute inset-0 w-full h-full opacity-0 cursor-pointer"
+                                />
+                                <label
+                                  htmlFor="edit-repair-pictures-input"
+                                  className="flex items-center gap-2 w-full rounded-lg border border-slate-700 bg-slate-900/70 px-3 py-2 text-sm text-slate-100 hover:bg-slate-800 transition-colors cursor-pointer"
+                                >
+                                  <svg className="w-5 h-5 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
+                                  </svg>
+                                  <span className="text-slate-300">
+                                    {editingRecord && ((editingRecord.repairPictures?.length || 0) + (editingRecord.repairPictureUrls?.length || 0) > 0)
+                                      ? `${(editingRecord.repairPictures?.length || 0) + (editingRecord.repairPictureUrls?.length || 0)} image${((editingRecord.repairPictures?.length || 0) + (editingRecord.repairPictureUrls?.length || 0)) > 1 ? 's' : ''} selected`
+                                      : 'Select images'}
+                                  </span>
+                                </label>
+                              </div>
                               {editingRecord && ((editingRecord.repairPictures?.length || 0) > 0 || (editingRecord.repairPictureUrls?.length || 0) > 0) && (
                                 <div className="mt-4 grid grid-cols-2 md:grid-cols-3 gap-4">
                                   {editingRecord.repairPictureUrls?.map((url, index) => (
@@ -2432,6 +2503,45 @@ export function RepairHistoryTool({ toolId }: RepairHistoryToolProps) {
                   <h3 className="text-lg font-semibold text-slate-50 mb-4">Add New Item</h3>
                   <div className="space-y-4">
                     <div>
+                      <div className="flex items-center justify-between mb-1.5">
+                        <label className="block text-xs font-medium text-slate-300">
+                          Area <span className="text-red-400">*</span>
+                        </label>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setIsCreatingNewArea(!isCreatingNewArea);
+                            setNewItemArea('');
+                          }}
+                          className="text-xs text-emerald-400 hover:text-emerald-300 transition-colors"
+                        >
+                          {isCreatingNewArea ? 'Select existing area' : '+ Create new area'}
+                        </button>
+                      </div>
+                      {isCreatingNewArea ? (
+                        <input
+                          type="text"
+                          value={newItemArea}
+                          onChange={(e) => setNewItemArea(e.target.value)}
+                          placeholder="Enter new area name..."
+                          className="w-full rounded-lg border border-slate-700 bg-slate-900/70 px-3 py-2 text-sm text-slate-100 placeholder-slate-500 focus:border-emerald-500/50 focus:outline-none focus:ring-1 focus:ring-emerald-500/50"
+                        />
+                      ) : (
+                        <select
+                          value={newItemArea}
+                          onChange={(e) => setNewItemArea(e.target.value)}
+                          className="w-full rounded-lg border border-slate-700 bg-slate-900/70 px-4 py-2 text-slate-100 focus:border-emerald-500/50 focus:outline-none focus:ring-1 focus:ring-emerald-500/50"
+                        >
+                          <option value="">Select an area...</option>
+                          {getUniqueAreas().map(area => (
+                            <option key={area} value={area}>
+                              {area}
+                            </option>
+                          ))}
+                        </select>
+                      )}
+                    </div>
+                    <div>
                       <label className="block text-xs font-medium text-slate-300 mb-1.5">
                         Item Name <span className="text-red-400">*</span>
                       </label>
@@ -2442,24 +2552,6 @@ export function RepairHistoryTool({ toolId }: RepairHistoryToolProps) {
                         placeholder="e.g., Washing Machine"
                         className="w-full rounded-lg border border-slate-700 bg-slate-900/70 px-3 py-2 text-sm text-slate-100 placeholder-slate-500 focus:border-emerald-500/50 focus:outline-none focus:ring-1 focus:ring-emerald-500/50"
                       />
-                    </div>
-                    <div>
-                      <label className="block text-xs font-medium text-slate-300 mb-1.5">
-                        Area <span className="text-red-400">*</span>
-                      </label>
-                      <input
-                        type="text"
-                        value={newItemArea}
-                        onChange={(e) => setNewItemArea(e.target.value)}
-                        placeholder="e.g., Appliances"
-                        className="w-full rounded-lg border border-slate-700 bg-slate-900/70 px-3 py-2 text-sm text-slate-100 placeholder-slate-500 focus:border-emerald-500/50 focus:outline-none focus:ring-1 focus:ring-emerald-500/50"
-                        list="area-suggestions"
-                      />
-                      <datalist id="area-suggestions">
-                        {getUniqueAreas().map(area => (
-                          <option key={area} value={area} />
-                        ))}
-                      </datalist>
                     </div>
                     <div className="flex gap-3 justify-end">
                       <button
@@ -2507,34 +2599,58 @@ export function RepairHistoryTool({ toolId }: RepairHistoryToolProps) {
                             {areaItems.map((item) => (
                             editingItemId === item.id ? (
                               // Edit mode
-                              <div key={item.id} className="flex items-center gap-2 p-2 rounded-lg border border-slate-700 bg-slate-800/50">
-                                <input
-                                  type="text"
-                                  value={editingItemName}
-                                  onChange={(e) => setEditingItemName(e.target.value)}
-                                  className="flex-1 px-3 py-1.5 rounded-lg border border-slate-700 bg-slate-900 text-slate-100 text-sm focus:border-emerald-500/50 focus:outline-none focus:ring-1 focus:ring-emerald-500/50"
-                                  onKeyDown={(e) => {
-                                    if (e.key === 'Enter') {
-                                      saveItemEdit();
-                                    } else if (e.key === 'Escape') {
-                                      cancelEditingItem();
-                                    }
-                                  }}
-                                  autoFocus
-                                />
-                                <button
-                                  onClick={saveItemEdit}
-                                  disabled={isSaving || !editingItemName.trim()}
-                                  className="px-3 py-1.5 rounded bg-emerald-500 text-slate-950 text-xs font-medium hover:bg-emerald-400 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-                                >
-                                  Save
-                                </button>
-                                <button
-                                  onClick={cancelEditingItem}
-                                  className="px-3 py-1.5 rounded border border-slate-600 bg-slate-700 text-slate-200 text-xs hover:bg-slate-600 transition-colors"
-                                >
-                                  Cancel
-                                </button>
+                              <div key={item.id} className="space-y-2 p-3 rounded-lg border border-slate-700 bg-slate-800/50">
+                                <div>
+                                  <label className="block text-xs font-medium text-slate-300 mb-1.5">
+                                    Area <span className="text-red-400">*</span>
+                                  </label>
+                                  <select
+                                    value={editingItemArea}
+                                    onChange={(e) => setEditingItemArea(e.target.value)}
+                                    className="w-full rounded-lg border border-slate-700 bg-slate-900/70 px-4 py-2 text-slate-100 focus:border-emerald-500/50 focus:outline-none focus:ring-1 focus:ring-emerald-500/50"
+                                  >
+                                    <option value="">Select an area...</option>
+                                    {getUniqueAreas().map(area => (
+                                      <option key={area} value={area}>
+                                        {area}
+                                      </option>
+                                    ))}
+                                  </select>
+                                </div>
+                                <div>
+                                  <label className="block text-xs font-medium text-slate-300 mb-1.5">
+                                    Item Name <span className="text-red-400">*</span>
+                                  </label>
+                                  <input
+                                    type="text"
+                                    value={editingItemName}
+                                    onChange={(e) => setEditingItemName(e.target.value)}
+                                    className="w-full px-3 py-1.5 rounded-lg border border-slate-700 bg-slate-900 text-slate-100 text-sm focus:border-emerald-500/50 focus:outline-none focus:ring-1 focus:ring-emerald-500/50"
+                                    onKeyDown={(e) => {
+                                      if (e.key === 'Enter') {
+                                        saveItemEdit();
+                                      } else if (e.key === 'Escape') {
+                                        cancelEditingItem();
+                                      }
+                                    }}
+                                    autoFocus
+                                  />
+                                </div>
+                                <div className="flex gap-2 justify-end">
+                                  <button
+                                    onClick={cancelEditingItem}
+                                    className="px-3 py-1.5 rounded border border-slate-600 bg-slate-700 text-slate-200 text-xs hover:bg-slate-600 transition-colors"
+                                  >
+                                    Cancel
+                                  </button>
+                                  <button
+                                    onClick={saveItemEdit}
+                                    disabled={isSaving || !editingItemName.trim() || !editingItemArea.trim()}
+                                    className="px-3 py-1.5 rounded bg-emerald-500 text-slate-950 text-xs font-medium hover:bg-emerald-400 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                                  >
+                                    Save
+                                  </button>
+                                </div>
                               </div>
                             ) : (
                               // Display mode
