@@ -16,6 +16,7 @@ import { ImportantDocumentsTool } from '../components/ImportantDocumentsTool';
 import { NotesTool } from '../components/NotesTool';
 import { RepairHistoryTool } from '../components/RepairHistoryTool';
 import { HealthcareApptsHistoryTool } from '../components/HealthcareApptsHistoryTool';
+import { ToDoListTool } from '../components/ToDoListTool';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, PieChart, Pie, Cell, Legend } from 'recharts';
 
 // Calendar Component
@@ -657,6 +658,7 @@ export default function Dashboard() {
   const [completingItemId, setCompletingItemId] = useState<string | null>(null);
   const [completeMessage, setCompleteMessage] = useState<{ type: 'success' | 'error'; text: string; itemId: string } | null>(null);
   const [dashboardKpis, setDashboardKpis] = useState<any[]>([]);
+  const [todoListDashboardData, setTodoListDashboardData] = useState<{ categoryName: string; taskNames: string[] }[]>([]);
   const [isLoadingKpis, setIsLoadingKpis] = useState(false);
   const [subscriptionTrackerMonthlySpend, setSubscriptionTrackerMonthlySpend] = useState<number | null>(null);
   const router = useRouter();
@@ -827,6 +829,29 @@ export default function Dashboard() {
       loadActionItems();
     }
   }, [activeTab, dashboardSubTab, loadActionItems]);
+
+  // To Do List dashboard section: fetch from API when user has the tool and is on overview
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    const toDoListTool = tools.find((t) => t.name === 'To Do List' && t.isOwned);
+    if (!toDoListTool?.id || activeTab !== 'dashboard' || dashboardSubTab !== 'overview') {
+      setTodoListDashboardData([]);
+      return;
+    }
+    let cancelled = false;
+    (async () => {
+      try {
+        const res = await fetch(`/api/tools/to-do-list?toolId=${encodeURIComponent(toDoListTool.id)}&resource=dashboard`);
+        const json = await res.json();
+        if (cancelled) return;
+        const items = Array.isArray(json.items) ? json.items : [];
+        setTodoListDashboardData(items as { categoryName: string; taskNames: string[] }[]);
+      } catch {
+        if (!cancelled) setTodoListDashboardData([]);
+      }
+    })();
+    return () => { cancelled = true; };
+  }, [activeTab, dashboardSubTab, tools]);
   
   useEffect(() => {
     if (activeTab === 'dashboard' && dashboardSubTab === 'overview' && tools.length > 0) {
@@ -1323,6 +1348,28 @@ export default function Dashboard() {
                     )}
                   </div>
                 </div>
+
+                {/* To Do List (one card per category with "Display on Dashboard" enabled and non-completed tasks) */}
+                {tools.some((t) => t.name === 'To Do List' && t.isOwned) &&
+                  todoListDashboardData.length > 0 && (
+                  <div className="mt-8 w-1/3 min-w-[280px] space-y-8">
+                    {todoListDashboardData.map((block, i) => (
+                      <div key={i} className="rounded-2xl border border-slate-800 bg-slate-900/70 p-6">
+                        <h3 className="text-lg font-semibold text-slate-100 mb-4">
+                          To Do List: {block.categoryName}
+                        </h3>
+                        <ul className="space-y-1">
+                          {block.taskNames.map((name, j) => (
+                            <li key={j} className="text-sm text-slate-300">
+                              {name}
+                            </li>
+                          ))}
+                        </ul>
+                      </div>
+                    ))}
+                  </div>
+                )}
+
               </div>
             )}
 
@@ -1357,6 +1404,7 @@ export default function Dashboard() {
                         <div className="grid gap-4 md:grid-cols-4 lg:grid-cols-6">
                           {tools
                             .filter(t => t.isOwned === true)
+                            .sort((a, b) => a.name.localeCompare(b.name, undefined, { sensitivity: 'base' }))
                             .map((tool) => {
                               // Use default icon first, then fallback to available/coming_soon for backward compatibility
                               const icon = tool.icons.default || tool.icons.available || tool.icons.coming_soon;
@@ -1421,6 +1469,8 @@ export default function Dashboard() {
                         <RepairHistoryTool toolId={tool.id} />
                       ) : (tool.name === 'Healthcare Appts and History' || tool.name === 'Healthcare Appts & History') ? (
                         <HealthcareApptsHistoryTool toolId={tool.id} />
+                      ) : tool.name === 'To Do List' ? (
+                        <ToDoListTool toolId={tool.id} />
                       ) : (
                         <div className="rounded-2xl border border-slate-800 bg-slate-900/70 p-6">
                           <h2 className="text-xl font-semibold text-slate-50 mb-4">{tool.name}</h2>
@@ -1596,6 +1646,8 @@ export default function Dashboard() {
                         <RepairHistoryTool toolId={tool.id} />
                       ) : (tool.name === 'Healthcare Appts and History' || tool.name === 'Healthcare Appts & History') ? (
                         <HealthcareApptsHistoryTool toolId={tool.id} />
+                      ) : tool.name === 'To Do List' ? (
+                        <ToDoListTool toolId={tool.id} />
                       ) : (
                         <div className="rounded-2xl border border-slate-800 bg-slate-900/70 p-6">
                           <h2 className="text-xl font-semibold text-slate-50 mb-4">{tool.name}</h2>
