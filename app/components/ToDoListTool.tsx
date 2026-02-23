@@ -119,7 +119,7 @@ export function ToDoListTool({ toolId }: ToDoListToolProps) {
     }
   };
 
-  const loadTasks = async (categoryId: string) => {
+  const loadTasks = async (categoryId: string | null | undefined) => {
     if (!toolId || !categoryId) return;
     setIsLoadingTasks(true);
     try {
