@@ -837,42 +837,16 @@ export async function POST(request: NextRequest) {
       await supabaseServer.from('tools_pcs_documents').delete().eq('pet_id', finalPetId);
       if (documents.length > 0) {
         // Upload files and prepare document data
-        const documentsToInsert = await Promise.all(
-          documents.map(async (d: any, index: number) => {
-            let fileUrl = d.file_url || null;
-            let fileName = d.file_name || null;
-            let fileSize = d.file_size || null;
-            let fileType = d.file_type || null;
-
-            // If there's a new file to upload
-            const file = documentFiles.get(index.toString());
-            if (file && file.size > 0) {
-              try {
-                const uploadResult = await uploadFile(file, user.id, 'pet-care-schedule', 'documents');
-                if (uploadResult) {
-                  fileUrl = uploadResult.url;
-                  fileName = uploadResult.fileName;
-                  fileSize = uploadResult.fileSize;
-                  fileType = uploadResult.fileType;
-                }
-              } catch (error: any) {
-                console.error(`Failed to upload document file for ${d.name}:`, error);
-                // Continue without file URL if upload fails
-              }
-            }
-
-            return {
+        const documentsToInsert = documents.map((d: any) => ({
               pet_id: finalPetId,
               name: d.name,
               date: d.date,
               description: d.description || null,
-              file_url: fileUrl,
-              file_name: fileName,
-              file_size: fileSize,
-              file_type: fileType,
-            };
-          })
-        );
+              file_url: d.file_url || null,
+              file_name: d.file_name || null,
+              file_size: d.file_size ?? null,
+              file_type: d.file_type || null,
+            }));
 
         await supabaseServer.from('tools_pcs_documents').insert(documentsToInsert);
       }
