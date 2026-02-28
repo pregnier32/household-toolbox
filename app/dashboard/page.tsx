@@ -17,7 +17,68 @@ import { NotesTool } from '../components/NotesTool';
 import { RepairHistoryTool } from '../components/RepairHistoryTool';
 import { HealthcareApptsHistoryTool } from '../components/HealthcareApptsHistoryTool';
 import { ToDoListTool } from '../components/ToDoListTool';
+import { GoalsTrackingTool, GoalsProvider, useGoalsContext, getGoalPercentExport } from '../components/GoalsTrackingTool';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, PieChart, Pie, Cell, Legend } from 'recharts';
+
+// Dashboard goal cards (left-side-only view for goals with showOnDashboard)
+function DashboardGoalCards() {
+  const ctx = useGoalsContext();
+  if (!ctx) return null;
+  const dashboardGoals = ctx.goals.filter((g) => g.showOnDashboard);
+  if (dashboardGoals.length === 0) return null;
+  return (
+    <div className="mb-6">
+      <h3 className="text-lg font-semibold text-slate-100 mb-3">Goals</h3>
+      <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
+        {dashboardGoals.map((goal) => {
+          const percent = getGoalPercentExport(goal);
+          const lastNote = goal.updateNotes.length > 0
+            ? [...goal.updateNotes].sort((a, b) => b.noteDate.localeCompare(a.noteDate))[0]
+            : null;
+          const today = new Date();
+          today.setHours(0, 0, 0, 0);
+          const daysSinceLastUpdate = lastNote
+            ? Math.floor((today.getTime() - new Date(lastNote.noteDate).getTime()) / (1000 * 60 * 60 * 24))
+            : Infinity;
+          const showReminderWarning = goal.reminderDays != null && daysSinceLastUpdate >= goal.reminderDays;
+          return (
+            <div
+              key={goal.id}
+              className="rounded-2xl border border-slate-800 bg-slate-900/70 p-5 text-center flex flex-col min-h-[200px]"
+            >
+              <div className="flex items-center justify-center gap-2 mb-3">
+                <h4 className="text-3xl font-semibold text-slate-50">{goal.title}</h4>
+                {showReminderWarning && (
+                  <span
+                    className="inline-flex text-amber-400 shrink-0"
+                    title={`No update in ${goal.reminderDays} days — reminder overdue`}
+                    aria-label="Update reminder overdue"
+                  >
+                    <svg className="h-6 w-6" fill="currentColor" viewBox="0 0 24 24">
+                      <path fillRule="evenodd" d="M8.485 2.495c.673-1.167 2.357-1.167 3.03 0l6.28 10.875c.673 1.167-.17 2.625-1.516 2.625H3.72c-1.347 0-2.189-1.458-1.515-2.625L8.485 2.495zM10 9a1 1 0 011 1v3a1 1 0 11-2 0v-3a1 1 0 011-1zm0 7a1 1 0 100 2 1 1 0 000-2z" clipRule="evenodd" />
+                    </svg>
+                  </span>
+                )}
+              </div>
+              <div className="mb-3">
+                <div className="text-xs text-slate-400 mb-1">Progress</div>
+                <div className="h-8 rounded-full bg-slate-800 overflow-hidden w-full">
+                  <div
+                    className="h-full rounded-full bg-emerald-500 transition-all duration-300"
+                    style={{ width: `${percent}%` }}
+                  />
+                </div>
+              </div>
+              <div className="flex-1 flex flex-col justify-center">
+                <div className="text-5xl font-semibold text-emerald-300">{percent}%</div>
+              </div>
+            </div>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
 
 // Calendar Component
 function CalendarView({ 
@@ -981,8 +1042,11 @@ export default function Dashboard() {
     return null;
   }
 
+  const goalsToolId = tools.find((t) => t.name === 'Goals Tracking')?.id ?? null;
+
   return (
     <main className="min-h-screen bg-slate-950 text-slate-100">
+      <GoalsProvider goalsToolId={goalsToolId}>
       {/* Header */}
       <header className="border-b border-slate-800 bg-slate-900/50">
         <div className="mx-auto flex max-w-7xl items-center justify-between px-4 py-4 sm:px-6 lg:px-8">
@@ -1174,7 +1238,9 @@ export default function Dashboard() {
                 <p className="text-slate-400 mb-6">
                   Welcome to your Household Toolbox dashboard. This is your central hub for managing your household.
                 </p>
-                
+
+                <DashboardGoalCards />
+
                 {/* Dashboard KPIs */}
                 {dashboardKpis.length > 0 && (
                   <div className="mb-6 grid gap-4 md:grid-cols-2 lg:grid-cols-3">
@@ -1471,6 +1537,8 @@ export default function Dashboard() {
                         <HealthcareApptsHistoryTool toolId={tool.id} />
                       ) : tool.name === 'To Do List' ? (
                         <ToDoListTool toolId={tool.id} />
+                      ) : tool.name === 'Goals Tracking' ? (
+                        <GoalsTrackingTool toolId={tool.id} />
                       ) : (
                         <div className="rounded-2xl border border-slate-800 bg-slate-900/70 p-6">
                           <h2 className="text-xl font-semibold text-slate-50 mb-4">{tool.name}</h2>
@@ -1648,6 +1716,8 @@ export default function Dashboard() {
                         <HealthcareApptsHistoryTool toolId={tool.id} />
                       ) : tool.name === 'To Do List' ? (
                         <ToDoListTool toolId={tool.id} />
+                      ) : tool.name === 'Goals Tracking' ? (
+                        <GoalsTrackingTool toolId={tool.id} />
                       ) : (
                         <div className="rounded-2xl border border-slate-800 bg-slate-900/70 p-6">
                           <h2 className="text-xl font-semibold text-slate-50 mb-4">{tool.name}</h2>
@@ -1904,6 +1974,7 @@ export default function Dashboard() {
         isBuying={isBuying}
         buyMessage={buyMessage}
       />
+      </GoalsProvider>
     </main>
   );
 }
