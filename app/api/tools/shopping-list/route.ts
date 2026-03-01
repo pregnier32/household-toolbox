@@ -146,9 +146,9 @@ export async function GET(request: NextRequest) {
           .eq('list_id', list.id)
           .order('display_order', { ascending: true });
 
-        const items = (listItemRows || []).map((row: { item_id: string; tools_sl_items: { name: string } | null }) => ({
+        const items = (listItemRows || []).map((row: { item_id: string; tools_sl_items: { name: string }[] | null }) => ({
           itemId: row.item_id,
-          name: row.tools_sl_items?.name ?? '',
+          name: row.tools_sl_items?.[0]?.name ?? '',
         }));
 
         result.push({
