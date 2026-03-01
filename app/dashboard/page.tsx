@@ -18,6 +18,7 @@ import { RepairHistoryTool } from '../components/RepairHistoryTool';
 import { HealthcareApptsHistoryTool } from '../components/HealthcareApptsHistoryTool';
 import { ToDoListTool } from '../components/ToDoListTool';
 import { GoalsTrackingTool, GoalsProvider, useGoalsContext, getGoalPercentExport } from '../components/GoalsTrackingTool';
+import { ShoppingListTool, type ShoppingListDashboardSummary } from '../components/ShoppingListTool';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, PieChart, Pie, Cell, Legend } from 'recharts';
 
 // Dashboard goal cards (left-side-only view for goals with showOnDashboard)
@@ -722,6 +723,7 @@ export default function Dashboard() {
   const [todoListDashboardData, setTodoListDashboardData] = useState<{ categoryName: string; taskNames: string[] }[]>([]);
   const [isLoadingKpis, setIsLoadingKpis] = useState(false);
   const [subscriptionTrackerMonthlySpend, setSubscriptionTrackerMonthlySpend] = useState<number | null>(null);
+  const [shoppingListDashboardSummaries, setShoppingListDashboardSummaries] = useState<ShoppingListDashboardSummary[]>([]);
   const router = useRouter();
   
   const isSuperAdmin = user?.userStatus === 'superadmin';
@@ -909,6 +911,28 @@ export default function Dashboard() {
         setTodoListDashboardData(items as { categoryName: string; taskNames: string[] }[]);
       } catch {
         if (!cancelled) setTodoListDashboardData([]);
+      }
+    })();
+    return () => { cancelled = true; };
+  }, [activeTab, dashboardSubTab, tools]);
+
+  // Shopping List dashboard section: fetch from API when user has the tool and is on overview
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    const shoppingListTool = tools.find((t) => t.name === 'Shopping List');
+    if (!shoppingListTool?.id || activeTab !== 'dashboard' || dashboardSubTab !== 'overview') {
+      setShoppingListDashboardSummaries([]);
+      return;
+    }
+    let cancelled = false;
+    (async () => {
+      try {
+        const res = await fetch(`/api/tools/shopping-list?toolId=${encodeURIComponent(shoppingListTool.id)}&resource=dashboard`);
+        const json = await res.json();
+        if (cancelled) return;
+        setShoppingListDashboardSummaries(Array.isArray(json.summaries) ? json.summaries : []);
+      } catch {
+        if (!cancelled) setShoppingListDashboardSummaries([]);
       }
     })();
     return () => { cancelled = true; };
@@ -1241,6 +1265,39 @@ export default function Dashboard() {
 
                 <DashboardGoalCards />
 
+                {/* Shopping Lists on Dashboard (from Shopping List tool) */}
+                {(() => {
+                  const shoppingListTool = tools.find((t) => t.name === 'Shopping List');
+                  if (!shoppingListTool?.id) return null;
+                  if (shoppingListDashboardSummaries.length === 0) return null;
+                  const formatDate = (iso: string) => {
+                    const d = new Date(iso);
+                    return `${d.getMonth() + 1}/${d.getDate()}/${d.getFullYear()}`;
+                  };
+                  return (
+                    <div className="mb-6">
+                      <h3 className="text-lg font-semibold text-slate-100 mb-3">Shopping Lists</h3>
+                      <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
+                        {shoppingListDashboardSummaries.map((s) => (
+                          <div
+                            key={s.listId}
+                            className="rounded-2xl border border-slate-800 bg-slate-900/70 p-5 text-center flex flex-col min-h-[120px]"
+                          >
+                            <div className="text-base font-semibold text-slate-50 mb-0.5">{s.name}</div>
+                            <div className="text-xs text-slate-400 mb-3">{formatDate(s.date)}</div>
+                            <div className="flex-1 flex items-center justify-center">
+                              <span className="text-4xl font-semibold text-emerald-300">{s.itemCount}</span>
+                              <span className="text-sm text-slate-400 ml-1">
+                                {s.itemCount === 1 ? 'item' : 'items'}
+                              </span>
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  );
+                })()}
+
                 {/* Dashboard KPIs */}
                 {dashboardKpis.length > 0 && (
                   <div className="mb-6 grid gap-4 md:grid-cols-2 lg:grid-cols-3">
@@ -1482,10 +1539,15 @@ export default function Dashboard() {
                                 <div 
                                   key={tool.id} 
                                   onClick={() => handleToolClick(tool)}
-                                  className="rounded-2xl border border-slate-800 bg-slate-900/70 p-4 transition-colors cursor-pointer hover:border-emerald-500/50"
+                                  className="relative flex flex-col rounded-2xl border border-slate-800 bg-slate-900/70 p-4 min-h-[180px] transition-colors cursor-pointer hover:border-emerald-500/50"
                                 >
+                                  {tool.trialStatus === 'trial' && (
+                                    <span className="absolute top-2 left-2 inline-flex items-center rounded-full bg-amber-500/20 px-2 py-0.5 text-xs font-medium text-amber-300">
+                                      Trial
+                                    </span>
+                                  )}
                                   {iconSrc && (
-                                    <div className="mb-3 flex items-center justify-center">
+                                    <div className="mb-3 flex flex-1 min-h-[60px] items-center justify-center">
                                       <DynamicIcon 
                                         iconName={iconSrc} 
                                         size={60} 
@@ -1494,12 +1556,7 @@ export default function Dashboard() {
                                     </div>
                                   )}
                                   <div className="flex flex-col items-center">
-                                    <h3 className="text-sm font-semibold text-slate-100 mb-1 text-center">{tool.name}</h3>
-                                    {tool.trialStatus === 'trial' && (
-                                      <span className="inline-flex items-center rounded-full bg-amber-500/20 px-2 py-0.5 text-xs font-medium text-amber-300 mb-1">
-                                        Trial
-                                      </span>
-                                    )}
+                                    <h3 className="text-sm font-semibold text-slate-100 text-center line-clamp-2">{tool.name}</h3>
                                   </div>
                                 </div>
                               );
@@ -1539,6 +1596,8 @@ export default function Dashboard() {
                         <ToDoListTool toolId={tool.id} />
                       ) : tool.name === 'Goals Tracking' ? (
                         <GoalsTrackingTool toolId={tool.id} />
+                      ) : tool.name === 'Shopping List' ? (
+                        <ShoppingListTool toolId={tool.id} />
                       ) : (
                         <div className="rounded-2xl border border-slate-800 bg-slate-900/70 p-6">
                           <h2 className="text-xl font-semibold text-slate-50 mb-4">{tool.name}</h2>
@@ -1718,6 +1777,8 @@ export default function Dashboard() {
                         <ToDoListTool toolId={tool.id} />
                       ) : tool.name === 'Goals Tracking' ? (
                         <GoalsTrackingTool toolId={tool.id} />
+                      ) : tool.name === 'Shopping List' ? (
+                        <ShoppingListTool toolId={tool.id} />
                       ) : (
                         <div className="rounded-2xl border border-slate-800 bg-slate-900/70 p-6">
                           <h2 className="text-xl font-semibold text-slate-50 mb-4">{tool.name}</h2>

@@ -162,10 +162,55 @@ className="px-3 py-2 text-sm font-medium transition-colors text-slate-400 hover:
 
 ### Icon Button
 ```tsx
-className="rounded-lg p-1 text-slate-400 hover:bg-slate-800 hover:text-slate-200 transition-colors"
+<button
+  aria-label="Close modal"
+  title="Close modal"
+  className="rounded-lg p-1 text-slate-400 hover:bg-slate-800 hover:text-slate-200 transition-colors"
+>
+  {/* icon SVG */}
+</button>
 ```
 - **Use For**: Close buttons, icon-only actions
-- **Include**: `aria-label` for accessibility
+- **Include**: 
+  - `aria-label` for accessibility (e.g., `aria-label="Close modal"`)
+  - `title` for tooltip on hover — all icon-only buttons must show a tooltip when the user hovers. Use the same text as `aria-label` (e.g., `title="Close modal"`).
+
+### Dashboard Toggle (Switch)
+Use this standard design for any "display on dashboard" or similar on/off toggle. The control is a capsule-shaped track with a white circular thumb that slides left (off) or right (on). When on, the track is emerald; when off, the track is slate.
+
+```tsx
+<label className="flex items-center gap-2 cursor-pointer" title="Display on dashboard">
+  <span className="text-xs text-slate-400 whitespace-nowrap">Dashboard</span>
+  <button
+    type="button"
+    role="switch"
+    aria-checked={isOn}
+    aria-label="Display on dashboard"
+    title="Display on dashboard"
+    onClick={() => toggle()}
+    className={`relative inline-flex h-6 w-11 flex-shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors focus:outline-none focus:ring-2 focus:ring-emerald-500/50 focus:ring-offset-2 focus:ring-offset-slate-900 ${
+      isOn ? 'bg-emerald-500' : 'bg-slate-700'
+    }`}
+  >
+    <span
+      className={`pointer-events-none inline-block h-5 w-5 transform rounded-full bg-white shadow ring-0 transition ${
+        isOn ? 'translate-x-5' : 'translate-x-1'
+      }`}
+    />
+  </button>
+</label>
+```
+- **Use For**: "Display on dashboard" and any similar boolean toggle where the standard is a switch (not a checkbox).
+- **Track**: 
+  - Size: `h-6 w-11` (24px height, 44px width) — capsule shape via `rounded-full`
+  - On state: `bg-emerald-500` (green)
+  - Off state: `bg-slate-700`
+  - Focus: `focus:ring-2 focus:ring-emerald-500/50 focus:ring-offset-2 focus:ring-offset-slate-900`
+- **Thumb**: 
+  - Size: `h-5 w-5` (20px), `rounded-full`, `bg-white`, `shadow`
+  - Position: `translate-x-1` when off (left), `translate-x-5` when on (right)
+- **Label**: Place the label text (e.g. "Dashboard") to the left of the switch in `text-xs text-slate-400`. Use a `<label>` wrapping both so clicking the text toggles the switch.
+- **Accessibility**: Use `role="switch"`, `aria-checked={boolean}`, and `aria-label` (and `title` for tooltip).
 
 ### Add New Record Button
 ```tsx
@@ -624,7 +669,7 @@ Use this structure at the top of the tool so the header selector matches across 
 - Use `<label>` elements properly associated with form inputs
 
 ### ARIA Labels
-- **Icon Buttons**: Always include `aria-label` (e.g., `aria-label="Close modal"`)
+- **Icon Buttons**: Always include `aria-label` (e.g., `aria-label="Close modal"`) and `title` (e.g., `title="Close modal"`) so that all icons show a tooltip on hover. Use the same text for both attributes.
 - **Form Fields**: Use `aria-describedby` for error messages when appropriate
 - **Loading States**: Use `aria-busy="true"` for loading elements
 
