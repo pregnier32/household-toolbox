@@ -146,10 +146,11 @@ export async function GET(request: NextRequest) {
           .eq('list_id', list.id)
           .order('display_order', { ascending: true });
 
-        const items = (listItemRows || []).map((row: { item_id: string; tools_sl_items: { name: string }[] | null }) => ({
-          itemId: row.item_id,
-          name: row.tools_sl_items?.[0]?.name ?? '',
-        }));
+        const items = (listItemRows || []).map((row: { item_id: string; tools_sl_items: { name: string } | { name: string }[] | null }) => {
+          const related = row.tools_sl_items;
+          const name = related == null ? '' : Array.isArray(related) ? related[0]?.name ?? '' : related.name ?? '';
+          return { itemId: row.item_id, name };
+        });
 
         result.push({
           id: list.id,

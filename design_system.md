@@ -165,15 +165,47 @@ className="px-3 py-2 text-sm font-medium transition-colors text-slate-400 hover:
 <button
   aria-label="Close modal"
   title="Close modal"
-  className="rounded-lg p-1 text-slate-400 hover:bg-slate-800 hover:text-slate-200 transition-colors"
+  className="rounded-lg p-2 text-slate-400 hover:bg-slate-800 hover:text-slate-200 transition-colors"
 >
-  {/* icon SVG */}
+  {/* icon SVG — use Icon Style format below */}
 </button>
 ```
-- **Use For**: Close buttons, icon-only actions
+- **Use For**: Close buttons, icon-only actions (e.g. print, close, view)
 - **Include**: 
   - `aria-label` for accessibility (e.g., `aria-label="Close modal"`)
   - `title` for tooltip on hover — all icon-only buttons must show a tooltip when the user hovers. Use the same text as `aria-label` (e.g., `title="Close modal"`).
+- **Icon**: Use the standard **Icon Style** format below so all app icons match (outline style, light grey).
+
+### Icon Style (standard for all tools)
+Use this format for every icon in icon-only buttons and inline icons so icons look consistent across the app (outline/stroke style, light grey that lightens on hover).
+
+- **Style**: Outline (stroke) icons only — no filled icons. Use `fill="none"` and `stroke="currentColor"` so the icon inherits the parent's text color.
+- **Stroke**: `strokeWidth={2}`, `strokeLinecap="round"`, `strokeLinejoin="round"` for a clean, consistent line.
+- **Size**: `className="h-5 w-5"` (20px) for standard icon buttons; use `h-6 w-6` where a larger icon is needed.
+- **Color**: Set on the parent (e.g. the button). Use `text-slate-400` for default and `hover:text-slate-200` on hover so the icon is a light grey that lightens on hover.
+- **ViewBox**: Use `viewBox="0 0 24 24"` for 24pt icon sets so scaling is consistent.
+
+**Example — print icon in a button:**
+```tsx
+<button
+  type="button"
+  onClick={() => window.print()}
+  aria-label="Print list"
+  title="Print list"
+  className="rounded-lg p-2 text-slate-400 hover:bg-slate-800 hover:text-slate-200 transition-colors"
+>
+  <svg className="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 17h2a2 2 0 002-2v-4a2 2 0 00-2-2H5a2 2 0 00-2 2v4a2 2 0 002 2h2m2 4h6a2 2 0 002-2v-4a2 2 0 00-2-2H9a2 2 0 00-2 2v4a2 2 0 002 2zm8-12V5a2 2 0 00-2-2H9a2 2 0 00-2 2v4h10z" />
+  </svg>
+</button>
+```
+
+**Example — close (X) icon:**
+```tsx
+<svg className="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+</svg>
+```
 
 ### Dashboard Toggle (Switch)
 Use this standard design for any "display on dashboard" or similar on/off toggle. The control is a capsule-shaped track with a white circular thumb that slides left (off) or right (on). When on, the track is emerald; when off, the track is slate.
@@ -512,6 +544,163 @@ For tools that include an Export tab, use this consistent UI pattern to provide 
 - All export functionality should be contained within the popup modal
 - Use consistent button styling matching the primary button pattern
 - Ensure the modal is keyboard accessible (Escape to close, tab navigation)
+
+### Report UI for Printing
+
+When a tool offers "Print" (e.g. from an icon on a view modal), the content that is sent to the printer should follow this report layout so all print/export output is consistent: clean, hierarchical, and readable on white.
+
+#### Design principles
+- **Print-friendly**: White background, black body text, high contrast for readability.
+- **Hierarchical**: Clear levels — report title → section/category headings → list items (or rows).
+- **Document-like**: Generous spacing, left-aligned, no app chrome (buttons, modals, card, or shadow) on the printed page.
+- **Single page**: Only one copy of the report should print; no duplicate pages.
+
+#### Recommended: Dedicated print-only block
+
+To avoid the modal card (border, shadow, max-width) and overlay appearing in print and to prevent duplicate or blank pages, use a **dedicated print-only block** that contains only the report content (title + categories + list). Give it a single class (e.g. `report-print`). Hide it on screen with inline styles (e.g. `position: absolute; left: -9999px; width: 1px; height: 1px; overflow: hidden`) and set `aria-hidden="true"`.
+
+**Preferred: Portal the print block to `document.body`** so it is a direct child of `body`. Then in `@media print`, hide all other body children with `body > *:not(.report-print) { display: none !important; }`. Only the print block is displayed, so the app root and overlay take no space — no blank second page. Use `createPortal` from `react-dom` and guard with `typeof document !== 'undefined'` for SSR. Example: `createPortal(<> <style>…</style> <div className="report-print" …>…</div> </>, document.body)`.
+
+**Alternative: Sibling to the modal.** Render the print-only block as a sibling to the modal (not inside it). In `@media print` use `body * { visibility: hidden; }` and `.report-print, .report-print * { visibility: visible !important; }`. Give the overlay a class and `display: none !important` in print so it doesn’t reserve a full page. This can still leave a blank second page in some browsers if the app root has large height; prefer the portal approach if that occurs.
+
+#### Structure and CSS (print only)
+
+1. **Printable container**  
+   Use a single element with a dedicated class (e.g. `report-print`). Prefer the **dedicated print-only block** (sibling to the modal) so print output has no card/chrome and no duplicate pages. Alternatively, you can put the class on the modal’s inner content div and rely on visibility so only that div prints (simpler but the modal wrapper can still affect layout in some browsers).
+
+2. **Hide app chrome when printing**  
+   With a dedicated print-only block, the modal and overlay are hidden via `body * { visibility: hidden }` and never shown in print. If you print from inside the modal instead, add `print-only-hidden` to modal header and buttons and use `.report-print .print-only-hidden { display: none !important; }`.
+
+3. **Print-only title**  
+   Inside the printable block, include the report title in an element with class `print-title`. If that block is only for print, the title can be visible there; if the same content is also in the modal, use `hidden` on screen and `display: block !important` in `@media print` for `.report-print .print-title`.
+
+4. **Scoped print styles**  
+   Inject a `<style>` (e.g. with `dangerouslySetInnerHTML`) that applies only when printing. Two patterns:
+
+   **Portal approach (recommended):** Print block is a direct child of `body` (rendered via `createPortal`). Hide all other body children so only the report prints; no second page.
+
+   **Visibility approach:** Print block is a sibling to the modal. Hide overlay with `display: none`, then use `body * { visibility: hidden }` and show only `.report-print` and its descendants.
+
+   **Critical — override off-screen styles in print:** The print block is hidden on screen with inline styles (`position: absolute; left: -9999px; width: 1px; overflow: hidden`). In `@media print` you **must** override these or the content will not appear (single blank page). Set `position: static !important; left: auto !important; overflow: visible !important; height: auto !important;` (and full width, white background, etc.) so the content is visible on the printed page.
+
+**Example — portal approach (single page, no blank second page):**
+
+```css
+@media print {
+  body > *:not(.report-print) { display: none !important; }
+  .report-print {
+    display: block !important;
+    position: static !important; left: auto !important;
+    width: 100% !important; max-width: none !important; height: auto !important;
+    overflow: visible !important;
+    background: white !important; color: black !important; padding: 1rem !important;
+    border: none !important; border-radius: 0 !important; box-shadow: none !important;
+  }
+  .report-print .print-title { display: block !important; color: black; }
+  .report-print .report-category { color: #059669; }
+  .report-print p, .report-print ul, .report-print li { color: black; }
+}
+```
+
+**Example — visibility approach (sibling block, overlay hidden):**
+
+```css
+@media print {
+  .report-overlay { display: none !important; }
+  body * { visibility: hidden; }
+  .report-print, .report-print * { visibility: visible !important; }
+  .report-print {
+    position: static !important; left: auto !important;
+    width: 100% !important; max-width: none !important; height: auto !important;
+    overflow: visible !important;
+    background: white !important; color: black !important; padding: 1rem !important;
+    border: none !important; border-radius: 0 !important; box-shadow: none !important;
+  }
+  .report-print .print-title { display: block !important; color: black; }
+  .report-print .report-category { color: #059669; }
+  .report-print p, .report-print ul, .report-print li { color: black; }
+}
+```
+
+- **Preventing duplicate or blank pages:** Prefer the **portal approach**: render the print block (and its `<style>`) with `createPortal(..., document.body)` and use `body > *:not(.report-print) { display: none !important; }` so only the report is in the print layout. If using the sibling approach, give the overlay a class and `display: none !important` in print. In both cases, **always override** the print block’s off-screen inline styles in print (`position: static`, `left: auto`, `overflow: visible`, `height: auto`) so the content is visible.
+
+#### Typography and hierarchy
+
+| Element | On-screen (optional) | When printed |
+|--------|----------------------|--------------|
+| **Report title** | Can be in modal header (not printed) | Shown via `.print-title`: black, bold, larger (e.g. `text-lg font-semibold`). Format: "[Report Name] — [Date or context]". Left-aligned, margin below. |
+| **Section / category headings** | e.g. `text-xs font-semibold uppercase tracking-[0.18em] text-emerald-300 mb-1` | Green (e.g. `#059669` / emerald-600), bold, uppercase, smaller than title, space below (`mb-1` or `mb-2`). |
+| **List items** | e.g. `text-sm text-slate-200 list-disc list-inside` | Black (inherit from container), regular weight, bulleted (`list-disc list-inside`), indented, tight vertical spacing (`space-y-0.5`). |
+
+- **Report title**: One line, e.g. "[List Name] — [MM/DD/YYYY]" or "[Report Name] — [context]". Use `mb-2` below.
+- **Categories/sections**: Uppercase labels (e.g. "BAKERY & BREAD", "BEVERAGES"). Use a class like `report-category` and set its color to green in the print stylesheet so it stays green in print.
+- **Body/list content**: Simple bullet lists or rows; black text, no colored UI; adequate line height and spacing.
+
+#### Layout and spacing
+
+- **Container**: In print, full width, white background, `padding: 1rem` (or `p-4`).
+- **Sections**: `space-y-4` between each category/section block.
+- **Lists**: `list-disc list-inside`, `space-y-0.5` between items, `ml-0` or small indent so bullets and text align cleanly.
+
+#### Example structure (React/JSX)
+
+**Option A — Portal (recommended):** Render the modal in place for on-screen use. Render the print block and its `<style>` via `createPortal(..., document.body)` so the print block is a direct child of `body`. In print, `body > *:not(.report-print) { display: none }` so only the report prints — one page, no blank second page.
+
+```tsx
+import { createPortal } from 'react-dom';
+
+// When report modal is open:
+const printContent = (
+  <>
+    <style dangerouslySetInnerHTML={{ __html: `@media print { body > *:not(.report-print){ display: none !important; } .report-print { display: block !important; position: static !important; left: auto !important; width: 100% !important; height: auto !important; overflow: visible !important; background: white !important; color: black !important; padding: 1rem !important; border: none !important; box-shadow: none !important; } .report-print .print-title { display: block !important; color: black; } .report-print .report-category { color: #059669; } .report-print p, .report-print ul, .report-print li { color: black; } }` }} />
+    <div
+      className="report-print"
+      aria-hidden
+      style={{ position: 'absolute', left: '-9999px', width: '1px', height: '1px', overflow: 'hidden' }}
+    >
+      <div className="print-title mb-2 text-lg font-semibold">{reportName} — {formatDateDisplay(date)}</div>
+      {items.length === 0 ? <p className="text-sm py-4">No items.</p> : (
+        <div className="space-y-4">
+          {groups.map(({ category, items: categoryItems }) => (
+            <div key={category}>
+              <p className="report-category text-xs font-semibold uppercase tracking-[0.18em] mb-1">{category}</p>
+              <ul className="text-sm list-disc list-inside ml-0 space-y-0.5">
+                {categoryItems.map((item) => <li key={item.id}>{item.name}</li>)}
+              </ul>
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  </>
+);
+
+return (
+  <>
+    <div className="report-overlay fixed inset-0 z-50 ..." onClick={() => setCloseModal(null)}>
+      <div className="... card ...">
+        <div className="... print-only-hidden">… <button onClick={() => window.print()}>Print</button> …</div>
+        <div className="overflow-y-auto ...">{/* On-screen content (same data) */}</div>
+      </div>
+    </div>
+    {typeof document !== 'undefined' && createPortal(printContent, document.body)}
+  </>
+);
+```
+
+**Option B — Sibling block:** Same as before: fragment contains `<style>`, overlay + modal, and a sibling `<div className="report-print" style={{ position: 'absolute', left: '-9999px', ... }}>` with the report content. Use the visibility-based print CSS and overlay `display: none` in print. Override the print block’s inline styles in print (`position: static`, `left: auto`, `overflow: visible`, `height: auto`) so the content is visible.
+
+- The modal and the print block receive the same data (`reportName`, `date`, `groups`). The print block is off-screen until print; the injected CSS makes it the only visible content and overrides its inline styles so it appears on the printed page.
+
+#### Guidelines
+
+- **Use the dedicated print-only block** for new report UIs. Prefer **portaling** it to `document.body` with `createPortal` so that in print you can use `body > *:not(.report-print) { display: none }` — this avoids a blank second page. Guard with `typeof document !== 'undefined'` for SSR.
+- **In print CSS, override the block’s off-screen inline styles** so the content is visible: set `position: static !important; left: auto !important; overflow: visible !important; height: auto !important` (and full width, white background, etc.). Without these overrides, the printed page will be blank because the block stays off-screen or clipped.
+- Use the same report layout for any "Print" action that opens the browser print dialog (e.g. print icon on a view modal).
+- Apply the same hierarchy (title → green section headings → black list/body) to other tools (e.g. export-to-PDF or print from Export tab) so printed and exported reports match this pattern.
+- Keep the printable area focused: no navigation, buttons, or decorative UI in the printed output.
+- In print CSS, explicitly set `color: black` for title, list, and body, and `color: #059669` for `.report-category`, so Tailwind’s on-screen colors don’t carry through.
+- Date display: Use MM/DD/YYYY in the report title and anywhere dates appear in the report body.
 
 ### Card Patterns
 - **Standard Card**: `rounded-2xl border border-slate-800 bg-slate-900/70 p-4` or `p-6`
@@ -967,5 +1156,5 @@ $$;
 - Consider adding a light theme option (currently only dark theme is implemented)
 - Document animation and transition patterns as they're added
 - Create component library/storybook for reusable components
-- Establish icon system guidelines (currently using DynamicIcon component)
+- Expand the icon set as needed; use the documented Icon Style (outline, stroke, currentColor) for consistency
 - Document responsive breakpoint strategy in more detail

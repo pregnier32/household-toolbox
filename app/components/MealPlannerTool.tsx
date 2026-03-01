@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useMemo, useEffect } from 'react';
+import { createPortal } from 'react-dom';
 
 const DEFAULT_ITEM_CATEGORIES = [
   'Bakery & Bread',
@@ -939,46 +940,45 @@ export function MealPlannerTool({ toolId }: MealPlannerToolProps) {
         const dates = getDatesForWeek(plan.startDate);
         const printItems = getConsolidatedItems(plan);
         const printGroups = groupConsolidatedItemsByCategory(printItems);
-        return (
+
+        const fullPrintContent = (
           <>
             <style
               dangerouslySetInnerHTML={{
                 __html: `
                   @media print {
                     @page { size: landscape; }
-                    body * { visibility: hidden; }
-                    .meal-plan-full-print, .meal-plan-full-print * { visibility: visible; }
+                    body > *:not(.meal-plan-full-print) { display: none !important; }
                     .meal-plan-full-print {
-                      position: absolute !important;
-                      left: 0 !important;
-                      top: 0 !important;
-                      width: 100% !important;
-                      background: white !important;
-                      color: black !important;
-                      padding: 16px !important;
-                      font-size: 12px;
+                      display: block !important;
+                      position: static !important; left: auto !important;
+                      width: 100% !important; max-width: none !important; height: auto !important;
+                      overflow: visible !important;
+                      background: white !important; color: black !important;
+                      padding: 1rem !important; font-size: 12px;
+                      border: none !important; border-radius: 0 !important; box-shadow: none !important;
                     }
                     .meal-plan-full-print .print-meal-plan { margin-bottom: 20px; }
                     .meal-plan-full-print .print-week-grid { display: grid; grid-template-columns: repeat(7, 1fr); gap: 8px; margin-top: 8px; }
-                    .meal-plan-full-print .print-day-cell { border: 1px solid #ccc; padding: 6px; min-height: 60px; }
-                    .meal-plan-full-print .print-day-label { font-weight: 700; text-transform: uppercase; }
-                    .meal-plan-full-print .print-day-date { font-size: 10px; color: #555; margin-bottom: 4px; }
-                    .meal-plan-full-print .print-meal-name { font-size: 11px; margin: 2px 0; }
-                    .meal-plan-full-print .print-list-title { font-weight: 700; margin-top: 16px; margin-bottom: 8px; font-size: 14px; }
-                    .meal-plan-full-print .print-category { font-weight: 600; text-transform: uppercase; margin-top: 10px; margin-bottom: 4px; font-size: 11px; }
+                    .meal-plan-full-print .print-day-cell { border: 1px solid #cbd5e1; padding: 6px; min-height: 60px; color: black; }
+                    .meal-plan-full-print .print-day-label { font-weight: 700; text-transform: uppercase; color: black; }
+                    .meal-plan-full-print .print-day-date { font-size: 10px; color: black; margin-bottom: 4px; }
+                    .meal-plan-full-print .print-meal-name { font-size: 11px; margin: 2px 0; color: black; }
+                    .meal-plan-full-print .print-list-title { font-weight: 700; margin-top: 16px; margin-bottom: 8px; font-size: 14px; color: black; }
+                    .meal-plan-full-print .print-category { font-weight: 600; text-transform: uppercase; margin-top: 10px; margin-bottom: 4px; font-size: 11px; color: #059669; }
                     .meal-plan-full-print .print-list-items { margin-left: 12px; list-style: disc; }
-                    .meal-plan-full-print .print-list-items li { margin: 2px 0; }
+                    .meal-plan-full-print .print-list-items li { margin: 2px 0; color: black; }
                   }
                 `,
               }}
             />
             <div
               className="meal-plan-full-print"
-              style={{ visibility: 'hidden', position: 'absolute', left: '-9999px' }}
               aria-hidden
+              style={{ position: 'absolute', left: '-9999px', width: '1px', height: '1px', overflow: 'hidden' }}
             >
               <div className="print-meal-plan">
-                <h2 style={{ margin: 0, fontSize: '18px' }}>
+                <h2 className="print-title" style={{ margin: 0, fontSize: '18px', fontWeight: 700 }}>
                   {plan.name} — Week of {formatDateDisplay(plan.startDate)}
                 </h2>
                 <div className="print-week-grid">
@@ -1015,6 +1015,8 @@ export function MealPlannerTool({ toolId }: MealPlannerToolProps) {
             </div>
           </>
         );
+
+        return typeof document !== 'undefined' ? createPortal(fullPrintContent, document.body) : null;
       })()}
 
       <div className="space-y-6">
@@ -2301,27 +2303,69 @@ export function MealPlannerTool({ toolId }: MealPlannerToolProps) {
         if (!plan) return null;
         const items = getConsolidatedItems(plan);
         const groups = groupConsolidatedItemsByCategory(items);
-        return (
+        const printContent = (
           <>
             <style
               dangerouslySetInnerHTML={{
                 __html: `
                   @media print {
-                    body * { visibility: hidden; }
-                    .meal-plan-cart-print, .meal-plan-cart-print * { visibility: visible; }
-                    .meal-plan-cart-print { position: absolute; left: 0; top: 0; width: 100%; background: white; color: black; padding: 1rem; }
-                    .meal-plan-cart-print .print-only-hidden { display: none !important; }
-                    .meal-plan-cart-print .print-title { display: block !important; }
+                    body > *:not(.meal-plan-cart-print) { display: none !important; }
+                    .meal-plan-cart-print {
+                      display: block !important;
+                      position: static !important; left: auto !important;
+                      width: 100% !important; max-width: none !important; height: auto !important;
+                      overflow: visible !important;
+                      background: white !important; color: black !important; padding: 1rem !important;
+                      border: none !important; border-radius: 0 !important; box-shadow: none !important;
+                    }
+                    .meal-plan-cart-print .print-title { display: block !important; color: black; }
+                    .meal-plan-cart-print .report-category { color: #059669; }
+                    .meal-plan-cart-print p, .meal-plan-cart-print ul, .meal-plan-cart-print li { color: black; }
                   }
                 `,
               }}
             />
             <div
-              className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm"
+              className="meal-plan-cart-print"
+              aria-hidden
+              style={{ position: 'absolute', left: '-9999px', width: '1px', height: '1px', overflow: 'hidden' }}
+            >
+              <div className="print-title mb-2 text-lg font-semibold">
+                {plan.name} — {formatDateDisplay(plan.startDate)}
+              </div>
+              {items.length === 0 ? (
+                <p className="text-sm py-4">No ingredients. Assign meals to days first.</p>
+              ) : (
+                <div className="space-y-4">
+                  {groups.map(({ category, items: categoryItems }) => (
+                    <div key={`print-${category}`}>
+                      <p className="report-category text-xs font-semibold uppercase tracking-[0.18em] mb-1">
+                        {category}
+                      </p>
+                      <ul className="text-sm list-disc list-inside ml-0 space-y-0.5">
+                        {categoryItems.map(({ itemId, name, count }) => (
+                          <li key={itemId}>
+                            {name}
+                            {count > 1 ? ` (×${count})` : ''}
+                          </li>
+                        ))}
+                      </ul>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          </>
+        );
+
+        return (
+          <>
+            <div
+              className="meal-plan-cart-overlay fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm"
               onClick={() => setCartOpenPlanId(null)}
             >
               <div
-                className="meal-plan-cart-print w-full max-w-lg rounded-2xl border border-slate-800 bg-slate-900 p-6 shadow-2xl mx-4 max-h-[90vh] flex flex-col"
+                className="w-full max-w-lg rounded-2xl border border-slate-800 bg-slate-900 p-6 shadow-2xl mx-4 max-h-[90vh] flex flex-col"
                 onClick={(e) => e.stopPropagation()}
               >
                 <div className="flex items-center justify-between gap-4 mb-4 print-only-hidden">
@@ -2335,7 +2379,7 @@ export function MealPlannerTool({ toolId }: MealPlannerToolProps) {
                       onClick={() => window.print()}
                       aria-label="Print list"
                       title="Print list"
-                      className="rounded-lg p-2 text-emerald-400 hover:bg-slate-800 hover:text-emerald-300 transition-colors shrink-0"
+                      className="rounded-lg p-2 text-slate-400 hover:bg-slate-800 hover:text-slate-200 transition-colors shrink-0"
                     >
                       <svg className="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 17h2a2 2 0 002-2v-4a2 2 0 00-2-2H5a2 2 0 00-2 2v4a2 2 0 002 2h2m2 4h6a2 2 0 002-2v-4a2 2 0 00-2-2H9a2 2 0 00-2 2v4a2 2 0 002 2zm8-12V5a2 2 0 00-2-2H9a2 2 0 00-2 2v4h10z" />
@@ -2364,7 +2408,7 @@ export function MealPlannerTool({ toolId }: MealPlannerToolProps) {
                   <div className="space-y-4">
                     {groups.map(({ category, items: categoryItems }) => (
                       <div key={category}>
-                        <p className="text-xs font-semibold uppercase tracking-[0.18em] text-emerald-300 mb-1">
+                        <p className="report-category text-xs font-semibold uppercase tracking-[0.18em] text-emerald-300 mb-1">
                           {category}
                         </p>
                         <ul className="text-sm text-slate-200 list-disc list-inside ml-0 space-y-0.5">
@@ -2381,7 +2425,8 @@ export function MealPlannerTool({ toolId }: MealPlannerToolProps) {
                 )}
               </div>
             </div>
-          </div>
+            </div>
+            {typeof document !== 'undefined' && createPortal(printContent, document.body)}
           </>
         );
       })()}

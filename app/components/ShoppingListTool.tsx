@@ -1197,7 +1197,9 @@ export function ShoppingListTool({ toolId }: ShoppingListToolProps) {
                           </p>
                           <ul className="text-sm text-slate-200 list-disc list-inside ml-0 space-y-0.5">
                             {categoryItems.map((ref) => (
-                              <li key={ref.itemId}>{ref.name}</li>
+                              <li key={ref.itemId}>
+                                {ref.name || (masterItems.find((i) => i.id === ref.itemId)?.name ?? 'Unknown item')}
+                              </li>
                             ))}
                           </ul>
                         </div>
