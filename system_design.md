@@ -1090,6 +1090,56 @@ USING (
 - **Consistency**: All buckets follow the same security pattern
 - **Idempotent**: Scripts can be safely re-run (DROP IF EXISTS before CREATE)
 
+#### Account Data Deletion Architecture
+
+The application uses a shared server-side deletion service to remove a user account and all associated data/documents.
+
+**Primary Deletion Service**:
+- File: `lib/user-data-deletion.ts`
+- Function: `deleteUserAndAssociatedData(userId)`
+- Purpose: One central place for account erasure logic used by both admin-initiated deletion and user self-service deletion.
+
+**Who Calls It**:
+- Admin Users Management delete action:
+  - API: `app/api/admin/users/route.ts` (`DELETE`)
+- Customer self-delete action:
+  - API: `app/api/account/delete/route.ts` (`DELETE`)
+  - UI trigger: `app/dashboard/profile/page.tsx` (`Delete My Account & Data`)
+
+**How Deletion Works**:
+1. Query known tool tables for file URLs that belong to the target user.
+2. Convert file URLs to storage object paths and remove files from relevant buckets.
+3. Delete the row in `users`.
+4. Database rows tied to the user are removed by foreign keys with `ON DELETE CASCADE`.
+
+**Important Design Rule (Future Tools)**:
+- DB records: If new tool tables are correctly related to `users` with cascade chains, no extra DB deletion code is required.
+- Storage files: If a new tool uploads files, update `deleteUserAndAssociatedData()` so those bucket objects are removed during account erasure.
+
+**Implementation Guidance for New File-Based Tools**:
+- Prefer storing a storage-relative path (or a consistently parseable URL) in the DB.
+- Keep files namespaced under user folders (e.g., `{bucket}/{userId}/...`) for predictable cleanup.
+- Add one focused cleanup block in `lib/user-data-deletion.ts` for the tool’s bucket/table mapping.
+
+**Safety Notes**:
+- Self-delete endpoint currently blocks `superadmin` self-deletion to prevent accidental admin lockout.
+- If storage cleanup for a specific file fails, errors are logged and account deletion still proceeds to avoid orphaned active accounts.
+
+**Developer Checklist (When Adding a New Tool)**:
+- Add foreign keys that lead back to `users.id` with `ON DELETE CASCADE` (directly or through parent tables).
+- If the tool stores files, use a user-scoped storage path convention (`{bucket}/{userId}/...`).
+- Store a reliable file locator in DB (prefer storage-relative path, or a parseable public URL).
+- Add/verify Storage RLS policies for upload/read/update/delete on user-owned files.
+- Add a cleanup block in `lib/user-data-deletion.ts` for the tool’s storage bucket (if files exist).
+- Verify both delete paths call shared logic:
+  - Admin deletion: `DELETE /api/admin/users?id=...`
+  - Self-delete: `DELETE /api/account/delete`
+- Run a manual test with a seeded user that has tool records + files, then confirm:
+  - files removed from storage
+  - user row deleted
+  - related rows removed by cascade
+- Run `npm run build` and resolve any issues before release.
+
 ### Security Standards
 
 #### Function Search Path

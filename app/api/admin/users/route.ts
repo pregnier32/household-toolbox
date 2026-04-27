@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getSession } from '@/lib/session';
 import { supabaseServer } from '@/lib/supabaseServer';
+import { deleteUserAndAssociatedData } from '@/lib/user-data-deletion';
 
 // GET - Fetch all users
 export async function GET(request: NextRequest) {
@@ -193,17 +194,10 @@ export async function DELETE(request: NextRequest) {
       return NextResponse.json({ error: 'User not found' }, { status: 404 });
     }
 
-    // Delete the user - this will cascade delete related records:
-    // - users_tools (ON DELETE CASCADE)
-    // - password_reset_tokens (ON DELETE CASCADE)
-    // Sessions are cookie-based and will become invalid automatically
-    const { error: deleteError } = await supabaseServer
-      .from('users')
-      .delete()
-      .eq('id', id);
-
-    if (deleteError) {
-      console.error('Error deleting user:', deleteError);
+    try {
+      await deleteUserAndAssociatedData(id);
+    } catch (deleteError) {
+      console.error('Error deleting user and associated data:', deleteError);
       return NextResponse.json({ error: 'Failed to delete user' }, { status: 500 });
     }
 

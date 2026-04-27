@@ -22,6 +22,7 @@ export default function Profile() {
   const [isChangingPassword, setIsChangingPassword] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
   const [isChangingPasswordLoading, setIsChangingPasswordLoading] = useState(false);
+  const [isDeletingAccount, setIsDeletingAccount] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
   const [passwordError, setPasswordError] = useState<string | null>(null);
@@ -165,6 +166,31 @@ export default function Profile() {
       });
     } else {
       setPasswordError(result.error || 'Failed to change password');
+    }
+  };
+
+  const handleDeleteAccount = async () => {
+    const confirmed = window.confirm(
+      'Delete your account and all associated data/documents permanently? This cannot be undone.'
+    );
+    if (!confirmed) return;
+
+    setError(null);
+    setSuccess(null);
+    setIsDeletingAccount(true);
+
+    try {
+      const response = await fetch('/api/account/delete', { method: 'DELETE' });
+      const data = await response.json();
+
+      if (!response.ok) {
+        throw new Error(data.error || 'Failed to delete account');
+      }
+
+      router.push('/');
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to delete account');
+      setIsDeletingAccount(false);
     }
   };
 
@@ -386,13 +412,25 @@ export default function Profile() {
               <h2 className="text-lg font-semibold text-slate-100 mb-4">Account Actions</h2>
               
               {!isChangingPassword ? (
-                <button
-                  type="button"
-                  onClick={handleChangePasswordClick}
-                  className="w-full rounded-lg border border-slate-700 bg-slate-800/70 px-4 py-2.5 text-sm font-medium text-slate-300 transition-colors hover:bg-slate-700 hover:text-slate-100"
-                >
-                  Change Password
-                </button>
+                <div className="space-y-3">
+                  <button
+                    type="button"
+                    onClick={handleChangePasswordClick}
+                    className="w-full rounded-lg border border-slate-700 bg-slate-800/70 px-4 py-2.5 text-sm font-medium text-slate-300 transition-colors hover:bg-slate-700 hover:text-slate-100"
+                  >
+                    Change Password
+                  </button>
+                  {user.userStatus !== 'superadmin' && (
+                    <button
+                      type="button"
+                      onClick={handleDeleteAccount}
+                      disabled={isDeletingAccount}
+                      className="w-full rounded-lg border border-red-500/50 bg-red-500/10 px-4 py-2.5 text-sm font-medium text-red-300 transition-colors hover:bg-red-500/20 disabled:cursor-not-allowed disabled:opacity-50"
+                    >
+                      {isDeletingAccount ? 'Deleting Account...' : 'Delete My Account & Data'}
+                    </button>
+                  )}
+                </div>
               ) : (
                 <form ref={passwordFormRef} onSubmit={handlePasswordSubmit} className="space-y-4">
                   {passwordError && (
