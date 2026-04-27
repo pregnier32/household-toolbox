@@ -1,7 +1,6 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { PieChart, Pie, Cell, ResponsiveContainer, Tooltip } from 'recharts';
 
 type SubscriptionFrequency = 'monthly' | 'quarterly' | 'annual';
 
@@ -42,7 +41,7 @@ type SubscriptionTrackerToolProps = {
 
 export function SubscriptionTrackerTool({ toolId }: SubscriptionTrackerToolProps) {
   const [subscriptions, setSubscriptions] = useState<Subscription[]>([]);
-  const [activeTab, setActiveTab] = useState<'subscriptions' | 'kpis' | 'export'>('subscriptions');
+  const [activeTab, setActiveTab] = useState<'subscriptions' | 'export'>('subscriptions');
   const [isLoading, setIsLoading] = useState(false);
   const [showExportPopup, setShowExportPopup] = useState(false);
   const [includeHistory, setIncludeHistory] = useState(false);
@@ -84,10 +83,6 @@ export function SubscriptionTrackerTool({ toolId }: SubscriptionTrackerToolProps
   const [deleteConfirmId, setDeleteConfirmId] = useState<string | null>(null);
   const [deleteConfirmText, setDeleteConfirmText] = useState('');
   
-  // KPI dashboard preference
-  const [showKpiOnDashboard, setShowKpiOnDashboard] = useState(false);
-  const [isLoadingKpiPreference, setIsLoadingKpiPreference] = useState(false);
-
   // Load subscriptions from API
   useEffect(() => {
     const loadSubscriptions = async () => {
@@ -128,62 +123,6 @@ export function SubscriptionTrackerTool({ toolId }: SubscriptionTrackerToolProps
 
     loadSubscriptions();
   }, [toolId]);
-
-  // Load KPI dashboard preference
-  useEffect(() => {
-    const loadKpiPreference = async () => {
-      if (!toolId) return;
-      
-      try {
-        const response = await fetch(`/api/dashboard/kpis?toolId=${toolId}&kpiKey=subscription_tracker_total_monthly_spend`);
-        if (response.ok) {
-          const data = await response.json();
-          // Check if there's an enabled KPI preference
-          const enabledKpi = data.kpis?.find((kpi: any) => 
-            kpi.kpi_key === 'subscription_tracker_total_monthly_spend' && kpi.is_enabled
-          );
-          setShowKpiOnDashboard(!!enabledKpi);
-        }
-      } catch (error) {
-        console.error('Error loading KPI preference:', error);
-      }
-    };
-
-    loadKpiPreference();
-  }, [toolId]);
-
-  // Handle KPI dashboard toggle
-  const handleKpiDashboardToggle = async (enabled: boolean) => {
-    if (!toolId) return;
-    
-    setIsLoadingKpiPreference(true);
-    try {
-      const response = await fetch('/api/dashboard/kpis', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          toolId,
-          kpiKey: 'subscription_tracker_total_monthly_spend',
-          isEnabled: enabled
-        }),
-      });
-
-      if (response.ok) {
-        setShowKpiOnDashboard(enabled);
-      } else {
-        const error = await response.json();
-        console.error('Error saving KPI preference:', error);
-        alert('Failed to save preference. Please try again.');
-      }
-    } catch (error) {
-      console.error('Error saving KPI preference:', error);
-      alert('Failed to save preference. Please try again.');
-    } finally {
-      setIsLoadingKpiPreference(false);
-    }
-  };
 
   // Calculate monthly spend
   const calculateMonthlySpend = () => {
@@ -879,22 +818,6 @@ export function SubscriptionTrackerTool({ toolId }: SubscriptionTrackerToolProps
 
   const activeSubscriptions = subscriptions.filter(sub => sub.isActive).sort((a, b) => a.name.localeCompare(b.name));
   const inactiveSubscriptions = subscriptions.filter(sub => !sub.isActive).sort((a, b) => a.name.localeCompare(b.name));
-  const categoryData = calculateCategoryBreakdown();
-
-  // Colors for pie chart
-  const COLORS = [
-    '#10b981', // emerald
-    '#3b82f6', // blue
-    '#8b5cf6', // purple
-    '#f59e0b', // amber
-    '#ef4444', // red
-    '#06b6d4', // cyan
-    '#ec4899', // pink
-    '#84cc16', // lime
-    '#f97316', // orange
-    '#6366f1', // indigo
-    '#14b8a6', // teal
-  ];
 
   return (
     <div className="space-y-6">
@@ -913,12 +836,11 @@ export function SubscriptionTrackerTool({ toolId }: SubscriptionTrackerToolProps
         <div className="flex gap-2">
           {[
             { id: 'subscriptions', label: 'Subscriptions' },
-            { id: 'kpis', label: 'KPIs' },
             { id: 'export', label: 'Export' }
           ].map((tab) => (
             <button
               key={tab.id}
-              onClick={() => setActiveTab(tab.id as 'subscriptions' | 'kpis' | 'export')}
+              onClick={() => setActiveTab(tab.id as 'subscriptions' | 'export')}
               className={`px-4 py-2 text-sm font-medium transition-colors ${
                 activeTab === tab.id
                   ? 'border-b-2 border-emerald-500 text-emerald-300'
@@ -1481,102 +1403,6 @@ export function SubscriptionTrackerTool({ toolId }: SubscriptionTrackerToolProps
               ) : (
                 <p className="text-slate-400 text-center py-8">No inactive subscriptions in history.</p>
               )
-            )}
-          </div>
-        </div>
-      )}
-
-      {/* KPIs Tab */}
-      {activeTab === 'kpis' && (
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-          {/* Total Monthly Spend KPI */}
-          <div className="rounded-2xl border border-slate-800 bg-slate-900/70 p-6">
-            <div className="flex items-center justify-between mb-4">
-              <h3 className="text-lg font-semibold text-slate-50">Total Monthly Spend</h3>
-              <div className="flex items-center gap-2">
-                <label className="text-xs text-slate-400">Show on Dashboard</label>
-                <button
-                  type="button"
-                  onClick={() => handleKpiDashboardToggle(!showKpiOnDashboard)}
-                  disabled={isLoadingKpiPreference}
-                  className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors focus:outline-none focus:ring-2 focus:ring-emerald-500/50 focus:ring-offset-2 focus:ring-offset-slate-900 disabled:opacity-50 disabled:cursor-not-allowed ${
-                    showKpiOnDashboard ? 'bg-emerald-500' : 'bg-slate-700'
-                  }`}
-                  aria-label="Toggle KPI on dashboard"
-                >
-                  <span
-                    className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${
-                      showKpiOnDashboard ? 'translate-x-6' : 'translate-x-1'
-                    }`}
-                  />
-                </button>
-              </div>
-            </div>
-            <div className="text-4xl font-semibold text-emerald-400">
-              ${calculateMonthlySpend().toFixed(2)}
-            </div>
-            <p className="text-sm text-slate-400 mt-2 mb-4">
-              Based on {activeSubscriptions.length} active {activeSubscriptions.length === 1 ? 'subscription' : 'subscriptions'}
-            </p>
-            
-            {/* Horizontal line */}
-            <hr className="border-slate-700 my-4" />
-            
-            {/* Category breakdown list */}
-            <div className="mt-4">
-              <h4 className="text-sm font-semibold text-slate-300 mb-3">By Category</h4>
-              {categoryData.length > 0 ? (
-                <div className="space-y-2">
-                  {[...categoryData]
-                    .sort((a, b) => b.value - a.value)
-                    .map((category, index) => (
-                      <div key={category.name} className="flex items-center justify-between py-1">
-                        <span className="text-slate-300 text-sm">{category.name}</span>
-                        <span className="text-emerald-400 font-medium">${category.value.toFixed(2)}</span>
-                      </div>
-                    ))}
-                </div>
-              ) : (
-                <p className="text-slate-400 text-sm">No categories to display.</p>
-              )}
-            </div>
-          </div>
-
-          {/* Category Breakdown Pie Chart */}
-          <div className="rounded-2xl border border-slate-800 bg-slate-900/70 p-6">
-            <h3 className="text-lg font-semibold text-slate-50 mb-4">Monthly Spend by Category</h3>
-            {categoryData.length > 0 ? (
-              <div className="h-96">
-                <ResponsiveContainer width="100%" height="100%">
-                  <PieChart>
-                    <Pie
-                      data={categoryData}
-                      cx="50%"
-                      cy="50%"
-                      labelLine={false}
-                      label={({ name, percent }) => `${name}: ${percent ? (percent * 100).toFixed(0) : '0'}%`}
-                      outerRadius={120}
-                      fill="#8884d8"
-                      dataKey="value"
-                    >
-                      {categoryData.map((entry, index) => (
-                        <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
-                      ))}
-                    </Pie>
-                    <Tooltip
-                      formatter={(value: number) => `$${value.toFixed(2)}`}
-                      contentStyle={{
-                        backgroundColor: '#1e293b',
-                        border: '1px solid #334155',
-                        borderRadius: '8px',
-                        color: '#e2e8f0'
-                      }}
-                    />
-                  </PieChart>
-                </ResponsiveContainer>
-              </div>
-            ) : (
-              <p className="text-slate-400 text-center py-8">No active subscriptions to display.</p>
             )}
           </div>
         </div>

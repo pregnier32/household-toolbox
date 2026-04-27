@@ -114,24 +114,6 @@ export function ShoppingListTool({ toolId }: ShoppingListToolProps) {
     fetchLists();
   }, [toolId]);
 
-  const isListOnDashboard = (listId: string) =>
-    shoppingLists.some((l) => l.id === listId && l.showOnDashboard);
-  const toggleListOnDashboard = async (list: ShoppingListRecord) => {
-    if (!toolId) return;
-    const next = !isListOnDashboard(list.id);
-    try {
-      const res = await fetch('/api/tools/shopping-list', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ action: 'setShowOnDashboard', toolId, listId: list.id, showOnDashboard: next }),
-      });
-      if (!res.ok) throw new Error('Failed to update dashboard');
-      await fetchLists();
-    } catch (e) {
-      console.error('Toggle dashboard error:', e);
-    }
-  };
-
   useEffect(() => {
     if (!viewListId) return;
     const onKeyDown = (e: KeyboardEvent) => {
@@ -824,29 +806,6 @@ export function ShoppingListTool({ toolId }: ShoppingListToolProps) {
                           )}
                         </div>
                         <div className="flex items-center gap-3 flex-shrink-0">
-                          <label
-                            className="flex items-center gap-2 cursor-pointer"
-                            title="Display on dashboard"
-                          >
-                            <span className="text-xs text-slate-400 whitespace-nowrap">Dashboard</span>
-                            <button
-                              type="button"
-                              role="switch"
-                              aria-checked={isListOnDashboard(list.id)}
-                              aria-label="Display on dashboard"
-                              title="Display on dashboard"
-                              onClick={() => toggleListOnDashboard(list)}
-                              className={`relative inline-flex h-6 w-11 flex-shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors focus:outline-none focus:ring-2 focus:ring-emerald-500/50 focus:ring-offset-2 focus:ring-offset-slate-900 ${
-                                isListOnDashboard(list.id) ? 'bg-emerald-500' : 'bg-slate-700'
-                              }`}
-                            >
-                              <span
-                                className={`pointer-events-none inline-block h-5 w-5 transform rounded-full bg-white shadow ring-0 transition ${
-                                  isListOnDashboard(list.id) ? 'translate-x-5' : 'translate-x-1'
-                                }`}
-                              />
-                            </button>
-                          </label>
                           <div className="flex items-center gap-1">
                             <button
                               type="button"

@@ -26,7 +26,7 @@ export async function GET(
       return NextResponse.json({ error: 'User ID is required' }, { status: 400 });
     }
 
-    // Fetch user's active and trial tools with tool details
+    // Fetch user's active tools with tool details
     const { data: userTools, error } = await supabaseServer
       .from('users_tools')
       .select(`
@@ -35,8 +35,6 @@ export async function GET(
         status,
         created_at,
         updated_at,
-        trial_start_date,
-        trial_end_date,
         tools (
           id,
           name,
@@ -46,7 +44,7 @@ export async function GET(
         )
       `)
       .eq('user_id', userId)
-      .in('status', ['active', 'trial', 'pending_cancellation'])
+      .eq('status', 'active')
       .order('created_at', { ascending: false });
 
     if (error) {
@@ -96,7 +94,7 @@ export async function PUT(
     }
 
     // Validate status
-    const validStatuses = ['active', 'trial', 'inactive', 'pending_cancellation'];
+    const validStatuses = ['active', 'inactive'];
     if (!validStatuses.includes(status)) {
       return NextResponse.json(
         { error: `Invalid status. Must be one of: ${validStatuses.join(', ')}` },
@@ -124,13 +122,10 @@ export async function PUT(
       return NextResponse.json({ error: 'Tool not found or does not belong to this user' }, { status: 404 });
     }
 
-    // Check if this is a custom tool - custom tools cannot be set to trial
+    // Check if this is a custom tool (no special status behavior)
     const toolStatus = (userTool as any)?.tools?.status;
-    if (toolStatus === 'custom' && status === 'trial') {
-      return NextResponse.json(
-        { error: 'Custom tools cannot be set to trial status. Please use active status instead.' },
-        { status: 400 }
-      );
+    if (toolStatus === 'custom' && status !== 'active' && status !== 'inactive') {
+      return NextResponse.json({ error: 'Invalid status for custom tool' }, { status: 400 });
     }
 
     // Build update data
@@ -138,23 +133,6 @@ export async function PUT(
       status,
       updated_at: new Date().toISOString(),
     };
-
-    // If changing from trial to inactive, clear trial dates
-    if (userTool.status === 'trial' && status === 'inactive') {
-      updateData.trial_start_date = null;
-      updateData.trial_end_date = null;
-    }
-
-    // If changing to trial and it wasn't trial before, set trial dates
-    // Note: Custom tools are already blocked from trial status above
-    if (status === 'trial' && userTool.status !== 'trial') {
-      const now = new Date();
-      const trialEndDate = new Date(now);
-      trialEndDate.setDate(trialEndDate.getDate() + 7);
-      updateData.trial_start_date = now.toISOString();
-      updateData.trial_end_date = trialEndDate.toISOString();
-      updateData.has_used_trial = true;
-    }
 
     // Update the tool status
     const { data: updatedTool, error: updateError } = await supabaseServer
@@ -168,8 +146,6 @@ export async function PUT(
         status,
         created_at,
         updated_at,
-        trial_start_date,
-        trial_end_date,
         tools (
           id,
           name,
@@ -288,10 +264,7 @@ export async function POST(
       }
     }
 
-    // Create new users_tools record
-    // Custom tools should be assigned as 'active' (no trial)
-    // Regular tools can be assigned as 'active' or 'trial' based on admin preference
-    // For now, we'll assign all tools as 'active' when assigned by admin
+    // Create new users_tools record as active
     const insertData: any = {
       user_id: userId,
       tool_id: toolId,

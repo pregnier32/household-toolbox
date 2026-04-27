@@ -147,7 +147,7 @@ export default function WelcomeEmailEditor() {
       <div className="mx-auto max-w-5xl px-4 py-8 sm:px-6 lg:px-8">
         <div className="mb-6">
           <button
-            onClick={() => router.push('/dashboard')}
+            onClick={() => router.push('/dashboard/admin/site-maintenance')}
             className="mb-4 flex items-center gap-2 text-sm text-slate-400 transition-colors hover:text-slate-300"
           >
             <svg
@@ -163,7 +163,7 @@ export default function WelcomeEmailEditor() {
                 d="M15 19l-7-7 7-7"
               />
             </svg>
-            <span>Back to Dashboard</span>
+            <span>Back to Site Maintenance</span>
           </button>
           <h1 className="text-2xl font-semibold text-slate-50 mb-2">
             Welcome Email Editor

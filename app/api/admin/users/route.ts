@@ -26,11 +26,11 @@ export async function GET(request: NextRequest) {
       return NextResponse.json({ error: 'Failed to fetch users' }, { status: 500 });
     }
 
-    // Fetch tool counts for all users (includes active, trial, and pending_cancellation status)
+    // Fetch active tool counts for all users
     const { data: toolCounts, error: toolCountsError } = await supabaseServer
       .from('users_tools')
       .select('user_id')
-      .in('status', ['active', 'trial', 'pending_cancellation']);
+      .eq('status', 'active');
 
     if (toolCountsError) {
       console.error('Error fetching tool counts:', toolCountsError);

@@ -446,7 +446,7 @@ export async function DELETE(request: NextRequest) {
       .from('users_tools')
       .select('id, user_id, status')
       .eq('tool_id', id)
-      .in('status', ['active', 'trial', 'pending_cancellation']);
+      .eq('status', 'active');
 
     if (checkError) {
       console.error('Error checking active users:', checkError);

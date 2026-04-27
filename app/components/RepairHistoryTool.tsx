@@ -713,7 +713,7 @@ export function RepairHistoryTool({ toolId }: RepairHistoryToolProps) {
       formData.append('cost', newRecord.cost || '');
       formData.append('serviceProvider', newRecord.serviceProvider || '');
       formData.append('warrantyEndDate', newRecord.warrantyEndDate || '');
-      formData.append('addWarrantyToDashboard', newRecord.addWarrantyToDashboard ? 'true' : 'false');
+      formData.append('addWarrantyToDashboard', 'false');
       formData.append('submittedToInsurance', newRecord.submittedToInsurance ? 'true' : 'false');
       formData.append('insuranceCarrier', newRecord.insuranceCarrier || '');
       formData.append('claimNumber', newRecord.claimNumber || '');
@@ -823,7 +823,7 @@ export function RepairHistoryTool({ toolId }: RepairHistoryToolProps) {
       formData.append('cost', editingRecord.cost || '');
       formData.append('serviceProvider', editingRecord.serviceProvider || '');
       formData.append('warrantyEndDate', editingRecord.warrantyEndDate || '');
-      formData.append('addWarrantyToDashboard', editingRecord.addWarrantyToDashboard ? 'true' : 'false');
+      formData.append('addWarrantyToDashboard', 'false');
       formData.append('submittedToInsurance', editingRecord.submittedToInsurance ? 'true' : 'false');
       formData.append('insuranceCarrier', editingRecord.insuranceCarrier || '');
       formData.append('claimNumber', editingRecord.claimNumber || '');
@@ -1847,22 +1847,6 @@ export function RepairHistoryTool({ toolId }: RepairHistoryToolProps) {
                         className="w-full rounded-lg border border-slate-700 bg-slate-900/70 px-3 py-2 text-sm text-slate-100 focus:border-emerald-500/50 focus:outline-none focus:ring-1 focus:ring-emerald-500/50"
                       />
                     </div>
-                    {newRecord.warrantyEndDate && (
-                      <div>
-                        <div className="flex items-center gap-3">
-                          <input
-                            type="checkbox"
-                            id="addWarrantyToDashboard"
-                            checked={newRecord.addWarrantyToDashboard || false}
-                            onChange={(e) => setNewRecord({ ...newRecord, addWarrantyToDashboard: e.target.checked })}
-                            className="w-5 h-5 rounded border-slate-600 bg-slate-700 text-emerald-500 focus:ring-emerald-500 focus:ring-offset-slate-800"
-                          />
-                          <label htmlFor="addWarrantyToDashboard" className="text-sm text-slate-300 cursor-pointer">
-                            Add warranty end date to dashboard calendar
-                          </label>
-                        </div>
-                      </div>
-                    )}
                     <div>
                       <label className="block text-xs font-medium text-slate-300 mb-1.5">
                         Repair Pictures
@@ -2242,22 +2226,6 @@ export function RepairHistoryTool({ toolId }: RepairHistoryToolProps) {
                                 className="w-full rounded-lg border border-slate-700 bg-slate-900/70 px-3 py-2 text-sm text-slate-100 focus:border-emerald-500/50 focus:outline-none focus:ring-1 focus:ring-emerald-500/50"
                               />
                             </div>
-                            {editingRecord.warrantyEndDate && (
-                              <div>
-                                <div className="flex items-center gap-3">
-                                  <input
-                                    type="checkbox"
-                                    id="editAddWarrantyToDashboard"
-                                    checked={editingRecord.addWarrantyToDashboard || false}
-                                    onChange={(e) => setEditingRecord({ ...editingRecord, addWarrantyToDashboard: e.target.checked })}
-                                    className="w-5 h-5 rounded border-slate-600 bg-slate-700 text-emerald-500 focus:ring-emerald-500 focus:ring-offset-slate-800"
-                                  />
-                                  <label htmlFor="editAddWarrantyToDashboard" className="text-sm text-slate-300 cursor-pointer">
-                                    Add warranty end date to dashboard calendar
-                                  </label>
-                                </div>
-                              </div>
-                            )}
                             <div>
                               <label className="block text-xs font-medium text-slate-300 mb-1.5">
                                 Repair Pictures

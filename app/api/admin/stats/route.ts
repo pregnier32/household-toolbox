@@ -37,11 +37,11 @@ export async function GET() {
       return NextResponse.json({ error: 'Failed to fetch stats' }, { status: 500 });
     }
 
-    // Count tools with active, trial, or pending_cancellation status
+    // Count active tools
     const { count: activeTrialToolsCount, error: toolsError } = await supabaseServer
       .from('users_tools')
       .select('*', { count: 'exact', head: true })
-      .in('status', ['active', 'trial', 'pending_cancellation']);
+      .eq('status', 'active');
 
     if (toolsError) {
       console.error('Error fetching active/trial tools count:', toolsError);
@@ -64,12 +64,12 @@ export async function GET() {
       ? (activeTrialToolsCount || 0) / adminUserCount 
       : 0;
 
-    // Get tools with active, trial, or pending_cancellation status, grouped by tool name
+    // Get active tools grouped by tool name
     // First, get all users_tools with their tool_ids
     const { data: usersToolsData, error: usersToolsError } = await supabaseServer
       .from('users_tools')
       .select('tool_id')
-      .in('status', ['active', 'trial', 'pending_cancellation']);
+      .eq('status', 'active');
 
     if (usersToolsError) {
       console.error('Error fetching users_tools:', usersToolsError);
@@ -168,61 +168,10 @@ export async function GET() {
     // Remove monthKey from response
     const responseData = monthsData.map(({ month, count }) => ({ month, count }));
 
-    // Get sum of amounts from billing_active table
-    const { data: billingData, error: billingError } = await supabaseServer
-      .from('billing_active')
-      .select('amount');
-
-    let monthlyRevenue = 0;
-    if (billingError) {
-      console.error('Error fetching billing_active amounts:', billingError);
-    } else if (billingData) {
-      monthlyRevenue = billingData.reduce((sum, record) => {
-        return sum + (parseFloat(record.amount.toString()) || 0);
-      }, 0);
-    }
-
-    // Get sum of amounts from billing_history table (Lifetime Revenue)
-    const { data: billingHistoryData, error: billingHistoryError } = await supabaseServer
-      .from('billing_history')
-      .select('amount');
-
-    let lifetimeRevenue = 0;
-    if (billingHistoryError) {
-      console.error('Error fetching billing_history amounts:', billingHistoryError);
-    } else if (billingHistoryData) {
-      lifetimeRevenue = billingHistoryData.reduce((sum, record) => {
-        return sum + (parseFloat(record.amount.toString()) || 0);
-      }, 0);
-    }
-
-    // Get revenue by day from billing_active table
-    const { data: billingByDateData, error: billingByDateError } = await supabaseServer
-      .from('billing_active')
-      .select('billing_date, amount')
-      .order('billing_date', { ascending: true });
-
+    // Legacy billing tables were removed; return zero revenue values until Stripe replaces this.
+    const monthlyRevenue = 0;
+    const lifetimeRevenue = 0;
     const revenueByDay: { date: string; revenue: number }[] = [];
-    if (billingByDateError) {
-      console.error('Error fetching billing_active by date:', billingByDateError);
-    } else if (billingByDateData) {
-      // Group by billing_date and sum amounts
-      const dateRevenueMap = new Map<string, number>();
-      billingByDateData.forEach((record) => {
-        if (record.billing_date) {
-          const date = record.billing_date;
-          const amount = parseFloat(record.amount.toString()) || 0;
-          const currentRevenue = dateRevenueMap.get(date) || 0;
-          dateRevenueMap.set(date, currentRevenue + amount);
-        }
-      });
-
-      // Convert to array and format dates
-      revenueByDay.push(...Array.from(dateRevenueMap.entries()).map(([date, revenue]) => ({
-        date: new Date(date).toLocaleDateString('en-US', { month: 'short', day: 'numeric' }),
-        revenue: Math.round(revenue * 100) / 100 // Round to 2 decimal places
-      })));
-    }
 
     return NextResponse.json({ 
       activeUserCount: count || 0,

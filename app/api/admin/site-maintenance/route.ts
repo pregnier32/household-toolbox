@@ -29,27 +29,11 @@ export async function GET() {
       return NextResponse.json({ error: 'Failed to fetch setting' }, { status: 500 });
     }
 
-    // Get the platform fee setting
-    const { data: platformFeeData, error: platformFeeError } = await supabaseServer
-      .from('settings')
-      .select('value')
-      .eq('key', 'platform_fee')
-      .single();
-
-    if (platformFeeError && platformFeeError.code !== 'PGRST116') {
-      console.error('Error fetching platform fee setting:', platformFeeError);
-    }
-
     // If no setting exists, return defaults
     const setting = maintenanceData?.value || { signUpsDisabled: false };
-    const platformFeeSetting = platformFeeData?.value || { amount: 5.00 };
-    const platformFeeAmount = typeof platformFeeSetting === 'object' && 'amount' in platformFeeSetting
-      ? Number(platformFeeSetting.amount)
-      : 5.00;
 
     return NextResponse.json({ 
-      setting,
-      platformFee: platformFeeAmount
+      setting
     });
   } catch (error) {
     console.error('Error in site maintenance API:', error);
@@ -72,7 +56,7 @@ export async function PUT(request: NextRequest) {
 
   try {
     const body = await request.json();
-    const { signUpsDisabled, platformFee } = body;
+    const { signUpsDisabled } = body;
 
     // Update site maintenance setting if provided
     if (signUpsDisabled !== undefined) {
@@ -102,38 +86,9 @@ export async function PUT(request: NextRequest) {
       }
     }
 
-    // Update platform fee setting if provided
-    if (platformFee !== undefined) {
-      if (typeof platformFee !== 'number' || platformFee < 0) {
-        return NextResponse.json(
-          { error: 'platformFee must be a non-negative number' },
-          { status: 400 }
-        );
-      }
-
-      const { error } = await supabaseServer
-        .from('settings')
-        .upsert(
-          {
-            key: 'platform_fee',
-            value: { amount: platformFee },
-            updated_at: new Date().toISOString(),
-          },
-          {
-            onConflict: 'key',
-          }
-        );
-
-      if (error) {
-        console.error('Error saving platform fee setting:', error);
-        return NextResponse.json({ error: 'Failed to save platform fee' }, { status: 500 });
-      }
-    }
-
     return NextResponse.json({ 
       success: true, 
-      setting: signUpsDisabled !== undefined ? { signUpsDisabled } : undefined,
-      platformFee: platformFee !== undefined ? platformFee : undefined
+      setting: signUpsDisabled !== undefined ? { signUpsDisabled } : undefined
     });
   } catch (error) {
     console.error('Error in site maintenance API:', error);

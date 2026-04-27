@@ -259,33 +259,6 @@ export function ToDoListTool({ toolId }: ToDoListToolProps) {
     setMenuOpenCategoryId(null);
   };
 
-  const toggleShowOnDashboard = async (categoryId: string) => {
-    const cat = categories.find((c) => c.id === categoryId);
-    const nextOn = !cat?.showOnDashboard;
-    if (!toolId) return;
-    try {
-      const res = await fetch('/api/tools/to-do-list', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          resource: 'category',
-          action: 'update',
-          toolId,
-          categoryId,
-          show_on_dashboard: nextOn,
-        }),
-      });
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.error || 'Failed to update');
-      setCategories((prev) =>
-        prev.map((c) => (c.id === categoryId ? { ...c, showOnDashboard: nextOn } : c))
-      );
-      showMessage('success', nextOn ? 'Showing on dashboard.' : 'Removed from dashboard.');
-    } catch (e) {
-      showMessage('error', e instanceof Error ? e.message : 'Failed to update');
-    }
-  };
-
   const deleteCategory = async () => {
     if (!deleteConfirmCategoryId || deleteConfirmText.toLowerCase() !== 'delete' || !toolId) return;
     setIsSaving(true);
@@ -608,20 +581,6 @@ export function ToDoListTool({ toolId }: ToDoListToolProps) {
                         onClick={(e) => {
                           e.stopPropagation();
                           setMenuOpenCategoryId(null);
-                          toggleShowOnDashboard(cat.id);
-                        }}
-                        className="w-full px-4 py-2 text-left text-sm text-slate-200 hover:bg-slate-700 flex items-center gap-2"
-                      >
-                        {cat.showOnDashboard ? (
-                          <>Hide from Dashboard</>
-                        ) : (
-                          <>Show on Dashboard</>
-                        )}
-                      </button>
-                      <button
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          setMenuOpenCategoryId(null);
                           setDeleteConfirmCategoryId(cat.id);
                           setDeleteConfirmText('');
                         }}
@@ -769,7 +728,7 @@ export function ToDoListTool({ toolId }: ToDoListToolProps) {
         <>
           {/* Single card: category task list */}
           <div className="rounded-2xl border border-slate-800 bg-slate-900/70 p-6">
-            {/* Card header: category name + add task icon (left) | dashboard toggle + filter icon (right) */}
+            {/* Card header: category name + add task icon (left) | print + filter (right) */}
             <div className="flex items-center justify-between gap-4 flex-wrap mb-6">
               <div className="flex items-center gap-2">
                 <h2 className="text-2xl sm:text-3xl font-semibold text-slate-50">
@@ -854,21 +813,6 @@ export function ToDoListTool({ toolId }: ToDoListToolProps) {
                     </>
                   )}
                 </div>
-                <button
-                  role="switch"
-                  aria-checked={selectedCategory.showOnDashboard}
-                  title="When on, non-completed tasks in this category appear as a simple list on your Dashboard."
-                  onClick={() => toggleShowOnDashboard(selectedCategory.id)}
-                  className={`relative inline-flex h-6 w-11 flex-shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors focus:outline-none focus:ring-2 focus:ring-emerald-500/50 focus:ring-offset-2 focus:ring-offset-slate-900 ${
-                    selectedCategory.showOnDashboard ? 'bg-emerald-500' : 'bg-slate-700'
-                  }`}
-                >
-                  <span
-                    className={`pointer-events-none inline-block h-5 w-5 transform rounded-full bg-white shadow ring-0 transition ${
-                      selectedCategory.showOnDashboard ? 'translate-x-5' : 'translate-x-1'
-                    }`}
-                  />
-                </button>
               </div>
             </div>
 

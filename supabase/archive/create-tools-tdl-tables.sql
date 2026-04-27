@@ -1,7 +1,7 @@
 -- To Do List Tool Database Schema
 -- All tables prefixed with 'tools_tdl_'
 -- Matches UI: categories (e.g. Home, Work, Kids, Errands), tasks per category.
--- RLS uses (select auth.uid()) per design_system.md.
+-- RLS uses (select auth.uid()) per system_design.md.
 
 -- ============================================================================
 -- CATEGORIES (user-created headers: Home, Work, Kids, Errands, etc.)
@@ -61,7 +61,7 @@ CREATE INDEX IF NOT EXISTS idx_tdl_tasks_due_date ON tools_tdl_tasks(due_date) W
 CREATE INDEX IF NOT EXISTS idx_tdl_tasks_status ON tools_tdl_tasks(status);
 
 -- ============================================================================
--- UPDATED_AT TRIGGERS (with secure search_path per design_system.md)
+-- UPDATED_AT TRIGGERS (with secure search_path per system_design.md)
 -- ============================================================================
 CREATE OR REPLACE FUNCTION update_tdl_categories_updated_at()
 RETURNS TRIGGER

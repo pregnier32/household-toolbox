@@ -175,8 +175,7 @@ export function HealthcareApptsHistoryTool({ toolId }: HealthcareApptsHistoryToo
   const [searchQuery, setSearchQuery] = useState('');
   const [filterType, setFilterType] = useState<'all' | 'upcoming' | 'history'>('all');
 
-  const [activeTab, setActiveTab] = useState<'history' | 'kpi' | 'report'>('history');
-  const [kpiYearFilter, setKpiYearFilter] = useState<string>('all');
+  const [activeTab, setActiveTab] = useState<'history' | 'report'>('history');
   const [showExportPopup, setShowExportPopup] = useState(false);
   const [exportIncludeUpcoming, setExportIncludeUpcoming] = useState(true);
   const [exportHistoryScope, setExportHistoryScope] = useState<string>('all');
@@ -429,7 +428,7 @@ export function HealthcareApptsHistoryTool({ toolId }: HealthcareApptsHistoryToo
       formData.append('reasonForVisit', newRecord.reasonForVisit);
       formData.append('preVisitNotes', newRecord.preVisitNotes);
       formData.append('postVisitNotes', newRecord.postVisitNotes);
-      formData.append('showOnDashboardCalendar', String(newRecord.showOnDashboardCalendar));
+      formData.append('showOnDashboardCalendar', 'false');
       formData.append('totalBilled', newRecord.totalBilled);
       formData.append('insurancePaid', newRecord.insurancePaid);
       formData.append('currentAmountDue', newRecord.currentAmountDue);
@@ -482,7 +481,7 @@ export function HealthcareApptsHistoryTool({ toolId }: HealthcareApptsHistoryToo
       formData.append('reasonForVisit', editingRecord.reasonForVisit);
       formData.append('preVisitNotes', editingRecord.preVisitNotes);
       formData.append('postVisitNotes', editingRecord.postVisitNotes);
-      formData.append('showOnDashboardCalendar', String(editingRecord.showOnDashboardCalendar));
+      formData.append('showOnDashboardCalendar', 'false');
       formData.append('totalBilled', editingRecord.totalBilled);
       formData.append('insurancePaid', editingRecord.insurancePaid);
       formData.append('currentAmountDue', editingRecord.currentAmountDue);
@@ -685,7 +684,7 @@ export function HealthcareApptsHistoryTool({ toolId }: HealthcareApptsHistoryToo
 
       pdf.setFontSize(12);
       pdf.setFont('helvetica', 'bold');
-      pdf.text('Summary (KPIs)', margin, y);
+      pdf.text('Financial summary', margin, y);
       y += 8;
       pdf.setFont('helvetica', 'normal');
       pdf.setFontSize(10);
@@ -1021,12 +1020,11 @@ export function HealthcareApptsHistoryTool({ toolId }: HealthcareApptsHistoryToo
               </div>
               {[
                 { id: 'history', label: 'Appointments' },
-                { id: 'kpi', label: 'KPI' },
                 { id: 'report', label: 'Report' },
               ].map((tab) => (
                 <button
                   key={tab.id}
-                  onClick={() => setActiveTab(tab.id as 'history' | 'kpi' | 'report')}
+                  onClick={() => setActiveTab(tab.id as 'history' | 'report')}
                   className={`px-4 py-2 text-sm font-medium transition-colors whitespace-nowrap ${
                     activeTab === tab.id
                       ? 'border-b-2 border-emerald-500 text-emerald-300'
@@ -1196,17 +1194,6 @@ export function HealthcareApptsHistoryTool({ toolId }: HealthcareApptsHistoryToo
                       className="w-full rounded-lg border border-slate-700 bg-slate-900/70 px-3 py-2 text-sm text-slate-100 placeholder-slate-500 focus:border-emerald-500/50 focus:outline-none focus:ring-1 focus:ring-emerald-500/50 resize-none"
                     />
                   </div>
-                  {newRecord.isUpcoming && (
-                    <label className="flex items-center gap-3">
-                      <input
-                        type="checkbox"
-                        checked={newRecord.showOnDashboardCalendar}
-                        onChange={(e) => setNewRecord({ ...newRecord, showOnDashboardCalendar: e.target.checked })}
-                        className="w-5 h-5 rounded border-slate-600 bg-slate-700 text-emerald-500 focus:ring-emerald-500 focus:ring-offset-slate-800"
-                      />
-                      <span className="text-sm text-slate-300">Show on dashboard calendar</span>
-                    </label>
-                  )}
                   <div className="rounded-lg border border-slate-700 bg-slate-800/50 p-4 space-y-3">
                     <h4 className="text-sm font-medium text-slate-200">Financial (optional)</h4>
                     <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
@@ -1411,17 +1398,6 @@ export function HealthcareApptsHistoryTool({ toolId }: HealthcareApptsHistoryToo
                       className="w-full rounded-lg border border-slate-700 bg-slate-900/70 px-3 py-2 text-sm text-slate-100 focus:border-emerald-500/50 focus:outline-none focus:ring-1 focus:ring-emerald-500/50 resize-none"
                     />
                   </div>
-                  {editingRecord.isUpcoming && (
-                    <label className="flex items-center gap-3">
-                      <input
-                        type="checkbox"
-                        checked={editingRecord.showOnDashboardCalendar}
-                        onChange={(e) => setEditingRecord({ ...editingRecord, showOnDashboardCalendar: e.target.checked })}
-                        className="w-5 h-5 rounded border-slate-600 bg-slate-700 text-emerald-500 focus:ring-emerald-500 focus:ring-offset-slate-800"
-                      />
-                      <span className="text-sm text-slate-300">Show on dashboard calendar</span>
-                    </label>
-                  )}
                   <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
                     <div>
                       <label className="block text-xs font-medium text-slate-300 mb-1.5">Total Billed</label>
@@ -1607,76 +1583,6 @@ export function HealthcareApptsHistoryTool({ toolId }: HealthcareApptsHistoryToo
                   )}
                 </div>
               )}
-            </div>
-          )}
-
-          {activeTab === 'kpi' && (
-            <div className="space-y-6">
-              <div className="rounded-2xl border border-slate-800 bg-slate-900/70 p-6">
-                <h3 className="text-lg font-semibold text-slate-50 mb-4">Financial KPIs</h3>
-                <p className="text-slate-300 text-sm mb-4">
-                  Totals for {selectedHeader.name}
-                  {kpiYearFilter === 'all' ? ' (all visits)' : ` (${kpiYearFilter})`}.
-                </p>
-                <div className="mb-6">
-                  <label className="block text-xs font-medium text-slate-300 mb-1.5">Show</label>
-                  <select
-                    value={kpiYearFilter}
-                    onChange={(e) => setKpiYearFilter(e.target.value)}
-                    className="w-full max-w-xs rounded-lg border border-slate-700 bg-slate-900/70 px-3 py-2 text-sm text-slate-100 focus:border-emerald-500/50 focus:outline-none focus:ring-1 focus:ring-emerald-500/50"
-                  >
-                    <option value="all">All visits</option>
-                    {Array.from(
-                      new Set(
-                        recordsForHeader
-                          .map((r) => r.appointmentDate?.slice(0, 4))
-                          .filter(Boolean)
-                      )
-                    )
-                      .sort((a, b) => b.localeCompare(a))
-                      .map((year) => (
-                        <option key={year} value={year}>
-                          {year}
-                        </option>
-                      ))}
-                  </select>
-                </div>
-                {(() => {
-                  const kpiFilteredRecords =
-                    kpiYearFilter === 'all'
-                      ? recordsForHeader
-                      : recordsForHeader.filter((r) => r.appointmentDate?.startsWith(kpiYearFilter) ?? false);
-                  const visitCount = kpiFilteredRecords.length;
-                  const totalBilledSum = kpiFilteredRecords.reduce((sum, r) => sum + parseCurrency(r.totalBilled), 0);
-                  const insurancePaidSum = kpiFilteredRecords.reduce((sum, r) => sum + parseCurrency(r.insurancePaid), 0);
-                  const patientResponsibilitySum = Math.max(0, totalBilledSum - insurancePaidSum);
-                  const currentAmountDueSum = kpiFilteredRecords.reduce((sum, r) => sum + parseCurrency(r.currentAmountDue), 0);
-                  return (
-                    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-4">
-                      <div className="rounded-lg border border-slate-700 bg-slate-800/50 p-4">
-                        <div className="text-xs font-medium text-slate-400 uppercase tracking-wide mb-1">Number of visits</div>
-                        <div className="text-xl font-semibold text-slate-50">{visitCount}</div>
-                      </div>
-                      <div className="rounded-lg border border-slate-700 bg-slate-800/50 p-4">
-                        <div className="text-xs font-medium text-slate-400 uppercase tracking-wide mb-1">Total Billed</div>
-                        <div className="text-xl font-semibold text-slate-50">{formatCurrencyDisplay(String(totalBilledSum))}</div>
-                      </div>
-                      <div className="rounded-lg border border-slate-700 bg-slate-800/50 p-4">
-                        <div className="text-xs font-medium text-slate-400 uppercase tracking-wide mb-1">Insurance Paid</div>
-                        <div className="text-xl font-semibold text-slate-50">{formatCurrencyDisplay(String(insurancePaidSum))}</div>
-                      </div>
-                      <div className="rounded-lg border border-slate-700 bg-slate-800/50 p-4">
-                        <div className="text-xs font-medium text-slate-400 uppercase tracking-wide mb-1">Patient Responsibility</div>
-                        <div className="text-xl font-semibold text-slate-50">{formatCurrencyDisplay(String(patientResponsibilitySum))}</div>
-                      </div>
-                      <div className="rounded-lg border border-slate-700 bg-slate-800/50 p-4">
-                        <div className="text-xs font-medium text-slate-400 uppercase tracking-wide mb-1">Current Amount Due</div>
-                        <div className="text-xl font-semibold text-slate-50">{formatCurrencyDisplay(String(currentAmountDueSum))}</div>
-                      </div>
-                    </div>
-                  );
-                })()}
-              </div>
             </div>
           )}
 

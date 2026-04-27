@@ -1158,3 +1158,426 @@ $$;
 - Create component library/storybook for reusable components
 - Expand the icon set as needed; use the documented Icon Style (outline, stroke, currentColor) for consistency
 - Document responsive breakpoint strategy in more detail
+
+---
+
+## Calendar Events Frequency Design
+
+# Calendar Events Frequency Design
+
+## Current Design Overview
+
+The Calendar Events tool stores event **definitions** in the `tools_ce_events` table with frequency information. However, the Dashboard Calendar view queries the `dashboard_items` table, which expects individual `scheduled_date` values (one record per calendar occurrence).
+
+## Frequency Types & Dashboard Display
+
+### 1. **One Time** Events
+- **Storage**: 1 record in `tools_ce_events`
+- **Dashboard Items**: 1 record in `dashboard_items` (if `add_to_dashboard = true`)
+- **Example**: "Doctor Appointment" on 2025-03-15
+  - Creates 1 dashboard item with `scheduled_date = 2025-03-15`
+
+### 2. **Weekly** Events
+- **Storage**: 1 record in `tools_ce_events` with `days_of_week` array (e.g., [1, 3, 5] for Mon, Wed, Fri)
+- **Dashboard Items**: **Multiple records** - one for each occurrence
+- **Calculation**:
+  - From `date` (start date) until `end_date` (or indefinitely if no end_date)
+  - For each selected day of week
+  - **Example**: "Gym Workout" starting 2025-01-06, every Monday/Wednesday/Friday, no end date
+    - Creates ~156 dashboard items per year (52 weeks × 3 days)
+    - Over 5 years: ~780 dashboard items
+    - Over 10 years: ~1,560 dashboard items
+
+### 3. **Monthly** Events
+- **Storage**: 1 record in `tools_ce_events` with `day_of_month` (e.g., 15)
+- **Dashboard Items**: **Multiple records** - one per month
+- **Calculation**:
+  - From `date` (start date) until `end_date` (or indefinitely)
+  - On the specified `day_of_month` each month
+  - **Example**: "Rent Payment" on the 1st of every month, starting 2025-01-01, no end date
+    - Creates 12 dashboard items per year
+    - Over 5 years: ~60 dashboard items
+    - Over 10 years: ~120 dashboard items
+
+### 4. **Annual** Events
+- **Storage**: 1 record in `tools_ce_events`
+- **Dashboard Items**: **Multiple records** - one per year
+- **Calculation**:
+  - From `date` (start date) until `end_date` (or indefinitely)
+  - On the same month/day each year
+  - **Example**: "Birthday" on 2025-06-15, no end date
+    - Creates 1 dashboard item per year
+    - Over 5 years: 5 dashboard items
+    - Over 10 years: 10 dashboard items
+
+## Current Implementation Gap
+
+**The current design does NOT automatically expand recurring events into dashboard_items records.**
+
+When a user creates a recurring event:
+1. ✅ The event definition is saved to `tools_ce_events`
+2. ❌ No dashboard_items are created automatically
+3. ❌ The Dashboard Calendar won't show the recurring occurrences
+
+## Recommended Approach
+
+### Option 1: **On-Demand Expansion (Recommended)**
+Generate dashboard_items dynamically when querying the Dashboard Calendar:
+
+**Pros:**
+- No database bloat
+- Easy to update recurring events (just change the definition)
+- Handles indefinite recurring events efficiently
+
+**Cons:**
+- More complex query logic
+- Requires calculating occurrences on-the-fly
+
+**Implementation:**
+- When Dashboard Calendar requests events for a month, query `tools_ce_events` where `add_to_dashboard = true`
+- Expand recurring events into individual occurrences for that month
+- Return expanded list to the calendar view
+
+### Option 2: **Pre-Generated Dashboard Items**
+Create dashboard_items records when events are saved/updated:
+
+**Pros:**
+- Simple queries (just filter dashboard_items by month)
+- Fast calendar rendering
+
+**Cons:**
+- Database bloat (potentially thousands of records for long-running recurring events)
+- Complex update logic (need to delete/recreate items when event changes)
+- Need cleanup logic for past events
+- Hard to handle indefinite recurring events (how far in advance to generate?)
+
+**Implementation:**
+- When event is created/updated, generate dashboard_items for:
+  - Next 2-3 years of occurrences, OR
+  - Until `end_date` if specified
+- Use a background job to generate future occurrences periodically
+- Clean up old dashboard_items periodically
+
+### Option 3: **Hybrid Approach**
+Store event definitions + generate dashboard_items for near-term only:
+
+**Pros:**
+- Balance between simplicity and efficiency
+- Only generate what's needed for current/future months
+
+**Cons:**
+- Still requires expansion logic
+- Need to regenerate periodically
+
+**Implementation:**
+- Generate dashboard_items for next 6-12 months when event is created
+- Background job regenerates items monthly
+- Query combines dashboard_items + on-demand expansion for far-future dates
+
+## Recommendation
+
+**I recommend Option 1 (On-Demand Expansion)** because:
+
+1. **Scalability**: No database bloat from thousands of recurring event occurrences
+2. **Flexibility**: Easy to modify recurring events without cascading updates
+3. **Simplicity**: Single source of truth (the event definition)
+4. **Performance**: Modern databases can handle the calculation efficiently
+
+### Implementation Details for Option 1:
+
+1. **API Endpoint**: Create `/api/dashboard/items/calendar-events` that:
+   - Queries `tools_ce_events` where `add_to_dashboard = true` and `is_active = true`
+   - Expands recurring events into occurrences for the requested month
+   - Returns array of occurrences with calculated `scheduled_date`
+
+2. **Expansion Logic**:
+   ```typescript
+   function expandEventToOccurrences(event, year, month) {
+     // One Time: return single occurrence if date matches month
+     // Weekly: calculate all occurrences in month for selected days_of_week
+     // Monthly: return occurrence if day_of_month exists in month
+     // Annual: return occurrence if month/day matches
+   }
+   ```
+
+3. **Update Dashboard Calendar**: Modify `loadCalendarEvents` to call the new endpoint instead of querying `dashboard_items` directly for calendar events.
+
+## Database Schema Considerations
+
+The current `tools_ce_events` table design supports this approach:
+- ✅ `frequency` field stores the recurrence pattern
+- ✅ `days_of_week` (JSONB) for Weekly events
+- ✅ `day_of_month` for Monthly events
+- ✅ `date` (start date) and `end_date` for date range
+- ✅ `add_to_dashboard` flag to control visibility
+
+No schema changes needed - the design already supports on-demand expansion!
+
+---
+
+## Users Table Recommendations
+
+# Users Table Analysis & Recommendations
+
+## Current Table Structure
+
+Based on the TypeScript types and codebase analysis, your `users` table has the following fields:
+
+- `id` (UUID, Primary Key)
+- `user_id` (UUID) - **⚠️ Potentially redundant**
+- `email` (TEXT)
+- `password` (TEXT) - Hashed password
+- `first_name` (TEXT)
+- `last_name` (TEXT)
+- `active` (TEXT - 'Y'/'N')
+- `user_status` (TEXT)
+- `guest_admin_id` (INTEGER, nullable) - **⚠️ Appears unused**
+- `created_at` (TIMESTAMP)
+
+## Critical Issues Found
+
+### 1. **Missing Indexes** ⚠️ HIGH PRIORITY
+
+Your table is missing critical indexes that will significantly impact performance:
+
+- **`email` index** - Most frequently queried field (sign in, sign up, password reset, profile updates)
+- **`active` index** - Used in session validation and stats queries
+- **`user_status` index** - Used in admin authorization checks
+- **`created_at` index** - Useful for sorting and analytics
+
+**Impact:** Without these indexes, queries will perform full table scans, which will get slower as your user base grows.
+
+### 2. **Missing Unique Constraint on Email** ⚠️ HIGH PRIORITY
+
+While your code checks for duplicate emails, there's no database-level constraint preventing duplicates. This is a data integrity risk.
+
+**Recommendation:** Add `UNIQUE` constraint on `email` column.
+
+### 3. **Missing `updated_at` Timestamp** ⚠️ MEDIUM PRIORITY
+
+No way to track when user records are modified. Useful for:
+- Audit trails
+- Debugging
+- Analytics
+
+**Recommendation:** Add `updated_at` column with auto-update trigger.
+
+## Field Analysis
+
+### Potentially Redundant Fields
+
+1. **`user_id`** - This field appears to be set to the same value as `id` in your signup code. Consider:
+   - Removing it if not used elsewhere
+   - Or adding a check constraint: `CHECK (user_id = id)`
+   - Or documenting its purpose if it serves a different function
+
+### Unused Fields
+
+1. **`guest_admin_id`** - Only found in TypeScript types, not in any actual queries. Consider:
+   - Removing if not needed
+   - Or implementing the feature that uses it
+   - Or documenting its purpose
+
+### Data Type Improvements
+
+1. **`active` field** - Currently TEXT ('Y'/'N'), but should ideally be BOOLEAN
+   - **Current:** `active TEXT`
+   - **Recommended:** `active BOOLEAN DEFAULT TRUE`
+   - **Note:** This is a breaking change - only do if you can update all code references
+
+2. **`user_status`** - Could benefit from a CHECK constraint to ensure only valid values
+   - Example: `CHECK (user_status IN ('admin', 'superadmin', 'guest'))`
+
+## Query Patterns Analyzed
+
+Based on codebase analysis, here are the most common query patterns:
+
+1. **Email lookups** (most frequent)
+   - Sign in: `.eq('email', ...)`
+   - Sign up: `.eq('email', ...)` (duplicate check)
+   - Password reset: `.eq('email', ...)`
+   - Profile update: `.eq('email', ...)` (duplicate check)
+
+2. **ID lookups**
+   - Session validation: `.eq('id', ...)`
+   - Profile updates: `.eq('id', ...)`
+   - Password changes: `.eq('id', ...)`
+
+3. **Active user filtering**
+   - Session validation: `.eq('active', 'Y')`
+   - Stats queries: `.eq('active', 'Y')`
+
+4. **Status checks**
+   - Admin authorization: `.eq('user_status', 'superadmin')`
+
+## Recommended Actions
+
+### Immediate (Run the SQL script)
+
+1. ✅ Add indexes on `email`, `active`, `user_status`, `created_at`
+2. ✅ Add unique constraint on `email`
+3. ✅ Add `updated_at` column with auto-update trigger
+4. ✅ Add check constraint on `active` field
+
+### Future Considerations
+
+1. **Consider converting `active` to BOOLEAN** - Requires code changes
+2. **Review `user_id` field** - Determine if it's needed or can be removed
+3. **Review `guest_admin_id`** - Implement feature or remove
+4. **Add CHECK constraint on `user_status`** - Define valid statuses
+
+## How to Apply
+
+Run the SQL script: `supabase/users-table-improvements.sql`
+
+This script is idempotent (safe to run multiple times) and includes:
+- All necessary indexes
+- Unique constraint on email
+- `updated_at` column with trigger
+- Check constraints
+- Detailed comments
+
+## Performance Impact
+
+After applying these improvements, you should see:
+- **Faster sign-in/sign-up** (email index)
+- **Faster session validation** (active index)
+- **Faster admin checks** (user_status index)
+- **Better data integrity** (unique constraint)
+- **Audit trail** (updated_at)
+
+## Notes
+
+- The script uses `IF NOT EXISTS` and `IF EXISTS` checks to be safe
+- All changes are backward compatible (won't break existing code)
+- The script includes verification queries you can run to confirm improvements
+
+---
+
+## Product and Project Overview
+
+### Household Toolbox Summary
+
+Household Toolbox is a digital toolbox for household management. It is designed to help users track recurring maintenance, organize important records, and coordinate shared tasks so routine responsibilities are not missed.
+
+### Core Product Features
+
+- Maintenance timeline for recurring household tasks and reminders.
+- Important documents storage for warranties, policies, and records.
+- Shared checklists for move-in, hosting, packing, and seasonal workflows.
+- Multi-user collaboration across family members, partners, or roommates.
+
+### Technical Stack
+
+- Framework: Next.js 16 (App Router)
+- Language: TypeScript
+- Styling: Tailwind CSS 4
+- Data platform: Supabase
+- Deployment target: Vercel
+
+### Local Development Prerequisites
+
+- Node.js 18+
+- npm (or another JS package manager)
+- Access to a configured Supabase project
+
+### Standard Development Commands
+
+```bash
+npm install
+npm run dev
+npm run build
+npm run start
+npm run lint
+```
+
+### Deployment Baseline
+
+The standard deployment flow is Vercel-based:
+1. Push the repository to GitHub.
+2. Import the repository into Vercel.
+3. Configure environment variables in Vercel project settings.
+4. Deploy.
+
+### Project Structure Notes
+
+Key application areas:
+- `app/` for routes, pages, and UI components.
+- `lib/` for shared server/client utility modules.
+- `public/` for static assets.
+
+`system_design.md` is the primary source for design standards, setup essentials, and operational architecture notes.
+
+---
+
+## Setup Essentials
+
+This section captures the core setup requirements that must be in place for local development and stable onboarding.
+
+### Required Environment Variables
+
+Create a `.env.local` file in the project root with:
+
+```env
+NEXT_PUBLIC_SUPABASE_URL=https://your-project.supabase.co
+NEXT_PUBLIC_SUPABASE_ANON_KEY=your_anon_key_here
+SUPABASE_SERVICE_ROLE_KEY=your_service_role_key_here
+RESEND_API_KEY=your_resend_api_key_here
+RESEND_FROM_EMAIL=noreply@yourdomain.com
+NEXT_PUBLIC_APP_URL=http://localhost:3000
+```
+
+Implementation guidance:
+- `NEXT_PUBLIC_SUPABASE_ANON_KEY` is safe for client-side usage.
+- `SUPABASE_SERVICE_ROLE_KEY` must remain server-side only.
+- Welcome email configuration via Resend is optional and should not block sign-up if unavailable.
+
+### Supabase Baseline Setup
+
+#### Waitlist table
+
+```sql
+CREATE TABLE waitlist (
+  id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
+  email TEXT UNIQUE NOT NULL,
+  created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+);
+```
+
+#### Waitlist RLS and insert policy
+
+```sql
+ALTER TABLE waitlist ENABLE ROW LEVEL SECURITY;
+
+CREATE POLICY "Allow public inserts" ON waitlist
+  FOR INSERT
+  TO anon
+  WITH CHECK (true);
+```
+
+#### Users table RLS policy
+
+```sql
+ALTER TABLE users ENABLE ROW LEVEL SECURITY;
+
+CREATE POLICY "Allow public user registration" ON users
+  FOR INSERT
+  TO anon
+  WITH CHECK (true);
+```
+
+Alternative: apply `supabase/users-rls-policy.sql`.
+
+### Local Run Commands
+
+```bash
+npm install
+npm run dev
+```
+
+### High-Value Troubleshooting
+
+- If `env.NEXT_PUBLIC_SUPABASE_URL` is missing, verify `.env.local` exists and restart dev server.
+- For RLS insert failures on `users`, prioritize server-side writes using `SUPABASE_SERVICE_ROLE_KEY`.
+- If needed, apply `supabase/users-rls-policy-fix.sql` and verify policies in Supabase.
+- Validate waitlist flow by confirming table existence and anon insert policy.

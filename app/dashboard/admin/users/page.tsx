@@ -452,7 +452,7 @@ export default function UsersPage() {
       <div className="mx-auto max-w-7xl px-4 py-8 sm:px-6 lg:px-8">
         <div className="mb-6">
           <button
-            onClick={() => router.push('/dashboard')}
+            onClick={() => router.push('/dashboard/admin/site-maintenance')}
             className="mb-4 flex items-center gap-2 text-sm text-slate-400 transition-colors hover:text-slate-300"
           >
             <svg
@@ -468,7 +468,7 @@ export default function UsersPage() {
                 d="M15 19l-7-7 7-7"
               />
             </svg>
-            <span>Back to Dashboard</span>
+            <span>Back to Site Maintenance</span>
           </button>
         </div>
         <div className="mb-6 flex items-center justify-between">
@@ -771,7 +771,6 @@ export default function UsersPage() {
               <div className="space-y-3 max-h-96 overflow-y-auto mb-6">
                 {userTools.map((userTool: any) => {
                   const tool = userTool.tools;
-                  const isTrial = userTool.status === 'trial';
                   const isUpdating = updatingToolId === userTool.id;
                   return (
                     <div
@@ -782,11 +781,6 @@ export default function UsersPage() {
                         <div className="flex-1">
                           <div className="flex items-center gap-2 mb-2">
                             <h3 className="text-sm font-semibold text-slate-100">{tool?.name || 'Unknown Tool'}</h3>
-                            {isTrial && (
-                              <span className="inline-flex rounded-full bg-amber-500/20 px-2 py-0.5 text-xs font-medium text-amber-300">
-                                Trial
-                              </span>
-                            )}
                             {userTool.status === 'active' && (
                               <span className="inline-flex rounded-full bg-emerald-500/20 px-2 py-0.5 text-xs font-medium text-emerald-300">
                                 Active
@@ -803,15 +797,6 @@ export default function UsersPage() {
                           )}
                           <div className="flex items-center gap-4 text-xs text-slate-400">
                             <span>Price: ${userTool.price?.toFixed(2) || tool?.price?.toFixed(2) || '0.00'}/month</span>
-                            {isTrial && userTool.trial_end_date && (
-                              <span>
-                                Trial ends: {new Date(userTool.trial_end_date).toLocaleDateString('en-US', {
-                                  year: 'numeric',
-                                  month: 'short',
-                                  day: 'numeric',
-                                })}
-                              </span>
-                            )}
                           </div>
                         </div>
                         <div className="flex-shrink-0">
@@ -822,7 +807,6 @@ export default function UsersPage() {
                             className="rounded border border-slate-600 bg-slate-900 px-3 py-1.5 text-xs text-slate-100 focus:border-emerald-500/50 focus:outline-none focus:ring-1 focus:ring-emerald-500/50 disabled:cursor-not-allowed disabled:opacity-50"
                           >
                             <option value="active">Active</option>
-                            <option value="trial">Trial</option>
                             <option value="inactive">Inactive</option>
                           </select>
                           {isUpdating && (

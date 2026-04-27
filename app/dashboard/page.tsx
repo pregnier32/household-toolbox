@@ -17,70 +17,10 @@ import { NotesTool } from '../components/NotesTool';
 import { RepairHistoryTool } from '../components/RepairHistoryTool';
 import { HealthcareApptsHistoryTool } from '../components/HealthcareApptsHistoryTool';
 import { ToDoListTool } from '../components/ToDoListTool';
-import { GoalsTrackingTool, GoalsProvider, useGoalsContext, getGoalPercentExport } from '../components/GoalsTrackingTool';
-import { ShoppingListTool, type ShoppingListDashboardSummary } from '../components/ShoppingListTool';
+import { GoalsTrackingTool, GoalsProvider } from '../components/GoalsTrackingTool';
+import { ShoppingListTool } from '../components/ShoppingListTool';
 import { MealPlannerTool } from '../components/MealPlannerTool';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, PieChart, Pie, Cell, Legend } from 'recharts';
-
-// Dashboard goal cards (left-side-only view for goals with showOnDashboard)
-function DashboardGoalCards() {
-  const ctx = useGoalsContext();
-  if (!ctx) return null;
-  const dashboardGoals = ctx.goals.filter((g) => g.showOnDashboard);
-  if (dashboardGoals.length === 0) return null;
-  return (
-    <div className="mb-6">
-      <h3 className="text-lg font-semibold text-slate-100 mb-3">Goals</h3>
-      <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
-        {dashboardGoals.map((goal) => {
-          const percent = getGoalPercentExport(goal);
-          const lastNote = goal.updateNotes.length > 0
-            ? [...goal.updateNotes].sort((a, b) => b.noteDate.localeCompare(a.noteDate))[0]
-            : null;
-          const today = new Date();
-          today.setHours(0, 0, 0, 0);
-          const daysSinceLastUpdate = lastNote
-            ? Math.floor((today.getTime() - new Date(lastNote.noteDate).getTime()) / (1000 * 60 * 60 * 24))
-            : Infinity;
-          const showReminderWarning = goal.reminderDays != null && daysSinceLastUpdate >= goal.reminderDays;
-          return (
-            <div
-              key={goal.id}
-              className="rounded-2xl border border-slate-800 bg-slate-900/70 p-5 text-center flex flex-col min-h-[200px]"
-            >
-              <div className="flex items-center justify-center gap-2 mb-3">
-                <h4 className="text-3xl font-semibold text-slate-50">{goal.title}</h4>
-                {showReminderWarning && (
-                  <span
-                    className="inline-flex text-amber-400 shrink-0"
-                    title={`No update in ${goal.reminderDays} days — reminder overdue`}
-                    aria-label="Update reminder overdue"
-                  >
-                    <svg className="h-6 w-6" fill="currentColor" viewBox="0 0 24 24">
-                      <path fillRule="evenodd" d="M8.485 2.495c.673-1.167 2.357-1.167 3.03 0l6.28 10.875c.673 1.167-.17 2.625-1.516 2.625H3.72c-1.347 0-2.189-1.458-1.515-2.625L8.485 2.495zM10 9a1 1 0 011 1v3a1 1 0 11-2 0v-3a1 1 0 011-1zm0 7a1 1 0 100 2 1 1 0 000-2z" clipRule="evenodd" />
-                    </svg>
-                  </span>
-                )}
-              </div>
-              <div className="mb-3">
-                <div className="text-xs text-slate-400 mb-1">Progress</div>
-                <div className="h-8 rounded-full bg-slate-800 overflow-hidden w-full">
-                  <div
-                    className="h-full rounded-full bg-emerald-500 transition-all duration-300"
-                    style={{ width: `${percent}%` }}
-                  />
-                </div>
-              </div>
-              <div className="flex-1 flex flex-col justify-center">
-                <div className="text-5xl font-semibold text-emerald-300">{percent}%</div>
-              </div>
-            </div>
-          );
-        })}
-      </div>
-    </div>
-  );
-}
 
 // Calendar Component
 function CalendarView({ 
@@ -691,8 +631,7 @@ type Tool = {
 };
 
 export default function Dashboard() {
-  const [activeTab, setActiveTab] = useState<'tools' | 'dashboard' | 'overview' | 'store'>('dashboard');
-  const [dashboardSubTab, setDashboardSubTab] = useState<'overview' | 'calendar'>('overview');
+  const [activeTab, setActiveTab] = useState<'tools' | 'dashboard' | 'calendar' | 'overview' | 'store'>('dashboard');
   const [activeToolId, setActiveToolId] = useState<string | null>(null);
   const [openedToolIds, setOpenedToolIds] = useState<Set<string>>(new Set());
   const [user, setUser] = useState<User | null>(null);
@@ -709,22 +648,12 @@ export default function Dashboard() {
   const [isLoadingStats, setIsLoadingStats] = useState(false);
   const [tools, setTools] = useState<Tool[]>([]);
   const [isLoadingTools, setIsLoadingTools] = useState(false);
-  const [actionItems, setActionItems] = useState<any[]>([]);
-  const [isLoadingActionItems, setIsLoadingActionItems] = useState(false);
   const [calendarEvents, setCalendarEvents] = useState<any[]>([]);
   const [isLoadingCalendarEvents, setIsLoadingCalendarEvents] = useState(false);
   const [selectedTool, setSelectedTool] = useState<Tool | null>(null);
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [isBuying, setIsBuying] = useState(false);
   const [buyMessage, setBuyMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
-  const [expandedActionItemId, setExpandedActionItemId] = useState<string | null>(null);
-  const [completingItemId, setCompletingItemId] = useState<string | null>(null);
-  const [completeMessage, setCompleteMessage] = useState<{ type: 'success' | 'error'; text: string; itemId: string } | null>(null);
-  const [dashboardKpis, setDashboardKpis] = useState<any[]>([]);
-  const [todoListDashboardData, setTodoListDashboardData] = useState<{ categoryName: string; taskNames: string[] }[]>([]);
-  const [isLoadingKpis, setIsLoadingKpis] = useState(false);
-  const [subscriptionTrackerMonthlySpend, setSubscriptionTrackerMonthlySpend] = useState<number | null>(null);
-  const [shoppingListDashboardSummaries, setShoppingListDashboardSummaries] = useState<ShoppingListDashboardSummary[]>([]);
   const router = useRouter();
   
   const isSuperAdmin = user?.userStatus === 'superadmin';
@@ -812,139 +741,6 @@ export default function Dashboard() {
     }
   }, [activeTab, loadTools]);
 
-  // Load dashboard KPIs
-  const loadDashboardKpis = useCallback(async () => {
-    setIsLoadingKpis(true);
-    try {
-      const response = await fetch('/api/dashboard/kpis');
-      if (response.ok) {
-        const data = await response.json();
-        setDashboardKpis(data.kpis || []);
-        
-        // Check if subscription tracker KPI is enabled
-        const subscriptionKpi = data.kpis?.find((kpi: any) => 
-          kpi.kpi_key === 'subscription_tracker_total_monthly_spend' && kpi.is_enabled
-        );
-        
-        if (subscriptionKpi) {
-          // Fetch the actual subscription data to calculate monthly spend
-          const subscriptionTool = tools.find(t => t.name === 'Subscription Tracker');
-          if (subscriptionTool && subscriptionTool.isOwned) {
-            try {
-              const subResponse = await fetch(`/api/tools/subscription-tracker?toolId=${subscriptionTool.id}`);
-              if (subResponse.ok) {
-                const subData = await subResponse.json();
-                const subscriptions = subData.subscriptions || [];
-                const activeSubscriptions = subscriptions.filter((sub: any) => sub.is_active !== false);
-                
-                // Calculate monthly spend
-                const monthlySpend = activeSubscriptions.reduce((total: number, sub: any) => {
-                  let monthlyAmount = parseFloat(sub.amount);
-                  if (sub.frequency === 'annual') {
-                    monthlyAmount = monthlyAmount / 12;
-                  } else if (sub.frequency === 'quarterly') {
-                    monthlyAmount = monthlyAmount / 3;
-                  }
-                  return total + monthlyAmount;
-                }, 0);
-                
-                setSubscriptionTrackerMonthlySpend(monthlySpend);
-              }
-            } catch (error) {
-              console.error('Error fetching subscription data for KPI:', error);
-            }
-          }
-        } else {
-          setSubscriptionTrackerMonthlySpend(null);
-        }
-      }
-    } catch (error) {
-      console.error('Error loading dashboard KPIs:', error);
-    } finally {
-      setIsLoadingKpis(false);
-    }
-  }, [tools]);
-
-  const loadActionItems = useCallback(() => {
-    setIsLoadingActionItems(true);
-    fetch('/api/dashboard/items?type=action_item&status=pending&limit=50')
-      .then((res) => res.json())
-      .then((data) => {
-        if (data.error) {
-          console.error('Error from API:', data.error);
-          setActionItems([]);
-        } else if (data.items) {
-          console.log(`Loaded ${data.items.length} action items`);
-          setActionItems(data.items || []);
-        } else {
-          setActionItems([]);
-        }
-        setIsLoadingActionItems(false);
-      })
-      .catch((error) => {
-        console.error('Error fetching action items:', error);
-        setActionItems([]);
-        setIsLoadingActionItems(false);
-      });
-  }, []);
-
-  useEffect(() => {
-    if (activeTab === 'dashboard' && dashboardSubTab === 'overview') {
-      loadActionItems();
-    }
-  }, [activeTab, dashboardSubTab, loadActionItems]);
-
-  // To Do List dashboard section: fetch from API when user has the tool and is on overview
-  useEffect(() => {
-    if (typeof window === 'undefined') return;
-    const toDoListTool = tools.find((t) => t.name === 'To Do List' && t.isOwned);
-    if (!toDoListTool?.id || activeTab !== 'dashboard' || dashboardSubTab !== 'overview') {
-      setTodoListDashboardData([]);
-      return;
-    }
-    let cancelled = false;
-    (async () => {
-      try {
-        const res = await fetch(`/api/tools/to-do-list?toolId=${encodeURIComponent(toDoListTool.id)}&resource=dashboard`);
-        const json = await res.json();
-        if (cancelled) return;
-        const items = Array.isArray(json.items) ? json.items : [];
-        setTodoListDashboardData(items as { categoryName: string; taskNames: string[] }[]);
-      } catch {
-        if (!cancelled) setTodoListDashboardData([]);
-      }
-    })();
-    return () => { cancelled = true; };
-  }, [activeTab, dashboardSubTab, tools]);
-
-  // Shopping List dashboard section: fetch from API when user has the tool and is on overview
-  useEffect(() => {
-    if (typeof window === 'undefined') return;
-    const shoppingListTool = tools.find((t) => t.name === 'Shopping List');
-    if (!shoppingListTool?.id || activeTab !== 'dashboard' || dashboardSubTab !== 'overview') {
-      setShoppingListDashboardSummaries([]);
-      return;
-    }
-    let cancelled = false;
-    (async () => {
-      try {
-        const res = await fetch(`/api/tools/shopping-list?toolId=${encodeURIComponent(shoppingListTool.id)}&resource=dashboard`);
-        const json = await res.json();
-        if (cancelled) return;
-        setShoppingListDashboardSummaries(Array.isArray(json.summaries) ? json.summaries : []);
-      } catch {
-        if (!cancelled) setShoppingListDashboardSummaries([]);
-      }
-    })();
-    return () => { cancelled = true; };
-  }, [activeTab, dashboardSubTab, tools]);
-  
-  useEffect(() => {
-    if (activeTab === 'dashboard' && dashboardSubTab === 'overview' && tools.length > 0) {
-      loadDashboardKpis();
-    }
-  }, [activeTab, dashboardSubTab, tools, loadDashboardKpis]);
-
   // Fetch calendar events when Calendar tab is active
   const loadCalendarEvents = useCallback(async (month?: string) => {
     setIsLoadingCalendarEvents(true);
@@ -982,10 +778,10 @@ export default function Dashboard() {
   }, []);
 
   useEffect(() => {
-    if (activeTab === 'dashboard' && dashboardSubTab === 'calendar') {
+    if (activeTab === 'calendar') {
       loadCalendarEvents();
     }
-  }, [activeTab, dashboardSubTab, loadCalendarEvents]);
+  }, [activeTab, loadCalendarEvents]);
 
   // Handle calendar month changes
   const handleCalendarMonthChange = useCallback((month: string) => {
@@ -1087,7 +883,14 @@ export default function Dashboard() {
           </div>
 
           <div className="flex items-center gap-3">
-            {isSuperAdmin && <AdminMenu />}
+            {isSuperAdmin && (
+              <AdminMenu
+                onOverviewClick={() => {
+                  setActiveTab('overview');
+                  setActiveToolId(null);
+                }}
+              />
+            )}
             <HelpMenu />
             <UserMenu
               userName={`${user.firstName} ${user.lastName || ''}`.trim()}
@@ -1100,21 +903,6 @@ export default function Dashboard() {
       {/* Tabs */}
       <div className="border-b border-slate-800 bg-slate-900/30">
         <div className="mx-auto flex max-w-7xl px-4 sm:px-6 lg:px-8">
-          {isSuperAdmin && (
-            <button
-              onClick={() => {
-              setActiveTab('overview');
-              setActiveToolId(null);
-            }}
-              className={`px-4 py-2 text-sm font-medium transition-colors ${
-                activeTab === 'overview'
-                  ? 'border-b-2 border-emerald-500 text-emerald-300'
-                  : 'text-slate-400 hover:text-slate-300'
-              }`}
-            >
-              Overview
-            </button>
-          )}
           <button
             onClick={() => {
               setActiveTab('dashboard');
@@ -1127,6 +915,19 @@ export default function Dashboard() {
             }`}
           >
             Dashboard
+          </button>
+          <button
+            onClick={() => {
+              setActiveTab('calendar');
+              setActiveToolId(null);
+            }}
+            className={`px-4 py-2 text-sm font-medium transition-colors ${
+              activeTab === 'calendar'
+                ? 'border-b-2 border-emerald-500 text-emerald-300'
+                : 'text-slate-400 hover:text-slate-300'
+            }`}
+          >
+            Calendar
           </button>
           <button
             onClick={() => {
@@ -1156,34 +957,6 @@ export default function Dashboard() {
           </button>
         </div>
       </div>
-
-      {/* Dashboard Sub-tabs */}
-      {activeTab === 'dashboard' && (
-        <div className="border-b border-slate-800 bg-slate-900/20">
-          <div className="mx-auto flex max-w-7xl px-4 sm:px-6 lg:px-8">
-            <button
-              onClick={() => setDashboardSubTab('overview')}
-              className={`px-4 py-2 text-sm font-medium transition-colors ${
-                dashboardSubTab === 'overview'
-                  ? 'border-b-2 border-emerald-500 text-emerald-300'
-                  : 'text-slate-400 hover:text-slate-300'
-              }`}
-            >
-              Overview
-            </button>
-            <button
-              onClick={() => setDashboardSubTab('calendar')}
-              className={`px-4 py-2 text-sm font-medium transition-colors ${
-                dashboardSubTab === 'calendar'
-                  ? 'border-b-2 border-emerald-500 text-emerald-300'
-                  : 'text-slate-400 hover:text-slate-300'
-              }`}
-            >
-              Calendar
-            </button>
-          </div>
-        </div>
-      )}
 
       {/* Tools Sub-tabs */}
       {activeTab === 'tools' && openedToolIds.size > 0 && (
@@ -1257,258 +1030,23 @@ export default function Dashboard() {
       <div className="mx-auto max-w-7xl px-4 py-8 sm:px-6 lg:px-8">
         {activeTab === 'dashboard' && (
           <div>
-            {dashboardSubTab === 'overview' && (
-              <div>
-                <h1 className="text-2xl font-semibold text-slate-50 mb-4">Dashboard</h1>
-                <p className="text-slate-400 mb-6">
-                  Welcome to your Household Toolbox dashboard. This is your central hub for managing your household.
-                </p>
+            <h1 className="text-2xl font-semibold text-slate-50 mb-4">Dashboard</h1>
+            <p className="text-slate-400 mb-6">
+              Welcome to your Household Toolbox dashboard. This is your central hub for managing your household.
+            </p>
+          </div>
+        )}
 
-                <DashboardGoalCards />
-
-                {/* Shopping Lists on Dashboard (from Shopping List tool) */}
-                {(() => {
-                  const shoppingListTool = tools.find((t) => t.name === 'Shopping List');
-                  if (!shoppingListTool?.id) return null;
-                  if (shoppingListDashboardSummaries.length === 0) return null;
-                  const formatDate = (iso: string) => {
-                    const d = new Date(iso);
-                    return `${d.getMonth() + 1}/${d.getDate()}/${d.getFullYear()}`;
-                  };
-                  return (
-                    <div className="mb-6">
-                      <h3 className="text-lg font-semibold text-slate-100 mb-3">Shopping Lists</h3>
-                      <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
-                        {shoppingListDashboardSummaries.map((s) => (
-                          <div
-                            key={s.listId}
-                            className="rounded-2xl border border-slate-800 bg-slate-900/70 p-5 text-center flex flex-col min-h-[120px]"
-                          >
-                            <div className="text-base font-semibold text-slate-50 mb-0.5">{s.name}</div>
-                            <div className="text-xs text-slate-400 mb-3">{formatDate(s.date)}</div>
-                            <div className="flex-1 flex items-center justify-center">
-                              <span className="text-4xl font-semibold text-emerald-300">{s.itemCount}</span>
-                              <span className="text-sm text-slate-400 ml-1">
-                                {s.itemCount === 1 ? 'item' : 'items'}
-                              </span>
-                            </div>
-                          </div>
-                        ))}
-                      </div>
-                    </div>
-                  );
-                })()}
-
-                {/* Dashboard KPIs */}
-                {dashboardKpis.length > 0 && (
-                  <div className="mb-6 grid gap-4 md:grid-cols-2 lg:grid-cols-3">
-                    {subscriptionTrackerMonthlySpend !== null && (
-                      <div className="rounded-2xl border border-slate-800 bg-slate-900/70 p-6">
-                        <h3 className="text-lg font-semibold text-slate-50 mb-2">Total Monthly Spend</h3>
-                        <div className="text-3xl font-semibold text-emerald-400 mb-2">
-                          ${subscriptionTrackerMonthlySpend.toFixed(2)}
-                        </div>
-                        <p className="text-xs text-slate-400">From Subscription Tracker</p>
-                      </div>
-                    )}
-                  </div>
-                )}
-                
-                <div className="w-1/2">
-                  <div className="rounded-2xl border border-slate-800 bg-slate-900/70 p-6">
-                    <h3 className="text-lg font-semibold text-slate-100 mb-4">Upcoming Action Items</h3>
-                    {isLoadingActionItems ? (
-                      <p className="text-sm text-slate-400">Loading action items...</p>
-                    ) : actionItems.length === 0 ? (
-                      <p className="text-sm text-slate-400">
-                        No upcoming action items. Items from your tools will appear here.
-                      </p>
-                    ) : (
-                      <div>
-                        {/* Header row */}
-                        <div className="grid grid-cols-[2fr_1fr_auto] gap-4 mb-3 pb-3 border-b border-slate-700">
-                          <div className="text-xs font-semibold text-slate-400 uppercase">Action Item</div>
-                          <div className="text-xs font-semibold text-slate-400 uppercase">Due Date</div>
-                          <div className="w-20"></div>
-                        </div>
-                        
-                        {/* Action items */}
-                        <div className="space-y-3">
-                          {actionItems.map((item) => {
-                            const dueDate = item.due_date ? new Date(item.due_date) : null;
-                            const isOverdue = dueDate && dueDate < new Date() && item.status === 'pending';
-                            const isExpanded = expandedActionItemId === item.id;
-                            const priorityBgColors = {
-                              high: 'bg-red-500/10 border-red-500/50',
-                              medium: 'bg-amber-500/10 border-amber-500/50',
-                              low: 'bg-slate-800/50 border-slate-700',
-                            };
-                            
-                            return (
-                              <div
-                                key={item.id}
-                                className={`rounded-lg border transition-colors ${
-                                  isOverdue
-                                    ? 'border-red-500/50 bg-red-500/10'
-                                    : priorityBgColors[item.priority as keyof typeof priorityBgColors] || 'border-slate-700 bg-slate-800/50'
-                                } ${isExpanded ? 'p-4' : 'p-3'}`}
-                              >
-                                {/* Single line view */}
-                                <div className="grid grid-cols-[2fr_1fr_auto] gap-4 items-center">
-                                  <div 
-                                    className="flex items-center gap-2 min-w-0 cursor-pointer"
-                                    onClick={() => {
-                                      setExpandedActionItemId(isExpanded ? null : item.id);
-                                    }}
-                                  >
-                                    <h4 className="text-sm font-semibold text-slate-100">{item.title}</h4>
-                                    <svg
-                                      className={`w-4 h-4 text-slate-400 transition-transform flex-shrink-0 ${isExpanded ? 'rotate-180' : ''}`}
-                                      fill="none"
-                                      stroke="currentColor"
-                                      viewBox="0 0 24 24"
-                                    >
-                                      <path
-                                        strokeLinecap="round"
-                                        strokeLinejoin="round"
-                                        strokeWidth={2}
-                                        d="M19 9l-7 7-7-7"
-                                      />
-                                    </svg>
-                                  </div>
-                                  <div className="text-sm text-slate-300">
-                                    {dueDate ? dueDate.toLocaleDateString() : '—'}
-                                    {isOverdue && (
-                                      <span className="ml-2 text-xs text-red-400">(Overdue)</span>
-                                    )}
-                                  </div>
-                                  <button
-                                    onClick={async (e) => {
-                                      e.stopPropagation();
-                                      setCompletingItemId(item.id);
-                                      setCompleteMessage(null);
-                                      try {
-                                        const response = await fetch(`/api/dashboard/items/${item.id}`, {
-                                          method: 'PUT',
-                                          headers: { 'Content-Type': 'application/json' },
-                                          body: JSON.stringify({ status: 'completed' }),
-                                        });
-                                        if (response.ok) {
-                                          setCompleteMessage({ type: 'success', text: 'Item completed!', itemId: item.id });
-                                          setTimeout(() => {
-                                            loadActionItems();
-                                            setExpandedActionItemId(null);
-                                            setCompletingItemId(null);
-                                            setCompleteMessage(null);
-                                          }, 1000);
-                                        } else {
-                                          const data = await response.json();
-                                          setCompleteMessage({ 
-                                            type: 'error', 
-                                            text: data.error || 'Failed to complete item', 
-                                            itemId: item.id 
-                                          });
-                                          setCompletingItemId(null);
-                                        }
-                                      } catch (error) {
-                                        console.error('Error completing item:', error);
-                                        setCompleteMessage({ 
-                                          type: 'error', 
-                                          text: 'An error occurred', 
-                                          itemId: item.id 
-                                        });
-                                        setCompletingItemId(null);
-                                      }
-                                    }}
-                                    disabled={completingItemId === item.id}
-                                    className={`px-4 py-2 text-sm font-medium rounded transition-colors whitespace-nowrap ${
-                                      completingItemId === item.id
-                                        ? 'text-slate-500 cursor-not-allowed bg-slate-700/50'
-                                        : 'text-emerald-300 hover:text-emerald-200 hover:bg-emerald-500/20'
-                                    }`}
-                                    title="Mark as completed"
-                                  >
-                                    {completingItemId === item.id ? 'Completing...' : 'Complete'}
-                                  </button>
-                                </div>
-                                
-                                {/* Expanded details */}
-                                {isExpanded && (
-                                  <div className="mt-4 pt-4 border-t border-slate-700/50 space-y-2">
-                                    {completeMessage && completeMessage.itemId === item.id && (
-                                      <div className={`p-2 rounded text-xs ${
-                                        completeMessage.type === 'success'
-                                          ? 'bg-emerald-500/20 text-emerald-300 border border-emerald-500/50'
-                                          : 'bg-red-500/20 text-red-300 border border-red-500/50'
-                                      }`}>
-                                        {completeMessage.text}
-                                      </div>
-                                    )}
-                                    {item.tools && (
-                                      <p className="text-sm text-slate-300">
-                                        <span className="text-slate-400">From tool:</span> {item.tools.name || 'Unknown Tool'}
-                                      </p>
-                                    )}
-                                    {item.description && (
-                                      <p className="text-sm text-slate-400">{item.description}</p>
-                                    )}
-                                    {item.priority && (
-                                      <p className="text-sm text-slate-400">
-                                        Priority: {item.priority.toUpperCase()}
-                                      </p>
-                                    )}
-                                    {item.metadata && typeof item.metadata === 'object' && item.metadata.notes && item.metadata.notes.trim() && (
-                                      <p className="text-sm text-slate-300 italic mt-2">
-                                        <span className="text-slate-400">Notes:</span> "{item.metadata.notes}"
-                                      </p>
-                                    )}
-                                  </div>
-                                )}
-                              </div>
-                            );
-                          })}
-                        </div>
-                      </div>
-                    )}
-                  </div>
-                </div>
-
-                {/* To Do List (one card per category with "Display on Dashboard" enabled and non-completed tasks) */}
-                {tools.some((t) => t.name === 'To Do List' && t.isOwned) &&
-                  todoListDashboardData.length > 0 && (
-                  <div className="mt-8 w-1/3 min-w-[280px] space-y-8">
-                    {todoListDashboardData.map((block, i) => (
-                      <div key={i} className="rounded-2xl border border-slate-800 bg-slate-900/70 p-6">
-                        <h3 className="text-lg font-semibold text-slate-100 mb-4">
-                          To Do List: {block.categoryName}
-                        </h3>
-                        <ul className="space-y-1">
-                          {block.taskNames.map((name, j) => (
-                            <li key={j} className="text-sm text-slate-300">
-                              {name}
-                            </li>
-                          ))}
-                        </ul>
-                      </div>
-                    ))}
-                  </div>
-                )}
-
-              </div>
-            )}
-
-            {dashboardSubTab === 'calendar' && (
-              <div>
-                <h1 className="text-2xl font-semibold text-slate-50 mb-4">Calendar</h1>
-                <p className="text-slate-400 mb-6">
-                  View and manage your household calendar events and schedules.
-                </p>
-                <CalendarView 
-                  calendarEvents={calendarEvents} 
-                  onMonthChange={handleCalendarMonthChange}
-                />
-              </div>
-            )}
+        {activeTab === 'calendar' && (
+          <div>
+            <h1 className="text-2xl font-semibold text-slate-50 mb-4">Calendar</h1>
+            <p className="text-slate-400 mb-6">
+              View and manage your household calendar events and schedules.
+            </p>
+            <CalendarView 
+              calendarEvents={calendarEvents} 
+              onMonthChange={handleCalendarMonthChange}
+            />
           </div>
         )}
 
@@ -1542,11 +1080,6 @@ export default function Dashboard() {
                                   onClick={() => handleToolClick(tool)}
                                   className="relative flex flex-col rounded-2xl border border-slate-800 bg-slate-900/70 p-4 min-h-[180px] transition-colors cursor-pointer hover:border-emerald-500/50"
                                 >
-                                  {tool.trialStatus === 'trial' && (
-                                    <span className="absolute top-2 left-2 inline-flex items-center rounded-full bg-amber-500/20 px-2 py-0.5 text-xs font-medium text-amber-300">
-                                      Trial
-                                    </span>
-                                  )}
                                   {iconSrc && (
                                     <div className="mb-3 flex flex-1 min-h-[60px] items-center justify-center">
                                       <DynamicIcon 
@@ -1865,7 +1398,7 @@ export default function Dashboard() {
             <div className="grid gap-4 md:grid-cols-2 mt-4">
               <div className="rounded-2xl border border-slate-800 bg-slate-900/70 p-6">
                 <p className="text-2xl mb-2">🔧</p>
-                <h3 className="text-sm font-semibold text-slate-100 mb-2">Active & Trial Tools</h3>
+                <h3 className="text-sm font-semibold text-slate-100 mb-2">Active Tools</h3>
                 {isLoadingStats ? (
                   <p className="text-xs text-slate-400">Loading...</p>
                 ) : (
@@ -1873,9 +1406,7 @@ export default function Dashboard() {
                     <p className="text-3xl font-semibold text-emerald-400 mb-1">
                       {activeTrialToolsCount !== null ? activeTrialToolsCount : '—'}
                     </p>
-                    <p className="text-xs text-slate-400 mb-4">
-                      Tools with active or trial status
-                    </p>
+                    <p className="text-xs text-slate-400 mb-4">Tools with active status</p>
                     <div className="pt-3 border-t border-slate-800">
                       <p className="text-2xl font-semibold text-emerald-400 mb-1">
                         {avgToolsPerAdmin !== null ? avgToolsPerAdmin.toFixed(2) : '—'}
@@ -1958,9 +1489,7 @@ export default function Dashboard() {
                           }).format(monthlyRevenue)
                         : '—'}
                     </p>
-                    <p className="text-xs text-slate-400 mb-4">
-                      Total pending revenue from billing_active
-                    </p>
+                    <p className="text-xs text-slate-400 mb-4">Legacy billing removed</p>
                     <div className="pt-3 border-t border-slate-800">
                       <p className="text-2xl font-semibold text-emerald-400 mb-1">
                         {lifetimeRevenue !== null 

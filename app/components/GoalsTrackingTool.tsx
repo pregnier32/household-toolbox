@@ -436,7 +436,7 @@ export function GoalsTrackingTool({ toolId }: GoalsTrackingToolProps) {
         priority: editingGoal.priority,
         status: editingGoal.status,
         percentComplete: editingGoal.percentComplete,
-        showOnDashboard: editingGoal.showOnDashboard,
+        showOnDashboard: false,
         reminderDays: editingGoal.reminderDays,
         useTaskProgressForPercent: editingGoal.useTaskProgressForPercent,
       });
@@ -1122,45 +1122,6 @@ export function GoalsTrackingTool({ toolId }: GoalsTrackingToolProps) {
                                   <th className="text-left text-xs font-medium text-slate-400 uppercase tracking-wider py-2 px-3">Tasks</th>
                                   <th className="text-right py-2 px-2 align-middle" scope="col">
                                     <div className="flex items-center justify-end gap-3">
-                                      <label className="flex items-center gap-2 cursor-pointer" title="Show on Dashboard">
-                                        <span className="text-xs text-slate-400 whitespace-nowrap">Dashboard</span>
-                                        <button
-                                          type="button"
-                                          role="switch"
-                                          aria-checked={goal.showOnDashboard}
-                                          onClick={async () => {
-                                            const next = !goal.showOnDashboard;
-                                            setGoals((prev) =>
-                                              prev.map((g) =>
-                                                g.id === goal.id ? { ...g, showOnDashboard: next } : g
-                                              )
-                                            );
-                                            if (toolId) {
-                                              const data = await apiPost('goal', 'update', {
-                                                goalId: goal.id,
-                                                showOnDashboard: next,
-                                              });
-                                              if (!data?.goal) {
-                                                setGoals((prev) =>
-                                                  prev.map((g) =>
-                                                    g.id === goal.id ? { ...g, showOnDashboard: goal.showOnDashboard } : g
-                                                  )
-                                                );
-                                                showMessage('error', 'Failed to update');
-                                              }
-                                            }
-                                          }}
-                                          className={`relative inline-flex h-6 w-11 shrink-0 rounded-full transition-colors focus:outline-none focus:ring-2 focus:ring-emerald-500/50 focus:ring-offset-2 focus:ring-offset-slate-900 ${
-                                            goal.showOnDashboard ? 'bg-emerald-500' : 'bg-slate-700'
-                                          }`}
-                                        >
-                                          <span
-                                            className={`pointer-events-none inline-block h-5 w-5 rounded-full bg-white shadow ring-0 transition-transform mt-0.5 ${
-                                              goal.showOnDashboard ? 'translate-x-5' : 'translate-x-0.5'
-                                            }`}
-                                          />
-                                        </button>
-                                      </label>
                                       <button
                                         onClick={() => startEditingGoal(goal)}
                                         className="rounded-lg p-1.5 text-slate-400 hover:bg-slate-800 hover:text-slate-200 transition-colors"

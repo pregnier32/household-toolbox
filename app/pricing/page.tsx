@@ -2,29 +2,11 @@
 
 import Image from 'next/image';
 import { useRouter } from 'next/navigation';
-import { useState, useEffect } from 'react';
 import { HelpMenu } from '../components/HelpMenu';
 
 export default function Pricing() {
   const router = useRouter();
-  const [platformFee, setPlatformFee] = useState<number>(5.00);
-
-  useEffect(() => {
-    const loadPlatformFee = async () => {
-      try {
-        const response = await fetch('/api/billing/platform-fee');
-        const data = await response.json();
-        if (response.ok && data.amount) {
-          setPlatformFee(Number(data.amount));
-        }
-      } catch (err) {
-        console.error('Error loading platform fee:', err);
-        // Keep default value of $5.00
-      }
-    };
-    
-    loadPlatformFee();
-  }, []);
+  const basePlatformFee = 5;
 
   return (
     <main className="min-h-screen bg-slate-950 text-slate-100">
@@ -93,8 +75,8 @@ export default function Pricing() {
                     Low monthly platform fee
                   </p>
                   <p className="text-xs text-slate-400 mt-1">
-                    Just <span className="font-semibold text-emerald-300">
-                      {new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' }).format(platformFee)}
+                    Currently <span className="font-semibold text-emerald-300">
+                      {new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' }).format(basePlatformFee)}
                     </span> per month when you have at least one active tool. No platform fee if you have no active tools.
                   </p>
                 </div>
@@ -188,7 +170,7 @@ export default function Pricing() {
                 <div className="flex justify-between text-slate-300">
                   <span>Platform Fee</span>
                   <span className="font-medium text-emerald-300">
-                    {new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' }).format(platformFee)}
+                    {new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' }).format(basePlatformFee)}
                   </span>
                 </div>
                 <div className="flex justify-between text-slate-300">
@@ -198,7 +180,7 @@ export default function Pricing() {
                 <div className="flex justify-between text-slate-300 pt-2 border-t border-slate-700">
                   <span className="font-medium text-slate-100">Total Monthly Cost</span>
                   <span className="font-semibold text-emerald-300">
-                    {new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' }).format(platformFee + 2)} - {new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' }).format(platformFee + 3)}
+                    {new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' }).format(basePlatformFee + 2)} - {new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' }).format(basePlatformFee + 3)}
                   </span>
                 </div>
               </div>

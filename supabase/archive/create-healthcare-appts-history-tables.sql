@@ -3,7 +3,7 @@
 -- Matches UI: headers (family members), appointment records, documents per record.
 --
 -- Storage: Bucket 'heathcare-appt-history' (10MB limit, image/*, application/pdf).
--- Apply RLS policies per design_system.md. See create-healthcare-appts-history-storage-bucket.sql.
+-- Apply RLS policies per system_design.md. See create-healthcare-appts-history-storage-bucket.sql.
 
 -- ============================================================================
 -- HEADERS (family members, e.g. Family1, Family2)

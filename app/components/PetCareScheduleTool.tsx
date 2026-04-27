@@ -189,9 +189,9 @@ export function PetCareScheduleTool({ toolId }: PetCareScheduleToolProps) {
   
   // Care Plan
   const [carePlanItems, setCarePlanItems] = useState<CarePlanItem[]>([]);
-  const [newCareItem, setNewCareItem] = useState({ name: '', frequency: 'Daily', notes: '', addToDashboard: true, priority: 'medium' as 'low' | 'medium' | 'high' });
+  const [newCareItem, setNewCareItem] = useState({ name: '', frequency: 'Daily', notes: '', addToDashboard: false, priority: 'medium' as 'low' | 'medium' | 'high' });
   const [editingCareItemId, setEditingCareItemId] = useState<string | null>(null);
-  const [editingCareItem, setEditingCareItem] = useState({ name: '', frequency: 'Daily', notes: '', addToDashboard: true, priority: 'medium' as 'low' | 'medium' | 'high' });
+  const [editingCareItem, setEditingCareItem] = useState({ name: '', frequency: 'Daily', notes: '', addToDashboard: false, priority: 'medium' as 'low' | 'medium' | 'high' });
   
   // Vaccinations
   const [vaccinations, setVaccinations] = useState<Vaccination[]>([]);
@@ -201,7 +201,7 @@ export function PetCareScheduleTool({ toolId }: PetCareScheduleToolProps) {
   
   // Appointments
   const [appointments, setAppointments] = useState<Appointment[]>([]);
-  const [newAppointment, setNewAppointment] = useState({ date: '', time: '', type: '', veterinarian: '', notes: '', addToDashboard: true });
+  const [newAppointment, setNewAppointment] = useState({ date: '', time: '', type: '', veterinarian: '', notes: '', addToDashboard: false });
   
   // Documents
   const [documents, setDocuments] = useState<Document[]>([]);
@@ -269,7 +269,7 @@ export function PetCareScheduleTool({ toolId }: PetCareScheduleToolProps) {
         startDate: c.startDate,
         endDate: c.endDate,
         notes: c.notes || '',
-        addToDashboard: c.addToDashboard !== undefined ? c.addToDashboard : true,
+        addToDashboard: false,
       })).sort((a, b) => a.name.localeCompare(b.name)),
       vaccinations: vaccinations.map(v => ({
         name: v.name.trim(),
@@ -284,7 +284,7 @@ export function PetCareScheduleTool({ toolId }: PetCareScheduleToolProps) {
         veterinarian: (a.veterinarian || '').trim(),
         notes: (a.notes || '').trim(),
         isUpcoming: a.isUpcoming,
-        addToDashboard: a.addToDashboard !== undefined ? a.addToDashboard : true,
+        addToDashboard: false,
       })).sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime()),
       documents: documents.map(d => {
         const doc: any = {
@@ -397,7 +397,7 @@ export function PetCareScheduleTool({ toolId }: PetCareScheduleToolProps) {
             startDate: c.start_date,
             endDate: c.end_date,
             notes: (c.notes && c.notes.trim()) ? c.notes.trim() : '',
-            addToDashboard: c.add_to_dashboard !== undefined ? c.add_to_dashboard : true,
+            addToDashboard: false,
             priority: (c.priority && ['low', 'medium', 'high'].includes(c.priority)) ? c.priority : 'medium' as 'low' | 'medium' | 'high',
           };
           console.log(`Loading care plan item: ${mappedItem.name}, notes: "${mappedItem.notes}"`);
@@ -420,7 +420,7 @@ export function PetCareScheduleTool({ toolId }: PetCareScheduleToolProps) {
           veterinarian: a.veterinarian || '',
           notes: a.notes || '',
           isUpcoming: a.is_upcoming,
-          addToDashboard: a.add_to_dashboard !== undefined ? a.add_to_dashboard : true,
+          addToDashboard: false,
         })));
         
         setDocuments((pet.documents || []).map((d: any) => ({
@@ -542,7 +542,7 @@ export function PetCareScheduleTool({ toolId }: PetCareScheduleToolProps) {
               startDate: c.startDate,
               endDate: c.endDate,
               notes: notesValue,
-              addToDashboard: c.addToDashboard !== undefined ? c.addToDashboard : true,
+              addToDashboard: false,
               priority: (c.priority && ['low', 'medium', 'high'].includes(c.priority)) ? c.priority : 'medium',
             };
           }),
@@ -559,7 +559,7 @@ export function PetCareScheduleTool({ toolId }: PetCareScheduleToolProps) {
             veterinarian: a.veterinarian,
             notes: a.notes || '',
             isUpcoming: a.isUpcoming,
-            addToDashboard: a.addToDashboard !== undefined ? a.addToDashboard : true,
+            addToDashboard: false,
           })),
           documents: documents.map(d => {
             const doc: any = {
@@ -760,7 +760,7 @@ export function PetCareScheduleTool({ toolId }: PetCareScheduleToolProps) {
             startDate: c.start_date,
             endDate: c.end_date,
             notes: c.notes || '',
-            addToDashboard: c.add_to_dashboard !== undefined ? c.add_to_dashboard : true,
+            addToDashboard: false,
           })),
           vaccinations: (currentPet.vaccinations || []).map((v: any) => ({
             name: v.name,
@@ -775,7 +775,7 @@ export function PetCareScheduleTool({ toolId }: PetCareScheduleToolProps) {
             veterinarian: a.veterinarian || '',
             notes: a.notes || '',
             isUpcoming: a.is_upcoming,
-            addToDashboard: a.add_to_dashboard !== undefined ? a.add_to_dashboard : true,
+            addToDashboard: false,
           })),
           documents: (currentPet.documents || []).map((d: any) => ({
             name: d.name,
@@ -886,7 +886,7 @@ export function PetCareScheduleTool({ toolId }: PetCareScheduleToolProps) {
             startDate: c.start_date,
             endDate: c.end_date,
             notes: c.notes || '',
-            addToDashboard: c.add_to_dashboard !== undefined ? c.add_to_dashboard : true,
+            addToDashboard: false,
           })),
           vaccinations: (currentPet.vaccinations || []).map((v: any) => ({
             name: v.name,
@@ -901,7 +901,7 @@ export function PetCareScheduleTool({ toolId }: PetCareScheduleToolProps) {
             veterinarian: a.veterinarian || '',
             notes: a.notes || '',
             isUpcoming: a.is_upcoming,
-            addToDashboard: a.add_to_dashboard !== undefined ? a.add_to_dashboard : true,
+            addToDashboard: false,
           })),
           documents: (currentPet.documents || []).map((d: any) => ({
             name: d.name,
@@ -1108,11 +1108,11 @@ export function PetCareScheduleTool({ toolId }: PetCareScheduleToolProps) {
         startDate: new Date().toISOString().split('T')[0],
         endDate: null,
         notes: newCareItem.notes || '',
-        addToDashboard: newCareItem.addToDashboard !== undefined ? newCareItem.addToDashboard : true,
+        addToDashboard: false,
         priority: newCareItem.priority || 'medium'
       };
       setCarePlanItems(prev => [...prev, newItem]);
-      setNewCareItem({ name: '', frequency: 'Daily', notes: '', addToDashboard: true, priority: 'medium' });
+      setNewCareItem({ name: '', frequency: 'Daily', notes: '', addToDashboard: false, priority: 'medium' });
       // Save to database immediately
       setTimeout(() => savePetData(), 100);
     }
@@ -1139,14 +1139,14 @@ export function PetCareScheduleTool({ toolId }: PetCareScheduleToolProps) {
       name: item.name, 
       frequency: item.frequency, 
       notes: item.notes || '',
-      addToDashboard: item.addToDashboard !== undefined ? item.addToDashboard : true,
+      addToDashboard: false,
       priority: item.priority || 'medium'
     });
   };
 
   const cancelEditingCareItem = () => {
     setEditingCareItemId(null);
-    setEditingCareItem({ name: '', frequency: 'Daily', notes: '', addToDashboard: true, priority: 'medium' });
+    setEditingCareItem({ name: '', frequency: 'Daily', notes: '', addToDashboard: false, priority: 'medium' });
   };
 
   const saveCareItemEdit = async () => {
@@ -1163,7 +1163,7 @@ export function PetCareScheduleTool({ toolId }: PetCareScheduleToolProps) {
             name: editingCareItem.name.trim(),
             frequency: editingCareItem.frequency,
             notes: notesValue,
-            addToDashboard: editingCareItem.addToDashboard !== undefined ? editingCareItem.addToDashboard : true,
+            addToDashboard: false,
             priority: editingCareItem.priority || 'medium'
           }
         : item
@@ -1177,7 +1177,7 @@ export function PetCareScheduleTool({ toolId }: PetCareScheduleToolProps) {
     setCarePlanItems(updatedItems);
     
     setEditingCareItemId(null);
-    setEditingCareItem({ name: '', frequency: 'Daily', notes: '', addToDashboard: true, priority: 'medium' });
+    setEditingCareItem({ name: '', frequency: 'Daily', notes: '', addToDashboard: false, priority: 'medium' });
     
     // Save to database using the updated items (after state update)
     setTimeout(() => {
@@ -1249,10 +1249,10 @@ export function PetCareScheduleTool({ toolId }: PetCareScheduleToolProps) {
         id: Date.now().toString(),
         ...newAppointment,
         isUpcoming: new Date(newAppointment.date) >= new Date(),
-        addToDashboard: newAppointment.addToDashboard !== undefined ? newAppointment.addToDashboard : true
+        addToDashboard: false
       };
       setAppointments(prev => [...prev, appointment]);
-      setNewAppointment({ date: '', time: '', type: '', veterinarian: '', notes: '', addToDashboard: true });
+      setNewAppointment({ date: '', time: '', type: '', veterinarian: '', notes: '', addToDashboard: false });
       // Save to database immediately
       setTimeout(() => savePetData(), 100);
     }
@@ -2984,18 +2984,6 @@ export function PetCareScheduleTool({ toolId }: PetCareScheduleToolProps) {
                 className="w-full px-4 py-2 rounded-lg border border-slate-700 bg-slate-900/70 text-slate-100 placeholder-slate-500 focus:border-emerald-500/50 focus:outline-none focus:ring-1 focus:ring-emerald-500/50 resize-none"
               />
             </div>
-            <div className="mt-4 flex items-center gap-2">
-              <input
-                type="checkbox"
-                id="addToDashboard"
-                checked={newCareItem.addToDashboard}
-                onChange={(e) => setNewCareItem({ ...newCareItem, addToDashboard: e.target.checked })}
-                className="w-4 h-4 rounded border-slate-600 bg-slate-800 text-emerald-500 focus:ring-emerald-500 focus:ring-offset-slate-900"
-              />
-              <label htmlFor="addToDashboard" className="text-sm text-slate-300 cursor-pointer">
-                Add to Dashboard Action Items
-              </label>
-            </div>
             <button
               onClick={addCarePlanItem}
               className="mt-4 px-4 py-2 rounded-lg bg-emerald-500 text-slate-950 font-medium hover:bg-emerald-400 transition-colors"
@@ -3057,18 +3045,6 @@ export function PetCareScheduleTool({ toolId }: PetCareScheduleToolProps) {
                             rows={3}
                             className="w-full px-3 py-2 rounded-lg border border-slate-700 bg-slate-900/70 text-slate-100 placeholder-slate-500 focus:border-emerald-500/50 focus:outline-none focus:ring-1 focus:ring-emerald-500/50 resize-none"
                           />
-                        </div>
-                        <div className="flex items-center gap-2">
-                          <input
-                            type="checkbox"
-                            id={`editAddToDashboard-${item.id}`}
-                            checked={editingCareItem.addToDashboard}
-                            onChange={(e) => setEditingCareItem({ ...editingCareItem, addToDashboard: e.target.checked })}
-                            className="w-4 h-4 rounded border-slate-600 bg-slate-800 text-emerald-500 focus:ring-emerald-500 focus:ring-offset-slate-900"
-                          />
-                          <label htmlFor={`editAddToDashboard-${item.id}`} className="text-sm text-slate-300 cursor-pointer">
-                            Add to Dashboard Action Items
-                          </label>
                         </div>
                         <div className="flex gap-2">
                           <button
@@ -3183,18 +3159,6 @@ export function PetCareScheduleTool({ toolId }: PetCareScheduleToolProps) {
                             rows={3}
                             className="w-full px-3 py-2 rounded-lg border border-slate-700 bg-slate-900/70 text-slate-100 placeholder-slate-500 focus:border-emerald-500/50 focus:outline-none focus:ring-1 focus:ring-emerald-500/50 resize-none"
                           />
-                        </div>
-                        <div className="flex items-center gap-2">
-                          <input
-                            type="checkbox"
-                            id={`editAddToDashboard-${item.id}`}
-                            checked={editingCareItem.addToDashboard}
-                            onChange={(e) => setEditingCareItem({ ...editingCareItem, addToDashboard: e.target.checked })}
-                            className="w-4 h-4 rounded border-slate-600 bg-slate-800 text-emerald-500 focus:ring-emerald-500 focus:ring-offset-slate-900"
-                          />
-                          <label htmlFor={`editAddToDashboard-${item.id}`} className="text-sm text-slate-300 cursor-pointer">
-                            Add to Dashboard Action Items
-                          </label>
                         </div>
                         <div className="flex gap-2">
                           <button
@@ -3471,18 +3435,6 @@ export function PetCareScheduleTool({ toolId }: PetCareScheduleToolProps) {
                   className="w-full px-3 py-2 rounded-lg border border-slate-700 bg-slate-900/70 text-slate-100 placeholder-slate-500 focus:border-emerald-500/50 focus:outline-none focus:ring-1 focus:ring-emerald-500/50"
                 />
               </div>
-            </div>
-            <div className="mt-4 flex items-center gap-2">
-              <input
-                type="checkbox"
-                id="addAppointmentToDashboard"
-                checked={newAppointment.addToDashboard}
-                onChange={(e) => setNewAppointment({ ...newAppointment, addToDashboard: e.target.checked })}
-                className="w-4 h-4 rounded border-slate-600 bg-slate-800 text-emerald-500 focus:ring-emerald-500 focus:ring-offset-slate-900"
-              />
-              <label htmlFor="addAppointmentToDashboard" className="text-sm text-slate-300 cursor-pointer">
-                Add to Dashboard Calendar
-              </label>
             </div>
             <button
               onClick={addAppointment}

@@ -5,9 +5,10 @@ import { useRouter } from 'next/navigation';
 
 type AdminMenuProps = {
   className?: string;
+  onOverviewClick?: () => void;
 };
 
-export function AdminMenu({ className = '' }: AdminMenuProps) {
+export function AdminMenu({ className = '', onOverviewClick }: AdminMenuProps) {
   const [isOpen, setIsOpen] = useState(false);
   const menuRef = useRef<HTMLDivElement>(null);
   const router = useRouter();
@@ -73,6 +74,30 @@ export function AdminMenu({ className = '' }: AdminMenuProps) {
       {isOpen && (
         <div className="absolute right-0 mt-2 w-56 rounded-lg border border-slate-700 bg-slate-800 shadow-lg z-50">
           <div className="py-1">
+            {onOverviewClick && (
+              <button
+                onClick={() => {
+                  onOverviewClick();
+                  setIsOpen(false);
+                }}
+                className="flex w-full items-center gap-3 px-4 py-2 text-sm text-slate-300 transition-colors hover:bg-slate-700"
+              >
+                <svg
+                  className="h-4 w-4"
+                  fill="none"
+                  stroke="currentColor"
+                  viewBox="0 0 24 24"
+                >
+                  <path
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    strokeWidth={2}
+                    d="M3 13h8V3H3v10zm10 8h8V3h-8v18zm-10 0h8v-6H3v6z"
+                  />
+                </svg>
+                <span>Overview</span>
+              </button>
+            )}
             <button
               onClick={() => {
                 router.push('/dashboard/admin/site-maintenance');
@@ -100,56 +125,6 @@ export function AdminMenu({ className = '' }: AdminMenuProps) {
                 />
               </svg>
               <span>Site Maintenance</span>
-            </button>
-            <button
-              onClick={() => {
-                router.push('/dashboard/admin/users');
-                setIsOpen(false);
-              }}
-              className="flex w-full items-center gap-3 px-4 py-2 text-sm text-slate-300 transition-colors hover:bg-slate-700"
-            >
-              <svg
-                className="h-4 w-4"
-                fill="none"
-                stroke="currentColor"
-                viewBox="0 0 24 24"
-              >
-                <path
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                  strokeWidth={2}
-                  d="M12 4.354a4 4 0 110 5.292M15 21H3v-1a6 6 0 0112 0v1zm0 0h6v-1a6 6 0 00-9-5.197M13 7a4 4 0 11-8 0 4 4 0 018 0z"
-                />
-              </svg>
-              <span>Users</span>
-            </button>
-            <button
-              onClick={() => {
-                router.push('/dashboard/admin/tools');
-                setIsOpen(false);
-              }}
-              className="flex w-full items-center gap-3 px-4 py-2 text-sm text-slate-300 transition-colors hover:bg-slate-700"
-            >
-              <svg
-                className="h-4 w-4"
-                fill="none"
-                stroke="currentColor"
-                viewBox="0 0 24 24"
-              >
-                <path
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                  strokeWidth={2}
-                  d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z"
-                />
-                <path
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                  strokeWidth={2}
-                  d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"
-                />
-              </svg>
-              <span>Tools</span>
             </button>
           </div>
         </div>

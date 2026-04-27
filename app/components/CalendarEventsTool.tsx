@@ -168,7 +168,7 @@ export function CalendarEventsTool({ toolId }: CalendarEventsToolProps) {
     time: '' as string | null,
     frequency: 'One Time' as 'One Time' | 'Weekly' | 'Monthly' | 'Annual',
     notes: '',
-    addToDashboard: true,
+    addToDashboard: false,
     endDate: '' as string | null,
     daysOfWeek: [] as number[],
     dayOfMonth: undefined as number | undefined
@@ -180,7 +180,7 @@ export function CalendarEventsTool({ toolId }: CalendarEventsToolProps) {
     time: '' as string | null,
     frequency: 'One Time' as 'One Time' | 'Weekly' | 'Monthly' | 'Annual',
     notes: '',
-    addToDashboard: true,
+    addToDashboard: false,
     endDate: '' as string | null,
     daysOfWeek: [] as number[],
     dayOfMonth: undefined as number | undefined
@@ -225,7 +225,7 @@ export function CalendarEventsTool({ toolId }: CalendarEventsToolProps) {
                 frequency: e.frequency as 'One Time' | 'Weekly' | 'Monthly' | 'Annual',
                 notes: e.notes || '',
                 isActive: e.is_active !== false,
-                addToDashboard: e.add_to_dashboard !== undefined ? e.add_to_dashboard : true,
+                addToDashboard: false,
                 categoryId: e.category_id,
                 endDate: e.end_date || null,
                 daysOfWeek: e.days_of_week ? (Array.isArray(e.days_of_week) ? e.days_of_week : (typeof e.days_of_week === 'string' ? JSON.parse(e.days_of_week) : e.days_of_week)) : undefined,
@@ -334,7 +334,7 @@ export function CalendarEventsTool({ toolId }: CalendarEventsToolProps) {
         frequency: e.frequency as 'One Time' | 'Weekly' | 'Monthly' | 'Annual',
         notes: e.notes || '',
         isActive: e.is_active !== false,
-        addToDashboard: e.add_to_dashboard !== undefined ? e.add_to_dashboard : true,
+        addToDashboard: false,
         categoryId: e.category_id,
         endDate: e.end_date || null,
         daysOfWeek: e.days_of_week ? (Array.isArray(e.days_of_week) ? e.days_of_week : JSON.parse(e.days_of_week)) : undefined,
@@ -605,7 +605,7 @@ export function CalendarEventsTool({ toolId }: CalendarEventsToolProps) {
             frequency: newEvent.frequency,
             notes: newEvent.notes || '',
             isActive: true,
-            addToDashboard: newEvent.addToDashboard,
+            addToDashboard: false,
             endDate: newEvent.endDate || null,
             daysOfWeek: newEvent.frequency === 'Weekly' && newEvent.daysOfWeek && newEvent.daysOfWeek.length > 0
               ? newEvent.daysOfWeek
@@ -630,7 +630,7 @@ export function CalendarEventsTool({ toolId }: CalendarEventsToolProps) {
           frequency: data.event.frequency as 'One Time' | 'Weekly' | 'Monthly' | 'Annual',
           notes: data.event.notes || '',
           isActive: data.event.is_active !== false,
-          addToDashboard: data.event.add_to_dashboard !== undefined ? data.event.add_to_dashboard : true,
+          addToDashboard: false,
           categoryId: data.event.category_id,
           endDate: data.event.end_date || null,
           daysOfWeek: data.event.days_of_week ? (Array.isArray(data.event.days_of_week) ? data.event.days_of_week : JSON.parse(data.event.days_of_week)) : undefined,
@@ -647,7 +647,7 @@ export function CalendarEventsTool({ toolId }: CalendarEventsToolProps) {
         time: null,
         frequency: 'One Time',
         notes: '',
-        addToDashboard: true,
+        addToDashboard: false,
         endDate: null,
         daysOfWeek: [],
         dayOfMonth: undefined
@@ -670,7 +670,7 @@ export function CalendarEventsTool({ toolId }: CalendarEventsToolProps) {
       time: event.time || null,
       frequency: event.frequency,
       notes: event.notes || '',
-      addToDashboard: event.addToDashboard,
+      addToDashboard: false,
       endDate: event.endDate || null,
       daysOfWeek: event.daysOfWeek || [],
       dayOfMonth: event.dayOfMonth
@@ -685,7 +685,7 @@ export function CalendarEventsTool({ toolId }: CalendarEventsToolProps) {
       time: null,
       frequency: 'One Time',
       notes: '',
-      addToDashboard: true,
+      addToDashboard: false,
       endDate: null,
       daysOfWeek: [],
       dayOfMonth: undefined
@@ -714,7 +714,7 @@ export function CalendarEventsTool({ toolId }: CalendarEventsToolProps) {
             frequency: editingEvent.frequency,
             notes: editingEvent.notes || '',
             isActive: eventToUpdate.isActive,
-            addToDashboard: editingEvent.addToDashboard,
+            addToDashboard: false,
             endDate: editingEvent.endDate || null,
             daysOfWeek: editingEvent.frequency === 'Weekly' && editingEvent.daysOfWeek && editingEvent.daysOfWeek.length > 0
               ? editingEvent.daysOfWeek
@@ -739,7 +739,7 @@ export function CalendarEventsTool({ toolId }: CalendarEventsToolProps) {
           frequency: data.event.frequency as 'One Time' | 'Weekly' | 'Monthly' | 'Annual',
           notes: data.event.notes || '',
           isActive: data.event.is_active !== false,
-          addToDashboard: data.event.add_to_dashboard !== undefined ? data.event.add_to_dashboard : true,
+          addToDashboard: false,
           categoryId: data.event.category_id,
           endDate: data.event.end_date || null,
           daysOfWeek: data.event.days_of_week ? (Array.isArray(data.event.days_of_week) ? data.event.days_of_week : JSON.parse(data.event.days_of_week)) : undefined,
@@ -759,7 +759,7 @@ export function CalendarEventsTool({ toolId }: CalendarEventsToolProps) {
         time: null,
         frequency: 'One Time',
         notes: '',
-        addToDashboard: true,
+        addToDashboard: false,
         endDate: null,
         daysOfWeek: [],
         dayOfMonth: undefined
@@ -1071,10 +1071,6 @@ export function CalendarEventsTool({ toolId }: CalendarEventsToolProps) {
           addText(`Notes: ${event.notes}`, 9, false, 10);
         }
         
-        if (event.addToDashboard) {
-          addText('On Dashboard Calendar: Yes', 9, false, 10);
-        }
-        
         yPos += 3;
       });
       
@@ -1105,7 +1101,7 @@ export function CalendarEventsTool({ toolId }: CalendarEventsToolProps) {
       time: null,
       frequency: 'Annual',
       notes: '',
-      addToDashboard: true,
+      addToDashboard: false,
       endDate: null,
       daysOfWeek: [],
       dayOfMonth: undefined
@@ -1581,20 +1577,6 @@ export function CalendarEventsTool({ toolId }: CalendarEventsToolProps) {
                 )}
               </div>
 
-              {/* Checkbox below frequency */}
-              <div className="flex items-center gap-2">
-                <input
-                  type="checkbox"
-                  id="addToDashboardNew"
-                  checked={newEvent.addToDashboard}
-                  onChange={(e) => setNewEvent({ ...newEvent, addToDashboard: e.target.checked })}
-                  className="w-4 h-4 rounded border-slate-600 bg-slate-800 text-emerald-500 focus:ring-emerald-500 focus:ring-offset-slate-900"
-                />
-                <label htmlFor="addToDashboardNew" className="text-sm text-slate-300 cursor-pointer">
-                  Show on Dashboard Calendar
-                </label>
-              </div>
-              
               {/* End Date - Optional for all frequencies */}
               <div>
                 <label className="block text-sm font-medium text-slate-300 mb-2">
@@ -1753,19 +1735,6 @@ export function CalendarEventsTool({ toolId }: CalendarEventsToolProps) {
                             )}
                           </div>
 
-                          {/* Checkbox below frequency */}
-                          <div className="flex items-center gap-2">
-                            <input
-                              type="checkbox"
-                              checked={editingEvent.addToDashboard}
-                              onChange={(e) => setEditingEvent({ ...editingEvent, addToDashboard: e.target.checked })}
-                              className="w-4 h-4 rounded border-slate-600 bg-slate-800 text-emerald-500 focus:ring-emerald-500 focus:ring-offset-slate-900"
-                            />
-                            <label className="text-sm text-slate-300 cursor-pointer">
-                              Show on Dashboard Calendar
-                            </label>
-                          </div>
-                          
                           {/* End Date - Optional for all frequencies */}
                           <div>
                             <label className="block text-sm font-medium text-slate-300 mb-2">
@@ -1829,11 +1798,6 @@ export function CalendarEventsTool({ toolId }: CalendarEventsToolProps) {
                               <p className="text-sm text-slate-400 mt-1">
                                 Day of Month: {event.dayOfMonth}
                               </p>
-                            )}
-                            {event.addToDashboard && (
-                              <span className="inline-flex items-center rounded-full bg-emerald-500/20 px-2 py-0.5 text-xs font-medium text-emerald-300 mt-2">
-                                On Dashboard
-                              </span>
                             )}
                             {event.notes && (
                               <p className="text-sm text-slate-300 mt-2 italic">"{event.notes}"</p>
