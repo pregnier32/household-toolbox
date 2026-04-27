@@ -2,13 +2,14 @@
 
 import Image from 'next/image';
 import { useRouter } from 'next/navigation';
-import { useState } from 'react';
-import { HelpMenu } from '../components/HelpMenu';
+import { useEffect, useState } from 'react';
+import { UserMenu } from '../components/UserMenu';
 
 type RequestType = 'question' | 'support' | 'feature' | 'custom_tool';
 
 export default function Support() {
   const router = useRouter();
+  const [user, setUser] = useState<{ firstName: string; lastName?: string } | null>(null);
   const [requestType, setRequestType] = useState<RequestType>('question');
   const [name, setName] = useState('');
   const [email, setEmail] = useState('');
@@ -17,6 +18,27 @@ export default function Support() {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState(false);
+
+  useEffect(() => {
+    fetch('/api/auth/session')
+      .then((res) => res.json())
+      .then((data) => {
+        if (data.user) {
+          setUser({
+            firstName: data.user.firstName,
+            lastName: data.user.lastName,
+          });
+        }
+      })
+      .catch(() => {
+        // Keep page accessible as public route if session check fails.
+      });
+  }, []);
+
+  const handleSignOut = async () => {
+    await fetch('/api/auth/signout', { method: 'POST' });
+    router.push('/');
+  };
 
   const requestTypeOptions: { value: RequestType; label: string; description: string; icon: string }[] = [
     {
@@ -92,10 +114,7 @@ export default function Support() {
       <header className="border-b border-slate-800 bg-slate-900/50">
         <div className="mx-auto flex max-w-7xl items-center justify-between px-4 py-4 sm:px-6 lg:px-8">
           <div className="flex items-center">
-            <button
-              onClick={() => router.push('/')}
-              className="flex items-center"
-            >
+            <button onClick={() => router.push('/')} className="flex items-center">
               <Image
                 src="/images/logo/Logo_Side_White.png"
                 alt="Household Toolbox"
@@ -107,15 +126,32 @@ export default function Support() {
             </button>
           </div>
 
-          <nav className="hidden gap-6 text-sm text-slate-300 sm:flex items-center">
-            <button
-              onClick={() => router.push('/')}
-              className="hover:text-emerald-300 transition-colors"
-            >
-              Home
-            </button>
-            <HelpMenu />
-          </nav>
+          {user ? (
+            <div className="flex items-center gap-3">
+              <button
+                onClick={() => router.push('/dashboard')}
+                className="flex items-center gap-2 rounded-lg px-3 py-2 text-sm font-medium text-slate-300 transition-colors hover:bg-slate-800 hover:text-slate-100"
+              >
+                <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 19l-7-7m0 0l7-7m-7 7h18" />
+                </svg>
+                <span>Back to Dashboard</span>
+              </button>
+              <UserMenu
+                userName={`${user.firstName} ${user.lastName || ''}`.trim()}
+                onSignOut={handleSignOut}
+              />
+            </div>
+          ) : (
+            <nav className="hidden gap-6 text-sm text-slate-300 sm:flex items-center">
+              <button
+                onClick={() => router.push('/')}
+                className="hover:text-emerald-300 transition-colors"
+              >
+                Home
+              </button>
+            </nav>
+          )}
         </div>
       </header>
 

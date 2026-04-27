@@ -4,7 +4,6 @@ import { useState, useEffect, useRef } from 'react';
 import Image from 'next/image';
 import { useRouter } from 'next/navigation';
 import { UserMenu } from '../../components/UserMenu';
-import { HelpMenu } from '../../components/HelpMenu';
 import { updateProfile, changePassword } from '../../actions/auth';
 
 type User = {
@@ -242,7 +241,6 @@ export default function Profile() {
               </svg>
               <span>Back to your Toolbox</span>
             </button>
-            <HelpMenu />
             <UserMenu
               userName={`${user.firstName} ${user.lastName || ''}`.trim()}
               onSignOut={handleSignOut}

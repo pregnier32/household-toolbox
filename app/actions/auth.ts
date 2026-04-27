@@ -177,6 +177,7 @@ export async function signUp(data: SignUpData): Promise<SignUpResult> {
       last_name: lastName,
       active: 'Y', // Default to active
       user_status: 'admin', // Default status
+      theme_preference: 'dark',
       user_id: userId,
     };
 

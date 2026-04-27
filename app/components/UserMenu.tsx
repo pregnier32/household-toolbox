@@ -2,6 +2,7 @@
 
 import { useState, useRef, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
+import { useTheme, type ThemeMode } from './AppThemeProvider';
 
 type UserMenuProps = {
   userName: string;
@@ -12,6 +13,12 @@ export function UserMenu({ userName, onSignOut }: UserMenuProps) {
   const [isOpen, setIsOpen] = useState(false);
   const menuRef = useRef<HTMLDivElement>(null);
   const router = useRouter();
+  const { theme, setTheme } = useTheme();
+
+  const themeOptions: Array<{ value: ThemeMode; label: string }> = [
+    { value: 'light', label: 'Light' },
+    { value: 'dark', label: 'Dark' },
+  ];
 
   // Close menu when clicking outside
   useEffect(() => {
@@ -105,6 +112,69 @@ export function UserMenu({ userName, onSignOut }: UserMenuProps) {
               </svg>
               <span>My Tools</span>
             </button>
+            <button
+              onClick={() => {
+                router.push('/faq');
+                setIsOpen(false);
+              }}
+              className="flex w-full items-center gap-3 px-4 py-2 text-sm text-slate-300 transition-colors hover:bg-slate-700"
+            >
+              <svg
+                className="h-4 w-4"
+                fill="none"
+                stroke="currentColor"
+                viewBox="0 0 24 24"
+              >
+                <path
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  strokeWidth={2}
+                  d="M8.228 9c.549-1.165 2.03-2 3.772-2 2.21 0 4 1.343 4 3 0 1.657-1.343 3-3 3H6m12-4a9 9 0 11-18 0 9 9 0 0118 0z"
+                />
+              </svg>
+              <span>FAQ</span>
+            </button>
+            <button
+              onClick={() => {
+                router.push('/support');
+                setIsOpen(false);
+              }}
+              className="flex w-full items-center gap-3 px-4 py-2 text-sm text-slate-300 transition-colors hover:bg-slate-700"
+            >
+              <svg
+                className="h-4 w-4"
+                fill="none"
+                stroke="currentColor"
+                viewBox="0 0 24 24"
+              >
+                <path
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  strokeWidth={2}
+                  d="M18.364 5.636l-3.536 3.536m0 5.656l3.536 3.536M9.172 9.172L5.636 5.636m3.536 9.192l-3.536 3.536M21 12a9 9 0 11-18 0 9 9 0 0118 0zm-5 0a4 4 0 11-8 0 4 4 0 018 0z"
+                />
+              </svg>
+              <span>Support</span>
+            </button>
+            <div className="my-1 border-t border-slate-700"></div>
+            <div className="px-4 py-2">
+              <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-slate-400">Theme</p>
+              <div className="grid grid-cols-2 gap-1 rounded-lg bg-slate-900/70 p-1">
+                {themeOptions.map((option) => (
+                  <button
+                    key={option.value}
+                    onClick={() => setTheme(option.value)}
+                    className={`rounded-md px-2 py-1 text-xs font-medium transition-colors ${
+                      theme === option.value
+                        ? 'bg-emerald-500 text-slate-950'
+                        : 'text-slate-300 hover:bg-slate-700'
+                    }`}
+                  >
+                    {option.label}
+                  </button>
+                ))}
+              </div>
+            </div>
             <div className="my-1 border-t border-slate-700"></div>
             <button
               onClick={() => {

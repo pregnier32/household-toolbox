@@ -4,7 +4,6 @@ import { useState, useEffect, useCallback } from 'react';
 import Image from 'next/image';
 import { useRouter } from 'next/navigation';
 import { UserMenu } from '../components/UserMenu';
-import { HelpMenu } from '../components/HelpMenu';
 import { AdminMenu } from '../components/AdminMenu';
 import { ToolModal } from '../components/ToolModal';
 import { DynamicIcon } from '../components/DynamicIcon';
@@ -891,7 +890,6 @@ export default function Dashboard() {
                 }}
               />
             )}
-            <HelpMenu />
             <UserMenu
               userName={`${user.firstName} ${user.lastName || ''}`.trim()}
               onSignOut={handleSignOut}

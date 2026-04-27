@@ -3,6 +3,7 @@
 import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import Image from 'next/image';
+import { UserMenu } from '../../components/UserMenu';
 
 type UserTool = {
   id: string;
@@ -22,7 +23,7 @@ export default function MyToolsPage() {
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
-  const [user, setUser] = useState<{ id?: string } | null>(null);
+  const [user, setUser] = useState<{ id?: string; firstName?: string; lastName?: string } | null>(null);
   const [inactivatingId, setInactivatingId] = useState<string | null>(null);
   const router = useRouter();
 
@@ -42,6 +43,11 @@ export default function MyToolsPage() {
         router.push('/');
       });
   }, [router]);
+
+  const handleSignOut = async () => {
+    await fetch('/api/auth/signout', { method: 'POST' });
+    router.push('/');
+  };
 
   const loadTools = async () => {
     try {
@@ -154,31 +160,37 @@ export default function MyToolsPage() {
               priority
             />
           </div>
+          <div className="flex items-center gap-3">
+            <button
+              onClick={() => router.push('/dashboard')}
+              className="flex items-center gap-2 rounded-lg px-3 py-2 text-sm font-medium text-slate-300 transition-colors hover:bg-slate-800 hover:text-slate-100"
+            >
+              <svg
+                className="h-4 w-4"
+                fill="none"
+                stroke="currentColor"
+                viewBox="0 0 24 24"
+              >
+                <path
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  strokeWidth={2}
+                  d="M10 19l-7-7m0 0l7-7m-7 7h18"
+                />
+              </svg>
+              <span>Back to Dashboard</span>
+            </button>
+            <UserMenu
+              userName={`${user?.firstName || ''} ${user?.lastName || ''}`.trim() || 'Account'}
+              onSignOut={handleSignOut}
+            />
+          </div>
         </div>
       </header>
 
       {/* Content */}
       <div className="mx-auto max-w-7xl px-4 py-8 sm:px-6 lg:px-8">
         <div className="mb-6">
-          <button
-            onClick={() => router.push('/dashboard')}
-            className="mb-4 flex items-center gap-2 text-sm text-slate-400 transition-colors hover:text-slate-300"
-          >
-            <svg
-              className="h-4 w-4"
-              fill="none"
-              stroke="currentColor"
-              viewBox="0 0 24 24"
-            >
-              <path
-                strokeLinecap="round"
-                strokeLinejoin="round"
-                strokeWidth={2}
-                d="M15 19l-7-7 7-7"
-              />
-            </svg>
-            <span>Back to Dashboard</span>
-          </button>
           <h1 className="text-2xl font-semibold text-slate-50">My Tools</h1>
           <p className="mt-1 text-sm text-slate-400">View and manage your active tools.</p>
         </div>

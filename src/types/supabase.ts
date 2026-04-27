@@ -1994,6 +1994,7 @@ export type Database = {
           id: string
           last_name: string
           password: string
+          theme_preference: string | null
           updated_at: string | null
           user_id: string
           user_status: string
@@ -2008,6 +2009,7 @@ export type Database = {
           id?: string
           last_name: string
           password: string
+          theme_preference?: string | null
           updated_at?: string | null
           user_id?: string
           user_status: string
@@ -2022,6 +2024,7 @@ export type Database = {
           id?: string
           last_name?: string
           password?: string
+          theme_preference?: string | null
           updated_at?: string | null
           user_id?: string
           user_status?: string
