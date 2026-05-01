@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useEffect, useCallback, useRef } from 'react';
+import { useTheme } from './AppThemeProvider';
 
 type CalendarCategory = {
   id: string;
@@ -137,6 +138,80 @@ type CalendarEventsToolProps = {
 };
 
 export function CalendarEventsTool({ toolId }: CalendarEventsToolProps) {
+  const { resolvedTheme } = useTheme();
+  const isLight = resolvedTheme === 'light';
+  const cardClass = isLight
+    ? 'rounded-2xl border border-slate-200 bg-white p-6 shadow-sm'
+    : 'rounded-2xl border border-slate-800 bg-slate-900/70 p-6';
+  const cardMutedClass = isLight
+    ? 'rounded-2xl border border-slate-200 bg-white p-8 text-center shadow-sm'
+    : 'rounded-2xl border border-slate-800 bg-slate-900/70 p-8 text-center';
+  const nestedCardClass = isLight
+    ? 'p-4 rounded-lg border border-slate-200 bg-slate-50'
+    : 'p-4 rounded-lg border border-slate-700 bg-slate-800/50';
+  const titleClass = isLight ? 'text-xl font-semibold text-slate-900' : 'text-xl font-semibold text-slate-50';
+  const subtitleClass = isLight ? 'text-lg font-semibold text-slate-900' : 'text-lg font-semibold text-slate-50';
+  const bodyTextClass = isLight ? 'text-slate-700' : 'text-slate-300';
+  const mutedTextClass = isLight ? 'text-slate-600' : 'text-slate-400';
+  const labelClass = isLight ? 'block text-sm font-medium text-slate-700 mb-2' : 'block text-sm font-medium text-slate-300 mb-2';
+  const inputClass = isLight
+    ? 'w-full px-4 py-2 rounded-lg border border-slate-300 bg-white text-slate-900 placeholder-slate-500 focus:border-emerald-500/50 focus:outline-none focus:ring-1 focus:ring-emerald-500/50'
+    : 'w-full px-4 py-2 rounded-lg border border-slate-700 bg-slate-900/70 text-slate-100 placeholder-slate-500 focus:border-emerald-500/50 focus:outline-none focus:ring-1 focus:ring-emerald-500/50';
+  const secondaryButtonClass = isLight
+    ? 'px-4 py-2 rounded-lg border-2 border-slate-400 bg-slate-100 text-slate-800 hover:bg-slate-200 transition-colors'
+    : 'px-4 py-2 rounded-lg border border-slate-700 bg-slate-800 text-slate-200 hover:bg-slate-700 transition-colors';
+  /** Page-level primary actions — in light mode, slightly deeper green + white label reads clearly on white/slate-50 cards (WCAG). */
+  const primaryButtonClass = isLight
+    ? 'rounded-lg bg-emerald-600 px-4 py-2.5 text-sm font-semibold text-white shadow-sm transition-colors hover:bg-emerald-500 focus:outline-none focus:ring-2 focus:ring-emerald-500/50 focus:ring-offset-2 focus:ring-offset-white disabled:cursor-not-allowed disabled:opacity-50'
+    : 'rounded-lg bg-emerald-500 px-4 py-2.5 text-sm font-semibold text-slate-950 transition-colors hover:bg-emerald-400 focus:outline-none focus:ring-2 focus:ring-emerald-500/50 focus:ring-offset-2 focus:ring-offset-slate-900 disabled:cursor-not-allowed disabled:opacity-50';
+  /** Icon-only row actions (edit / reactivate) — bordered like other row icons. */
+  const eventActionIconEditClass = isLight
+    ? 'inline-flex items-center justify-center rounded-lg border-2 border-emerald-700 bg-white p-2 text-emerald-700 transition-colors hover:bg-emerald-50 hover:text-emerald-900 focus:outline-none focus:ring-2 focus:ring-emerald-500/50 focus:ring-offset-2 focus:ring-offset-white'
+    : 'inline-flex items-center justify-center rounded-lg border-2 border-emerald-500/50 bg-slate-800/50 p-2 text-emerald-300 transition-colors hover:border-emerald-400 hover:bg-emerald-500/20 focus:outline-none focus:ring-2 focus:ring-emerald-500/50 focus:ring-offset-2 focus:ring-offset-slate-900';
+  /** Icon-only secondary (e.g. move to history). */
+  const eventActionIconSecondaryClass = isLight
+    ? 'inline-flex items-center justify-center rounded-lg border-2 border-slate-400 bg-slate-100 p-2 text-slate-700 transition-colors hover:bg-slate-200 hover:text-slate-900 focus:outline-none focus:ring-2 focus:ring-slate-400/40 focus:ring-offset-2 focus:ring-offset-white'
+    : 'inline-flex items-center justify-center rounded-lg border-2 border-slate-600 bg-slate-800 p-2 text-slate-200 transition-colors hover:bg-slate-700 focus:outline-none focus:ring-2 focus:ring-slate-500/50 focus:ring-offset-2 focus:ring-offset-slate-900';
+  /** Icon-only destructive (delete from history). */
+  const eventActionIconDangerClass = isLight
+    ? 'inline-flex items-center justify-center rounded-lg border-2 border-red-300 bg-white p-2 text-red-700 transition-colors hover:bg-red-50 hover:border-red-400 focus:outline-none focus:ring-2 focus:ring-red-500/40 focus:ring-offset-2 focus:ring-offset-white'
+    : 'inline-flex items-center justify-center rounded-lg border-2 border-red-500/50 bg-slate-800/50 p-2 text-red-400 transition-colors hover:border-red-400 hover:bg-red-500/20 focus:outline-none focus:ring-2 focus:ring-red-500/50 focus:ring-offset-2 focus:ring-offset-slate-900';
+  /** Inline Save on category cards (narrow padding). */
+  const primaryButtonCompactClass = isLight
+    ? 'flex-1 rounded px-2 py-1 text-xs font-semibold text-white bg-emerald-600 hover:bg-emerald-500 disabled:cursor-not-allowed disabled:opacity-50'
+    : 'flex-1 rounded bg-emerald-500 px-2 py-1 text-xs font-medium text-slate-950 hover:bg-emerald-400 disabled:cursor-not-allowed disabled:opacity-50';
+  const successAlertClass = isLight
+    ? 'rounded-lg p-4 bg-emerald-50 text-emerald-900 border border-emerald-200'
+    : 'rounded-lg p-4 bg-emerald-500/20 text-emerald-300 border border-emerald-500/50';
+  const errorAlertClass = isLight
+    ? 'rounded-lg p-4 bg-red-50 text-red-800 border border-red-200'
+    : 'rounded-lg p-4 bg-red-500/20 text-red-300 border border-red-500/50';
+  const popupMenuClass = isLight
+    ? 'absolute top-10 right-0 z-50 mt-1 min-w-[170px] rounded-xl border border-slate-200 bg-white py-1.5 shadow-xl ring-1 ring-slate-900/5'
+    : 'absolute top-10 right-0 z-50 bg-slate-800 border border-slate-700 rounded-lg shadow-lg min-w-[160px] py-1';
+  const popupItemClass = isLight
+    ? 'w-full px-4 py-2.5 text-left text-sm text-slate-700 hover:bg-slate-50 transition-colors flex items-center gap-2'
+    : 'w-full px-4 py-2 text-left text-sm text-slate-200 hover:bg-slate-700 transition-colors flex items-center gap-2';
+  const popupDangerItemClass = isLight
+    ? 'w-full px-4 py-2.5 text-left text-sm text-red-600 hover:bg-red-50 transition-colors flex items-center gap-2'
+    : 'w-full px-4 py-2 text-left text-sm text-red-400 hover:bg-slate-700 transition-colors flex items-center gap-2';
+  const modalCardClass = isLight
+    ? 'rounded-2xl border border-slate-200 bg-white p-6 max-w-md w-full mx-4 shadow-xl'
+    : 'rounded-2xl border border-slate-800 bg-slate-900 p-6 max-w-md w-full mx-4';
+  const deleteModalCardClass = isLight
+    ? 'rounded-2xl border border-slate-200 bg-white p-6 max-w-md w-full mx-4 shadow-2xl'
+    : 'rounded-2xl border border-slate-800 bg-slate-900 p-6 max-w-md w-full mx-4';
+  const deleteModalTitleClass = isLight ? 'text-xl font-semibold text-slate-900 mb-2' : 'text-xl font-semibold text-slate-50 mb-2';
+  const deleteWarningBoxClass = isLight
+    ? 'rounded-lg border border-red-300 bg-red-50 px-4 py-3 mb-4'
+    : 'rounded-lg border border-red-500/50 bg-red-500/10 px-4 py-3 mb-4';
+  const deleteWarningTextClass = isLight ? 'text-red-700 font-semibold mb-2' : 'text-red-300 font-semibold mb-2';
+  const deleteWarningDetailClass = isLight ? 'text-red-600 text-sm' : 'text-red-200 text-sm';
+  const deleteInstructionTextClass = isLight ? 'text-slate-700 mb-4' : 'text-slate-300 mb-4';
+  const deleteInstructionKeywordClass = isLight ? 'text-slate-900' : 'text-slate-200';
+  const deleteInputClass = isLight
+    ? 'w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900 placeholder-slate-500 focus:border-red-500/50 focus:outline-none focus:ring-1 focus:ring-red-500/50 mb-4'
+    : 'w-full rounded-lg border border-slate-700 bg-slate-900/70 px-3 py-2 text-sm text-slate-100 placeholder-slate-500 focus:border-red-500/50 focus:outline-none focus:ring-1 focus:ring-red-500/50 mb-4';
   // Category management
   const [categories, setCategories] = useState<CalendarCategory[]>([]);
   const [selectedCategoryId, setSelectedCategoryId] = useState<string | null>(null);
@@ -156,6 +231,8 @@ export function CalendarEventsTool({ toolId }: CalendarEventsToolProps) {
   // Delete confirmation
   const [deleteConfirmCategoryId, setDeleteConfirmCategoryId] = useState<string | null>(null);
   const [deleteConfirmText, setDeleteConfirmText] = useState('');
+  const [deleteConfirmEventId, setDeleteConfirmEventId] = useState<string | null>(null);
+  const [deleteConfirmEventText, setDeleteConfirmEventText] = useState('');
   const [isSaving, setIsSaving] = useState(false);
   const isSavingRef = useRef(false);
   const [saveMessage, setSaveMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
@@ -542,20 +619,14 @@ export function CalendarEventsTool({ toolId }: CalendarEventsToolProps) {
 
     setIsSaving(true);
     try {
-      const categoryToDelete = categories.find(c => c.id === deleteConfirmCategoryId);
-      if (categoryToDelete?.isDefault) {
-        setSaveMessage({ type: 'error', text: 'Default categories cannot be deleted' });
-        setIsSaving(false);
-        return;
-      }
-
       const response = await fetch('/api/tools/calendar-events', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           toolId,
           action: 'delete_category',
-          category: { id: deleteConfirmCategoryId }
+          category: { id: deleteConfirmCategoryId },
+          forceDeleteEvents: true
         })
       });
 
@@ -884,6 +955,13 @@ export function CalendarEventsTool({ toolId }: CalendarEventsToolProps) {
     }
   };
 
+  const confirmDeleteEvent = async () => {
+    if (!deleteConfirmEventId || deleteConfirmEventText.toLowerCase() !== 'delete') return;
+    await deleteEvent(deleteConfirmEventId);
+    setDeleteConfirmEventId(null);
+    setDeleteConfirmEventText('');
+  };
+
   // Helper function to parse YYYY-MM-DD string as local date (not UTC)
   const parseLocalDate = (dateString: string): Date => {
     const [year, month, day] = dateString.split('-').map(Number);
@@ -1118,22 +1196,26 @@ export function CalendarEventsTool({ toolId }: CalendarEventsToolProps) {
     <div className="space-y-6">
       {/* Save Message */}
       {saveMessage && (
-        <div className={`rounded-lg p-4 ${
+        <div className={`${
           saveMessage.type === 'success' 
-            ? 'bg-emerald-500/20 text-emerald-300 border border-emerald-500/50' 
-            : 'bg-red-500/20 text-red-300 border border-red-500/50'
+            ? successAlertClass
+            : errorAlertClass
         }`}>
           {saveMessage.text}
         </div>
       )}
 
       {/* Categories List */}
-      <div className="rounded-2xl border border-slate-800 bg-slate-900/70 p-6">
+      <div className={cardClass}>
         <div className="flex items-center justify-between mb-4">
-          <h2 className="text-xl font-semibold text-slate-50">Calendar Categories</h2>
+          <h2 className={titleClass}>Calendar Categories</h2>
           <button
             onClick={() => setShowExportPopup(true)}
-            className="p-2 rounded-lg text-emerald-400 hover:bg-emerald-500/10 hover:text-emerald-300 transition-colors"
+            className={
+              isLight
+                ? 'p-2 rounded-lg text-emerald-700 transition-colors hover:bg-emerald-100 hover:text-emerald-900'
+                : 'p-2 rounded-lg text-emerald-400 transition-colors hover:bg-emerald-500/10 hover:text-emerald-300'
+            }
             title="Export all calendar events to PDF"
           >
             <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -1146,14 +1228,11 @@ export function CalendarEventsTool({ toolId }: CalendarEventsToolProps) {
             {categories.map((category) => (
               editingCategoryId === category.id && showColorPicker ? (
                 // Color picker mode
-                <div
-                  key={category.id}
-                  className="px-4 py-3 rounded-lg border border-slate-700 bg-slate-800/50 min-w-[180px]"
-                >
+                <div key={category.id} className={isLight ? 'px-4 py-3 rounded-lg border border-slate-300 bg-slate-100 min-w-[180px]' : 'px-4 py-3 rounded-lg border border-slate-700 bg-slate-800/50 min-w-[180px]'}>
                   <div className="mb-3">
-                    <div className="font-medium text-slate-200 mb-2 text-sm">{category.name}</div>
+                    <div className={isLight ? 'font-medium text-slate-800 mb-2 text-sm' : 'font-medium text-slate-200 mb-2 text-sm'}>{category.name}</div>
                     <div className="flex items-center gap-2">
-                      <label className="text-xs text-slate-400">Card Color:</label>
+                      <label className={isLight ? 'text-xs text-slate-600' : 'text-xs text-slate-400'}>Card Color:</label>
                       <input
                         type="color"
                         value={editingCategoryColor}
@@ -1166,7 +1245,7 @@ export function CalendarEventsTool({ toolId }: CalendarEventsToolProps) {
                     <button
                       onClick={handleSaveColorOnly}
                       disabled={isSaving}
-                      className="flex-1 px-2 py-1 rounded bg-emerald-500 text-slate-950 text-xs font-medium hover:bg-emerald-400 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                      className={primaryButtonCompactClass}
                     >
                       {isSaving ? 'Saving...' : 'Save'}
                     </button>
@@ -1175,7 +1254,7 @@ export function CalendarEventsTool({ toolId }: CalendarEventsToolProps) {
                         setEditingCategoryId(null);
                         setShowColorPicker(false);
                       }}
-                      className="px-2 py-1 rounded border border-slate-600 bg-slate-700 text-slate-200 text-xs hover:bg-slate-600 transition-colors"
+                      className={isLight ? 'px-2 py-1 rounded border border-slate-300 bg-white text-slate-700 text-xs hover:bg-slate-100 transition-colors' : 'px-2 py-1 rounded border border-slate-600 bg-slate-700 text-slate-200 text-xs hover:bg-slate-600 transition-colors'}
                     >
                       Cancel
                     </button>
@@ -1183,15 +1262,12 @@ export function CalendarEventsTool({ toolId }: CalendarEventsToolProps) {
                 </div>
               ) : editingCategoryId === category.id ? (
                 // Edit mode
-                <div
-                  key={category.id}
-                  className="px-4 py-3 rounded-lg border border-slate-700 bg-slate-800/50 min-w-[180px]"
-                >
+                <div key={category.id} className={isLight ? 'px-4 py-3 rounded-lg border border-slate-300 bg-slate-100 min-w-[180px]' : 'px-4 py-3 rounded-lg border border-slate-700 bg-slate-800/50 min-w-[180px]'}>
                   <input
                     type="text"
                     value={editingCategoryName}
                     onChange={(e) => setEditingCategoryName(e.target.value)}
-                    className="w-full px-2 py-1 rounded border border-slate-600 bg-slate-900 text-slate-100 text-sm mb-2 focus:border-emerald-500/50 focus:outline-none"
+                    className={isLight ? 'w-full px-2 py-1 rounded border border-slate-300 bg-white text-slate-900 text-sm mb-2 focus:border-emerald-500/50 focus:outline-none' : 'w-full px-2 py-1 rounded border border-slate-600 bg-slate-900 text-slate-100 text-sm mb-2 focus:border-emerald-500/50 focus:outline-none'}
                     autoFocus
                     onKeyDown={(e) => {
                       if (e.key === 'Enter') {
@@ -1205,13 +1281,13 @@ export function CalendarEventsTool({ toolId }: CalendarEventsToolProps) {
                     <button
                       onClick={saveCategoryEdit}
                       disabled={isSaving || !editingCategoryName.trim()}
-                      className="flex-1 px-2 py-1 rounded bg-emerald-500 text-slate-950 text-xs font-medium hover:bg-emerald-400 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                      className={primaryButtonCompactClass}
                     >
                       {isSaving ? 'Saving...' : 'Save'}
                     </button>
                     <button
                       onClick={cancelEditingCategory}
-                      className="px-2 py-1 rounded border border-slate-600 bg-slate-700 text-slate-200 text-xs hover:bg-slate-600 transition-colors"
+                      className={isLight ? 'px-2 py-1 rounded border border-slate-300 bg-white text-slate-700 text-xs hover:bg-slate-100 transition-colors' : 'px-2 py-1 rounded border border-slate-600 bg-slate-700 text-slate-200 text-xs hover:bg-slate-600 transition-colors'}
                     >
                       Cancel
                     </button>
@@ -1246,56 +1322,42 @@ export function CalendarEventsTool({ toolId }: CalendarEventsToolProps) {
                       e.stopPropagation();
                       setMenuOpenCategoryId(menuOpenCategoryId === category.id ? null : category.id);
                     }}
-                    className="absolute top-1 right-1 p-1 rounded hover:bg-slate-700/50 transition-colors"
+                    className={isLight ? 'absolute top-1 right-1 p-1 rounded hover:bg-slate-200 transition-colors' : 'absolute top-1 right-1 p-1 rounded hover:bg-slate-700/50 transition-colors'}
                     title="Category options"
                   >
-                    <svg className="h-4 w-4 text-slate-400 hover:text-slate-200" fill="currentColor" viewBox="0 0 24 24">
+                    <svg className={isLight ? 'h-4 w-4 text-slate-600 hover:text-slate-900' : 'h-4 w-4 text-slate-400 hover:text-slate-200'} fill="currentColor" viewBox="0 0 24 24">
                       <path d="M12 8c1.1 0 2-.9 2-2s-.9-2-2-2-2 .9-2 2 .9 2 2 2zm0 2c-1.1 0-2 .9-2 2s.9 2 2 2 2-.9 2-2-.9-2-2-2zm0 6c-1.1 0-2 .9-2 2s.9 2 2 2 2-.9 2-2-.9-2-2-2z" />
                     </svg>
                   </button>
                   {/* Menu Popup */}
                   {menuOpenCategoryId === category.id && (
-                    <div className="absolute top-10 right-0 z-50 bg-slate-800 border border-slate-700 rounded-lg shadow-lg min-w-[160px] py-1">
+                    <div className={popupMenuClass}>
                       <button
                         onClick={(e) => {
                           e.stopPropagation();
                           startEditingCategory(category);
                         }}
-                        className="w-full px-4 py-2 text-left text-sm text-slate-200 hover:bg-slate-700 transition-colors flex items-center gap-2"
+                        className={popupItemClass}
                       >
                         <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
                         </svg>
-                        Edit Name
+                        Edit
                       </button>
                       <button
                         onClick={(e) => {
                           e.stopPropagation();
-                          handleChangeColor(category);
+                          setMenuOpenCategoryId(null);
+                          setDeleteConfirmCategoryId(category.id);
+                          setDeleteConfirmText('');
                         }}
-                        className="w-full px-4 py-2 text-left text-sm text-slate-200 hover:bg-slate-700 transition-colors flex items-center gap-2"
+                        className={popupDangerItemClass}
                       >
                         <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 21a4 4 0 01-4-4V5a2 2 0 012-2h4a2 2 0 012 2v12a4 4 0 01-4 4zm0 0h12a2 2 0 002-2v-4a2 2 0 00-2-2h-2.343M11 7.343l1.657-1.657a2 2 0 012.828 0l2.829 2.829a2 2 0 010 2.828l-8.486 8.485M7 17h.01" />
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
                         </svg>
-                        Change Color
+                        Delete
                       </button>
-                      {!category.isDefault && (
-                        <button
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            setMenuOpenCategoryId(null);
-                            setDeleteConfirmCategoryId(category.id);
-                            setDeleteConfirmText('');
-                          }}
-                          className="w-full px-4 py-2 text-left text-sm text-red-400 hover:bg-slate-700 transition-colors flex items-center gap-2"
-                        >
-                          <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
-                          </svg>
-                          Delete
-                        </button>
-                      )}
                     </div>
                   )}
                 </div>
@@ -1309,7 +1371,7 @@ export function CalendarEventsTool({ toolId }: CalendarEventsToolProps) {
                 setSelectedCategoryId(null);
                 setEditingCategoryId(null);
               }}
-              className="px-4 py-3 rounded-lg border border-slate-700 bg-slate-800/50 text-slate-300 hover:border-emerald-500/50 hover:bg-emerald-500/10 hover:text-emerald-300 transition-all duration-200 flex items-center justify-center min-w-[60px]"
+              className={isLight ? 'px-4 py-3 rounded-lg border border-slate-300 bg-white text-slate-700 hover:border-emerald-500/50 hover:bg-emerald-50 hover:text-emerald-800 transition-all duration-200 flex items-center justify-center min-w-[60px]' : 'px-4 py-3 rounded-lg border border-slate-700 bg-slate-800/50 text-slate-300 hover:border-emerald-500/50 hover:bg-emerald-500/10 hover:text-emerald-300 transition-all duration-200 flex items-center justify-center min-w-[60px]'}
               title="Add New Category"
             >
               <svg className="h-6 w-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -1320,7 +1382,7 @@ export function CalendarEventsTool({ toolId }: CalendarEventsToolProps) {
         ) : (
           <div className="flex items-end gap-2 flex-wrap">
             <div className="flex-1 min-w-[200px]">
-              <label className="block text-sm font-medium text-slate-300 mb-2">
+              <label className={labelClass}>
                 New Category Name
               </label>
               <input
@@ -1328,7 +1390,7 @@ export function CalendarEventsTool({ toolId }: CalendarEventsToolProps) {
                 value={newCategoryName}
                 onChange={(e) => setNewCategoryName(e.target.value)}
                 placeholder="Enter category name"
-                className="w-full px-4 py-2 rounded-lg border border-slate-700 bg-slate-900/70 text-slate-100 placeholder-slate-500 focus:border-emerald-500/50 focus:outline-none focus:ring-1 focus:ring-emerald-500/50"
+                className={inputClass}
                 onKeyDown={(e) => {
                   if (e.key === 'Enter') {
                     createNewCategory();
@@ -1343,7 +1405,7 @@ export function CalendarEventsTool({ toolId }: CalendarEventsToolProps) {
             <button
               onClick={createNewCategory}
               disabled={!newCategoryName.trim()}
-              className="px-4 py-2 rounded-lg bg-emerald-500 text-slate-950 font-medium hover:bg-emerald-400 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+              className={primaryButtonClass}
             >
               Create
             </button>
@@ -1352,7 +1414,7 @@ export function CalendarEventsTool({ toolId }: CalendarEventsToolProps) {
                 setIsCreatingNewCategory(false);
                 setNewCategoryName('');
               }}
-              className="px-4 py-2 rounded-lg border border-slate-700 bg-slate-800 text-slate-200 hover:bg-slate-700 transition-colors"
+              className={secondaryButtonClass}
             >
               Cancel
             </button>
@@ -1361,8 +1423,8 @@ export function CalendarEventsTool({ toolId }: CalendarEventsToolProps) {
       </div>
 
       {isLoading && (
-        <div className="rounded-2xl border border-slate-800 bg-slate-900/70 p-8 text-center">
-          <p className="text-slate-400">Loading categories...</p>
+        <div className={cardMutedClass}>
+          <p className={mutedTextClass}>Loading categories...</p>
         </div>
       )}
 
@@ -1377,20 +1439,21 @@ export function CalendarEventsTool({ toolId }: CalendarEventsToolProps) {
       {/* Delete Confirmation Modal */}
       {deleteConfirmCategoryId && (
         <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
-          <div className="rounded-2xl border border-slate-800 bg-slate-900 p-6 max-w-md w-full mx-4">
-            <h3 className="text-xl font-semibold text-slate-50 mb-2">Delete Category</h3>
-            <p className="text-slate-300 mb-4">
-              <strong className="text-red-400">Warning:</strong> This action cannot be undone. All calendar events in this category will be permanently deleted.
-            </p>
-            <p className="text-slate-400 text-sm mb-4">
-              To confirm, please type <strong className="text-slate-200">delete</strong> in the box below:
+          <div className={deleteModalCardClass}>
+            <h3 className={deleteModalTitleClass}>Delete Category</h3>
+            <div className={deleteWarningBoxClass}>
+              <p className={deleteWarningTextClass}>Warning: This action cannot be undone.</p>
+              <p className={deleteWarningDetailClass}>All calendar events in this category will be permanently deleted.</p>
+            </div>
+            <p className={deleteInstructionTextClass}>
+              To confirm, please type <strong className={deleteInstructionKeywordClass}>delete</strong> in the box below:
             </p>
             <input
               type="text"
               value={deleteConfirmText}
               onChange={(e) => setDeleteConfirmText(e.target.value)}
               placeholder="Type 'delete' to confirm"
-              className="w-full px-4 py-2 rounded-lg border border-slate-700 bg-slate-800 text-slate-100 placeholder-slate-500 focus:border-red-500/50 focus:outline-none focus:ring-1 focus:ring-red-500/50 mb-4"
+              className={deleteInputClass}
               autoFocus
               onKeyDown={(e) => {
                 if (e.key === 'Escape') {
@@ -1413,7 +1476,55 @@ export function CalendarEventsTool({ toolId }: CalendarEventsToolProps) {
                   setDeleteConfirmText('');
                 }}
                 disabled={isSaving}
-                className="px-4 py-2 rounded-lg border border-slate-700 bg-slate-800 text-slate-200 hover:bg-slate-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                className={`${secondaryButtonClass} disabled:opacity-50 disabled:cursor-not-allowed`}
+              >
+                Cancel
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {deleteConfirmEventId && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
+          <div className={deleteModalCardClass}>
+            <h3 className={deleteModalTitleClass}>Delete Event</h3>
+            <div className={deleteWarningBoxClass}>
+              <p className={deleteWarningTextClass}>Warning: This action cannot be undone.</p>
+              <p className={deleteWarningDetailClass}>This calendar event will be permanently deleted.</p>
+            </div>
+            <p className={deleteInstructionTextClass}>
+              To confirm, please type <strong className={deleteInstructionKeywordClass}>delete</strong> in the box below:
+            </p>
+            <input
+              type="text"
+              value={deleteConfirmEventText}
+              onChange={(e) => setDeleteConfirmEventText(e.target.value)}
+              placeholder="Type 'delete' to confirm"
+              className={deleteInputClass}
+              autoFocus
+              onKeyDown={(e) => {
+                if (e.key === 'Escape') {
+                  setDeleteConfirmEventId(null);
+                  setDeleteConfirmEventText('');
+                }
+              }}
+            />
+            <div className="flex gap-3">
+              <button
+                onClick={confirmDeleteEvent}
+                disabled={deleteConfirmEventText.toLowerCase() !== 'delete' || isSaving}
+                className="flex-1 px-4 py-2 rounded-lg bg-red-600 text-white font-medium hover:bg-red-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                {isSaving ? 'Deleting...' : 'Delete Event'}
+              </button>
+              <button
+                onClick={() => {
+                  setDeleteConfirmEventId(null);
+                  setDeleteConfirmEventText('');
+                }}
+                disabled={isSaving}
+                className={`${secondaryButtonClass} disabled:opacity-50 disabled:cursor-not-allowed`}
               >
                 Cancel
               </button>
@@ -1423,17 +1534,17 @@ export function CalendarEventsTool({ toolId }: CalendarEventsToolProps) {
       )}
 
       {!isLoading && !selectedCategoryId && !isCreatingNewCategory && (
-        <div className="rounded-2xl border border-slate-800 bg-slate-900/70 p-8 text-center">
-          <p className="text-slate-400 mb-4">Please select a category or create a new one to get started.</p>
+        <div className={cardMutedClass}>
+          <p className={`${mutedTextClass} mb-4`}>Please select a category or create a new one to get started.</p>
         </div>
       )}
 
       {selectedCategoryId && selectedCategory && (
         <>
           {/* Category Header */}
-          <div className="rounded-2xl border border-slate-800 bg-slate-900/70 p-6">
+          <div className={cardClass}>
             <div className="flex items-center justify-between mb-4">
-              <h3 className="text-lg font-semibold text-slate-50">
+              <h3 className={subtitleClass}>
                 {selectedCategory.name} Calendar Events
               </h3>
             </div>
@@ -1445,7 +1556,7 @@ export function CalendarEventsTool({ toolId }: CalendarEventsToolProps) {
                 <div className="mb-4">
                   <button
                     onClick={() => setShowHolidayModal(true)}
-                    className="px-4 py-2 rounded-lg border border-emerald-500/50 bg-emerald-500/10 text-emerald-300 hover:bg-emerald-500/20 transition-colors flex items-center gap-2"
+                    className={isLight ? 'px-4 py-2 rounded-lg border border-emerald-300 bg-emerald-50 text-emerald-900 hover:bg-emerald-100 transition-colors flex items-center gap-2' : 'px-4 py-2 rounded-lg border border-emerald-500/50 bg-emerald-500/10 text-emerald-300 hover:bg-emerald-500/20 transition-colors flex items-center gap-2'}
                   >
                     <svg className="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 6v6m0 0v6m0-6h6m-6 0H6" />
@@ -1456,7 +1567,7 @@ export function CalendarEventsTool({ toolId }: CalendarEventsToolProps) {
               )}
               {/* Title - Full width */}
               <div>
-                <label className="block text-sm font-medium text-slate-300 mb-2">
+                <label className={labelClass}>
                   Title <span className="text-red-400">*</span>
                 </label>
                 <input
@@ -1464,41 +1575,41 @@ export function CalendarEventsTool({ toolId }: CalendarEventsToolProps) {
                   value={newEvent.title}
                   onChange={(e) => setNewEvent({ ...newEvent, title: e.target.value })}
                   placeholder="Enter event title"
-                  className="w-full px-4 py-2 rounded-lg border border-slate-700 bg-slate-900/70 text-slate-100 placeholder-slate-500 focus:border-emerald-500/50 focus:outline-none focus:ring-1 focus:ring-emerald-500/50"
+                  className={inputClass}
                 />
               </div>
 
               {/* Date and Time - Side by side */}
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div>
-                  <label className="block text-sm font-medium text-slate-300 mb-2">
+                  <label className={labelClass}>
                     Date <span className="text-red-400">*</span>
                   </label>
                   <input
                     type="date"
                     value={newEvent.date}
                     onChange={(e) => setNewEvent({ ...newEvent, date: e.target.value })}
-                    className="w-full px-4 py-2 rounded-lg border border-slate-700 bg-slate-900/70 text-slate-100 focus:border-emerald-500/50 focus:outline-none focus:ring-1 focus:ring-emerald-500/50"
+                    className={inputClass}
                   />
                 </div>
                 <div>
-                  <label className="block text-sm font-medium text-slate-300 mb-2">
+                  <label className={labelClass}>
                     Time (Optional)
                   </label>
                   <input
                     type="time"
                     value={newEvent.time || ''}
                     onChange={(e) => setNewEvent({ ...newEvent, time: e.target.value || null })}
-                    className="w-full px-4 py-2 rounded-lg border border-slate-700 bg-slate-900/70 text-slate-100 focus:border-emerald-500/50 focus:outline-none focus:ring-1 focus:ring-emerald-500/50"
+                    className={inputClass}
                   />
-                  <p className="text-xs text-slate-400 mt-1">Leave empty for all-day event (defaults to 9:00 AM)</p>
+                  <p className={`text-xs ${mutedTextClass} mt-1`}>Leave empty for all-day event (defaults to 9:00 AM)</p>
                 </div>
               </div>
 
               {/* Row 2: Frequency and conditional inputs */}
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div>
-                  <label className="block text-sm font-medium text-slate-300 mb-2">
+                  <label className={labelClass}>
                     Frequency <span className="text-red-400">*</span>
                   </label>
                   <select
@@ -1513,7 +1624,7 @@ export function CalendarEventsTool({ toolId }: CalendarEventsToolProps) {
                         dayOfMonth: newFreq === 'Monthly' ? newEvent.dayOfMonth : undefined
                       });
                     }}
-                    className="w-full px-4 py-2 rounded-lg border border-slate-700 bg-slate-900/70 text-slate-100 focus:border-emerald-500/50 focus:outline-none focus:ring-1 focus:ring-emerald-500/50"
+                    className={inputClass}
                   >
                     {FREQUENCY_OPTIONS.map(freq => (
                       <option key={freq} value={freq}>{freq}</option>
@@ -1524,7 +1635,7 @@ export function CalendarEventsTool({ toolId }: CalendarEventsToolProps) {
                 {/* Days of Week - Only for Weekly frequency */}
                 {newEvent.frequency === 'Weekly' && (
                   <div>
-                    <label className="block text-sm font-medium text-slate-300 mb-2">
+                    <label className={labelClass}>
                       Days of Week
                     </label>
                     <div className="flex flex-wrap gap-2">
@@ -1543,8 +1654,8 @@ export function CalendarEventsTool({ toolId }: CalendarEventsToolProps) {
                           }}
                           className={`px-3 py-2 rounded-lg border transition-colors ${
                             newEvent.daysOfWeek?.includes(day.value)
-                              ? 'border-emerald-500 bg-emerald-500/20 text-emerald-300'
-                              : 'border-slate-700 bg-slate-800/50 text-slate-300 hover:border-slate-600'
+                              ? isLight ? 'border-emerald-400 bg-emerald-100 text-emerald-900' : 'border-emerald-500 bg-emerald-500/20 text-emerald-300'
+                              : isLight ? 'border-slate-300 bg-white text-slate-700 hover:border-slate-400' : 'border-slate-700 bg-slate-800/50 text-slate-300 hover:border-slate-600'
                           }`}
                         >
                           {day.short}
@@ -1552,7 +1663,7 @@ export function CalendarEventsTool({ toolId }: CalendarEventsToolProps) {
                       ))}
                     </div>
                     {newEvent.daysOfWeek && newEvent.daysOfWeek.length === 0 && (
-                      <p className="text-xs text-slate-400 mt-1">Select at least one day</p>
+                      <p className={`text-xs ${mutedTextClass} mt-1`}>Select at least one day</p>
                     )}
                   </div>
                 )}
@@ -1560,13 +1671,13 @@ export function CalendarEventsTool({ toolId }: CalendarEventsToolProps) {
                 {/* Day of Month - Only for Monthly frequency */}
                 {newEvent.frequency === 'Monthly' && (
                   <div>
-                    <label className="block text-sm font-medium text-slate-300 mb-2">
+                    <label className={labelClass}>
                       Day of Month
                     </label>
                     <select
                       value={newEvent.dayOfMonth || ''}
                       onChange={(e) => setNewEvent({ ...newEvent, dayOfMonth: e.target.value ? parseInt(e.target.value) : undefined })}
-                      className="w-full px-4 py-2 rounded-lg border border-slate-700 bg-slate-900/70 text-slate-100 focus:border-emerald-500/50 focus:outline-none focus:ring-1 focus:ring-emerald-500/50"
+                      className={inputClass}
                     >
                       <option value="">Select day of month</option>
                       {Array.from({ length: 31 }, (_, i) => i + 1).map(day => (
@@ -1579,32 +1690,32 @@ export function CalendarEventsTool({ toolId }: CalendarEventsToolProps) {
 
               {/* End Date - Optional for all frequencies */}
               <div>
-                <label className="block text-sm font-medium text-slate-300 mb-2">
+                <label className={labelClass}>
                   End Date (Optional)
                 </label>
                 <input
                   type="date"
                   value={newEvent.endDate || ''}
                   onChange={(e) => setNewEvent({ ...newEvent, endDate: e.target.value || null })}
-                  className="w-full px-4 py-2 rounded-lg border border-slate-700 bg-slate-900/70 text-slate-100 focus:border-emerald-500/50 focus:outline-none focus:ring-1 focus:ring-emerald-500/50"
+                  className={inputClass}
                 />
-                <p className="text-xs text-slate-400 mt-1">Leave empty for no end date</p>
+                <p className={`text-xs ${mutedTextClass} mt-1`}>Leave empty for no end date</p>
               </div>
 
               <div>
-                <label className="block text-sm font-medium text-slate-300 mb-2">Notes (Optional)</label>
+                <label className={labelClass}>Notes (Optional)</label>
                 <textarea
                   value={newEvent.notes}
                   onChange={(e) => setNewEvent({ ...newEvent, notes: e.target.value })}
                   placeholder="Add any additional notes..."
                   rows={3}
-                  className="w-full px-4 py-2 rounded-lg border border-slate-700 bg-slate-900/70 text-slate-100 placeholder-slate-500 focus:border-emerald-500/50 focus:outline-none focus:ring-1 focus:ring-emerald-500/50 resize-none"
+                  className={`${inputClass} resize-none`}
                 />
               </div>
               <button
                 onClick={addCalendarEvent}
                 disabled={!newEvent.title.trim() || !newEvent.date || isSaving}
-                className="px-4 py-2 rounded-lg bg-emerald-500 text-slate-950 font-medium hover:bg-emerald-400 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                className={primaryButtonClass}
               >
                 {isSaving ? 'Saving...' : 'Add Calendar Event'}
               </button>
@@ -1613,10 +1724,10 @@ export function CalendarEventsTool({ toolId }: CalendarEventsToolProps) {
             {/* Active Events List */}
             {activeEvents.length > 0 && (
               <div className="mt-6">
-                <h4 className="text-md font-semibold text-slate-50 mb-4">Active Events</h4>
+                <h4 className={isLight ? 'text-md font-semibold text-slate-900 mb-4' : 'text-md font-semibold text-slate-50 mb-4'}>Active Events</h4>
                 <div className="space-y-4">
                   {activeEvents.map(event => (
-                    <div key={event.id} className="p-4 rounded-lg border border-slate-700 bg-slate-800/50">
+                    <div key={event.id} className={nestedCardClass}>
                       {editingEventId === event.id ? (
                         <div className="space-y-4">
                           {/* Title - Full width */}
@@ -1701,8 +1812,12 @@ export function CalendarEventsTool({ toolId }: CalendarEventsToolProps) {
                                       }}
                                       className={`px-3 py-2 rounded-lg border transition-colors ${
                                         editingEvent.daysOfWeek?.includes(day.value)
-                                          ? 'border-emerald-500 bg-emerald-500/20 text-emerald-300'
-                                          : 'border-slate-700 bg-slate-800/50 text-slate-300 hover:border-slate-600'
+                                          ? isLight
+                                            ? 'border-emerald-600 bg-emerald-100 text-emerald-900'
+                                            : 'border-emerald-500 bg-emerald-500/20 text-emerald-300'
+                                          : isLight
+                                            ? 'border-slate-300 bg-white text-slate-700 hover:border-slate-400'
+                                            : 'border-slate-700 bg-slate-800/50 text-slate-300 hover:border-slate-600'
                                       }`}
                                     >
                                       {day.short}
@@ -1762,13 +1877,13 @@ export function CalendarEventsTool({ toolId }: CalendarEventsToolProps) {
                             <button
                               onClick={saveEventEdit}
                               disabled={!editingEvent.title.trim() || !editingEvent.date}
-                              className="px-4 py-2 rounded-lg bg-emerald-500 text-slate-950 font-medium hover:bg-emerald-400 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                              className={primaryButtonClass}
                             >
                               Save
                             </button>
                             <button
                               onClick={cancelEditingEvent}
-                              className="px-4 py-2 rounded-lg bg-slate-700 text-slate-200 hover:bg-slate-600 transition-colors"
+                              className={secondaryButtonClass}
                             >
                               Cancel
                             </button>
@@ -1777,17 +1892,17 @@ export function CalendarEventsTool({ toolId }: CalendarEventsToolProps) {
                       ) : (
                         <div className="flex items-start justify-between">
                           <div className="flex-1">
-                            <h4 className="text-slate-100 font-medium">{event.title}</h4>
-                            <p className="text-sm text-slate-400 mt-1">
+                            <h4 className={isLight ? 'text-slate-900 font-medium' : 'text-slate-100 font-medium'}>{event.title}</h4>
+                            <p className={`text-sm ${mutedTextClass} mt-1`}>
                               Date: {parseLocalDate(event.date).toLocaleDateString()} | Frequency: {event.frequency}
                             </p>
                             {event.endDate && (
-                              <p className="text-sm text-slate-400 mt-1">
+                              <p className={`text-sm ${mutedTextClass} mt-1`}>
                                 End Date: {parseLocalDate(event.endDate).toLocaleDateString()}
                               </p>
                             )}
                             {event.frequency === 'Weekly' && event.daysOfWeek && event.daysOfWeek.length > 0 && (
-                              <p className="text-sm text-slate-400 mt-1">
+                              <p className={`text-sm ${mutedTextClass} mt-1`}>
                                 Days: {event.daysOfWeek
                                   .sort((a, b) => a - b)
                                   .map(d => DAYS_OF_WEEK.find(day => day.value === d)?.short)
@@ -1795,26 +1910,46 @@ export function CalendarEventsTool({ toolId }: CalendarEventsToolProps) {
                               </p>
                             )}
                             {event.frequency === 'Monthly' && event.dayOfMonth && (
-                              <p className="text-sm text-slate-400 mt-1">
+                              <p className={`text-sm ${mutedTextClass} mt-1`}>
                                 Day of Month: {event.dayOfMonth}
                               </p>
                             )}
                             {event.notes && (
-                              <p className="text-sm text-slate-300 mt-2 italic">"{event.notes}"</p>
+                              <p className={`text-sm ${bodyTextClass} mt-2 italic`}>"{event.notes}"</p>
                             )}
                           </div>
-                          <div className="flex gap-2 ml-4">
+                          <div className="flex shrink-0 items-center gap-1.5 ml-4">
                             <button
+                              type="button"
                               onClick={() => startEditingEvent(event)}
-                              className="px-3 py-1 rounded-lg bg-emerald-500/20 text-emerald-300 hover:bg-emerald-500/30 transition-colors text-sm"
+                              className={eventActionIconEditClass}
+                              aria-label="Edit event"
+                              title="Edit event"
                             >
-                              Edit
+                              <svg className="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden>
+                                <path
+                                  strokeLinecap="round"
+                                  strokeLinejoin="round"
+                                  strokeWidth={2}
+                                  d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"
+                                />
+                              </svg>
                             </button>
                             <button
+                              type="button"
                               onClick={() => inactivateEvent(event.id)}
-                              className="px-3 py-1 rounded-lg bg-slate-700 text-slate-200 hover:bg-slate-600 transition-colors text-sm"
+                              className={eventActionIconSecondaryClass}
+                              aria-label="Move to history"
+                              title="Move to history"
                             >
-                              Move to History
+                              <svg className="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden>
+                                <path
+                                  strokeLinecap="round"
+                                  strokeLinejoin="round"
+                                  strokeWidth={2}
+                                  d="M20.25 7.5l-.625 10.632a2.25 2.25 0 01-2.247 2.118H6.622a2.25 2.25 0 01-2.247-2.118L3.75 7.5M10 11.25h4M3.375 7.5h17.25c.621 0 1.125-.504 1.125-1.125v-1.5c0-.621-.504-1.125-1.125-1.125H3.375c-.621 0-1.125.504-1.125 1.125v1.5c0 .621.504 1.125 1.125 1.125z"
+                                />
+                              </svg>
                             </button>
                           </div>
                         </div>
@@ -1826,12 +1961,12 @@ export function CalendarEventsTool({ toolId }: CalendarEventsToolProps) {
             )}
 
             {/* History Events List */}
-            <div className="mt-6 rounded-2xl border border-slate-800 bg-slate-900/70 p-6">
+            <div className={`mt-6 ${cardClass}`}>
               <div className="flex items-center justify-between mb-4">
-                <h3 className="text-lg font-semibold text-slate-50">History</h3>
+                <h3 className={subtitleClass}>History</h3>
                 <button
                   onClick={() => setShowHistory(!showHistory)}
-                  className="text-sm text-slate-400 hover:text-slate-300 transition-colors"
+                  className={isLight ? 'text-sm text-slate-600 hover:text-slate-900 transition-colors' : 'text-sm text-slate-400 hover:text-slate-300 transition-colors'}
                 >
                   <span>{showHistory ? 'Hide' : 'Show'}</span>
                   <span> ({historyEvents?.length || 0})</span>
@@ -1841,7 +1976,7 @@ export function CalendarEventsTool({ toolId }: CalendarEventsToolProps) {
                 historyEvents.length > 0 ? (
                   <div className="space-y-4">
                     {historyEvents.map(event => (
-                      <div key={event.id} className="p-4 rounded-lg border border-slate-700 bg-slate-800/50 opacity-75">
+                      <div key={event.id} className={`${nestedCardClass} opacity-75`}>
                         <div className="flex items-start justify-between">
                           <div className="flex-1">
                             <div className="flex items-center gap-3 mb-2">
@@ -1896,18 +2031,41 @@ export function CalendarEventsTool({ toolId }: CalendarEventsToolProps) {
                               </div>
                             )}
                           </div>
-                          <div className="flex gap-2 ml-4">
+                          <div className="flex shrink-0 items-center gap-1.5 ml-4">
                             <button
+                              type="button"
                               onClick={() => reactivateEvent(event.id)}
-                              className="px-3 py-1 rounded-lg bg-emerald-500/20 text-emerald-400 hover:bg-emerald-500/30 transition-colors text-sm"
+                              className={eventActionIconEditClass}
+                              aria-label="Reactivate event"
+                              title="Reactivate event"
                             >
-                              Reactivate
+                              <svg className="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden>
+                                <path
+                                  strokeLinecap="round"
+                                  strokeLinejoin="round"
+                                  strokeWidth={2}
+                                  d="M9 15L3 9m0 0l6-6M3 9h12a6 6 0 010 12h-3"
+                                />
+                              </svg>
                             </button>
                             <button
-                              onClick={() => deleteEvent(event.id)}
-                              className="px-3 py-1 rounded-lg bg-red-500/20 text-red-400 hover:bg-red-500/30 transition-colors text-sm"
+                              type="button"
+                              onClick={() => {
+                                setDeleteConfirmEventId(event.id);
+                                setDeleteConfirmEventText('');
+                              }}
+                              className={eventActionIconDangerClass}
+                              aria-label="Delete event"
+                              title="Delete event"
                             >
-                              Delete
+                              <svg className="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden>
+                                <path
+                                  strokeLinecap="round"
+                                  strokeLinejoin="round"
+                                  strokeWidth={2}
+                                  d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"
+                                />
+                              </svg>
                             </button>
                           </div>
                         </div>
@@ -1915,14 +2073,14 @@ export function CalendarEventsTool({ toolId }: CalendarEventsToolProps) {
                     ))}
                   </div>
                 ) : (
-                  <p className="text-slate-400 text-center py-8">No inactive events in history.</p>
+                  <p className={`${mutedTextClass} text-center py-8`}>No inactive events in history.</p>
                 )
               )}
             </div>
 
             {activeEvents.length === 0 && !showHistory && (
               <div className="text-center py-8">
-                <p className="text-slate-400">No calendar events yet. Add your first event above.</p>
+                <p className={mutedTextClass}>No calendar events yet. Add your first event above.</p>
               </div>
             )}
           </div>
@@ -1932,19 +2090,19 @@ export function CalendarEventsTool({ toolId }: CalendarEventsToolProps) {
       {/* Holiday Selection Modal */}
       {showHolidayModal && (
         <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
-          <div className="rounded-2xl border border-slate-800 bg-slate-900 p-6 max-w-2xl w-full mx-4 max-h-[80vh] overflow-y-auto">
+          <div className={isLight ? 'rounded-2xl border border-slate-200 bg-white p-6 max-w-2xl w-full mx-4 max-h-[80vh] overflow-y-auto shadow-xl' : 'rounded-2xl border border-slate-800 bg-slate-900 p-6 max-w-2xl w-full mx-4 max-h-[80vh] overflow-y-auto'}>
             <div className="flex items-center justify-between mb-4">
-              <h3 className="text-xl font-semibold text-slate-50">Select a Common US Holiday</h3>
+              <h3 className={isLight ? 'text-xl font-semibold text-slate-900' : 'text-xl font-semibold text-slate-50'}>Select a Common US Holiday</h3>
               <button
                 onClick={() => setShowHolidayModal(false)}
-                className="text-slate-400 hover:text-slate-200 transition-colors"
+                className={isLight ? 'text-slate-600 hover:text-slate-900 transition-colors' : 'text-slate-400 hover:text-slate-200 transition-colors'}
               >
                 <svg className="h-6 w-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
                 </svg>
               </button>
             </div>
-            <p className="text-sm text-slate-400 mb-4">
+            <p className={`text-sm ${mutedTextClass} mb-4`}>
               Select a holiday to pre-fill the form. You can edit the details before saving.
             </p>
             <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
@@ -1968,10 +2126,10 @@ export function CalendarEventsTool({ toolId }: CalendarEventsToolProps) {
                   <button
                     key={index}
                     onClick={() => handleHolidaySelect(holiday)}
-                    className="p-4 rounded-lg border border-slate-700 bg-slate-800/50 text-left hover:border-emerald-500/50 hover:bg-slate-800 transition-colors"
+                    className={isLight ? 'p-4 rounded-lg border border-slate-200 bg-white text-left hover:border-emerald-500/50 hover:bg-emerald-50 transition-colors' : 'p-4 rounded-lg border border-slate-700 bg-slate-800/50 text-left hover:border-emerald-500/50 hover:bg-slate-800 transition-colors'}
                   >
-                    <div className="font-medium text-slate-100 mb-1">{holiday.name}</div>
-                    <div className="text-sm text-slate-400">{displayDate}</div>
+                    <div className={isLight ? 'font-medium text-slate-900 mb-1' : 'font-medium text-slate-100 mb-1'}>{holiday.name}</div>
+                    <div className={`text-sm ${mutedTextClass}`}>{displayDate}</div>
                   </button>
                 );
               })}
@@ -1979,7 +2137,7 @@ export function CalendarEventsTool({ toolId }: CalendarEventsToolProps) {
             <div className="mt-4 flex justify-end">
               <button
                 onClick={() => setShowHolidayModal(false)}
-                className="px-4 py-2 rounded-lg border border-slate-700 bg-slate-800 text-slate-200 hover:bg-slate-700 transition-colors"
+                className={secondaryButtonClass}
               >
                 Cancel
               </button>
@@ -1991,12 +2149,12 @@ export function CalendarEventsTool({ toolId }: CalendarEventsToolProps) {
       {/* Export Popup */}
       {showExportPopup && (
         <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
-          <div className="bg-slate-800 rounded-2xl border border-slate-700 p-6 max-w-md w-full mx-4">
+          <div className={isLight ? 'bg-white rounded-2xl border border-slate-200 p-6 max-w-md w-full mx-4 shadow-xl' : 'bg-slate-800 rounded-2xl border border-slate-700 p-6 max-w-md w-full mx-4'}>
             <div className="flex items-center justify-between mb-4">
-              <h3 className="text-lg font-semibold text-slate-50">Export Options</h3>
+              <h3 className={isLight ? 'text-lg font-semibold text-slate-900' : 'text-lg font-semibold text-slate-50'}>Export Options</h3>
               <button
                 onClick={() => setShowExportPopup(false)}
-                className="text-slate-400 hover:text-slate-200 transition-colors"
+                className={isLight ? 'text-slate-600 hover:text-slate-900 transition-colors' : 'text-slate-400 hover:text-slate-200 transition-colors'}
               >
                 <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
@@ -2005,7 +2163,7 @@ export function CalendarEventsTool({ toolId }: CalendarEventsToolProps) {
             </div>
             
             <div className="space-y-4">
-              <p className="text-slate-300 text-sm mb-4">
+              <p className={`${bodyTextClass} text-sm mb-4`}>
                 Generate a comprehensive PDF report of all your calendar events grouped by category. The report will include all event details and summary statistics.
               </p>
               
@@ -2017,7 +2175,7 @@ export function CalendarEventsTool({ toolId }: CalendarEventsToolProps) {
                   onChange={(e) => setIncludeHistory(e.target.checked)}
                   className="w-5 h-5 rounded border-slate-600 bg-slate-700 text-emerald-500 focus:ring-emerald-500 focus:ring-offset-slate-800"
                 />
-                <label htmlFor="includeHistoryExport" className="text-slate-300 cursor-pointer">
+                <label htmlFor="includeHistoryExport" className={`${bodyTextClass} cursor-pointer`}>
                   Include inactive events in the report
                 </label>
               </div>
@@ -2025,13 +2183,13 @@ export function CalendarEventsTool({ toolId }: CalendarEventsToolProps) {
               <div className="flex gap-3 pt-4">
                 <button
                   onClick={exportToPDF}
-                  className="flex-1 px-4 py-2 rounded-lg bg-emerald-500 text-slate-950 font-medium hover:bg-emerald-400 transition-colors"
+                  className={`flex-1 ${primaryButtonClass}`}
                 >
                   Export to PDF
                 </button>
                 <button
                   onClick={() => setShowExportPopup(false)}
-                  className="px-4 py-2 rounded-lg bg-slate-700 text-slate-200 hover:bg-slate-600 transition-colors"
+                  className={secondaryButtonClass}
                 >
                   Cancel
                 </button>

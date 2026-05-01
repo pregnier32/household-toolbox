@@ -1,9 +1,10 @@
 'use client';
 
 import { useState, useEffect, useCallback } from 'react';
-import Image from 'next/image';
 import { useRouter } from 'next/navigation';
 import { UserMenu } from '../components/UserMenu';
+import { SideLogo } from '../components/SideLogo';
+import { useTheme } from '../components/AppThemeProvider';
 import { AdminMenu } from '../components/AdminMenu';
 import { ToolModal } from '../components/ToolModal';
 import { DynamicIcon } from '../components/DynamicIcon';
@@ -29,8 +30,13 @@ function CalendarView({
   calendarEvents?: any[];
   onMonthChange?: (month: string) => void;
 }) {
+  const { resolvedTheme } = useTheme();
+  const isLight = resolvedTheme === 'light';
+  const calendarIconButtonClass = isLight
+    ? 'p-2 text-slate-700 transition-colors rounded-lg hover:bg-slate-100 hover:text-slate-900'
+    : 'p-2 text-slate-400 hover:text-emerald-300 transition-colors rounded-lg hover:bg-slate-800';
+
   const [currentDate, setCurrentDate] = useState(new Date());
-  const [pdfTheme, setPdfTheme] = useState<'dark' | 'light'>('dark');
   const [showPdfPopup, setShowPdfPopup] = useState(false);
   const [selectedDay, setSelectedDay] = useState<{ day: number; events: any[] } | null>(null);
 
@@ -101,7 +107,7 @@ function CalendarView({
   };
 
   // Export calendar to PDF
-  const exportToPDF = async (theme: 'dark' | 'light' = pdfTheme) => {
+  const exportToPDF = async () => {
     // Dynamic import to avoid SSR issues
     if (typeof window === 'undefined') return;
     
@@ -131,17 +137,8 @@ function CalendarView({
       format: 'a4'
     });
 
-    // Theme colors
-    const colors = theme === 'dark' ? {
-      background: [15, 23, 42], // slate-950
-      title: [241, 245, 249], // slate-50
-      dayHeader: [148, 163, 184], // slate-400
-      cellBackground: [15, 23, 42], // slate-950
-      cellBorder: [51, 65, 85], // slate-700
-      dayText: [203, 213, 225], // slate-300
-      eventText: [16, 185, 129], // emerald-500
-      eventBackground: [16, 185, 129, 0.2], // emerald-500/20
-    } : {
+    // PDF export is always generated in light mode.
+    const colors = {
       background: [255, 255, 255], // white
       title: [15, 23, 42], // slate-950
       dayHeader: [71, 85, 105], // slate-600
@@ -287,8 +284,7 @@ function CalendarView({
     }
 
     // Save PDF
-    const themeSuffix = theme === 'light' ? '_Light' : '';
-    const fileName = `${monthNames[month]}_${year}_Calendar${themeSuffix}.pdf`;
+    const fileName = `${monthNames[month]}_${year}_Calendar_Light.pdf`;
     pdf.save(fileName);
   };
 
@@ -317,7 +313,7 @@ function CalendarView({
           <div className="relative">
             <button
               onClick={() => setShowPdfPopup(!showPdfPopup)}
-              className="p-2 text-slate-400 hover:text-emerald-300 transition-colors rounded-lg hover:bg-slate-800"
+              className={calendarIconButtonClass}
               title="Export to PDF"
             >
               <svg
@@ -346,37 +342,10 @@ function CalendarView({
                 {/* Popup */}
                 <div className="absolute right-0 top-full mt-2 z-20 w-64 rounded-lg border border-slate-700 bg-slate-800 shadow-xl p-4">
                   <div className="space-y-4">
-                    <div>
-                      <label className="block text-sm font-medium text-slate-300 mb-2">
-                        Theme
-                      </label>
-                      <div className="flex gap-2">
-                        <button
-                          onClick={() => setPdfTheme('dark')}
-                          className={`flex-1 px-3 py-2 text-sm font-medium rounded-lg transition-colors ${
-                            pdfTheme === 'dark'
-                              ? 'bg-emerald-500 text-white'
-                              : 'bg-slate-700 text-slate-300 hover:bg-slate-600'
-                          }`}
-                        >
-                          Dark
-                        </button>
-                        <button
-                          onClick={() => setPdfTheme('light')}
-                          className={`flex-1 px-3 py-2 text-sm font-medium rounded-lg transition-colors ${
-                            pdfTheme === 'light'
-                              ? 'bg-emerald-500 text-white'
-                              : 'bg-slate-700 text-slate-300 hover:bg-slate-600'
-                          }`}
-                        >
-                          Light
-                        </button>
-                      </div>
-                    </div>
                     <button
                       onClick={(e) => {
                         e.preventDefault();
-                        exportToPDF(pdfTheme);
+                        exportToPDF();
                         setShowPdfPopup(false);
                       }}
                       className="w-full px-4 py-2 text-sm font-medium text-slate-50 bg-emerald-500 hover:bg-emerald-600 transition-colors rounded-lg flex items-center justify-center gap-2"
@@ -630,6 +599,20 @@ type Tool = {
 };
 
 export default function Dashboard() {
+  const { resolvedTheme } = useTheme();
+  const isLight = resolvedTheme === 'light';
+  const tabActiveClass = isLight
+    ? 'border-b-2 border-emerald-600 text-emerald-900 font-semibold'
+    : 'border-b-2 border-emerald-500 text-emerald-300';
+  const tabInactiveClass = isLight
+    ? 'text-slate-600 hover:text-slate-900'
+    : 'text-slate-400 hover:text-slate-300';
+
+  /** Thicker, higher-contrast dividers for header + tab rows (light: slate-400; dark: lighter slate-600 on dark canvas) */
+  const navChromeBorderClass = isLight
+    ? 'border-b-2 border-slate-400'
+    : 'border-b-2 border-slate-600';
+
   const [activeTab, setActiveTab] = useState<'tools' | 'dashboard' | 'calendar' | 'overview' | 'store'>('dashboard');
   const [activeToolId, setActiveToolId] = useState<string | null>(null);
   const [openedToolIds, setOpenedToolIds] = useState<Set<string>>(new Set());
@@ -868,17 +851,10 @@ export default function Dashboard() {
     <main className="min-h-screen bg-slate-950 text-slate-100">
       <GoalsProvider goalsToolId={goalsToolId}>
       {/* Header */}
-      <header className="border-b border-slate-800 bg-slate-900/50">
+      <header className={`${navChromeBorderClass} bg-slate-900/50`}>
         <div className="mx-auto flex max-w-7xl items-center justify-between px-4 py-4 sm:px-6 lg:px-8">
           <div className="flex items-center relative">
-            <Image
-              src="/images/logo/Logo_Side_White.png"
-              alt="Household Toolbox"
-              width={200}
-              height={40}
-              className="h-auto"
-              priority
-            />
+            <SideLogo priority />
           </div>
 
           <div className="flex items-center gap-3">
@@ -899,7 +875,7 @@ export default function Dashboard() {
       </header>
 
       {/* Tabs */}
-      <div className="border-b border-slate-800 bg-slate-900/30">
+      <div className={`${navChromeBorderClass} bg-slate-950`}>
         <div className="mx-auto flex max-w-7xl px-4 sm:px-6 lg:px-8">
           <button
             onClick={() => {
@@ -907,9 +883,7 @@ export default function Dashboard() {
               setActiveToolId(null);
             }}
             className={`px-4 py-2 text-sm font-medium transition-colors ${
-              activeTab === 'dashboard'
-                ? 'border-b-2 border-emerald-500 text-emerald-300'
-                : 'text-slate-400 hover:text-slate-300'
+              activeTab === 'dashboard' ? tabActiveClass : tabInactiveClass
             }`}
           >
             Dashboard
@@ -920,9 +894,7 @@ export default function Dashboard() {
               setActiveToolId(null);
             }}
             className={`px-4 py-2 text-sm font-medium transition-colors ${
-              activeTab === 'calendar'
-                ? 'border-b-2 border-emerald-500 text-emerald-300'
-                : 'text-slate-400 hover:text-slate-300'
+              activeTab === 'calendar' ? tabActiveClass : tabInactiveClass
             }`}
           >
             Calendar
@@ -933,9 +905,7 @@ export default function Dashboard() {
               // Don't clear activeToolId here - allow tools to stay open when switching back to tools tab
             }}
             className={`px-4 py-2 text-sm font-medium transition-colors ${
-              activeTab === 'tools'
-                ? 'border-b-2 border-emerald-500 text-emerald-300'
-                : 'text-slate-400 hover:text-slate-300'
+              activeTab === 'tools' ? tabActiveClass : tabInactiveClass
             }`}
           >
             Tool Box
@@ -946,9 +916,7 @@ export default function Dashboard() {
               setActiveToolId(null);
             }}
             className={`px-4 py-2 text-sm font-medium transition-colors ${
-              activeTab === 'store'
-                ? 'border-b-2 border-emerald-500 text-emerald-300'
-                : 'text-slate-400 hover:text-slate-300'
+              activeTab === 'store' ? tabActiveClass : tabInactiveClass
             }`}
           >
             Store
@@ -958,14 +926,12 @@ export default function Dashboard() {
 
       {/* Tools Sub-tabs */}
       {activeTab === 'tools' && openedToolIds.size > 0 && (
-        <div className="border-b border-slate-800 bg-slate-900/20">
+        <div className={`${navChromeBorderClass} bg-slate-950`}>
           <div className="mx-auto flex max-w-7xl px-4 sm:px-6 lg:px-8">
             <button
               onClick={() => setActiveToolId(null)}
               className={`px-4 py-2 text-sm font-medium transition-colors ${
-                activeToolId === null
-                  ? 'border-b-2 border-emerald-500 text-emerald-300'
-                  : 'text-slate-400 hover:text-slate-300'
+                activeToolId === null ? tabActiveClass : tabInactiveClass
               }`}
             >
               All Tools
@@ -980,9 +946,7 @@ export default function Dashboard() {
                   <button
                     onClick={() => setActiveToolId(tool.id)}
                     className={`px-4 py-2 text-sm font-medium transition-colors ${
-                      activeToolId === tool.id
-                        ? 'border-b-2 border-emerald-500 text-emerald-300'
-                        : 'text-slate-400 hover:text-slate-300'
+                      activeToolId === tool.id ? tabActiveClass : tabInactiveClass
                     }`}
                   >
                     {tool.name}
@@ -1172,10 +1136,10 @@ export default function Dashboard() {
                                 <div 
                                   key={tool.id} 
                                   onClick={() => handleToolClick(tool)}
-                                  className="rounded-2xl border border-slate-800 bg-slate-900/70 p-4 hover:border-emerald-500/50 transition-colors cursor-pointer"
+                                  className="relative flex flex-col rounded-2xl border border-slate-800 bg-slate-900/70 p-4 min-h-[180px] hover:border-emerald-500/50 transition-colors cursor-pointer"
                                 >
                                   {iconSrc && (
-                                    <div className="mb-3 flex items-center justify-center">
+                                    <div className="mb-3 flex flex-1 min-h-[60px] items-center justify-center">
                                       <DynamicIcon 
                                         iconName={iconSrc} 
                                         size={60} 
@@ -1214,10 +1178,10 @@ export default function Dashboard() {
                                 <div 
                                   key={tool.id} 
                                   onClick={() => handleToolClick(tool)}
-                                  className="rounded-2xl border border-slate-800 bg-slate-900/70 p-4 hover:border-emerald-500/50 transition-colors cursor-pointer"
+                                  className="relative flex flex-col rounded-2xl border border-slate-800 bg-slate-900/70 p-4 min-h-[180px] hover:border-emerald-500/50 transition-colors cursor-pointer"
                                 >
                                   {iconSrc && (
-                                    <div className="mb-3 flex items-center justify-center">
+                                    <div className="mb-3 flex flex-1 min-h-[60px] items-center justify-center">
                                       <DynamicIcon 
                                         iconName={iconSrc} 
                                         size={60} 
@@ -1259,10 +1223,10 @@ export default function Dashboard() {
                                     <div 
                                       key={tool.id} 
                                       onClick={() => handleToolClick(tool)}
-                                      className="rounded-2xl border border-slate-800 bg-slate-900/70 p-4 hover:border-emerald-500/50 transition-colors cursor-pointer"
+                                      className="relative flex flex-col rounded-2xl border border-slate-800 bg-slate-900/70 p-4 min-h-[180px] hover:border-emerald-500/50 transition-colors cursor-pointer"
                                     >
                                       {iconSrc && (
-                                        <div className="mb-3 flex items-center justify-center">
+                                        <div className="mb-3 flex flex-1 min-h-[60px] items-center justify-center">
                                           <DynamicIcon 
                                             iconName={iconSrc} 
                                             size={60} 

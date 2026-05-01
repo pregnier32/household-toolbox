@@ -1,10 +1,10 @@
 'use client';
 
-import Image from 'next/image';
 import { useState, useRef, useEffect, Suspense } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import Link from 'next/link';
 import { resetPassword } from '../actions/auth';
+import { SideLogo } from '../components/SideLogo';
 
 function ResetPasswordForm() {
   const [isLoading, setIsLoading] = useState(false);
@@ -31,14 +31,7 @@ function ResetPasswordForm() {
           <header className="mb-10 flex items-center justify-between">
             <div className="flex items-center">
               <Link href="/">
-                <Image
-                  src="/images/logo/Logo_Side_White.png"
-                  alt="Household Toolbox"
-                  width={200}
-                  height={40}
-                  className="h-auto"
-                  priority
-                />
+                <SideLogo priority />
               </Link>
             </div>
           </header>
@@ -73,14 +66,7 @@ function ResetPasswordForm() {
         <header className="mb-10 flex items-center justify-between">
           <div className="flex items-center">
             <Link href="/">
-              <Image
-                src="/images/logo/Logo_Side_White.png"
-                alt="Household Toolbox"
-                width={200}
-                height={40}
-                className="h-auto"
-                priority
-              />
+              <SideLogo priority />
             </Link>
           </div>
 
@@ -222,14 +208,7 @@ export default function ResetPassword() {
           <header className="mb-10 flex items-center justify-between">
             <div className="flex items-center">
               <Link href="/">
-                <Image
-                  src="/images/logo/Logo_Side_White.png"
-                  alt="Household Toolbox"
-                  width={200}
-                  height={40}
-                  className="h-auto"
-                  priority
-                />
+                <SideLogo priority />
               </Link>
             </div>
           </header>

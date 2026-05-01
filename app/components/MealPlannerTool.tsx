@@ -2,6 +2,7 @@
 
 import { useState, useMemo, useEffect } from 'react';
 import { createPortal } from 'react-dom';
+import { useTheme } from './AppThemeProvider';
 
 const DEFAULT_ITEM_CATEGORIES = [
   'Bakery & Bread',
@@ -99,6 +100,48 @@ type MealPlannerToolProps = {
 const API_BASE = '/api/tools/meal-planner';
 
 export function MealPlannerTool({ toolId }: MealPlannerToolProps) {
+  const { resolvedTheme } = useTheme();
+  const isLight = resolvedTheme === 'light';
+  const titleClass = isLight ? 'text-2xl font-semibold text-slate-900 mb-2' : 'text-2xl font-semibold text-slate-50 mb-2';
+  const descClass = isLight ? 'text-slate-600 text-sm' : 'text-slate-400 text-sm';
+  const mutedClass = isLight ? 'text-slate-600 text-sm' : 'text-slate-400 text-sm';
+  const cardClass = isLight
+    ? 'rounded-2xl border border-slate-200 bg-white p-6 shadow-sm'
+    : 'rounded-2xl border border-slate-800 bg-slate-900/70 p-6';
+  const primaryButtonClass = isLight
+    ? 'rounded-lg bg-emerald-600 px-4 py-2.5 text-sm font-semibold text-white hover:bg-emerald-500 transition-colors focus:outline-none focus:ring-2 focus:ring-emerald-500/50 focus:ring-offset-2 focus:ring-offset-white disabled:opacity-50 disabled:cursor-not-allowed'
+    : 'rounded-lg bg-emerald-500 px-4 py-2.5 text-sm font-semibold text-slate-950 hover:bg-emerald-400 transition-colors focus:outline-none focus:ring-2 focus:ring-emerald-500/50 focus:ring-offset-2 focus:ring-offset-slate-900 disabled:opacity-50 disabled:cursor-not-allowed';
+  const secondaryButtonClass = isLight
+    ? 'px-4 py-2 rounded-lg border-2 border-slate-400 bg-slate-100 text-slate-800 hover:bg-slate-200 transition-colors'
+    : 'px-4 py-2 rounded-lg border border-slate-700 bg-slate-800 text-slate-200 hover:bg-slate-700 transition-colors';
+  const tabStripClass = isLight ? 'border-b border-slate-200' : 'border-b border-slate-800';
+  const tabActiveClass = isLight
+    ? 'border-b-2 border-emerald-600 text-emerald-900 font-semibold'
+    : 'border-b-2 border-emerald-500 text-emerald-300';
+  const tabInactiveClass = isLight ? 'text-slate-600 hover:text-slate-900' : 'text-slate-400 hover:text-slate-300';
+  const rowIconEmeraldClass = isLight
+    ? 'inline-flex items-center justify-center rounded-lg border-2 border-emerald-700 bg-white p-2 text-emerald-700 transition-colors hover:bg-emerald-50 hover:text-emerald-900'
+    : 'inline-flex items-center justify-center rounded-lg border-2 border-emerald-500/50 bg-slate-800/50 p-2 text-emerald-300 transition-colors hover:border-emerald-400 hover:bg-emerald-500/20';
+  const rowIconSecondaryClass = isLight
+    ? 'inline-flex items-center justify-center rounded-lg border-2 border-slate-400 bg-slate-100 p-2 text-slate-700 transition-colors hover:bg-slate-200 hover:text-slate-900'
+    : 'inline-flex items-center justify-center rounded-lg border-2 border-slate-600 bg-slate-800 p-2 text-slate-200 transition-colors hover:bg-slate-700';
+  const rowIconDangerClass = isLight
+    ? 'inline-flex items-center justify-center rounded-lg border-2 border-red-300 bg-white p-2 text-red-700 transition-colors hover:bg-red-50 hover:border-red-400'
+    : 'inline-flex items-center justify-center rounded-lg border-2 border-red-500/50 bg-slate-800/50 p-2 text-red-400 transition-colors hover:border-red-400 hover:bg-red-500/20';
+  const modalCardClass = isLight
+    ? 'rounded-2xl border border-slate-200 bg-white p-6 max-w-md w-full mx-4 shadow-2xl'
+    : 'rounded-2xl border border-slate-800 bg-slate-900 p-6 max-w-md w-full mx-4';
+  const deleteModalTitleClass = isLight ? 'text-xl font-semibold text-slate-900 mb-2' : 'text-xl font-semibold text-slate-50 mb-2';
+  const deleteWarningBoxClass = isLight
+    ? 'rounded-lg border border-red-300 bg-red-50 px-4 py-3 mb-4'
+    : 'rounded-lg border border-red-500/50 bg-red-500/10 px-4 py-3 mb-4';
+  const deleteWarningTextClass = isLight ? 'text-red-700 font-semibold mb-2' : 'text-red-300 font-semibold mb-2';
+  const deleteWarningDetailClass = isLight ? 'text-red-600 text-sm' : 'text-red-200 text-sm';
+  const deleteInstructionTextClass = isLight ? 'text-slate-700 mb-4' : 'text-slate-300 mb-4';
+  const deleteInstructionKeywordClass = isLight ? 'text-slate-900' : 'text-slate-200';
+  const deleteConfirmInputClass = isLight
+    ? 'w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900 placeholder-slate-500 focus:border-red-500/50 focus:outline-none focus:ring-1 focus:ring-red-500/50 mb-4'
+    : 'w-full rounded-lg border border-slate-700 bg-slate-900/70 px-3 py-2 text-sm text-slate-100 placeholder-slate-500 focus:border-red-500/50 focus:outline-none focus:ring-1 focus:ring-red-500/50 mb-4';
   const [activeTab, setActiveTab] = useState<'meal-plan' | 'meals' | 'meal-types' | 'items'>('meal-plan');
 
   const [masterItems, setMasterItems] = useState<MasterItem[]>([]);
@@ -535,16 +578,20 @@ export function MealPlannerTool({ toolId }: MealPlannerToolProps) {
     return (
       <tr
         key={meal.id}
-        className="border-b border-slate-700/50 bg-slate-800/50 hover:bg-slate-800 transition-colors text-sm"
+        className={`transition-colors text-sm ${
+          isLight
+            ? 'border-b border-slate-200 bg-white hover:bg-slate-50'
+            : 'border-b border-slate-700/50 bg-slate-800/50 hover:bg-slate-800'
+        }`}
       >
-        <td className="px-3 py-2 font-medium text-slate-100 truncate max-w-0" title={meal.name}>
+        <td className={`px-3 py-2 font-medium truncate max-w-0 ${isLight ? 'text-slate-900' : 'text-slate-100'}`} title={meal.name}>
           {meal.name}
         </td>
-        <td className="px-3 py-2 text-slate-300 truncate max-w-0">{typeName}</td>
-        <td className="px-3 py-2 text-slate-300 whitespace-nowrap">
+        <td className={`px-3 py-2 truncate max-w-0 ${isLight ? 'text-slate-700' : 'text-slate-300'}`}>{typeName}</td>
+        <td className={`px-3 py-2 whitespace-nowrap ${isLight ? 'text-slate-700' : 'text-slate-300'}`}>
           {meal.prepTimeMinutes != null ? `${meal.prepTimeMinutes} min` : '—'}
         </td>
-        <td className="px-3 py-2 text-slate-300 capitalize whitespace-nowrap">
+        <td className={`px-3 py-2 capitalize whitespace-nowrap ${isLight ? 'text-slate-700' : 'text-slate-300'}`}>
           {meal.difficulty || '—'}
         </td>
         <td className="px-3 py-2">
@@ -552,7 +599,7 @@ export function MealPlannerTool({ toolId }: MealPlannerToolProps) {
             {[1, 2, 3, 4, 5].map((star) => (
               <span
                 key={star}
-                className={meal.rating >= star ? 'text-amber-400' : 'text-slate-600'}
+                className={meal.rating >= star ? 'text-amber-500' : isLight ? 'text-slate-400' : 'text-slate-600'}
                 aria-hidden
               >
                 <svg className="h-4 w-4" fill="currentColor" viewBox="0 0 24 24">
@@ -569,7 +616,7 @@ export function MealPlannerTool({ toolId }: MealPlannerToolProps) {
               onClick={() => startEditingMeal(meal)}
               aria-label={`Edit ${meal.name}`}
               title="Edit"
-              className="rounded-lg p-2 text-slate-400 hover:bg-slate-700 hover:text-slate-200 transition-colors"
+              className={rowIconEmeraldClass}
             >
               <svg className="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
@@ -580,7 +627,7 @@ export function MealPlannerTool({ toolId }: MealPlannerToolProps) {
               onClick={() => setMealActive(meal.id, !isActive)}
               aria-label={isActive ? 'Move to inactive' : 'Move to active'}
               title={isActive ? 'Move to Inactive Meals' : 'Move to Active Meals'}
-              className="rounded-lg p-2 text-slate-400 hover:bg-slate-700 hover:text-slate-200 transition-colors"
+              className={rowIconSecondaryClass}
             >
               {isActive ? (
                 <svg className="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -600,7 +647,7 @@ export function MealPlannerTool({ toolId }: MealPlannerToolProps) {
               }}
               aria-label={`Delete ${meal.name}`}
               title="Delete"
-              className="rounded-lg p-2 text-red-400 hover:bg-red-500/20 hover:text-red-300 transition-colors"
+              className={rowIconDangerClass}
             >
               <svg className="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
@@ -1021,17 +1068,17 @@ export function MealPlannerTool({ toolId }: MealPlannerToolProps) {
 
       <div className="space-y-6">
       <div>
-        <h2 className="text-2xl font-semibold text-slate-50 mb-2">Meal Planner</h2>
-        <p className="text-slate-400 text-sm">
+        <h2 className={titleClass}>Meal Planner</h2>
+        <p className={descClass}>
           Create a weekly meal plan, manage meals and ingredients, and generate a shopping list for the week.
         </p>
       </div>
       {isLoading && (
-        <p className="text-slate-400 text-sm">Loading your meal planner data…</p>
+        <p className={mutedClass}>Loading your meal planner data…</p>
       )}
 
       {/* Tabs */}
-      <div className="border-b border-slate-800">
+      <div className={tabStripClass}>
         <div className="flex gap-2">
           {[
             { id: 'meal-plan', label: 'Meal Plan' },
@@ -1043,9 +1090,7 @@ export function MealPlannerTool({ toolId }: MealPlannerToolProps) {
               key={tab.id}
               onClick={() => setActiveTab(tab.id as typeof activeTab)}
               className={`px-4 py-2 text-sm font-medium transition-colors ${
-                activeTab === tab.id
-                  ? 'border-b-2 border-emerald-500 text-emerald-300'
-                  : 'text-slate-400 hover:text-slate-300'
+                activeTab === tab.id ? tabActiveClass : tabInactiveClass
               }`}
             >
               {tab.label}
@@ -1061,14 +1106,14 @@ export function MealPlannerTool({ toolId }: MealPlannerToolProps) {
             <div className="flex justify-start">
               <button
                 onClick={() => setIsAddingItem(true)}
-                className="px-4 py-2.5 rounded-lg bg-emerald-500 text-slate-950 font-semibold hover:bg-emerald-400 transition-colors focus:outline-none focus:ring-2 focus:ring-emerald-500/50 focus:ring-offset-2 focus:ring-offset-slate-900"
+                className={primaryButtonClass}
               >
                 + Add New Item
               </button>
             </div>
           )}
           {isAddingItem && (
-            <div className="rounded-2xl border border-slate-800 bg-slate-900/70 p-6">
+            <div className={cardClass}>
               <h3 className="text-lg font-semibold text-slate-50 mb-4">Add New Item</h3>
               <div className="space-y-4">
                 <div>
@@ -1082,7 +1127,11 @@ export function MealPlannerTool({ toolId }: MealPlannerToolProps) {
                         setIsCreatingNewCategory(!isCreatingNewCategory);
                         setNewItemCategory('');
                       }}
-                      className="text-xs text-emerald-400 hover:text-emerald-300 transition-colors"
+                      className={
+                        isLight
+                          ? 'px-2 py-1 rounded-lg border-2 border-slate-400 bg-slate-100 text-xs font-medium text-slate-800 hover:bg-slate-200 transition-colors'
+                          : 'px-2 py-1 rounded border border-slate-600 bg-slate-800 text-xs font-medium text-slate-200 hover:bg-slate-700 transition-colors'
+                      }
                     >
                       {isCreatingNewCategory ? 'Select existing category' : '+ Create new category'}
                     </button>
@@ -1130,14 +1179,14 @@ export function MealPlannerTool({ toolId }: MealPlannerToolProps) {
                       setNewItemCategory('');
                       setIsCreatingNewCategory(false);
                     }}
-                    className="px-4 py-2 rounded-lg border border-slate-700 bg-slate-800 text-slate-200 hover:bg-slate-700 transition-colors"
+                    className={secondaryButtonClass}
                   >
                     Cancel
                   </button>
                   <button
                     onClick={addMasterItem}
                     disabled={!newItemName.trim() || !(isCreatingNewCategory ? newItemCategory.trim() : newItemCategory)}
-                    className="rounded-lg bg-emerald-500 px-4 py-2.5 text-sm font-semibold text-slate-950 transition-colors hover:bg-emerald-400 focus:outline-none focus:ring-2 focus:ring-emerald-500/50 focus:ring-offset-2 focus:ring-offset-slate-900 disabled:opacity-50 disabled:cursor-not-allowed"
+                    className={primaryButtonClass}
                   >
                     Save Item
                   </button>
@@ -1146,10 +1195,18 @@ export function MealPlannerTool({ toolId }: MealPlannerToolProps) {
             </div>
           )}
           {!isAddingItem && (
-            <div className="flex gap-4 rounded-2xl border border-slate-800 bg-slate-900/70 overflow-hidden">
-              <div className="w-1/4 min-w-0 flex-shrink-0 border-r border-slate-800 bg-slate-900/50">
+            <div
+              className={`flex gap-4 rounded-2xl overflow-hidden ${
+                isLight ? 'border border-slate-300 bg-white' : 'border border-slate-800 bg-slate-900/70'
+              }`}
+            >
+              <div
+                className={`w-1/4 min-w-0 flex-shrink-0 ${
+                  isLight ? 'border-r border-slate-200 bg-slate-50' : 'border-r border-slate-800 bg-slate-900/50'
+                }`}
+              >
                 <div className="p-3">
-                  <h3 className="text-xs font-semibold uppercase tracking-wider text-slate-400 mb-2 px-2">
+                  <h3 className={`text-xs font-semibold uppercase tracking-wider mb-2 px-2 ${isLight ? 'text-slate-700' : 'text-slate-400'}`}>
                     Categories
                   </h3>
                   {categories.length === 0 ? (
@@ -1163,8 +1220,12 @@ export function MealPlannerTool({ toolId }: MealPlannerToolProps) {
                           onClick={() => setSelectedItemsCategory(cat)}
                           className={`w-full text-left px-3 py-2 rounded-lg text-sm font-medium transition-colors ${
                             displayCategory === cat
-                              ? 'bg-emerald-500/20 text-emerald-300'
-                              : 'text-slate-300 hover:bg-slate-800 hover:text-slate-100'
+                              ? isLight
+                                ? 'border border-emerald-300 bg-emerald-50 text-emerald-800'
+                                : 'bg-emerald-500/20 text-emerald-300'
+                              : isLight
+                                ? 'text-slate-700 hover:bg-slate-200 hover:text-slate-900'
+                                : 'text-slate-300 hover:bg-slate-800 hover:text-slate-100'
                           }`}
                         >
                           {cat}
@@ -1179,14 +1240,21 @@ export function MealPlannerTool({ toolId }: MealPlannerToolProps) {
                   <p className="text-slate-500 text-sm">Select a category to view and manage items.</p>
                 ) : (
                   <>
-                    <h3 className="text-lg font-semibold text-emerald-300 mb-4">{displayCategory}</h3>
+                    <h3 className={`text-lg font-semibold mb-4 ${isLight ? 'text-emerald-700' : 'text-emerald-300'}`}>{displayCategory}</h3>
                     {currentItems.length === 0 ? (
                       <p className="text-slate-500 text-sm">No items in this category. Use “Add New Item” above.</p>
                     ) : (
                       <ul className="space-y-2" role="list">
                         {currentItems.map((item) =>
                           editingItemId === item.id ? (
-                            <li key={item.id} className="space-y-2 p-3 rounded-lg border border-slate-700 bg-slate-800/50">
+                            <li
+                              key={item.id}
+                              className={`space-y-2 p-3 rounded-lg ${
+                                isLight
+                                  ? 'border border-slate-300 bg-slate-50'
+                                  : 'border border-slate-700 bg-slate-800/50'
+                              }`}
+                            >
                               <div>
                                 <label className="block text-xs font-medium text-slate-300 mb-1.5">Category</label>
                                 <select
@@ -1233,15 +1301,21 @@ export function MealPlannerTool({ toolId }: MealPlannerToolProps) {
                             </li>
                           ) : (
                             <li key={item.id}>
-                              <div className="flex items-center justify-between p-2 rounded-lg border border-slate-700 bg-slate-800/50 hover:bg-slate-800 transition-colors">
-                                <span className="text-sm text-slate-200">{item.name}</span>
+                              <div
+                                className={`flex items-center justify-between p-2 rounded-lg transition-colors ${
+                                  isLight
+                                    ? 'border border-slate-300 bg-white hover:bg-slate-100'
+                                    : 'border border-slate-700 bg-slate-800/50 hover:bg-slate-800'
+                                }`}
+                              >
+                                <span className={`text-sm ${isLight ? 'text-slate-800' : 'text-slate-200'}`}>{item.name}</span>
                                 <div className="flex items-center gap-1">
                                   <button
                                     type="button"
                                     onClick={() => startEditingItem(item)}
                                     aria-label={`Edit ${item.name}`}
                                     title="Edit"
-                                    className="rounded-lg p-1.5 text-slate-400 hover:bg-slate-700 hover:text-slate-200 transition-colors"
+                                    className={rowIconEmeraldClass}
                                   >
                                     <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
@@ -1255,7 +1329,7 @@ export function MealPlannerTool({ toolId }: MealPlannerToolProps) {
                                     }}
                                     aria-label={`Delete ${item.name}`}
                                     title="Delete"
-                                    className="rounded-lg p-1.5 text-red-400 hover:bg-red-500/20 hover:text-red-300 transition-colors"
+                                    className={rowIconDangerClass}
                                   >
                                     <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
@@ -1283,14 +1357,14 @@ export function MealPlannerTool({ toolId }: MealPlannerToolProps) {
             <div className="flex justify-start">
               <button
                 onClick={() => setIsAddingMealType(true)}
-                className="px-4 py-2.5 rounded-lg bg-emerald-500 text-slate-950 font-semibold hover:bg-emerald-400 transition-colors focus:outline-none focus:ring-2 focus:ring-emerald-500/50 focus:ring-offset-2 focus:ring-offset-slate-900"
+                className={primaryButtonClass}
               >
                 + Add New Meal Type
               </button>
             </div>
           )}
           {isAddingMealType && (
-            <div className="rounded-2xl border border-slate-800 bg-slate-900/70 p-6 flex items-end gap-2 flex-wrap">
+            <div className={`${cardClass} flex items-end gap-2 flex-wrap`}>
               <div className="min-w-[200px] flex-1">
                 <label className="block text-xs font-medium text-slate-300 mb-1.5">Name</label>
                 <input
@@ -1304,7 +1378,7 @@ export function MealPlannerTool({ toolId }: MealPlannerToolProps) {
               <button
                 onClick={addMealType}
                 disabled={!newMealTypeName.trim()}
-                className="rounded-lg bg-emerald-500 px-4 py-2.5 text-sm font-semibold text-slate-950 hover:bg-emerald-400 disabled:opacity-50 disabled:cursor-not-allowed"
+                className={primaryButtonClass}
               >
                 Add
               </button>
@@ -1313,13 +1387,13 @@ export function MealPlannerTool({ toolId }: MealPlannerToolProps) {
                   setIsAddingMealType(false);
                   setNewMealTypeName('');
                 }}
-                className="px-4 py-2 rounded-lg border border-slate-700 bg-slate-800 text-slate-200 hover:bg-slate-700 transition-colors"
+                className={secondaryButtonClass}
               >
                 Cancel
               </button>
             </div>
           )}
-          <div className="rounded-2xl border border-slate-800 bg-slate-900/70 p-6">
+          <div className={cardClass}>
             <h3 className="text-lg font-semibold text-slate-50 mb-4">Meal Types</h3>
             {mealTypes.length === 0 ? (
               <p className="text-slate-400 text-center py-6">No meal types yet. Add one above.</p>
@@ -1363,7 +1437,7 @@ export function MealPlannerTool({ toolId }: MealPlannerToolProps) {
                             }}
                             aria-label={`Edit ${t.name}`}
                             title="Edit"
-                            className="rounded-lg p-1.5 text-slate-400 hover:bg-slate-700 hover:text-slate-200 transition-colors"
+                            className={rowIconEmeraldClass}
                           >
                             <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
@@ -1377,7 +1451,7 @@ export function MealPlannerTool({ toolId }: MealPlannerToolProps) {
                             }}
                             aria-label={`Delete ${t.name}`}
                             title="Delete"
-                            className="rounded-lg p-1.5 text-red-400 hover:bg-red-500/20 hover:text-red-300 transition-colors"
+                            className={rowIconDangerClass}
                           >
                             <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
@@ -1405,14 +1479,14 @@ export function MealPlannerTool({ toolId }: MealPlannerToolProps) {
                   setEditingMealId(null);
                   setIsAddingMeal(true);
                 }}
-                className="px-4 py-2.5 rounded-lg bg-emerald-500 text-slate-950 font-semibold hover:bg-emerald-400 transition-colors focus:outline-none focus:ring-2 focus:ring-emerald-500/50 focus:ring-offset-2 focus:ring-offset-slate-900"
+                className={primaryButtonClass}
               >
                 + Add New Meal
               </button>
             </div>
           )}
           {isAddingMeal && (
-            <div className="rounded-2xl border border-slate-800 bg-slate-900/70 p-6 space-y-4">
+            <div className={`${cardClass} space-y-4`}>
               <div className="flex items-start justify-between gap-4">
                 <h3 className="text-lg font-semibold text-slate-50">
                   {editingMealId ? 'Edit Meal' : 'New Meal'}
@@ -1530,10 +1604,22 @@ export function MealPlannerTool({ toolId }: MealPlannerToolProps) {
                   placeholder="Search items..."
                   className="w-full rounded-lg border border-slate-700 bg-slate-900/70 px-3 py-2 text-sm text-slate-100 placeholder-slate-500 focus:border-emerald-500/50 focus:outline-none focus:ring-1 focus:ring-emerald-500/50 mb-2"
                 />
-                <div className="flex gap-0 rounded-lg border border-slate-700 bg-slate-800/50 max-h-96 overflow-hidden">
-                  <div className="w-[28%] min-w-0 flex-shrink-0 border-r border-slate-700 bg-slate-900/50 overflow-hidden flex flex-col">
-                    <div className="px-2 py-1.5 border-b border-slate-700 bg-slate-800/70">
-                      <span className="text-xs font-semibold uppercase tracking-wider text-slate-400">Category</span>
+                <div
+                  className={`flex gap-0 rounded-lg max-h-96 overflow-hidden ${
+                    isLight ? 'border border-slate-300 bg-white' : 'border border-slate-700 bg-slate-800/50'
+                  }`}
+                >
+                  <div
+                    className={`w-[28%] min-w-0 flex-shrink-0 overflow-hidden flex flex-col ${
+                      isLight ? 'border-r border-slate-200 bg-slate-50' : 'border-r border-slate-700 bg-slate-900/50'
+                    }`}
+                  >
+                    <div
+                      className={`px-2 py-1.5 ${
+                        isLight ? 'border-b border-slate-200 bg-slate-100' : 'border-b border-slate-700 bg-slate-800/70'
+                      }`}
+                    >
+                      <span className={`text-xs font-semibold uppercase tracking-wider ${isLight ? 'text-slate-700' : 'text-slate-400'}`}>Category</span>
                     </div>
                     <div className="overflow-y-auto p-2 flex-1 min-h-0">
                       {categories.map((cat) => {
@@ -1544,7 +1630,13 @@ export function MealPlannerTool({ toolId }: MealPlannerToolProps) {
                             type="button"
                             onClick={() => setSelectedPickerCategory(cat)}
                             className={`w-full text-left px-2 py-1.5 rounded text-sm font-medium transition-colors ${
-                              isSelected ? 'bg-emerald-500/20 text-emerald-300' : 'text-slate-300 hover:bg-slate-700 hover:text-slate-100'
+                              isSelected
+                                ? isLight
+                                  ? 'border border-emerald-300 bg-emerald-50 text-emerald-800'
+                                  : 'bg-emerald-500/20 text-emerald-300'
+                                : isLight
+                                  ? 'text-slate-700 hover:bg-slate-200 hover:text-slate-900'
+                                  : 'text-slate-300 hover:bg-slate-700 hover:text-slate-100'
                             }`}
                           >
                             {cat}
@@ -1553,9 +1645,17 @@ export function MealPlannerTool({ toolId }: MealPlannerToolProps) {
                       })}
                     </div>
                   </div>
-                  <div className="flex-1 min-w-0 overflow-hidden flex flex-col border-r border-slate-700">
-                    <div className="px-3 py-1.5 border-b border-slate-700 bg-slate-800/70">
-                      <span className="text-xs font-semibold uppercase tracking-wider text-slate-400">Item</span>
+                  <div
+                    className={`flex-1 min-w-0 overflow-hidden flex flex-col ${
+                      isLight ? 'border-r border-slate-200' : 'border-r border-slate-700'
+                    }`}
+                  >
+                    <div
+                      className={`px-3 py-1.5 ${
+                        isLight ? 'border-b border-slate-200 bg-slate-100' : 'border-b border-slate-700 bg-slate-800/70'
+                      }`}
+                    >
+                      <span className={`text-xs font-semibold uppercase tracking-wider ${isLight ? 'text-slate-700' : 'text-slate-400'}`}>Item</span>
                     </div>
                     <div className="overflow-y-auto p-2 flex-1 min-h-0">
                       {(() => {
@@ -1576,13 +1676,17 @@ export function MealPlannerTool({ toolId }: MealPlannerToolProps) {
                               onClick={() => toggleMealIngredient(item.id)}
                               className={`w-full text-left px-3 py-2 rounded-lg text-sm transition-colors ${
                                 inList
-                                  ? 'bg-emerald-500/20 text-emerald-300 border border-emerald-500/50'
-                                  : 'text-slate-200 hover:bg-slate-700 border border-transparent'
+                                  ? isLight
+                                    ? 'border border-emerald-300 bg-emerald-50 text-emerald-800'
+                                    : 'bg-emerald-500/20 text-emerald-300 border border-emerald-500/50'
+                                  : isLight
+                                    ? 'text-slate-800 hover:bg-slate-100 border border-transparent'
+                                    : 'text-slate-200 hover:bg-slate-700 border border-transparent'
                               }`}
                             >
                               <span className="block truncate">{item.name}</span>
                               {q && (
-                                <span className="block text-xs text-slate-500 truncate mt-0.5">{item.category}</span>
+                                <span className={`block text-xs truncate mt-0.5 ${isLight ? 'text-slate-500' : 'text-slate-500'}`}>{item.category}</span>
                               )}
                               {inList && ' ✓'}
                             </button>
@@ -1591,9 +1695,13 @@ export function MealPlannerTool({ toolId }: MealPlannerToolProps) {
                       })()}
                     </div>
                   </div>
-                  <div className="w-[28%] min-w-0 flex-shrink-0 bg-slate-900/50 overflow-hidden flex flex-col">
-                    <div className="px-2 py-1.5 border-b border-slate-700 bg-slate-800/70">
-                      <span className="text-xs font-semibold uppercase tracking-wider text-slate-400">Selected</span>
+                  <div className={`w-[28%] min-w-0 flex-shrink-0 overflow-hidden flex flex-col ${isLight ? 'bg-slate-50' : 'bg-slate-900/50'}`}>
+                    <div
+                      className={`px-2 py-1.5 ${
+                        isLight ? 'border-b border-slate-200 bg-slate-100' : 'border-b border-slate-700 bg-slate-800/70'
+                      }`}
+                    >
+                      <span className={`text-xs font-semibold uppercase tracking-wider ${isLight ? 'text-slate-700' : 'text-slate-400'}`}>Selected</span>
                     </div>
                     <div className="overflow-y-auto p-2 flex-1 min-h-0">
                       {mealForm.ingredientIds.length === 0 ? (
@@ -1604,7 +1712,11 @@ export function MealPlannerTool({ toolId }: MealPlannerToolProps) {
                           return (
                             <div
                               key={itemId}
-                              className="flex items-center justify-between gap-1 px-2 py-1.5 rounded-lg bg-slate-700/50 text-slate-200 text-sm group"
+                              className={`flex items-center justify-between gap-1 px-2 py-1.5 rounded-lg text-sm group ${
+                                isLight
+                                  ? 'border border-slate-300 bg-white text-slate-800'
+                                  : 'bg-slate-700/50 text-slate-200'
+                              }`}
                             >
                               <span className="truncate flex-1 min-w-0">{item?.name ?? 'Unknown'}</span>
                               <button
@@ -1612,7 +1724,11 @@ export function MealPlannerTool({ toolId }: MealPlannerToolProps) {
                                 onClick={() => toggleMealIngredient(itemId)}
                                 aria-label={`Remove ${item?.name ?? 'item'}`}
                                 title="Remove"
-                                className="rounded p-0.5 text-slate-400 hover:bg-slate-600 hover:text-red-300 flex-shrink-0"
+                                className={`rounded p-0.5 flex-shrink-0 ${
+                                  isLight
+                                    ? 'text-slate-500 hover:bg-red-50 hover:text-red-700'
+                                    : 'text-slate-400 hover:bg-slate-600 hover:text-red-300'
+                                }`}
                               >
                                 <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
@@ -1654,7 +1770,7 @@ export function MealPlannerTool({ toolId }: MealPlannerToolProps) {
                 <h3 className="text-lg font-semibold text-slate-50 mb-4">Active Meals</h3>
                 <div className="flex flex-wrap gap-3 mb-4">
                   <div className="flex items-center gap-2">
-                    <span className="text-xs font-medium text-slate-400">Type</span>
+                    <span className={`text-xs font-medium ${isLight ? 'text-slate-600' : 'text-slate-400'}`}>Type</span>
                     <select
                       value={mealFilterType}
                       onChange={(e) => setMealFilterType(e.target.value)}
@@ -1669,7 +1785,7 @@ export function MealPlannerTool({ toolId }: MealPlannerToolProps) {
                     </select>
                   </div>
                   <div className="flex items-center gap-2">
-                    <span className="text-xs font-medium text-slate-400">Difficulty</span>
+                    <span className={`text-xs font-medium ${isLight ? 'text-slate-600' : 'text-slate-400'}`}>Difficulty</span>
                     <select
                       value={mealFilterDifficulty}
                       onChange={(e) => setMealFilterDifficulty(e.target.value)}
@@ -1682,7 +1798,7 @@ export function MealPlannerTool({ toolId }: MealPlannerToolProps) {
                     </select>
                   </div>
                   <div className="flex items-center gap-2">
-                    <span className="text-xs font-medium text-slate-400">Rating (min)</span>
+                    <span className={`text-xs font-medium ${isLight ? 'text-slate-600' : 'text-slate-400'}`}>Rating (min)</span>
                     <select
                       value={mealFilterRating}
                       onChange={(e) => setMealFilterRating(e.target.value)}
@@ -1697,10 +1813,16 @@ export function MealPlannerTool({ toolId }: MealPlannerToolProps) {
                     </select>
                   </div>
                 </div>
-                <div className="rounded-lg border border-slate-700 overflow-hidden">
+                <div className={`rounded-lg overflow-hidden ${isLight ? 'border border-slate-200' : 'border border-slate-700'}`}>
                   <table className="w-full table-fixed border-collapse">
                     <thead>
-                      <tr className="bg-slate-800/70 border-b border-slate-700 text-xs font-semibold uppercase tracking-wider text-slate-400">
+                      <tr
+                        className={`text-xs font-semibold uppercase tracking-wider ${
+                          isLight
+                            ? 'bg-slate-100 border-b border-slate-200 text-slate-600'
+                            : 'bg-slate-800/70 border-b border-slate-700 text-slate-400'
+                        }`}
+                      >
                         <th className="px-3 py-2 text-left w-[18%]">Name</th>
                         <th className="px-3 py-2 text-left w-[18%]">Type</th>
                         <th className="px-3 py-2 text-left w-[18%]">Duration</th>
@@ -1752,7 +1874,13 @@ export function MealPlannerTool({ toolId }: MealPlannerToolProps) {
                     ) : (
                       <table className="w-full table-fixed border-collapse">
                         <thead>
-                          <tr className="bg-slate-800/70 border-b border-slate-700 text-xs font-semibold uppercase tracking-wider text-slate-400">
+                          <tr
+                            className={`text-xs font-semibold uppercase tracking-wider ${
+                              isLight
+                                ? 'bg-slate-100 border-b border-slate-200 text-slate-600'
+                                : 'bg-slate-800/70 border-b border-slate-700 text-slate-400'
+                            }`}
+                          >
                             <th className="px-3 py-2 text-left w-[18%]">Name</th>
                             <th className="px-3 py-2 text-left w-[18%]">Type</th>
                             <th className="px-3 py-2 text-left w-[18%]">Duration</th>
@@ -1938,7 +2066,7 @@ export function MealPlannerTool({ toolId }: MealPlannerToolProps) {
                                   onClick={() => startEditingPlan(plan)}
                                   aria-label="Edit plan"
                                   title="Edit plan"
-                                  className="rounded-lg p-1.5 text-slate-400 hover:bg-slate-800 hover:text-slate-200 transition-colors"
+                                  className={rowIconEmeraldClass}
                                 >
                                   <svg className="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
@@ -1949,7 +2077,7 @@ export function MealPlannerTool({ toolId }: MealPlannerToolProps) {
                                   onClick={() => setPrintingPlanId(plan.id)}
                                   aria-label="Print meal plan"
                                   title="Print meal plan"
-                                  className="rounded-lg p-1.5 text-slate-400 hover:bg-slate-800 hover:text-slate-200 transition-colors"
+                                  className={rowIconSecondaryClass}
                                 >
                                   <svg className="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 17h2a2 2 0 002-2v-4a2 2 0 00-2-2H5a2 2 0 00-2 2v4a2 2 0 002 2h2m2 4h6a2 2 0 002-2v-4a2 2 0 00-2-2H9a2 2 0 00-2 2v4a2 2 0 002 2zm8-12V5a2 2 0 00-2-2H9a2 2 0 00-2 2v4h10z" />
@@ -1960,7 +2088,7 @@ export function MealPlannerTool({ toolId }: MealPlannerToolProps) {
                                   onClick={() => setCartOpenPlanId(plan.id)}
                                   aria-label="View shopping list"
                                   title="View shopping list"
-                                  className="rounded-lg p-1.5 text-slate-400 hover:bg-slate-800 hover:text-slate-200 transition-colors"
+                                  className={rowIconSecondaryClass}
                                 >
                                   <svg className="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 3h2l.4 2M7 13h10l4-8H5.4M7 13L5.4 5M7 13l-2.293 2.293c-.63.63-.184 1.707.707 1.707H17m0 0a2 2 0 100 4 2 2 0 000-4zm-8 2a2 2 0 11-4 0 2 2 0 014 0z" />
@@ -1971,7 +2099,7 @@ export function MealPlannerTool({ toolId }: MealPlannerToolProps) {
                                   onClick={() => movePlanToHistory(plan.id)}
                                   aria-label="Move to History"
                                   title="Move to History"
-                                  className="rounded-lg p-1.5 text-slate-400 hover:bg-slate-800 hover:text-slate-200 transition-colors"
+                                  className={rowIconSecondaryClass}
                                 >
                                   <svg className="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 8h14M5 8a2 2 0 110-4h14a2 2 0 110 4M5 8v10a2 2 0 002 2h10a2 2 0 002-2V8m-9 4h4" />
@@ -1985,7 +2113,7 @@ export function MealPlannerTool({ toolId }: MealPlannerToolProps) {
                                   }}
                                   aria-label="Delete plan"
                                   title="Delete plan"
-                                  className="rounded-lg p-1.5 text-red-400 hover:bg-red-500/20 hover:text-red-300 transition-colors"
+                                  className={rowIconDangerClass}
                                 >
                                   <svg className="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
@@ -2000,11 +2128,19 @@ export function MealPlannerTool({ toolId }: MealPlannerToolProps) {
                         {dates.map(({ key, date, label }) => (
                           <div
                             key={key}
-                            className="rounded-lg border border-slate-700 bg-slate-800/50 p-3"
+                            className={`rounded-lg p-3 ${
+                              isLight
+                                ? 'border border-slate-300 bg-slate-50'
+                                : 'border border-slate-700 bg-slate-800/50'
+                            }`}
                           >
                             <div className="flex items-start justify-between gap-2 mb-2">
                               <div>
-                                <p className="text-xs font-semibold uppercase tracking-wider text-emerald-300">
+                                <p
+                                  className={`text-xs font-semibold uppercase tracking-wider ${
+                                    isLight ? 'text-emerald-700' : 'text-emerald-300'
+                                  }`}
+                                >
                                   {label}
                                 </p>
                                 <p className="text-xs text-slate-500 mt-0.5">{formatDateDisplay(date)}</p>
@@ -2027,7 +2163,11 @@ export function MealPlannerTool({ toolId }: MealPlannerToolProps) {
                                 return meal ? (
                                   <div
                                     key={mealId}
-                                    className="flex items-center justify-between gap-1 text-sm text-slate-200 bg-slate-700/50 rounded px-2 py-1"
+                                    className={`flex items-center justify-between gap-1 text-sm rounded px-2 py-1 ${
+                                      isLight
+                                        ? 'text-slate-800 bg-white border border-slate-300'
+                                        : 'text-slate-200 bg-slate-700/50'
+                                    }`}
                                   >
                                     <span className="truncate">{meal.name}</span>
                                     <button
@@ -2115,7 +2255,7 @@ export function MealPlannerTool({ toolId }: MealPlannerToolProps) {
                                   onClick={() => startEditingPlan(plan)}
                                   aria-label="Edit plan"
                                   title="Edit plan"
-                                  className="rounded-lg p-1.5 text-slate-400 hover:bg-slate-800 hover:text-slate-200 transition-colors"
+                                  className={rowIconEmeraldClass}
                                 >
                                   <svg className="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
@@ -2126,7 +2266,7 @@ export function MealPlannerTool({ toolId }: MealPlannerToolProps) {
                                   onClick={() => setPrintingPlanId(plan.id)}
                                   aria-label="Print meal plan"
                                   title="Print meal plan"
-                                  className="rounded-lg p-1.5 text-slate-400 hover:bg-slate-800 hover:text-slate-200 transition-colors"
+                                  className={rowIconSecondaryClass}
                                 >
                                   <svg className="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 17h2a2 2 0 002-2v-4a2 2 0 00-2-2H5a2 2 0 00-2 2v4a2 2 0 002 2h2m2 4h6a2 2 0 002-2v-4a2 2 0 00-2-2H9a2 2 0 00-2 2v4a2 2 0 002 2zm8-12V5a2 2 0 00-2-2H9a2 2 0 00-2 2v4h10z" />
@@ -2137,7 +2277,7 @@ export function MealPlannerTool({ toolId }: MealPlannerToolProps) {
                                   onClick={() => setCartOpenPlanId(plan.id)}
                                   aria-label="View shopping list"
                                   title="View shopping list"
-                                  className="rounded-lg p-1.5 text-slate-400 hover:bg-slate-800 hover:text-slate-200 transition-colors"
+                                  className={rowIconSecondaryClass}
                                 >
                                   <svg className="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 3h2l.4 2M7 13h10l4-8H5.4M7 13L5.4 5M7 13l-2.293 2.293c-.63.63-.184 1.707.707 1.707H17m0 0a2 2 0 100 4 2 2 0 000-4zm-8 2a2 2 0 11-4 0 2 2 0 014 0z" />
@@ -2151,7 +2291,7 @@ export function MealPlannerTool({ toolId }: MealPlannerToolProps) {
                                   }}
                                   aria-label="Delete plan"
                                   title="Delete plan"
-                                  className="rounded-lg p-1.5 text-red-400 hover:bg-red-500/20 hover:text-red-300 transition-colors"
+                                  className={rowIconDangerClass}
                                 >
                                   <svg className="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
@@ -2166,11 +2306,19 @@ export function MealPlannerTool({ toolId }: MealPlannerToolProps) {
                         {dates.map(({ key, date, label }) => (
                           <div
                             key={key}
-                            className="rounded-lg border border-slate-700 bg-slate-800/50 p-3"
+                            className={`rounded-lg p-3 ${
+                              isLight
+                                ? 'border border-slate-300 bg-slate-50'
+                                : 'border border-slate-700 bg-slate-800/50'
+                            }`}
                           >
                             <div className="flex items-start justify-between gap-2 mb-2">
                               <div>
-                                <p className="text-xs font-semibold uppercase tracking-wider text-emerald-300">
+                                <p
+                                  className={`text-xs font-semibold uppercase tracking-wider ${
+                                    isLight ? 'text-emerald-700' : 'text-emerald-300'
+                                  }`}
+                                >
                                   {label}
                                 </p>
                                 <p className="text-xs text-slate-500 mt-0.5">{formatDateDisplay(date)}</p>
@@ -2193,7 +2341,11 @@ export function MealPlannerTool({ toolId }: MealPlannerToolProps) {
                                 return meal ? (
                                   <div
                                     key={mealId}
-                                    className="flex items-center justify-between gap-1 text-sm text-slate-200 bg-slate-700/50 rounded px-2 py-1"
+                                    className={`flex items-center justify-between gap-1 text-sm rounded px-2 py-1 ${
+                                      isLight
+                                        ? 'text-slate-800 bg-white border border-slate-300'
+                                        : 'text-slate-200 bg-slate-700/50'
+                                    }`}
                                   >
                                     <span className="truncate">{meal.name}</span>
                                     <button
@@ -2228,17 +2380,17 @@ export function MealPlannerTool({ toolId }: MealPlannerToolProps) {
           onClick={() => setMealPickerOpenFor(null)}
         >
           <div
-            className="w-full max-w-md rounded-2xl border border-slate-800 bg-slate-900 p-6 shadow-2xl mx-4 max-h-[80vh] flex flex-col"
+            className={`${isLight ? 'w-full max-w-md rounded-2xl border border-slate-200 bg-white p-6 shadow-2xl mx-4 max-h-[80vh] flex flex-col' : 'w-full max-w-md rounded-2xl border border-slate-800 bg-slate-900 p-6 shadow-2xl mx-4 max-h-[80vh] flex flex-col'}`}
             onClick={(e) => e.stopPropagation()}
           >
             <div className="flex items-center justify-between mb-4">
-              <h3 className="text-lg font-semibold text-slate-50">Pick a meal</h3>
+              <h3 className={isLight ? 'text-lg font-semibold text-slate-900' : 'text-lg font-semibold text-slate-50'}>Pick a meal</h3>
               <button
                 type="button"
                 onClick={() => setMealPickerOpenFor(null)}
                 aria-label="Close modal"
                 title="Close modal"
-                className="rounded-lg p-2 text-slate-400 hover:bg-slate-800 hover:text-slate-200 transition-colors"
+                className={isLight ? 'rounded-lg p-2 text-slate-600 hover:bg-slate-100 hover:text-slate-900 transition-colors' : 'rounded-lg p-2 text-slate-400 hover:bg-slate-800 hover:text-slate-200 transition-colors'}
               >
                 <svg className="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
@@ -2434,19 +2586,19 @@ export function MealPlannerTool({ toolId }: MealPlannerToolProps) {
       {/* Delete item confirmation */}
       {deleteConfirmItemId && (
         <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
-          <div className="rounded-2xl border border-slate-800 bg-slate-900 p-6 max-w-md w-full mx-4">
-            <h3 className="text-xl font-semibold text-slate-50 mb-2">Delete Item</h3>
-            <div className="rounded-lg border border-red-500/50 bg-red-500/10 px-4 py-3 mb-4">
-              <p className="text-red-300 font-semibold mb-2">⚠️ This action cannot be undone.</p>
-              <p className="text-red-200 text-sm">This item will be removed from your list.</p>
+          <div className={modalCardClass}>
+            <h3 className={deleteModalTitleClass}>Delete Item</h3>
+            <div className={deleteWarningBoxClass}>
+              <p className={deleteWarningTextClass}>Warning: This action cannot be undone.</p>
+              <p className={deleteWarningDetailClass}>This item will be removed from your list.</p>
             </div>
-            <p className="text-slate-300 mb-4">Type <strong className="text-slate-200">delete</strong> to confirm:</p>
+            <p className={deleteInstructionTextClass}>Type <strong className={deleteInstructionKeywordClass}>delete</strong> to confirm:</p>
             <input
               type="text"
               value={deleteConfirmItemText}
               onChange={(e) => setDeleteConfirmItemText(e.target.value)}
               placeholder="Type 'delete' to confirm"
-              className="w-full rounded-lg border border-slate-700 bg-slate-900/70 px-3 py-2 text-sm text-slate-100 placeholder-slate-500 focus:border-red-500/50 focus:outline-none focus:ring-1 focus:ring-red-500/50 mb-4"
+              className={deleteConfirmInputClass}
               onKeyDown={(e) => {
                 if (e.key === 'Escape') {
                   setDeleteConfirmItemId(null);
@@ -2467,7 +2619,7 @@ export function MealPlannerTool({ toolId }: MealPlannerToolProps) {
                   setDeleteConfirmItemId(null);
                   setDeleteConfirmItemText('');
                 }}
-                className="px-4 py-2 rounded-lg border border-slate-700 bg-slate-800 text-slate-200 hover:bg-slate-700 transition-colors"
+                className={secondaryButtonClass}
               >
                 Cancel
               </button>
@@ -2479,18 +2631,19 @@ export function MealPlannerTool({ toolId }: MealPlannerToolProps) {
       {/* Delete meal type confirmation */}
       {deleteConfirmMealTypeId && (
         <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
-          <div className="rounded-2xl border border-slate-800 bg-slate-900 p-6 max-w-md w-full mx-4">
-            <h3 className="text-xl font-semibold text-slate-50 mb-2">Delete Meal Type</h3>
-            <div className="rounded-lg border border-red-500/50 bg-red-500/10 px-4 py-3 mb-4">
-              <p className="text-red-300 font-semibold mb-2">⚠️ This action cannot be undone.</p>
+          <div className={modalCardClass}>
+            <h3 className={deleteModalTitleClass}>Delete Meal Type</h3>
+            <div className={deleteWarningBoxClass}>
+              <p className={deleteWarningTextClass}>Warning: This action cannot be undone.</p>
+              <p className={deleteWarningDetailClass}>This meal type will be permanently deleted.</p>
             </div>
-            <p className="text-slate-300 mb-4">Type <strong className="text-slate-200">delete</strong> to confirm:</p>
+            <p className={deleteInstructionTextClass}>Type <strong className={deleteInstructionKeywordClass}>delete</strong> to confirm:</p>
             <input
               type="text"
               value={deleteConfirmMealTypeText}
               onChange={(e) => setDeleteConfirmMealTypeText(e.target.value)}
               placeholder="Type 'delete' to confirm"
-              className="w-full rounded-lg border border-slate-700 bg-slate-900/70 px-3 py-2 text-sm text-slate-100 placeholder-slate-500 focus:border-red-500/50 focus:outline-none focus:ring-1 focus:ring-red-500/50 mb-4"
+              className={deleteConfirmInputClass}
               onKeyDown={(e) => {
                 if (e.key === 'Escape') {
                   setDeleteConfirmMealTypeId(null);
@@ -2511,7 +2664,7 @@ export function MealPlannerTool({ toolId }: MealPlannerToolProps) {
                   setDeleteConfirmMealTypeId(null);
                   setDeleteConfirmMealTypeText('');
                 }}
-                className="px-4 py-2 rounded-lg border border-slate-700 bg-slate-800 text-slate-200 hover:bg-slate-700 transition-colors"
+                className={secondaryButtonClass}
               >
                 Cancel
               </button>
@@ -2523,18 +2676,19 @@ export function MealPlannerTool({ toolId }: MealPlannerToolProps) {
       {/* Delete meal confirmation */}
       {deleteConfirmMealId && (
         <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
-          <div className="rounded-2xl border border-slate-800 bg-slate-900 p-6 max-w-md w-full mx-4">
-            <h3 className="text-xl font-semibold text-slate-50 mb-2">Delete Meal</h3>
-            <div className="rounded-lg border border-red-500/50 bg-red-500/10 px-4 py-3 mb-4">
-              <p className="text-red-300 font-semibold mb-2">⚠️ This action cannot be undone.</p>
+          <div className={modalCardClass}>
+            <h3 className={deleteModalTitleClass}>Delete Meal</h3>
+            <div className={deleteWarningBoxClass}>
+              <p className={deleteWarningTextClass}>Warning: This action cannot be undone.</p>
+              <p className={deleteWarningDetailClass}>This meal will be permanently deleted.</p>
             </div>
-            <p className="text-slate-300 mb-4">Type <strong className="text-slate-200">delete</strong> to confirm:</p>
+            <p className={deleteInstructionTextClass}>Type <strong className={deleteInstructionKeywordClass}>delete</strong> to confirm:</p>
             <input
               type="text"
               value={deleteConfirmMealText}
               onChange={(e) => setDeleteConfirmMealText(e.target.value)}
               placeholder="Type 'delete' to confirm"
-              className="w-full rounded-lg border border-slate-700 bg-slate-900/70 px-3 py-2 text-sm text-slate-100 placeholder-slate-500 focus:border-red-500/50 focus:outline-none focus:ring-1 focus:ring-red-500/50 mb-4"
+              className={deleteConfirmInputClass}
               onKeyDown={(e) => {
                 if (e.key === 'Escape') {
                   setDeleteConfirmMealId(null);
@@ -2555,7 +2709,7 @@ export function MealPlannerTool({ toolId }: MealPlannerToolProps) {
                   setDeleteConfirmMealId(null);
                   setDeleteConfirmMealText('');
                 }}
-                className="px-4 py-2 rounded-lg border border-slate-700 bg-slate-800 text-slate-200 hover:bg-slate-700 transition-colors"
+                className={secondaryButtonClass}
               >
                 Cancel
               </button>
@@ -2567,18 +2721,19 @@ export function MealPlannerTool({ toolId }: MealPlannerToolProps) {
       {/* Delete plan confirmation */}
       {deleteConfirmPlanId && (
         <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
-          <div className="rounded-2xl border border-slate-800 bg-slate-900 p-6 max-w-md w-full mx-4">
-            <h3 className="text-xl font-semibold text-slate-50 mb-2">Delete Meal Plan</h3>
-            <div className="rounded-lg border border-red-500/50 bg-red-500/10 px-4 py-3 mb-4">
-              <p className="text-red-300 font-semibold mb-2">⚠️ This action cannot be undone.</p>
+          <div className={modalCardClass}>
+            <h3 className={deleteModalTitleClass}>Delete Meal Plan</h3>
+            <div className={deleteWarningBoxClass}>
+              <p className={deleteWarningTextClass}>Warning: This action cannot be undone.</p>
+              <p className={deleteWarningDetailClass}>This meal plan will be permanently deleted.</p>
             </div>
-            <p className="text-slate-300 mb-4">Type <strong className="text-slate-200">delete</strong> to confirm:</p>
+            <p className={deleteInstructionTextClass}>Type <strong className={deleteInstructionKeywordClass}>delete</strong> to confirm:</p>
             <input
               type="text"
               value={deleteConfirmPlanText}
               onChange={(e) => setDeleteConfirmPlanText(e.target.value)}
               placeholder="Type 'delete' to confirm"
-              className="w-full rounded-lg border border-slate-700 bg-slate-900/70 px-3 py-2 text-sm text-slate-100 placeholder-slate-500 focus:border-red-500/50 focus:outline-none focus:ring-1 focus:ring-red-500/50 mb-4"
+              className={deleteConfirmInputClass}
               onKeyDown={(e) => {
                 if (e.key === 'Escape') {
                   setDeleteConfirmPlanId(null);
@@ -2599,7 +2754,7 @@ export function MealPlannerTool({ toolId }: MealPlannerToolProps) {
                   setDeleteConfirmPlanId(null);
                   setDeleteConfirmPlanText('');
                 }}
-                className="px-4 py-2 rounded-lg border border-slate-700 bg-slate-800 text-slate-200 hover:bg-slate-700 transition-colors"
+                className={secondaryButtonClass}
               >
                 Cancel
               </button>

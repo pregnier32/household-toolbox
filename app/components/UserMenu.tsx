@@ -13,12 +13,39 @@ export function UserMenu({ userName, onSignOut }: UserMenuProps) {
   const [isOpen, setIsOpen] = useState(false);
   const menuRef = useRef<HTMLDivElement>(null);
   const router = useRouter();
-  const { theme, setTheme } = useTheme();
+  const { theme, setTheme, resolvedTheme } = useTheme();
+  const isLight = resolvedTheme === 'light';
 
   const themeOptions: Array<{ value: ThemeMode; label: string }> = [
     { value: 'light', label: 'Light' },
     { value: 'dark', label: 'Dark' },
   ];
+
+  const triggerClass = isLight
+    ? 'flex items-center gap-2 rounded-lg px-3 py-2 text-sm font-medium text-slate-700 transition-colors hover:bg-slate-100 hover:text-slate-900'
+    : 'flex items-center gap-2 rounded-lg px-3 py-2 text-sm font-medium text-slate-300 transition-colors hover:bg-slate-800 hover:text-slate-100';
+
+  const menuPanelClass = isLight
+    ? 'absolute right-0 z-50 mt-2 w-48 rounded-lg border border-slate-200 bg-white shadow-lg ring-1 ring-slate-900/5'
+    : 'absolute right-0 z-50 mt-2 w-48 rounded-lg border border-slate-700 bg-slate-800 shadow-lg';
+
+  const menuItemClass = isLight
+    ? 'flex w-full items-center gap-3 px-4 py-2 text-sm text-slate-700 transition-colors hover:bg-slate-100'
+    : 'flex w-full items-center gap-3 px-4 py-2 text-sm text-slate-300 transition-colors hover:bg-slate-700';
+
+  const dividerClass = isLight ? 'my-1 border-t border-slate-200' : 'my-1 border-t border-slate-700';
+
+  const themeLabelClass = isLight
+    ? 'mb-2 text-xs font-semibold uppercase tracking-wide text-slate-500'
+    : 'mb-2 text-xs font-semibold uppercase tracking-wide text-slate-400';
+
+  const themeTrackClass = isLight
+    ? 'grid grid-cols-2 gap-1 rounded-lg bg-slate-100 p-1'
+    : 'grid grid-cols-2 gap-1 rounded-lg bg-slate-900/70 p-1';
+
+  const signOutClass = isLight
+    ? 'flex w-full items-center gap-3 px-4 py-2 text-sm text-red-600 transition-colors hover:bg-red-50'
+    : 'flex w-full items-center gap-3 px-4 py-2 text-sm text-red-400 transition-colors hover:bg-slate-700';
 
   // Close menu when clicking outside
   useEffect(() => {
@@ -39,10 +66,7 @@ export function UserMenu({ userName, onSignOut }: UserMenuProps) {
 
   return (
     <div className="relative" ref={menuRef}>
-      <button
-        onClick={() => setIsOpen(!isOpen)}
-        className="flex items-center gap-2 rounded-lg px-3 py-2 text-sm font-medium text-slate-300 transition-colors hover:bg-slate-800 hover:text-slate-100"
-      >
+      <button onClick={() => setIsOpen(!isOpen)} className={triggerClass}>
         <span>{userName}</span>
         <svg
           className={`h-4 w-4 transition-transform ${isOpen ? 'rotate-180' : ''}`}
@@ -60,17 +84,17 @@ export function UserMenu({ userName, onSignOut }: UserMenuProps) {
       </button>
 
       {isOpen && (
-        <div className="absolute right-0 mt-2 w-48 rounded-lg border border-slate-700 bg-slate-800 shadow-lg">
+        <div className={menuPanelClass}>
           <div className="py-1">
             <button
               onClick={() => {
                 router.push('/dashboard/profile');
                 setIsOpen(false);
               }}
-              className="flex w-full items-center gap-3 px-4 py-2 text-sm text-slate-300 transition-colors hover:bg-slate-700"
+              className={menuItemClass}
             >
               <svg
-                className="h-4 w-4"
+                className="h-4 w-4 shrink-0"
                 fill="none"
                 stroke="currentColor"
                 viewBox="0 0 24 24"
@@ -89,10 +113,10 @@ export function UserMenu({ userName, onSignOut }: UserMenuProps) {
                 router.push('/dashboard/my-tools');
                 setIsOpen(false);
               }}
-              className="flex w-full items-center gap-3 px-4 py-2 text-sm text-slate-300 transition-colors hover:bg-slate-700"
+              className={menuItemClass}
             >
               <svg
-                className="h-4 w-4"
+                className="h-4 w-4 shrink-0"
                 fill="none"
                 stroke="currentColor"
                 viewBox="0 0 24 24"
@@ -117,10 +141,10 @@ export function UserMenu({ userName, onSignOut }: UserMenuProps) {
                 router.push('/faq');
                 setIsOpen(false);
               }}
-              className="flex w-full items-center gap-3 px-4 py-2 text-sm text-slate-300 transition-colors hover:bg-slate-700"
+              className={menuItemClass}
             >
               <svg
-                className="h-4 w-4"
+                className="h-4 w-4 shrink-0"
                 fill="none"
                 stroke="currentColor"
                 viewBox="0 0 24 24"
@@ -139,10 +163,10 @@ export function UserMenu({ userName, onSignOut }: UserMenuProps) {
                 router.push('/support');
                 setIsOpen(false);
               }}
-              className="flex w-full items-center gap-3 px-4 py-2 text-sm text-slate-300 transition-colors hover:bg-slate-700"
+              className={menuItemClass}
             >
               <svg
-                className="h-4 w-4"
+                className="h-4 w-4 shrink-0"
                 fill="none"
                 stroke="currentColor"
                 viewBox="0 0 24 24"
@@ -156,18 +180,23 @@ export function UserMenu({ userName, onSignOut }: UserMenuProps) {
               </svg>
               <span>Support</span>
             </button>
-            <div className="my-1 border-t border-slate-700"></div>
+            <div className={dividerClass} />
             <div className="px-4 py-2">
-              <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-slate-400">Theme</p>
-              <div className="grid grid-cols-2 gap-1 rounded-lg bg-slate-900/70 p-1">
+              <p className={themeLabelClass}>Theme</p>
+              <div className={themeTrackClass}>
                 {themeOptions.map((option) => (
                   <button
                     key={option.value}
+                    type="button"
                     onClick={() => setTheme(option.value)}
                     className={`rounded-md px-2 py-1 text-xs font-medium transition-colors ${
                       theme === option.value
-                        ? 'bg-emerald-500 text-slate-950'
-                        : 'text-slate-300 hover:bg-slate-700'
+                        ? isLight
+                          ? 'bg-white text-slate-900 shadow-sm ring-1 ring-slate-200'
+                          : 'bg-emerald-500 text-slate-950'
+                        : isLight
+                          ? 'text-slate-600 hover:bg-slate-200/80'
+                          : 'text-slate-300 hover:bg-slate-700'
                     }`}
                   >
                     {option.label}
@@ -175,16 +204,17 @@ export function UserMenu({ userName, onSignOut }: UserMenuProps) {
                 ))}
               </div>
             </div>
-            <div className="my-1 border-t border-slate-700"></div>
+            <div className={dividerClass} />
             <button
+              type="button"
               onClick={() => {
                 onSignOut();
                 setIsOpen(false);
               }}
-              className="flex w-full items-center gap-3 px-4 py-2 text-sm text-red-400 transition-colors hover:bg-slate-700"
+              className={signOutClass}
             >
               <svg
-                className="h-4 w-4"
+                className="h-4 w-4 shrink-0"
                 fill="none"
                 stroke="currentColor"
                 viewBox="0 0 24 24"
@@ -204,4 +234,3 @@ export function UserMenu({ userName, onSignOut }: UserMenuProps) {
     </div>
   );
 }
-

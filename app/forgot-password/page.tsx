@@ -1,9 +1,9 @@
 'use client';
 
-import Image from 'next/image';
 import { useState, useRef } from 'react';
 import Link from 'next/link';
 import { requestPasswordReset } from '../actions/auth';
+import { SideLogo } from '../components/SideLogo';
 
 export default function ForgotPassword() {
   const [isLoading, setIsLoading] = useState(false);
@@ -19,14 +19,7 @@ export default function ForgotPassword() {
         <header className="mb-10 flex items-center justify-between">
           <div className="flex items-center">
             <Link href="/">
-              <Image
-                src="/images/logo/Logo_Side_White.png"
-                alt="Household Toolbox"
-                width={200}
-                height={40}
-                className="h-auto"
-                priority
-              />
+              <SideLogo priority />
             </Link>
           </div>
 

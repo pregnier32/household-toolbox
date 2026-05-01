@@ -1,9 +1,10 @@
 'use client';
 
 import { useState, useEffect, useRef } from 'react';
-import Image from 'next/image';
 import { useRouter } from 'next/navigation';
 import { UserMenu } from '../../components/UserMenu';
+import { SideLogo } from '../../components/SideLogo';
+import { useTheme } from '../../components/AppThemeProvider';
 import { updateProfile, changePassword } from '../../actions/auth';
 
 type User = {
@@ -15,6 +16,25 @@ type User = {
 };
 
 export default function Profile() {
+  const { resolvedTheme } = useTheme();
+  const isLight = resolvedTheme === 'light';
+  const headerChromeButtonClass = isLight
+    ? 'flex items-center gap-2 rounded-lg px-3 py-2 text-sm font-medium text-slate-700 transition-colors hover:bg-slate-100 hover:text-slate-900'
+    : 'flex items-center gap-2 rounded-lg px-3 py-2 text-sm font-medium text-slate-300 transition-colors hover:bg-slate-800 hover:text-slate-100';
+
+  /** Stronger 2px borders so secondary actions read as clickable; light uses mid slate, dark uses lighter edge on dark chrome */
+  const secondaryOutlineButtonClass = isLight
+    ? 'rounded-lg border-2 border-slate-400 bg-slate-100 px-4 py-2.5 text-sm font-medium text-slate-800 transition-colors hover:bg-slate-200/90 hover:border-slate-500 focus:outline-none focus:ring-2 focus:ring-slate-400/40 focus:ring-offset-2 focus:ring-offset-white disabled:cursor-not-allowed disabled:opacity-50'
+    : 'rounded-lg border-2 border-slate-500 bg-slate-800/70 px-4 py-2.5 text-sm font-medium text-slate-300 transition-colors hover:bg-slate-700 hover:border-slate-400 hover:text-slate-100 focus:outline-none focus:ring-2 focus:ring-slate-500/50 focus:ring-offset-2 focus:ring-offset-slate-900 disabled:cursor-not-allowed disabled:opacity-50';
+
+  const editProfileButtonClass = isLight
+    ? 'flex items-center gap-2 rounded-lg border-2 border-slate-400 bg-slate-100 px-4 py-2 text-sm font-medium text-slate-800 transition-colors hover:bg-slate-200/90 hover:border-slate-500 focus:outline-none focus:ring-2 focus:ring-slate-400/40 focus:ring-offset-2 focus:ring-offset-white'
+    : 'flex items-center gap-2 rounded-lg border-2 border-slate-500 bg-slate-800/70 px-4 py-2 text-sm font-medium text-slate-300 transition-colors hover:bg-slate-700 hover:border-slate-400 hover:text-slate-100';
+
+  const accountStatusBadgeClass = isLight
+    ? 'inline-flex items-center rounded-full border border-emerald-200 bg-emerald-100 px-2 py-1 text-xs font-semibold text-emerald-900'
+    : 'inline-flex items-center rounded-full px-2 py-1 text-xs font-medium bg-emerald-400/10 text-emerald-300';
+
   const [user, setUser] = useState<User | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [isEditing, setIsEditing] = useState(false);
@@ -211,20 +231,14 @@ export default function Profile() {
       <header className="border-b border-slate-800 bg-slate-900/50">
         <div className="mx-auto flex max-w-7xl items-center justify-between px-4 py-4 sm:px-6 lg:px-8">
           <div className="flex items-center relative">
-            <Image
-              src="/images/logo/Logo_Side_White.png"
-              alt="Household Toolbox"
-              width={200}
-              height={40}
-              className="h-auto"
-              priority
-            />
+            <SideLogo priority />
           </div>
 
           <div className="flex items-center gap-3">
             <button
+              type="button"
               onClick={() => router.push('/dashboard')}
-              className="flex items-center gap-2 rounded-lg px-3 py-2 text-sm font-medium text-slate-300 transition-colors hover:bg-slate-800 hover:text-slate-100"
+              className={headerChromeButtonClass}
             >
               <svg
                 className="h-4 w-4"
@@ -239,7 +253,7 @@ export default function Profile() {
                   d="M10 19l-7-7m0 0l7-7m-7 7h18"
                 />
               </svg>
-              <span>Back to your Toolbox</span>
+              <span>Back to Dashboard</span>
             </button>
             <UserMenu
               userName={`${user.firstName} ${user.lastName || ''}`.trim()}
@@ -281,7 +295,7 @@ export default function Profile() {
                     <button
                       type="button"
                       onClick={handleEdit}
-                      className="flex items-center gap-2 rounded-lg border border-slate-700 bg-slate-800/70 px-4 py-2 text-sm font-medium text-slate-300 transition-colors hover:bg-slate-700 hover:text-slate-100"
+                      className={editProfileButtonClass}
                     >
                       <svg
                         className="h-4 w-4"
@@ -372,7 +386,7 @@ export default function Profile() {
                         Account Status
                       </label>
                       <div className="rounded-lg border border-slate-700 bg-slate-900/70 px-3 py-2 text-sm text-slate-100">
-                        <span className="inline-flex items-center rounded-full px-2 py-1 text-xs font-medium bg-emerald-400/10 text-emerald-300">
+                        <span className={accountStatusBadgeClass}>
                           {user.userStatus === 'superadmin' ? 'Super Admin' : user.userStatus}
                         </span>
                       </div>
@@ -395,7 +409,7 @@ export default function Profile() {
                     type="button"
                     onClick={handleCancel}
                     disabled={isSaving}
-                    className="flex-1 rounded-lg border border-slate-700 bg-slate-800/70 px-4 py-2.5 text-sm font-medium text-slate-300 transition-colors hover:bg-slate-700 hover:text-slate-100 focus:outline-none focus:ring-2 focus:ring-slate-500/50 focus:ring-offset-2 focus:ring-offset-slate-900 disabled:cursor-not-allowed disabled:opacity-50"
+                    className={`flex-1 ${secondaryOutlineButtonClass}`}
                   >
                     Cancel
                   </button>
@@ -414,7 +428,7 @@ export default function Profile() {
                   <button
                     type="button"
                     onClick={handleChangePasswordClick}
-                    className="w-full rounded-lg border border-slate-700 bg-slate-800/70 px-4 py-2.5 text-sm font-medium text-slate-300 transition-colors hover:bg-slate-700 hover:text-slate-100"
+                    className={`w-full ${secondaryOutlineButtonClass}`}
                   >
                     Change Password
                   </button>
@@ -508,7 +522,7 @@ export default function Profile() {
                       type="button"
                       onClick={handleCancelPasswordChange}
                       disabled={isChangingPasswordLoading}
-                      className="flex-1 rounded-lg border border-slate-700 bg-slate-800/70 px-4 py-2.5 text-sm font-medium text-slate-300 transition-colors hover:bg-slate-700 hover:text-slate-100 focus:outline-none focus:ring-2 focus:ring-slate-500/50 focus:ring-offset-2 focus:ring-offset-slate-900 disabled:cursor-not-allowed disabled:opacity-50"
+                      className={`flex-1 ${secondaryOutlineButtonClass}`}
                     >
                       Cancel
                     </button>

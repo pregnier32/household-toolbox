@@ -1,6 +1,7 @@
 'use client';
 
-import { createContext, useContext, useEffect, useMemo, useRef, useState } from 'react';
+import { createContext, useContext, useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { usePathname } from 'next/navigation';
 
 export type ThemeMode = 'light' | 'dark';
 
@@ -14,6 +15,10 @@ const STORAGE_KEY = 'household-toolbox-theme';
 
 const ThemeContext = createContext<ThemeContextType | undefined>(undefined);
 
+function isForcedDarkRoute(pathname: string): boolean {
+  return pathname === '/' || pathname === '/pricing';
+}
+
 function applyThemeClass(theme: ThemeMode): 'light' | 'dark' {
   const root = document.documentElement;
   root.classList.remove('light', 'dark');
@@ -23,31 +28,55 @@ function applyThemeClass(theme: ThemeMode): 'light' | 'dark' {
 }
 
 export function AppThemeProvider({ children }: { children: React.ReactNode }) {
+  const pathname = usePathname();
   const [theme, setThemeState] = useState<ThemeMode>('dark');
   const [resolvedTheme, setResolvedTheme] = useState<'light' | 'dark'>('dark');
   const userChangedThemeRef = useRef(false);
 
-  useEffect(() => {
-    const saved = localStorage.getItem(STORAGE_KEY) as ThemeMode | null;
-    const initialTheme: ThemeMode = saved === 'light' || saved === 'dark' ? saved : 'dark';
-    setThemeState(initialTheme);
-    setResolvedTheme(applyThemeClass(initialTheme));
+  const syncThemeFromSession = useCallback(async () => {
+    if (isForcedDarkRoute(pathname)) {
+      setThemeState('dark');
+      setResolvedTheme(applyThemeClass('dark'));
+      return;
+    }
 
-    fetch('/api/auth/session')
-      .then((res) => res.json())
-      .then((data) => {
-        if (userChangedThemeRef.current) return;
-        const dbTheme = data?.user?.themePreference;
-        if (dbTheme === 'light' || dbTheme === 'dark') {
-          setThemeState(dbTheme);
-          setResolvedTheme(applyThemeClass(dbTheme));
-          localStorage.setItem(STORAGE_KEY, dbTheme);
-        }
-      })
-      .catch(() => {
-        // Ignore; local fallback already applied.
-      });
-  }, []);
+    try {
+      const res = await fetch('/api/auth/session');
+      const data = await res.json();
+      const user = data?.user;
+
+      if (!user) {
+        userChangedThemeRef.current = false;
+        setThemeState('dark');
+        setResolvedTheme(applyThemeClass('dark'));
+        return;
+      }
+
+      if (userChangedThemeRef.current) return;
+
+      const dbTheme = user.themePreference;
+      if (dbTheme === 'light' || dbTheme === 'dark') {
+        setThemeState(dbTheme);
+        setResolvedTheme(applyThemeClass(dbTheme));
+        localStorage.setItem(STORAGE_KEY, dbTheme);
+        return;
+      }
+
+      const saved = localStorage.getItem(STORAGE_KEY) as ThemeMode | null;
+      const fallback: ThemeMode = saved === 'light' || saved === 'dark' ? saved : 'dark';
+      setThemeState(fallback);
+      setResolvedTheme(applyThemeClass(fallback));
+    } catch {
+      if (!userChangedThemeRef.current) {
+        setThemeState('dark');
+        setResolvedTheme(applyThemeClass('dark'));
+      }
+    }
+  }, [pathname]);
+
+  useEffect(() => {
+    syncThemeFromSession();
+  }, [pathname, syncThemeFromSession]);
 
   const setTheme = (nextTheme: ThemeMode) => {
     userChangedThemeRef.current = true;

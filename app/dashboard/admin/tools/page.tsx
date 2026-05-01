@@ -2,9 +2,10 @@
 
 import { useState, useEffect, useRef } from 'react';
 import { useRouter } from 'next/navigation';
-import Image from 'next/image';
 import { IconPicker } from '../../../components/IconPicker';
+import { SideLogo } from '../../../components/SideLogo';
 import { DynamicIcon } from '../../../components/DynamicIcon';
+import { useTheme } from '../../../components/AppThemeProvider';
 
 type ToolIcon = {
   id: string;
@@ -39,6 +40,64 @@ type ToolFormData = {
 
 
 export default function ToolsPage() {
+  const { resolvedTheme } = useTheme();
+  const isLight = resolvedTheme === 'light';
+  const headerBarClass = isLight
+    ? 'border-b-2 border-slate-400 bg-slate-900/50'
+    : 'border-b border-slate-800 bg-slate-900/50';
+  const topBackIconClass = isLight
+    ? 'text-slate-700 hover:text-slate-900 transition-colors'
+    : 'text-slate-400 hover:text-slate-300 transition-colors';
+  const backLinkClass = isLight
+    ? 'mb-4 flex items-center gap-2 text-sm text-slate-700 transition-colors hover:text-slate-900'
+    : 'mb-4 flex items-center gap-2 text-sm text-slate-400 transition-colors hover:text-slate-300';
+  const pageTitleClass = isLight ? 'text-2xl font-semibold text-slate-900 mb-2' : 'text-2xl font-semibold text-slate-50 mb-2';
+  const pageSubtitleClass = isLight ? 'text-slate-600 text-sm' : 'text-slate-400 text-sm';
+  const statusLabelClass = isLight ? 'text-sm font-medium text-slate-700' : 'text-sm font-medium text-slate-300';
+  const statusCountClass = isLight ? 'text-sm text-slate-600' : 'text-sm text-slate-400';
+  const filterSelectClass = isLight
+    ? 'rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900 focus:border-emerald-500/50 focus:outline-none focus:ring-1 focus:ring-emerald-500/50'
+    : 'rounded-lg border border-slate-700 bg-slate-900/70 px-3 py-2 text-sm text-slate-100 focus:border-emerald-500/50 focus:outline-none focus:ring-1 focus:ring-emerald-500/50';
+  const errorAlertClass = isLight
+    ? 'mb-4 rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-800'
+    : 'mb-4 rounded-lg border border-red-500/50 bg-red-500/10 px-4 py-3 text-sm text-red-300';
+  const successAlertClass = isLight
+    ? 'mb-4 rounded-lg border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-900'
+    : 'mb-4 rounded-lg border border-emerald-500/50 bg-emerald-500/10 px-4 py-3 text-sm text-emerald-300';
+  const modalCardClass = isLight
+    ? 'bg-white rounded-lg border border-slate-200 max-w-2xl w-full max-h-[90vh] overflow-y-auto shadow-xl'
+    : 'bg-slate-900 rounded-lg border border-slate-700 max-w-2xl w-full max-h-[90vh] overflow-y-auto';
+  const modalTitleClass = isLight ? 'text-xl font-semibold text-slate-900' : 'text-xl font-semibold text-slate-50';
+  const modalBodyTextClass = isLight ? 'text-sm text-slate-600' : 'text-sm text-slate-400';
+  const inputClass = isLight
+    ? 'w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900 placeholder-slate-500 focus:border-emerald-500/50 focus:outline-none focus:ring-1 focus:ring-emerald-500/50'
+    : 'w-full rounded-lg border border-slate-700 bg-slate-900/70 px-3 py-2 text-sm text-slate-100 placeholder-slate-500 focus:border-emerald-500/50 focus:outline-none focus:ring-1 focus:ring-emerald-500/50';
+  const stepBorderClass = isLight ? 'flex-1 h-0.5 bg-slate-300' : 'flex-1 h-0.5 bg-slate-700';
+  const sectionBorderClass = isLight ? 'flex justify-end gap-3 pt-4 border-t border-slate-200' : 'flex justify-end gap-3 pt-4 border-t border-slate-800';
+  const secondaryButtonClass = isLight
+    ? 'px-4 py-2 text-sm font-medium text-slate-700 rounded-lg border border-slate-300 bg-white hover:bg-slate-100 transition-colors'
+    : 'px-4 py-2 text-sm font-medium text-slate-300 rounded-lg border border-slate-700 hover:bg-slate-800 transition-colors';
+  const tableWrapClass = isLight
+    ? 'rounded-lg border border-slate-200 bg-white overflow-hidden shadow-sm'
+    : 'rounded-lg border border-slate-800 bg-slate-900/50 overflow-hidden';
+  const tableHeadClass = isLight ? 'bg-slate-100' : 'bg-slate-800/50';
+  const tableHeadCellClass = isLight
+    ? 'px-4 py-3 text-left text-xs font-medium text-slate-600 uppercase tracking-wider'
+    : 'px-4 py-3 text-left text-xs font-medium text-slate-300 uppercase tracking-wider';
+  const tableHeadCellRightClass = isLight
+    ? 'px-4 py-3 text-right text-xs font-medium text-slate-600 uppercase tracking-wider'
+    : 'px-4 py-3 text-right text-xs font-medium text-slate-300 uppercase tracking-wider';
+  const tableBodyClass = isLight ? 'divide-y divide-slate-200' : 'divide-y divide-slate-800';
+  const rowHoverClass = isLight ? 'hover:bg-slate-50' : 'hover:bg-slate-800/30';
+  const toolNameClass = isLight ? 'font-medium text-slate-900' : 'font-medium text-slate-100';
+  const tipClass = isLight ? 'text-xs text-slate-500 mt-0.5 line-clamp-1' : 'text-xs text-slate-500 mt-0.5 line-clamp-1';
+  const bodyMutedClass = isLight ? 'px-4 py-3 text-sm text-slate-600' : 'px-4 py-3 text-sm text-slate-400';
+  const bodyPriceClass = isLight ? 'px-4 py-3 text-sm text-slate-700' : 'px-4 py-3 text-sm text-slate-300';
+  const iconNameClass = isLight ? 'text-xs text-slate-600' : 'text-xs text-slate-400';
+  const iconNoneClass = isLight ? 'text-xs text-slate-500' : 'text-xs text-slate-500';
+  const editIconClass = isLight ? 'text-emerald-700 hover:text-emerald-800 transition-colors' : 'text-emerald-400 hover:text-emerald-300 transition-colors';
+  const deleteIconClass = isLight ? 'text-red-700 hover:text-red-800 transition-colors' : 'text-red-400 hover:text-red-300 transition-colors';
+
   const [tools, setTools] = useState<Tool[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [isSaving, setIsSaving] = useState(false);
@@ -267,6 +326,20 @@ export default function ToolsPage() {
   };
 
   const getStatusBadgeColor = (status: string) => {
+    if (isLight) {
+      switch (status) {
+        case 'active':
+          return 'bg-emerald-100 text-emerald-900';
+        case 'available':
+          return 'bg-blue-100 text-blue-900';
+        case 'coming_soon':
+          return 'bg-amber-100 text-amber-900';
+        case 'inactive':
+          return 'bg-red-100 text-red-900';
+        default:
+          return 'bg-slate-200 text-slate-700';
+      }
+    }
     switch (status) {
       case 'active':
         return 'bg-emerald-500/20 text-emerald-300';
@@ -296,12 +369,13 @@ export default function ToolsPage() {
   return (
     <main className="min-h-screen bg-slate-950 text-slate-100">
       {/* Header */}
-      <header className="border-b border-slate-800 bg-slate-900/50">
+      <header className={headerBarClass}>
         <div className="mx-auto flex max-w-7xl items-center justify-between px-4 py-4 sm:px-6 lg:px-8">
           <div className="flex items-center gap-4">
             <button
+              type="button"
               onClick={() => router.push('/dashboard')}
-              className="text-slate-400 hover:text-slate-300 transition-colors"
+              className={topBackIconClass}
             >
               <svg
                 className="h-5 w-5"
@@ -317,14 +391,7 @@ export default function ToolsPage() {
                 />
               </svg>
             </button>
-            <Image
-              src="/images/logo/Logo_Side_White.png"
-              alt="Household Toolbox"
-              width={200}
-              height={40}
-              className="h-auto"
-              priority
-            />
+            <SideLogo priority />
           </div>
         </div>
       </header>
@@ -333,8 +400,9 @@ export default function ToolsPage() {
       <div className="mx-auto max-w-7xl px-4 py-8 sm:px-6 lg:px-8">
         <div className="mb-6">
           <button
+            type="button"
             onClick={() => router.push('/dashboard/admin/site-maintenance')}
-            className="mb-4 flex items-center gap-2 text-sm text-slate-400 transition-colors hover:text-slate-300"
+            className={backLinkClass}
           >
             <svg
               className="h-4 w-4"
@@ -354,10 +422,10 @@ export default function ToolsPage() {
         </div>
         <div className="mb-6 flex items-center justify-between">
           <div>
-            <h1 className="text-2xl font-semibold text-slate-50 mb-2">
+            <h1 className={pageTitleClass}>
               Tools Management
             </h1>
-            <p className="text-slate-400 text-sm">
+            <p className={pageSubtitleClass}>
               Create and manage tools that users can access. Select icons from the Lucide icon library for each status.
             </p>
           </div>
@@ -371,24 +439,24 @@ export default function ToolsPage() {
 
         {/* Only show messages on main page when modal is closed */}
         {!showForm && error && (
-          <div className="mb-4 rounded-lg border border-red-500/50 bg-red-500/10 px-4 py-3 text-sm text-red-300">
+          <div className={errorAlertClass}>
             {error}
           </div>
         )}
 
         {!showForm && success && (
-          <div className="mb-4 rounded-lg border border-emerald-500/50 bg-emerald-500/10 px-4 py-3 text-sm text-emerald-300">
+          <div className={successAlertClass}>
             {success}
           </div>
         )}
 
         {/* Status Filter */}
         <div className="mb-4 flex items-center gap-4">
-          <label className="text-sm font-medium text-slate-300">Filter by Status:</label>
+          <label className={statusLabelClass}>Filter by Status:</label>
           <select
             value={statusFilter}
             onChange={(e) => setStatusFilter(e.target.value)}
-            className="rounded-lg border border-slate-700 bg-slate-900/70 px-3 py-2 text-sm text-slate-100 focus:border-emerald-500/50 focus:outline-none focus:ring-1 focus:ring-emerald-500/50"
+            className={filterSelectClass}
           >
             <option value="all">All Statuses</option>
             <option value="active">Active</option>
@@ -397,7 +465,7 @@ export default function ToolsPage() {
             <option value="custom">Custom</option>
             <option value="inactive">Inactive</option>
           </select>
-          <span className="text-sm text-slate-400">
+          <span className={statusCountClass}>
             ({statusFilter === 'all' ? tools.length : tools.filter(t => t.status === statusFilter).length} {statusFilter === 'all' ? 'total' : 'filtered'} tools)
           </span>
         </div>
@@ -405,10 +473,10 @@ export default function ToolsPage() {
         {/* Form Modal */}
         {showForm && (
           <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
-            <div className="bg-slate-900 rounded-lg border border-slate-700 max-w-2xl w-full max-h-[90vh] overflow-y-auto">
+            <div className={modalCardClass}>
               <div className="p-6">
                 <div className="flex items-center justify-between mb-4">
-                  <h2 className="text-xl font-semibold text-slate-50">
+                  <h2 className={modalTitleClass}>
                     {editingId ? 'Edit Tool' : 'Create Tool'}
                   </h2>
                   <button
@@ -418,7 +486,7 @@ export default function ToolsPage() {
                       setError(null);
                       setSuccess(null);
                     }}
-                    className="text-slate-400 hover:text-slate-300"
+                    className={isLight ? 'text-slate-500 hover:text-slate-700' : 'text-slate-400 hover:text-slate-300'}
                   >
                     <svg className="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
@@ -440,7 +508,7 @@ export default function ToolsPage() {
                     </div>
                     <span className="ml-2 text-sm font-medium">Basic Info</span>
                   </div>
-                  <div className="flex-1 h-0.5 bg-slate-700"></div>
+                  <div className={stepBorderClass}></div>
                   <div className={`flex items-center ${formStep === 2 ? 'text-emerald-400' : 'text-slate-400'}`}>
                     <div className={`w-8 h-8 rounded-full flex items-center justify-center ${formStep === 2 ? 'bg-emerald-500/20 border-2 border-emerald-500' : 'bg-slate-800 border-2 border-slate-600'}`}>
                       <span className="text-sm font-medium">2</span>
@@ -453,22 +521,22 @@ export default function ToolsPage() {
                 {formStep === 1 && (
                   <form onSubmit={(e) => { e.preventDefault(); handleNext(); }} className="space-y-4">
                   <div>
-                    <label className="block text-sm font-medium text-slate-300 mb-1.5">
+                    <label className={isLight ? 'block text-sm font-medium text-slate-700 mb-1.5' : 'block text-sm font-medium text-slate-300 mb-1.5'}>
                       Name <span className="text-red-400">*</span>
                     </label>
                     <input
                       type="text"
                       value={formData.name}
                       onChange={(e) => setFormData({ ...formData, name: e.target.value })}
-                      className="w-full rounded-lg border border-slate-700 bg-slate-900/70 px-3 py-2 text-sm text-slate-100 placeholder-slate-500 focus:border-emerald-500/50 focus:outline-none focus:ring-1 focus:ring-emerald-500/50"
+                      className={inputClass}
                       placeholder="Maintenance Calendar"
                       required
                     />
                   </div>
 
                   <div>
-                    <label className="block text-sm font-medium text-slate-300 mb-1.5">
-                      Short Name <span className="text-xs text-slate-500">(Internal use, max 6 characters)</span>
+                    <label className={isLight ? 'block text-sm font-medium text-slate-700 mb-1.5' : 'block text-sm font-medium text-slate-300 mb-1.5'}>
+                      Short Name <span className={isLight ? 'text-xs text-slate-500' : 'text-xs text-slate-500'}>(Internal use, max 6 characters)</span>
                     </label>
                     <input
                       type="text"
@@ -478,24 +546,24 @@ export default function ToolsPage() {
                         setFormData({ ...formData, short_name: value });
                       }}
                       maxLength={6}
-                      className="w-full rounded-lg border border-slate-700 bg-slate-900/70 px-3 py-2 text-sm text-slate-100 placeholder-slate-500 focus:border-emerald-500/50 focus:outline-none focus:ring-1 focus:ring-emerald-500/50"
+                      className={inputClass}
                       placeholder="e.g., MAINT"
                     />
                     {formData.short_name.length > 0 && (
-                      <p className="mt-1 text-xs text-slate-500">
+                      <p className={isLight ? 'mt-1 text-xs text-slate-500' : 'mt-1 text-xs text-slate-500'}>
                         {formData.short_name.length}/6 characters
                       </p>
                     )}
                   </div>
 
                   <div>
-                    <label className="block text-sm font-medium text-slate-300 mb-1.5">
+                    <label className={isLight ? 'block text-sm font-medium text-slate-700 mb-1.5' : 'block text-sm font-medium text-slate-300 mb-1.5'}>
                       Description <span className="text-red-400">*</span>
                     </label>
                     <textarea
                       value={formData.description}
                       onChange={(e) => setFormData({ ...formData, description: e.target.value })}
-                      className="w-full rounded-lg border border-slate-700 bg-slate-900/70 px-3 py-2 text-sm text-slate-100 placeholder-slate-500 focus:border-emerald-500/50 focus:outline-none focus:ring-1 focus:ring-emerald-500/50"
+                      className={inputClass}
                       placeholder="Detailed description of the tool"
                       rows={3}
                       required
@@ -503,7 +571,7 @@ export default function ToolsPage() {
                   </div>
 
                   <div>
-                    <label className="block text-sm font-medium text-slate-300 mb-1.5">
+                    <label className={isLight ? 'block text-sm font-medium text-slate-700 mb-1.5' : 'block text-sm font-medium text-slate-300 mb-1.5'}>
                       Price <span className="text-red-400">*</span>
                     </label>
                     <input
@@ -512,14 +580,14 @@ export default function ToolsPage() {
                       min="0"
                       value={formData.price}
                       onChange={(e) => setFormData({ ...formData, price: e.target.value })}
-                      className="w-full rounded-lg border border-slate-700 bg-slate-900/70 px-3 py-2 text-sm text-slate-100 placeholder-slate-500 focus:border-emerald-500/50 focus:outline-none focus:ring-1 focus:ring-emerald-500/50"
+                      className={inputClass}
                       placeholder="0.00"
                       required
                     />
                   </div>
 
                   <div>
-                    <label className="block text-sm font-medium text-slate-300 mb-1.5">
+                    <label className={isLight ? 'block text-sm font-medium text-slate-700 mb-1.5' : 'block text-sm font-medium text-slate-300 mb-1.5'}>
                       Status <span className="text-red-400">*</span>
                     </label>
                     <select
@@ -533,7 +601,7 @@ export default function ToolsPage() {
                         setFormData({ ...formData, status: e.target.value });
                         setError(null);
                       }}
-                      className="w-full rounded-lg border border-slate-700 bg-slate-900/70 px-3 py-2 text-sm text-slate-100 focus:border-emerald-500/50 focus:outline-none focus:ring-1 focus:ring-emerald-500/50"
+                      className={inputClass}
                       required
                     >
                       <option value="coming_soon">Coming Soon</option>
@@ -545,15 +613,15 @@ export default function ToolsPage() {
                       <option value="inactive">Inactive</option>
                     </select>
                     {formData.status === 'active' ? (
-                      <p className="mt-1 text-xs text-emerald-400">
+                      <p className={isLight ? 'mt-1 text-xs text-emerald-700' : 'mt-1 text-xs text-emerald-400'}>
                         This tool is active. You can change it to Available or Coming Soon.
                       </p>
                     ) : formData.status === 'custom' ? (
-                      <p className="mt-1 text-xs text-emerald-400">
+                      <p className={isLight ? 'mt-1 text-xs text-emerald-700' : 'mt-1 text-xs text-emerald-400'}>
                         Custom tools are only visible to users who have been assigned this tool. Create a users_tools record to grant access.
                       </p>
                     ) : (
-                      <p className="mt-1 text-xs text-slate-500">
+                      <p className={isLight ? 'mt-1 text-xs text-slate-600' : 'mt-1 text-xs text-slate-500'}>
                         Note: Tools become "Active" when users purchase them. Use the "Available" icon for purchased tools.
                       </p>
                     )}
@@ -561,12 +629,12 @@ export default function ToolsPage() {
 
                   {/* Error and Success Messages - Inside Modal */}
                   {error && (
-                    <div className="rounded-lg border border-red-500/50 bg-red-500/10 px-4 py-3 text-sm text-red-300">
+                    <div className={errorAlertClass}>
                       {error}
                     </div>
                   )}
 
-                  <div className="flex justify-end gap-3 pt-4 border-t border-slate-800">
+                  <div className={sectionBorderClass}>
                     <button
                       type="button"
                       onClick={() => {
@@ -575,7 +643,7 @@ export default function ToolsPage() {
                         setError(null);
                         setSuccess(null);
                       }}
-                      className="px-4 py-2 text-sm font-medium text-slate-300 rounded-lg border border-slate-700 hover:bg-slate-800 transition-colors"
+                      className={secondaryButtonClass}
                     >
                       Cancel
                     </button>
@@ -593,8 +661,8 @@ export default function ToolsPage() {
                 {formStep === 2 && (
                   <div className="space-y-6">
                     <div>
-                      <h3 className="text-lg font-semibold text-slate-50 mb-2">Select Icon</h3>
-                      <p className="text-sm text-slate-400">
+                      <h3 className={isLight ? 'text-lg font-semibold text-slate-900 mb-2' : 'text-lg font-semibold text-slate-50 mb-2'}>Select Icon</h3>
+                      <p className={modalBodyTextClass}>
                         Choose an icon from the Lucide icon library. Each icon can only be used by one tool.
                       </p>
                     </div>
@@ -616,12 +684,12 @@ export default function ToolsPage() {
                         const iconUrl = existingIcon.icon_url;
                         return (
                           <div className="mt-2">
-                            <p className="text-xs text-slate-400 mb-2">Current icon:</p>
-                            <div className="inline-block border border-slate-700 rounded-lg p-2 bg-slate-800/50">
+                            <p className={isLight ? 'text-xs text-slate-600 mb-2' : 'text-xs text-slate-400 mb-2'}>Current icon:</p>
+                            <div className={isLight ? 'inline-block border border-slate-300 rounded-lg p-2 bg-slate-100' : 'inline-block border border-slate-700 rounded-lg p-2 bg-slate-800/50'}>
                               {iconUrl && !iconUrl.startsWith('http') && !iconUrl.startsWith('/') ? (
-                                <DynamicIcon iconName={iconUrl} size={32} className="text-slate-300" />
+                                <DynamicIcon iconName={iconUrl} size={32} className={isLight ? 'text-slate-700' : 'text-slate-300'} />
                               ) : (
-                                <p className="text-xs text-slate-500">Icon exists (select new icon to replace)</p>
+                                <p className={isLight ? 'text-xs text-slate-600' : 'text-xs text-slate-500'}>Icon exists (select new icon to replace)</p>
                               )}
                             </div>
                           </div>
@@ -632,16 +700,16 @@ export default function ToolsPage() {
 
                     {/* Error and Success Messages */}
                     {error && (
-                      <div className="rounded-lg border border-red-500/50 bg-red-500/10 px-4 py-3 text-sm text-red-300">
+                      <div className={errorAlertClass}>
                         {error}
                       </div>
                     )}
 
-                    <div className="flex justify-between gap-3 pt-4 border-t border-slate-800">
+                    <div className={isLight ? 'flex justify-between gap-3 pt-4 border-t border-slate-200' : 'flex justify-between gap-3 pt-4 border-t border-slate-800'}>
                       <button
                         type="button"
                         onClick={handleBack}
-                        className="px-4 py-2 text-sm font-medium text-slate-300 rounded-lg border border-slate-700 hover:bg-slate-800 transition-colors"
+                        className={secondaryButtonClass}
                       >
                         Back
                       </button>
@@ -673,52 +741,52 @@ export default function ToolsPage() {
           );
           
           return sortedTools.length === 0 ? (
-            <div className="rounded-lg border border-slate-800 bg-slate-900/50 p-8 text-center">
-              <p className="text-slate-400">
+            <div className={isLight ? 'rounded-lg border border-slate-200 bg-white p-8 text-center shadow-sm' : 'rounded-lg border border-slate-800 bg-slate-900/50 p-8 text-center'}>
+              <p className={isLight ? 'text-slate-600' : 'text-slate-400'}>
                 {tools.length === 0 
                   ? 'No tools found. Create your first one!' 
                   : `No tools found with status "${formatStatus(statusFilter)}".`}
               </p>
             </div>
           ) : (
-            <div className="rounded-lg border border-slate-800 bg-slate-900/50 overflow-hidden">
+            <div className={tableWrapClass}>
               <div className="overflow-x-auto">
                 <table className="w-full">
-                  <thead className="bg-slate-800/50">
+                  <thead className={tableHeadClass}>
                     <tr>
-                      <th className="px-4 py-3 text-left text-xs font-medium text-slate-300 uppercase tracking-wider">
+                      <th className={tableHeadCellClass}>
                         Name
                       </th>
-                      <th className="px-4 py-3 text-left text-xs font-medium text-slate-300 uppercase tracking-wider">
+                      <th className={tableHeadCellClass}>
                         Short Name
                       </th>
-                      <th className="px-4 py-3 text-left text-xs font-medium text-slate-300 uppercase tracking-wider">
+                      <th className={tableHeadCellClass}>
                         Price
                       </th>
-                      <th className="px-4 py-3 text-left text-xs font-medium text-slate-300 uppercase tracking-wider">
+                      <th className={tableHeadCellClass}>
                         Status
                       </th>
-                      <th className="px-4 py-3 text-left text-xs font-medium text-slate-300 uppercase tracking-wider">
+                      <th className={tableHeadCellClass}>
                         Icons
                       </th>
-                      <th className="px-4 py-3 text-right text-xs font-medium text-slate-300 uppercase tracking-wider">
+                      <th className={tableHeadCellRightClass}>
                         Actions
                       </th>
                     </tr>
                   </thead>
-                  <tbody className="divide-y divide-slate-800">
+                  <tbody className={tableBodyClass}>
                     {sortedTools.map((tool) => (
-                    <tr key={tool.id} className="hover:bg-slate-800/30">
+                    <tr key={tool.id} className={rowHoverClass}>
                       <td className="px-4 py-3 text-sm">
-                        <div className="font-medium text-slate-100">{tool.name}</div>
+                        <div className={toolNameClass}>{tool.name}</div>
                         {tool.tool_tip && (
-                          <div className="text-xs text-slate-500 mt-0.5 line-clamp-1">{tool.tool_tip}</div>
+                          <div className={tipClass}>{tool.tool_tip}</div>
                         )}
                       </td>
-                      <td className="px-4 py-3 text-sm text-slate-400">
-                        {tool.short_name || <span className="text-slate-600">—</span>}
+                      <td className={bodyMutedClass}>
+                        {tool.short_name || <span className={isLight ? 'text-slate-500' : 'text-slate-600'}>—</span>}
                       </td>
-                      <td className="px-4 py-3 text-sm text-slate-300">
+                      <td className={bodyPriceClass}>
                         ${tool.price.toFixed(2)} / month
                       </td>
                       <td className="px-4 py-3 text-sm">
@@ -736,11 +804,11 @@ export default function ToolsPage() {
                             : null;
                           return iconName ? (
                             <div className="flex items-center gap-2">
-                              <DynamicIcon iconName={iconName} size={20} className="text-slate-300" />
-                              <span className="text-xs text-slate-400">{iconName}</span>
+                              <DynamicIcon iconName={iconName} size={20} className={isLight ? 'text-slate-700' : 'text-slate-300'} />
+                              <span className={iconNameClass}>{iconName}</span>
                             </div>
                           ) : (
-                            <span className="text-xs text-slate-500">No icon</span>
+                            <span className={iconNoneClass}>No icon</span>
                           );
                         })()}
                       </td>
@@ -748,7 +816,7 @@ export default function ToolsPage() {
                         <div className="flex items-center justify-end gap-2">
                           <button
                             onClick={() => handleEdit(tool)}
-                            className="text-emerald-400 hover:text-emerald-300 transition-colors"
+                            className={editIconClass}
                             title="Edit"
                           >
                             <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -757,7 +825,7 @@ export default function ToolsPage() {
                           </button>
                           <button
                             onClick={() => handleDelete(tool.id)}
-                            className="text-red-400 hover:text-red-300 transition-colors"
+                            className={deleteIconClass}
                             title="Delete"
                           >
                             <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">

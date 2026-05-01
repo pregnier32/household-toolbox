@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useMemo, useEffect } from 'react';
+import { useTheme } from './AppThemeProvider';
 
 type ShoppingListItemRef = {
   itemId: string;
@@ -38,6 +39,77 @@ function formatDateDisplay(isoDate: string): string {
 export type ShoppingListDashboardSummary = { listId: string; name: string; date: string; itemCount: number };
 
 export function ShoppingListTool({ toolId }: ShoppingListToolProps) {
+  const { resolvedTheme } = useTheme();
+  const isLight = resolvedTheme === 'light';
+  const titleClass = isLight ? 'text-2xl font-semibold text-slate-900 mb-2' : 'text-2xl font-semibold text-slate-50 mb-2';
+  const descClass = isLight ? 'text-slate-600 text-sm' : 'text-slate-400 text-sm';
+  const loadingClass = isLight ? 'text-slate-600 text-sm' : 'text-slate-400 text-sm';
+  const cardClass = isLight
+    ? 'rounded-2xl border border-slate-200 bg-white p-6 shadow-sm'
+    : 'rounded-2xl border border-slate-800 bg-slate-900/70 p-6';
+  const inputClass = isLight
+    ? 'w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900 placeholder-slate-500 focus:border-emerald-500/50 focus:outline-none focus:ring-1 focus:ring-emerald-500/50'
+    : 'w-full rounded-lg border border-slate-700 bg-slate-900/70 px-3 py-2 text-sm text-slate-100 placeholder-slate-500 focus:border-emerald-500/50 focus:outline-none focus:ring-1 focus:ring-emerald-500/50';
+  const selectClass = isLight
+    ? 'w-full rounded-lg border border-slate-300 bg-white px-4 py-2 text-slate-900 focus:border-emerald-500/50 focus:outline-none focus:ring-1 focus:ring-emerald-500/50'
+    : 'w-full rounded-lg border border-slate-700 bg-slate-900/70 px-4 py-2 text-slate-100 focus:border-emerald-500/50 focus:outline-none focus:ring-1 focus:ring-emerald-500/50';
+  const primaryButtonClass = isLight
+    ? 'px-4 py-2.5 rounded-lg bg-emerald-600 text-white font-semibold hover:bg-emerald-500 transition-colors focus:outline-none focus:ring-2 focus:ring-emerald-500/50 focus:ring-offset-2 focus:ring-offset-white disabled:opacity-50 disabled:cursor-not-allowed'
+    : 'px-4 py-2.5 rounded-lg bg-emerald-500 text-slate-950 font-semibold hover:bg-emerald-400 transition-colors focus:outline-none focus:ring-2 focus:ring-emerald-500/50 focus:ring-offset-2 focus:ring-offset-slate-900 disabled:opacity-50 disabled:cursor-not-allowed';
+  const secondaryButtonClass = isLight
+    ? 'px-4 py-2 rounded-lg border-2 border-slate-400 bg-slate-100 text-slate-800 hover:bg-slate-200 transition-colors'
+    : 'px-4 py-2 rounded-lg border border-slate-700 bg-slate-800 text-slate-200 hover:bg-slate-700 transition-colors';
+  const tabStripClass = isLight ? 'border-b border-slate-200' : 'border-b border-slate-800';
+  const tabActiveClass = isLight ? 'border-b-2 border-emerald-600 text-emerald-900' : 'border-b-2 border-emerald-500 text-emerald-300';
+  const tabInactiveClass = isLight ? 'text-slate-600 hover:text-slate-900' : 'text-slate-400 hover:text-slate-300';
+  const modalCardClass = isLight
+    ? 'w-full max-w-lg rounded-2xl border border-slate-200 bg-white p-6 shadow-2xl mx-4 max-h-[90vh] flex flex-col'
+    : 'w-full max-w-lg rounded-2xl border border-slate-800 bg-slate-900 p-6 shadow-2xl mx-4 max-h-[90vh] flex flex-col';
+  const rowIconSecondaryClass = isLight
+    ? 'inline-flex h-9 w-9 items-center justify-center rounded-lg border border-slate-300 bg-white text-slate-700 hover:bg-slate-100 transition-colors'
+    : 'inline-flex h-9 w-9 items-center justify-center rounded-lg border border-slate-700 bg-slate-900/60 text-slate-300 hover:border-slate-500 hover:text-slate-100 transition-colors';
+  const rowIconEmeraldClass = isLight
+    ? 'inline-flex h-9 w-9 items-center justify-center rounded-lg border border-emerald-300 bg-emerald-50 text-emerald-700 hover:bg-emerald-100 transition-colors'
+    : 'inline-flex h-9 w-9 items-center justify-center rounded-lg border border-emerald-500/50 bg-emerald-500/10 text-emerald-300 hover:bg-emerald-500/20 transition-colors';
+  const rowIconDangerClass = isLight
+    ? 'inline-flex h-9 w-9 items-center justify-center rounded-lg border border-red-300 bg-red-50 text-red-700 hover:bg-red-100 transition-colors'
+    : 'inline-flex h-9 w-9 items-center justify-center rounded-lg border border-red-500/50 bg-red-500/10 text-red-300 hover:bg-red-500/20 transition-colors';
+  const labelClass = isLight ? 'block text-xs font-medium text-slate-700 mb-1.5' : 'block text-xs font-medium text-slate-300 mb-1.5';
+  const splitPanelClass = isLight
+    ? 'flex gap-0 rounded-lg border border-slate-300 bg-slate-50 max-h-64 overflow-hidden'
+    : 'flex gap-0 rounded-lg border border-slate-700 bg-slate-800/50 max-h-64 overflow-hidden';
+  const splitPanelSidebarClass = isLight
+    ? 'w-1/4 min-w-0 flex-shrink-0 border-r border-slate-300 bg-white overflow-y-auto'
+    : 'w-1/4 min-w-0 flex-shrink-0 border-r border-slate-700 bg-slate-900/50 overflow-y-auto';
+  const categoryPickerSelectedClass = isLight ? 'bg-emerald-100 text-emerald-900' : 'bg-emerald-500/20 text-emerald-300';
+  const categoryPickerUnselectedClass = isLight
+    ? 'text-slate-700 hover:bg-slate-100 hover:text-slate-900'
+    : 'text-slate-300 hover:bg-slate-700 hover:text-slate-100';
+  const pickerHeaderClass = isLight
+    ? 'text-xs font-semibold uppercase tracking-wider text-emerald-800 mb-2 sticky top-0 bg-slate-50 py-1'
+    : 'text-xs font-semibold uppercase tracking-wider text-emerald-300 mb-2 sticky top-0 bg-slate-800/95 py-1';
+  const pickerItemSelectedClass = isLight
+    ? 'bg-emerald-100 text-emerald-900 border border-emerald-300'
+    : 'bg-emerald-500/20 text-emerald-300 border border-emerald-500/50';
+  const pickerItemUnselectedClass = isLight
+    ? 'text-slate-800 hover:bg-slate-100 border border-transparent'
+    : 'text-slate-200 hover:bg-slate-700 border border-transparent';
+  const mutedTextClass = isLight ? 'text-slate-600 text-sm' : 'text-slate-500 text-sm';
+  const chipClass = isLight
+    ? 'inline-flex items-center gap-1 px-2 py-1 rounded-md border border-slate-300 bg-white text-slate-800 text-sm'
+    : 'inline-flex items-center gap-1 px-2 py-1 rounded-md bg-slate-700 text-slate-200 text-sm';
+  const nestedPanelClass = isLight
+    ? 'rounded-xl border border-slate-300 bg-slate-50 p-4 space-y-3'
+    : 'rounded-xl border border-slate-700 bg-slate-800/50 p-4 space-y-3';
+  const itemRowClass = isLight
+    ? 'flex items-center justify-between p-2 rounded-lg border border-slate-300 bg-white hover:bg-slate-100 transition-colors'
+    : 'flex items-center justify-between p-2 rounded-lg border border-slate-700 bg-slate-800/50 hover:bg-slate-800 transition-colors';
+  const groupedCategoryHeadingClass = isLight
+    ? 'text-xs font-semibold uppercase tracking-[0.18em] text-emerald-800 border-b border-slate-300 pb-1 truncate'
+    : 'text-xs font-semibold uppercase tracking-[0.18em] text-emerald-300 border-b border-slate-700 pb-1 truncate';
+  const groupedCategoryListClass = isLight
+    ? 'text-sm text-slate-700 list-disc list-inside ml-0 mt-1 space-y-0.5'
+    : 'text-sm text-slate-200 list-disc list-inside ml-0 mt-1 space-y-0.5';
   const [activeTab, setActiveTab] = useState<'lists' | 'items'>('lists');
 
   // Master items (loaded from API; defaults copied on first load if empty)
@@ -408,17 +480,17 @@ export function ShoppingListTool({ toolId }: ShoppingListToolProps) {
   return (
     <div className="space-y-6">
       <div>
-        <h2 className="text-2xl font-semibold text-slate-50 mb-2">Shopping List</h2>
-        <p className="text-slate-400 text-sm">
+        <h2 className={titleClass}>Shopping List</h2>
+        <p className={descClass}>
           Create shopping lists from your master list of items. Manage active lists and history.
         </p>
       </div>
       {isLoading && (
-        <p className="text-slate-400 text-sm">Loading your lists and items…</p>
+        <p className={loadingClass}>Loading your lists and items…</p>
       )}
 
       {/* Tabs */}
-      <div className="border-b border-slate-800">
+      <div className={tabStripClass}>
         <div className="flex gap-2">
           {[
             { id: 'lists', label: 'Shopping Lists' },
@@ -428,9 +500,7 @@ export function ShoppingListTool({ toolId }: ShoppingListToolProps) {
               key={tab.id}
               onClick={() => setActiveTab(tab.id as 'lists' | 'items')}
               className={`px-4 py-2 text-sm font-medium transition-colors ${
-                activeTab === tab.id
-                  ? 'border-b-2 border-emerald-500 text-emerald-300'
-                  : 'text-slate-400 hover:text-slate-300'
+                activeTab === tab.id ? tabActiveClass : tabInactiveClass
               }`}
             >
               {tab.label}
@@ -450,7 +520,7 @@ export function ShoppingListTool({ toolId }: ShoppingListToolProps) {
                   setNewListItems([]);
                   setBuildFromHistoryId('');
                 }}
-                className="px-4 py-2.5 rounded-lg bg-emerald-500 text-slate-950 font-semibold hover:bg-emerald-400 transition-colors focus:outline-none focus:ring-2 focus:ring-emerald-500/50 focus:ring-offset-2 focus:ring-offset-slate-900"
+                className={primaryButtonClass}
               >
                 + Add New Shopping List
               </button>
@@ -459,8 +529,8 @@ export function ShoppingListTool({ toolId }: ShoppingListToolProps) {
 
           {/* Create new list form */}
           {isCreatingList && (
-            <div className="rounded-2xl border border-slate-800 bg-slate-900/70 p-6 space-y-4">
-              <h3 className="text-lg font-semibold text-slate-50">New Shopping List</h3>
+            <div className={`${cardClass} space-y-4`}>
+              <h3 className={isLight ? 'text-lg font-semibold text-slate-900' : 'text-lg font-semibold text-slate-50'}>New Shopping List</h3>
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div>
                   <label className="block text-xs font-medium text-slate-300 mb-1.5">
@@ -471,7 +541,7 @@ export function ShoppingListTool({ toolId }: ShoppingListToolProps) {
                     value={newListName}
                     onChange={(e) => setNewListName(e.target.value)}
                     placeholder="e.g., Weekly groceries"
-                    className="w-full rounded-lg border border-slate-700 bg-slate-900/70 px-3 py-2 text-sm text-slate-100 placeholder-slate-500 focus:border-emerald-500/50 focus:outline-none focus:ring-1 focus:ring-emerald-500/50"
+                    className={inputClass}
                   />
                 </div>
                 <div>
@@ -482,7 +552,7 @@ export function ShoppingListTool({ toolId }: ShoppingListToolProps) {
                     type="date"
                     value={newListDate}
                     onChange={(e) => setNewListDate(e.target.value)}
-                    className="w-full rounded-lg border border-slate-700 bg-slate-900/70 px-3 py-2 text-sm text-slate-100 focus:border-emerald-500/50 focus:outline-none focus:ring-1 focus:ring-emerald-500/50"
+                    className={inputClass}
                   />
                 </div>
               </div>
@@ -500,7 +570,7 @@ export function ShoppingListTool({ toolId }: ShoppingListToolProps) {
                       setBuildFromHistoryId(v);
                       if (v) startBuildFromHistory(v);
                     }}
-                    className="w-full rounded-lg border border-slate-700 bg-slate-900/70 px-4 py-2 text-slate-100 focus:border-emerald-500/50 focus:outline-none focus:ring-1 focus:ring-emerald-500/50"
+                    className={selectClass}
                   >
                     <option value="">Select a list to copy...</option>
                     {historyLists.map((l) => (
@@ -513,12 +583,12 @@ export function ShoppingListTool({ toolId }: ShoppingListToolProps) {
               )}
 
               <div>
-                <label className="block text-xs font-medium text-slate-300 mb-1.5">
+                <label className={labelClass}>
                   Click items below to add to this list
                 </label>
-                <div className="flex gap-0 rounded-lg border border-slate-700 bg-slate-800/50 max-h-64 overflow-hidden">
+                <div className={splitPanelClass}>
                   {/* Left: categories — 25% */}
-                  <div className="w-1/4 min-w-0 flex-shrink-0 border-r border-slate-700 bg-slate-900/50 overflow-y-auto">
+                  <div className={splitPanelSidebarClass}>
                     <div className="p-2">
                       {getUniqueCategories().map((cat) => {
                         const isSelected = (selectedPickerCategory ?? getUniqueCategories()[0] ?? null) === cat;
@@ -528,7 +598,7 @@ export function ShoppingListTool({ toolId }: ShoppingListToolProps) {
                             type="button"
                             onClick={() => setSelectedPickerCategory(cat)}
                             className={`w-full text-left px-2 py-1.5 rounded text-sm font-medium transition-colors ${
-                              isSelected ? 'bg-emerald-500/20 text-emerald-300' : 'text-slate-300 hover:bg-slate-700 hover:text-slate-100'
+                              isSelected ? categoryPickerSelectedClass : categoryPickerUnselectedClass
                             }`}
                           >
                             {cat}
@@ -544,11 +614,11 @@ export function ShoppingListTool({ toolId }: ShoppingListToolProps) {
                       const displayCat = selectedPickerCategory ?? cats[0] ?? null;
                       const items = displayCat ? getItemsByCategory(displayCat) : [];
                       if (!displayCat || items.length === 0) {
-                        return <p className="text-slate-500 text-sm py-2">No items in this category.</p>;
+                        return <p className={mutedTextClass + ' py-2'}>No items in this category.</p>;
                       }
                       return (
                         <>
-                          <p className="text-xs font-semibold uppercase tracking-wider text-emerald-300 mb-2 sticky top-0 bg-slate-800/95 py-1">
+                          <p className={pickerHeaderClass}>
                             {displayCat}
                           </p>
                           <div className="space-y-0.5">
@@ -560,9 +630,7 @@ export function ShoppingListTool({ toolId }: ShoppingListToolProps) {
                                   type="button"
                                   onClick={() => addItemToNewList(item)}
                                   className={`w-full text-left px-3 py-2 rounded-lg text-sm transition-colors ${
-                                    inList
-                                      ? 'bg-emerald-500/20 text-emerald-300 border border-emerald-500/50'
-                                      : 'text-slate-200 hover:bg-slate-700 border border-transparent'
+                                    inList ? pickerItemSelectedClass : pickerItemUnselectedClass
                                   }`}
                                 >
                                   {item.name}
@@ -585,10 +653,7 @@ export function ShoppingListTool({ toolId }: ShoppingListToolProps) {
                   </p>
                   <div className="flex flex-wrap gap-2">
                     {newListItems.map((ref) => (
-                      <span
-                        key={ref.itemId}
-                        className="inline-flex items-center gap-1 px-2 py-1 rounded-md bg-slate-700 text-slate-200 text-sm"
-                      >
+                      <span key={ref.itemId} className={chipClass}>
                         {ref.name}
                         <button
                           type="button"
@@ -613,14 +678,14 @@ export function ShoppingListTool({ toolId }: ShoppingListToolProps) {
                     setNewListItems([]);
                     setBuildFromHistoryId('');
                   }}
-                  className="px-4 py-2 rounded-lg border border-slate-700 bg-slate-800 text-slate-200 hover:bg-slate-700 transition-colors"
+                  className={secondaryButtonClass}
                 >
                   Cancel
                 </button>
                 <button
                   onClick={createList}
                   disabled={!newListName.trim()}
-                  className="rounded-lg bg-emerald-500 px-4 py-2.5 text-sm font-semibold text-slate-950 transition-colors hover:bg-emerald-400 focus:outline-none focus:ring-2 focus:ring-emerald-500/50 focus:ring-offset-2 focus:ring-offset-slate-900 disabled:opacity-50 disabled:cursor-not-allowed"
+                  className={primaryButtonClass}
                 >
                   Create List
                 </button>
@@ -629,8 +694,8 @@ export function ShoppingListTool({ toolId }: ShoppingListToolProps) {
           )}
 
           {/* Active section */}
-          <div className="rounded-2xl border border-slate-800 bg-slate-900/70 p-6">
-            <h3 className="text-lg font-semibold text-slate-50 mb-4">Active</h3>
+          <div className={cardClass}>
+            <h3 className={isLight ? 'text-lg font-semibold text-slate-900 mb-4' : 'text-lg font-semibold text-slate-50 mb-4'}>Active</h3>
             {activeLists.length === 0 ? (
               <p className="text-slate-400 text-center py-6">
                 No active lists. Create one above or move a list from History.
@@ -641,11 +706,11 @@ export function ShoppingListTool({ toolId }: ShoppingListToolProps) {
                   editingListId === list.id ? (
                     <div
                       key={list.id}
-                      className="rounded-xl border border-slate-700 bg-slate-800/50 p-4 space-y-3"
+                      className={nestedPanelClass}
                     >
                       <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
                         <div>
-                          <label className="block text-xs font-medium text-slate-300 mb-1">
+                          <label className={isLight ? 'block text-xs font-medium text-slate-700 mb-1' : 'block text-xs font-medium text-slate-300 mb-1'}>
                             List name
                           </label>
                           <input
@@ -656,7 +721,7 @@ export function ShoppingListTool({ toolId }: ShoppingListToolProps) {
                           />
                         </div>
                         <div>
-                          <label className="block text-xs font-medium text-slate-300 mb-1">
+                          <label className={isLight ? 'block text-xs font-medium text-slate-700 mb-1' : 'block text-xs font-medium text-slate-300 mb-1'}>
                             Date
                           </label>
                           <input
@@ -668,20 +733,20 @@ export function ShoppingListTool({ toolId }: ShoppingListToolProps) {
                         </div>
                       </div>
                       <div>
-                        <label className="block text-xs font-medium text-slate-300 mb-1">
+                        <label className={isLight ? 'block text-xs font-medium text-slate-700 mb-1' : 'block text-xs font-medium text-slate-300 mb-1'}>
                           Add items (click to add)
                         </label>
-                        <div className="rounded-lg border border-slate-700 bg-slate-900/70 overflow-hidden">
-                          <div className="flex gap-0 border-b border-slate-700 bg-slate-800/70">
+                        <div className={isLight ? 'rounded-lg border border-slate-300 bg-white overflow-hidden' : 'rounded-lg border border-slate-700 bg-slate-900/70 overflow-hidden'}>
+                          <div className={isLight ? 'flex gap-0 border-b border-slate-300 bg-slate-100' : 'flex gap-0 border-b border-slate-700 bg-slate-800/70'}>
                             <div className="w-1/4 min-w-0 flex-shrink-0 px-2 py-1.5">
-                              <span className="text-xs font-semibold uppercase tracking-wider text-slate-400">Category</span>
+                              <span className={isLight ? 'text-xs font-semibold uppercase tracking-wider text-slate-600' : 'text-xs font-semibold uppercase tracking-wider text-slate-400'}>Category</span>
                             </div>
-                            <div className="flex-1 min-w-0 px-2 py-1.5 border-l border-slate-700">
-                              <span className="text-xs font-semibold uppercase tracking-wider text-slate-400">Items</span>
+                            <div className={isLight ? 'flex-1 min-w-0 px-2 py-1.5 border-l border-slate-300' : 'flex-1 min-w-0 px-2 py-1.5 border-l border-slate-700'}>
+                              <span className={isLight ? 'text-xs font-semibold uppercase tracking-wider text-slate-600' : 'text-xs font-semibold uppercase tracking-wider text-slate-400'}>Items</span>
                             </div>
                           </div>
                           <div className="flex gap-0 max-h-48 overflow-hidden">
-                            <div className="w-1/4 min-w-0 flex-shrink-0 border-r border-slate-700 bg-slate-900/50 overflow-y-auto p-2">
+                            <div className={isLight ? 'w-1/4 min-w-0 flex-shrink-0 border-r border-slate-300 bg-white overflow-y-auto p-2' : 'w-1/4 min-w-0 flex-shrink-0 border-r border-slate-700 bg-slate-900/50 overflow-y-auto p-2'}>
                               {getUniqueCategories().map((cat) => {
                                 const isSelected = (selectedPickerCategory ?? getUniqueCategories()[0] ?? null) === cat;
                                 return (
@@ -690,7 +755,7 @@ export function ShoppingListTool({ toolId }: ShoppingListToolProps) {
                                     type="button"
                                     onClick={() => setSelectedPickerCategory(cat)}
                                     className={`w-full text-left px-2 py-1.5 rounded text-sm font-medium transition-colors ${
-                                      isSelected ? 'bg-emerald-500/20 text-emerald-300' : 'text-slate-300 hover:bg-slate-700 hover:text-slate-100'
+                                      isSelected ? categoryPickerSelectedClass : categoryPickerUnselectedClass
                                     }`}
                                   >
                                     {cat}
@@ -704,7 +769,7 @@ export function ShoppingListTool({ toolId }: ShoppingListToolProps) {
                                 const displayCat = selectedPickerCategory ?? cats[0] ?? null;
                                 const items = displayCat ? getItemsByCategory(displayCat) : [];
                                 if (!displayCat || items.length === 0) {
-                                  return <p className="text-slate-500 text-sm py-1">No items.</p>;
+                                  return <p className={mutedTextClass + ' py-1'}>No items.</p>;
                                 }
                                 return (
                                   <div className="space-y-0.5">
@@ -716,7 +781,7 @@ export function ShoppingListTool({ toolId }: ShoppingListToolProps) {
                                           type="button"
                                           onClick={() => addItemToEditingList(item)}
                                           className={`w-full text-left px-2 py-1 rounded text-sm ${
-                                            inList ? 'bg-emerald-500/20 text-emerald-300' : 'text-slate-200 hover:bg-slate-700'
+                                            inList ? categoryPickerSelectedClass : categoryPickerUnselectedClass
                                           }`}
                                         >
                                           {item.name}
@@ -785,18 +850,14 @@ export function ShoppingListTool({ toolId }: ShoppingListToolProps) {
                               >
                                 {groups.map(({ category, items: categoryItems }) => (
                                   <div key={category}>
-                                    <p
-                                      className="text-xs font-semibold uppercase tracking-[0.18em] text-emerald-300 border-b border-slate-700 pb-1 truncate"
-                                      title={category}
-                                      style={{ maxWidth: '100%' }}
-                                    >
+                                    <p className={groupedCategoryHeadingClass} title={category} style={{ maxWidth: '100%' }}>
                                       {category.length > 15 ? `${category.slice(0, 15)}…` : category}
                                     </p>
-                                    <p className="text-sm text-slate-200 mt-0.5">
-                                      {categoryItems.length === 1
-                                        ? categoryItems[0].name
-                                        : `${categoryItems.length} items`}
-                                    </p>
+                                    <ul className={groupedCategoryListClass}>
+                                      {categoryItems.map((ref) => (
+                                        <li key={ref.itemId}>{ref.name}</li>
+                                      ))}
+                                    </ul>
                                   </div>
                                 ))}
                               </div>
@@ -812,7 +873,7 @@ export function ShoppingListTool({ toolId }: ShoppingListToolProps) {
                               onClick={() => setViewListId(list.id)}
                               aria-label="View full list"
                               title="View full list"
-                              className="rounded-lg p-2 text-slate-400 hover:bg-slate-800 hover:text-slate-200 transition-colors"
+                              className={rowIconSecondaryClass}
                             >
                               <svg className="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
@@ -824,7 +885,7 @@ export function ShoppingListTool({ toolId }: ShoppingListToolProps) {
                               onClick={() => startEditingList(list)}
                               aria-label="Edit list"
                               title="Edit list"
-                              className="rounded-lg p-2 text-slate-400 hover:bg-slate-800 hover:text-slate-200 transition-colors"
+                              className={rowIconEmeraldClass}
                             >
                               <svg className="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
@@ -835,7 +896,7 @@ export function ShoppingListTool({ toolId }: ShoppingListToolProps) {
                               onClick={() => moveToHistory(list.id)}
                               aria-label="Move to History"
                               title="Move to History"
-                              className="rounded-lg p-2 text-slate-400 hover:bg-slate-800 hover:text-slate-200 transition-colors"
+                              className={rowIconSecondaryClass}
                             >
                               <svg className="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 8h14M5 8a2 2 0 110-4h14a2 2 0 110 4M5 8v10a2 2 0 002 2h10a2 2 0 002-2V8m-9 4h4" />
@@ -849,7 +910,7 @@ export function ShoppingListTool({ toolId }: ShoppingListToolProps) {
                               }}
                               aria-label="Delete list"
                               title="Delete list"
-                              className="rounded-lg p-2 text-red-400 hover:bg-red-500/20 hover:text-red-300 transition-colors"
+                              className={rowIconDangerClass}
                             >
                               <svg className="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
@@ -866,8 +927,8 @@ export function ShoppingListTool({ toolId }: ShoppingListToolProps) {
           </div>
 
           {/* History section */}
-          <div className="rounded-2xl border border-slate-800 bg-slate-900/70 p-6">
-            <h3 className="text-lg font-semibold text-slate-50 mb-4">History</h3>
+          <div className={cardClass}>
+            <h3 className={isLight ? 'text-lg font-semibold text-slate-900 mb-4' : 'text-lg font-semibold text-slate-50 mb-4'}>History</h3>
             {historyLists.length === 0 ? (
               <p className="text-slate-400 text-center py-6">
                 No lists in history yet. Move an active list to History when done.
@@ -878,11 +939,11 @@ export function ShoppingListTool({ toolId }: ShoppingListToolProps) {
                   editingListId === list.id ? (
                     <div
                       key={list.id}
-                      className="rounded-xl border border-slate-700 bg-slate-800/50 p-4 space-y-3"
+                      className={nestedPanelClass}
                     >
                       <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
                         <div>
-                          <label className="block text-xs font-medium text-slate-300 mb-1">
+                          <label className={isLight ? 'block text-xs font-medium text-slate-700 mb-1' : 'block text-xs font-medium text-slate-300 mb-1'}>
                             List name
                           </label>
                           <input
@@ -893,7 +954,7 @@ export function ShoppingListTool({ toolId }: ShoppingListToolProps) {
                           />
                         </div>
                         <div>
-                          <label className="block text-xs font-medium text-slate-300 mb-1">
+                          <label className={isLight ? 'block text-xs font-medium text-slate-700 mb-1' : 'block text-xs font-medium text-slate-300 mb-1'}>
                             Date
                           </label>
                           <input
@@ -905,20 +966,20 @@ export function ShoppingListTool({ toolId }: ShoppingListToolProps) {
                         </div>
                       </div>
                       <div>
-                        <label className="block text-xs font-medium text-slate-300 mb-1">
+                        <label className={isLight ? 'block text-xs font-medium text-slate-700 mb-1' : 'block text-xs font-medium text-slate-300 mb-1'}>
                           Add items (click to add)
                         </label>
-                        <div className="rounded-lg border border-slate-700 bg-slate-900/70 overflow-hidden">
-                          <div className="flex gap-0 border-b border-slate-700 bg-slate-800/70">
+                        <div className={isLight ? 'rounded-lg border border-slate-300 bg-white overflow-hidden' : 'rounded-lg border border-slate-700 bg-slate-900/70 overflow-hidden'}>
+                          <div className={isLight ? 'flex gap-0 border-b border-slate-300 bg-slate-100' : 'flex gap-0 border-b border-slate-700 bg-slate-800/70'}>
                             <div className="w-1/4 min-w-0 flex-shrink-0 px-2 py-1.5">
-                              <span className="text-xs font-semibold uppercase tracking-wider text-slate-400">Category</span>
+                              <span className={isLight ? 'text-xs font-semibold uppercase tracking-wider text-slate-600' : 'text-xs font-semibold uppercase tracking-wider text-slate-400'}>Category</span>
                             </div>
-                            <div className="flex-1 min-w-0 px-2 py-1.5 border-l border-slate-700">
-                              <span className="text-xs font-semibold uppercase tracking-wider text-slate-400">Items</span>
+                            <div className={isLight ? 'flex-1 min-w-0 px-2 py-1.5 border-l border-slate-300' : 'flex-1 min-w-0 px-2 py-1.5 border-l border-slate-700'}>
+                              <span className={isLight ? 'text-xs font-semibold uppercase tracking-wider text-slate-600' : 'text-xs font-semibold uppercase tracking-wider text-slate-400'}>Items</span>
                             </div>
                           </div>
                           <div className="flex gap-0 max-h-48 overflow-hidden">
-                            <div className="w-1/4 min-w-0 flex-shrink-0 border-r border-slate-700 bg-slate-900/50 overflow-y-auto p-2">
+                            <div className={isLight ? 'w-1/4 min-w-0 flex-shrink-0 border-r border-slate-300 bg-white overflow-y-auto p-2' : 'w-1/4 min-w-0 flex-shrink-0 border-r border-slate-700 bg-slate-900/50 overflow-y-auto p-2'}>
                               {getUniqueCategories().map((cat) => {
                                 const isSelected = (selectedPickerCategory ?? getUniqueCategories()[0] ?? null) === cat;
                                 return (
@@ -927,7 +988,7 @@ export function ShoppingListTool({ toolId }: ShoppingListToolProps) {
                                     type="button"
                                     onClick={() => setSelectedPickerCategory(cat)}
                                     className={`w-full text-left px-2 py-1.5 rounded text-sm font-medium transition-colors ${
-                                      isSelected ? 'bg-emerald-500/20 text-emerald-300' : 'text-slate-300 hover:bg-slate-700 hover:text-slate-100'
+                                      isSelected ? categoryPickerSelectedClass : categoryPickerUnselectedClass
                                     }`}
                                   >
                                     {cat}
@@ -941,7 +1002,7 @@ export function ShoppingListTool({ toolId }: ShoppingListToolProps) {
                                 const displayCat = selectedPickerCategory ?? cats[0] ?? null;
                                 const items = displayCat ? getItemsByCategory(displayCat) : [];
                                 if (!displayCat || items.length === 0) {
-                                  return <p className="text-slate-500 text-sm py-1">No items.</p>;
+                                  return <p className={mutedTextClass + ' py-1'}>No items.</p>;
                                 }
                                 return (
                                   <div className="space-y-0.5">
@@ -953,7 +1014,7 @@ export function ShoppingListTool({ toolId }: ShoppingListToolProps) {
                                           type="button"
                                           onClick={() => addItemToEditingList(item)}
                                           className={`w-full text-left px-2 py-1 rounded text-sm ${
-                                            inList ? 'bg-emerald-500/20 text-emerald-300' : 'text-slate-200 hover:bg-slate-700'
+                                            inList ? categoryPickerSelectedClass : categoryPickerUnselectedClass
                                           }`}
                                         >
                                           {item.name}
@@ -1022,18 +1083,14 @@ export function ShoppingListTool({ toolId }: ShoppingListToolProps) {
                               >
                                 {groups.map(({ category, items: categoryItems }) => (
                                   <div key={category}>
-                                    <p
-                                      className="text-xs font-semibold uppercase tracking-[0.18em] text-emerald-300 border-b border-slate-700 pb-1 truncate"
-                                      title={category}
-                                      style={{ maxWidth: '100%' }}
-                                    >
+                                    <p className={groupedCategoryHeadingClass} title={category} style={{ maxWidth: '100%' }}>
                                       {category.length > 15 ? `${category.slice(0, 15)}…` : category}
                                     </p>
-                                    <p className="text-sm text-slate-200 mt-0.5">
-                                      {categoryItems.length === 1
-                                        ? categoryItems[0].name
-                                        : `${categoryItems.length} items`}
-                                    </p>
+                                    <ul className={groupedCategoryListClass}>
+                                      {categoryItems.map((ref) => (
+                                        <li key={ref.itemId}>{ref.name}</li>
+                                      ))}
+                                    </ul>
                                   </div>
                                 ))}
                               </div>
@@ -1048,7 +1105,7 @@ export function ShoppingListTool({ toolId }: ShoppingListToolProps) {
                             onClick={() => setViewListId(list.id)}
                             aria-label="View full list"
                             title="View full list"
-                            className="rounded-lg p-2 text-slate-400 hover:bg-slate-800 hover:text-slate-200 transition-colors"
+                            className={rowIconSecondaryClass}
                           >
                             <svg className="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
@@ -1060,7 +1117,7 @@ export function ShoppingListTool({ toolId }: ShoppingListToolProps) {
                             onClick={() => startEditingList(list)}
                             aria-label="Edit list"
                             title="Edit list"
-                            className="rounded-lg p-2 text-slate-400 hover:bg-slate-800 hover:text-slate-200 transition-colors"
+                            className={rowIconEmeraldClass}
                           >
                             <svg className="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
@@ -1074,7 +1131,7 @@ export function ShoppingListTool({ toolId }: ShoppingListToolProps) {
                             }}
                             aria-label="Delete list"
                             title="Delete list"
-                            className="rounded-lg p-2 text-red-400 hover:bg-red-500/20 hover:text-red-300 transition-colors"
+                            className={rowIconDangerClass}
                           >
                             <svg className="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
@@ -1112,9 +1169,9 @@ export function ShoppingListTool({ toolId }: ShoppingListToolProps) {
               }}
             />
             <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm">
-              <div className="w-full max-w-lg rounded-2xl border border-slate-800 bg-slate-900 p-6 shadow-2xl mx-4 max-h-[90vh] flex flex-col">
+              <div className={modalCardClass}>
                 <div className="flex items-center justify-between gap-4 mb-4 print-only-hidden">
-                  <h3 className="text-lg font-semibold text-slate-50">
+                  <h3 className={isLight ? 'text-lg font-semibold text-slate-900' : 'text-lg font-semibold text-slate-50'}>
                     {list.name}
                     <span className="text-slate-400 font-normal"> — {formatDateDisplay(list.date)}</span>
                   </h3>
@@ -1182,18 +1239,15 @@ export function ShoppingListTool({ toolId }: ShoppingListToolProps) {
           <div className="space-y-6">
             {!isAddingItem && (
               <div className="flex justify-start">
-                <button
-                  onClick={() => setIsAddingItem(true)}
-                  className="px-4 py-2.5 rounded-lg bg-emerald-500 text-slate-950 font-semibold hover:bg-emerald-400 transition-colors focus:outline-none focus:ring-2 focus:ring-emerald-500/50 focus:ring-offset-2 focus:ring-offset-slate-900"
-                >
+                <button onClick={() => setIsAddingItem(true)} className={primaryButtonClass}>
                   + Add New Item
                 </button>
               </div>
             )}
 
             {isAddingItem && (
-              <div className="rounded-2xl border border-slate-800 bg-slate-900/70 p-6">
-                <h3 className="text-lg font-semibold text-slate-50 mb-4">Add New Item</h3>
+              <div className={cardClass}>
+                <h3 className={isLight ? 'text-lg font-semibold text-slate-900 mb-4' : 'text-lg font-semibold text-slate-50 mb-4'}>Add New Item</h3>
                 <div className="space-y-4">
                   <div>
                     <div className="flex items-center justify-between mb-1.5">
@@ -1206,7 +1260,7 @@ export function ShoppingListTool({ toolId }: ShoppingListToolProps) {
                           setIsCreatingNewCategory(!isCreatingNewCategory);
                           setNewItemCategory('');
                         }}
-                        className="text-xs text-emerald-400 hover:text-emerald-300 transition-colors"
+                        className={isLight ? 'px-2 py-1 rounded-lg border-2 border-slate-400 bg-slate-100 text-xs font-medium text-slate-800 hover:bg-slate-200 transition-colors' : 'px-2 py-1 rounded border border-slate-600 bg-slate-800 text-xs font-medium text-slate-200 hover:bg-slate-700 transition-colors'}
                       >
                         {isCreatingNewCategory
                           ? 'Select existing category'
@@ -1219,13 +1273,13 @@ export function ShoppingListTool({ toolId }: ShoppingListToolProps) {
                         value={newItemCategory}
                         onChange={(e) => setNewItemCategory(e.target.value)}
                         placeholder="Enter new category..."
-                        className="w-full rounded-lg border border-slate-700 bg-slate-900/70 px-3 py-2 text-sm text-slate-100 placeholder-slate-500 focus:border-emerald-500/50 focus:outline-none focus:ring-1 focus:ring-emerald-500/50"
+                        className={inputClass}
                       />
                     ) : (
                       <select
                         value={newItemCategory}
                         onChange={(e) => setNewItemCategory(e.target.value)}
-                        className="w-full rounded-lg border border-slate-700 bg-slate-900/70 px-4 py-2 text-slate-100 focus:border-emerald-500/50 focus:outline-none focus:ring-1 focus:ring-emerald-500/50"
+                        className={selectClass}
                       >
                         <option value="">Select a category...</option>
                         {categories.map((cat) => (
@@ -1245,7 +1299,7 @@ export function ShoppingListTool({ toolId }: ShoppingListToolProps) {
                       value={newItemName}
                       onChange={(e) => setNewItemName(e.target.value)}
                       placeholder="e.g., Oat milk"
-                      className="w-full rounded-lg border border-slate-700 bg-slate-900/70 px-3 py-2 text-sm text-slate-100 placeholder-slate-500 focus:border-emerald-500/50 focus:outline-none focus:ring-1 focus:ring-emerald-500/50"
+                      className={inputClass}
                     />
                   </div>
                   <div className="flex gap-3 justify-end">
@@ -1256,14 +1310,14 @@ export function ShoppingListTool({ toolId }: ShoppingListToolProps) {
                         setNewItemCategory('');
                         setIsCreatingNewCategory(false);
                       }}
-                      className="px-4 py-2 rounded-lg border border-slate-700 bg-slate-800 text-slate-200 hover:bg-slate-700 transition-colors"
+                      className={secondaryButtonClass}
                     >
                       Cancel
                     </button>
                     <button
                       onClick={addMasterItem}
                       disabled={!newItemName.trim() || !newItemCategory.trim()}
-                      className="rounded-lg bg-emerald-500 px-4 py-2.5 text-sm font-semibold text-slate-950 transition-colors hover:bg-emerald-400 focus:outline-none focus:ring-2 focus:ring-emerald-500/50 focus:ring-offset-2 focus:ring-offset-slate-900 disabled:opacity-50 disabled:cursor-not-allowed"
+                      className={primaryButtonClass}
                     >
                       Save Item
                     </button>
@@ -1273,11 +1327,11 @@ export function ShoppingListTool({ toolId }: ShoppingListToolProps) {
             )}
 
             {!isAddingItem && (
-              <div className="flex gap-4 rounded-2xl border border-slate-800 bg-slate-900/70 overflow-hidden">
+              <div className={isLight ? 'flex gap-4 rounded-2xl border border-slate-300 bg-slate-50 overflow-hidden' : 'flex gap-4 rounded-2xl border border-slate-800 bg-slate-900/70 overflow-hidden'}>
                 {/* Left: categories — 25% width */}
-                <div className="w-1/4 min-w-0 flex-shrink-0 border-r border-slate-800 bg-slate-900/50">
+                <div className={isLight ? 'w-1/4 min-w-0 flex-shrink-0 border-r border-slate-300 bg-white' : 'w-1/4 min-w-0 flex-shrink-0 border-r border-slate-800 bg-slate-900/50'}>
                   <div className="p-3">
-                    <h3 className="text-xs font-semibold uppercase tracking-wider text-slate-400 mb-2 px-2">
+                    <h3 className={isLight ? 'text-xs font-semibold uppercase tracking-wider text-slate-600 mb-2 px-2' : 'text-xs font-semibold uppercase tracking-wider text-slate-400 mb-2 px-2'}>
                       Categories
                     </h3>
                     {categories.length === 0 ? (
@@ -1290,9 +1344,7 @@ export function ShoppingListTool({ toolId }: ShoppingListToolProps) {
                             type="button"
                             onClick={() => setSelectedItemsCategory(cat)}
                             className={`w-full text-left px-3 py-2 rounded-lg text-sm font-medium transition-colors ${
-                              displayCategory === cat
-                                ? 'bg-emerald-500/20 text-emerald-300'
-                                : 'text-slate-300 hover:bg-slate-800 hover:text-slate-100'
+                              displayCategory === cat ? categoryPickerSelectedClass : categoryPickerUnselectedClass
                             }`}
                           >
                             {cat}
@@ -1309,22 +1361,22 @@ export function ShoppingListTool({ toolId }: ShoppingListToolProps) {
                     <p className="text-slate-500 text-sm">Select a category to view and manage items.</p>
                   ) : (
                     <>
-                      <h3 className="text-lg font-semibold text-emerald-300 mb-4">{displayCategory}</h3>
+                      <h3 className={isLight ? 'text-lg font-semibold text-emerald-800 mb-4' : 'text-lg font-semibold text-emerald-300 mb-4'}>{displayCategory}</h3>
                       {currentItems.length === 0 ? (
                         <p className="text-slate-500 text-sm">No items in this category. Use “Add New Item” above.</p>
                       ) : (
                         <ul className="space-y-2" role="list">
                           {currentItems.map((item) =>
                             editingItemId === item.id ? (
-                              <li key={item.id} className="space-y-2 p-3 rounded-lg border border-slate-700 bg-slate-800/50">
+                              <li key={item.id} className={isLight ? 'space-y-2 p-3 rounded-lg border border-slate-300 bg-white' : 'space-y-2 p-3 rounded-lg border border-slate-700 bg-slate-800/50'}>
                                 <div>
-                                  <label className="block text-xs font-medium text-slate-300 mb-1.5">
+                                  <label className={labelClass}>
                                     Category <span className="text-red-400">*</span>
                                   </label>
                                   <select
                                     value={editingItemCategory}
                                     onChange={(e) => setEditingItemCategory(e.target.value)}
-                                    className="w-full rounded-lg border border-slate-700 bg-slate-900/70 px-4 py-2 text-slate-100 focus:border-emerald-500/50 focus:outline-none focus:ring-1 focus:ring-emerald-500/50"
+                                    className={selectClass}
                                   >
                                     {categories.map((cat) => (
                                       <option key={cat} value={cat}>
@@ -1334,14 +1386,14 @@ export function ShoppingListTool({ toolId }: ShoppingListToolProps) {
                                   </select>
                                 </div>
                                 <div>
-                                  <label className="block text-xs font-medium text-slate-300 mb-1.5">
+                                  <label className={labelClass}>
                                     Item Name <span className="text-red-400">*</span>
                                   </label>
                                   <input
                                     type="text"
                                     value={editingItemName}
                                     onChange={(e) => setEditingItemName(e.target.value)}
-                                    className="w-full px-3 py-1.5 rounded-lg border border-slate-700 bg-slate-900 text-slate-100 text-sm focus:border-emerald-500/50 focus:outline-none focus:ring-1 focus:ring-emerald-500/50"
+                                    className={inputClass}
                                     onKeyDown={(e) => {
                                       if (e.key === 'Enter') saveEditingItem();
                                       if (e.key === 'Escape') cancelEditingItem();
@@ -1352,7 +1404,7 @@ export function ShoppingListTool({ toolId }: ShoppingListToolProps) {
                                 <div className="flex gap-2 justify-end">
                                   <button
                                     onClick={cancelEditingItem}
-                                    className="px-3 py-1.5 rounded border border-slate-600 bg-slate-700 text-slate-200 text-xs hover:bg-slate-600"
+                                    className={isLight ? 'px-3 py-1.5 rounded border-2 border-slate-400 bg-slate-100 text-slate-800 text-xs hover:bg-slate-200' : 'px-3 py-1.5 rounded border border-slate-600 bg-slate-700 text-slate-200 text-xs hover:bg-slate-600'}
                                   >
                                     Cancel
                                   </button>
@@ -1367,15 +1419,15 @@ export function ShoppingListTool({ toolId }: ShoppingListToolProps) {
                               </li>
                             ) : (
                               <li key={item.id}>
-                                <div className="flex items-center justify-between p-2 rounded-lg border border-slate-700 bg-slate-800/50 hover:bg-slate-800 transition-colors">
-                                  <span className="text-sm text-slate-200">{item.name}</span>
+                                <div className={itemRowClass}>
+                                  <span className={isLight ? 'text-sm text-slate-800' : 'text-sm text-slate-200'}>{item.name}</span>
                                   <div className="flex items-center gap-1">
                                     <button
                                       type="button"
                                       onClick={() => startEditingItem(item)}
                                       aria-label={`Edit ${item.name}`}
                                       title="Edit"
-                                      className="rounded-lg p-1.5 text-slate-400 hover:bg-slate-700 hover:text-slate-200 transition-colors"
+                                      className={rowIconEmeraldClass}
                                     >
                                       <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
@@ -1389,7 +1441,7 @@ export function ShoppingListTool({ toolId }: ShoppingListToolProps) {
                                       }}
                                       aria-label={`Delete ${item.name}`}
                                       title="Delete"
-                                      className="rounded-lg p-1.5 text-red-400 hover:bg-red-500/20 hover:text-red-300 transition-colors"
+                                      className={rowIconDangerClass}
                                     >
                                       <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
@@ -1414,27 +1466,27 @@ export function ShoppingListTool({ toolId }: ShoppingListToolProps) {
       {/* Delete list confirmation modal */}
       {deleteConfirmListId && (
         <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
-          <div className="rounded-2xl border border-slate-800 bg-slate-900 p-6 max-w-md w-full mx-4">
-            <h3 className="text-xl font-semibold text-slate-50 mb-2">
+          <div className={isLight ? 'rounded-2xl border border-slate-200 bg-white p-6 max-w-md w-full mx-4 shadow-2xl' : 'rounded-2xl border border-slate-800 bg-slate-900 p-6 max-w-md w-full mx-4'}>
+            <h3 className={isLight ? 'text-xl font-semibold text-slate-900 mb-2' : 'text-xl font-semibold text-slate-50 mb-2'}>
               Delete Shopping List
             </h3>
-            <div className="rounded-lg border border-red-500/50 bg-red-500/10 px-4 py-3 mb-4">
-              <p className="text-red-300 font-semibold mb-2">
+            <div className={isLight ? 'rounded-lg border border-red-300 bg-red-50 px-4 py-3 mb-4' : 'rounded-lg border border-red-500/50 bg-red-500/10 px-4 py-3 mb-4'}>
+              <p className={isLight ? 'text-red-700 font-semibold mb-2' : 'text-red-300 font-semibold mb-2'}>
                 ⚠️ Warning: This action cannot be undone!
               </p>
-              <p className="text-red-200 text-sm">
+              <p className={isLight ? 'text-red-600 text-sm' : 'text-red-200 text-sm'}>
                 This list will be <strong>permanently deleted</strong>.
               </p>
             </div>
-            <p className="text-slate-300 mb-4">
-              Type <strong className="text-slate-200">delete</strong> to confirm:
+            <p className={isLight ? 'text-slate-700 mb-4' : 'text-slate-300 mb-4'}>
+              Type <strong className={isLight ? 'text-slate-900' : 'text-slate-200'}>delete</strong> to confirm:
             </p>
             <input
               type="text"
               value={deleteConfirmText}
               onChange={(e) => setDeleteConfirmText(e.target.value)}
               placeholder="Type 'delete' to confirm"
-              className="w-full rounded-lg border border-slate-700 bg-slate-900/70 px-3 py-2 text-sm text-slate-100 placeholder-slate-500 focus:border-red-500/50 focus:outline-none focus:ring-1 focus:ring-red-500/50 mb-4"
+              className={isLight ? 'w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900 placeholder-slate-500 focus:border-red-500/50 focus:outline-none focus:ring-1 focus:ring-red-500/50 mb-4' : 'w-full rounded-lg border border-slate-700 bg-slate-900/70 px-3 py-2 text-sm text-slate-100 placeholder-slate-500 focus:border-red-500/50 focus:outline-none focus:ring-1 focus:ring-red-500/50 mb-4'}
               onKeyDown={(e) => {
                 if (e.key === 'Escape') {
                   setDeleteConfirmListId(null);
@@ -1455,7 +1507,7 @@ export function ShoppingListTool({ toolId }: ShoppingListToolProps) {
                   setDeleteConfirmListId(null);
                   setDeleteConfirmText('');
                 }}
-                className="px-4 py-2 rounded-lg border border-slate-700 bg-slate-800 text-slate-200 hover:bg-slate-700 transition-colors"
+                className={secondaryButtonClass}
               >
                 Cancel
               </button>
@@ -1467,27 +1519,27 @@ export function ShoppingListTool({ toolId }: ShoppingListToolProps) {
       {/* Delete item confirmation modal */}
       {deleteConfirmItemId && (
         <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
-          <div className="rounded-2xl border border-slate-800 bg-slate-900 p-6 max-w-md w-full mx-4">
-            <h3 className="text-xl font-semibold text-slate-50 mb-2">
+          <div className={isLight ? 'rounded-2xl border border-slate-200 bg-white p-6 max-w-md w-full mx-4 shadow-2xl' : 'rounded-2xl border border-slate-800 bg-slate-900 p-6 max-w-md w-full mx-4'}>
+            <h3 className={isLight ? 'text-xl font-semibold text-slate-900 mb-2' : 'text-xl font-semibold text-slate-50 mb-2'}>
               Delete Item
             </h3>
-            <div className="rounded-lg border border-red-500/50 bg-red-500/10 px-4 py-3 mb-4">
-              <p className="text-red-300 font-semibold mb-2">
+            <div className={isLight ? 'rounded-lg border border-red-300 bg-red-50 px-4 py-3 mb-4' : 'rounded-lg border border-red-500/50 bg-red-500/10 px-4 py-3 mb-4'}>
+              <p className={isLight ? 'text-red-700 font-semibold mb-2' : 'text-red-300 font-semibold mb-2'}>
                 ⚠️ Warning: This action cannot be undone!
               </p>
-              <p className="text-red-200 text-sm">
+              <p className={isLight ? 'text-red-600 text-sm' : 'text-red-200 text-sm'}>
                 This item will be removed from your master list. It will not affect existing shopping lists that already include it.
               </p>
             </div>
-            <p className="text-slate-300 mb-4">
-              Type <strong className="text-slate-200">delete</strong> to confirm:
+            <p className={isLight ? 'text-slate-700 mb-4' : 'text-slate-300 mb-4'}>
+              Type <strong className={isLight ? 'text-slate-900' : 'text-slate-200'}>delete</strong> to confirm:
             </p>
             <input
               type="text"
               value={deleteConfirmItemText}
               onChange={(e) => setDeleteConfirmItemText(e.target.value)}
               placeholder="Type 'delete' to confirm"
-              className="w-full rounded-lg border border-slate-700 bg-slate-900/70 px-3 py-2 text-sm text-slate-100 placeholder-slate-500 focus:border-red-500/50 focus:outline-none focus:ring-1 focus:ring-red-500/50 mb-4"
+              className={isLight ? 'w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900 placeholder-slate-500 focus:border-red-500/50 focus:outline-none focus:ring-1 focus:ring-red-500/50 mb-4' : 'w-full rounded-lg border border-slate-700 bg-slate-900/70 px-3 py-2 text-sm text-slate-100 placeholder-slate-500 focus:border-red-500/50 focus:outline-none focus:ring-1 focus:ring-red-500/50 mb-4'}
               onKeyDown={(e) => {
                 if (e.key === 'Escape') {
                   setDeleteConfirmItemId(null);
@@ -1508,7 +1560,7 @@ export function ShoppingListTool({ toolId }: ShoppingListToolProps) {
                   setDeleteConfirmItemId(null);
                   setDeleteConfirmItemText('');
                 }}
-                className="px-4 py-2 rounded-lg border border-slate-700 bg-slate-800 text-slate-200 hover:bg-slate-700 transition-colors"
+                className={secondaryButtonClass}
               >
                 Cancel
               </button>

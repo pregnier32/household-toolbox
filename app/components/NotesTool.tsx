@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useEffect } from 'react';
+import { useTheme } from './AppThemeProvider';
 
 type NoteTag = {
   id: string;
@@ -80,6 +81,62 @@ type NotesToolProps = {
 };
 
 export function NotesTool({ toolId }: NotesToolProps) {
+  const { resolvedTheme } = useTheme();
+  const isLight = resolvedTheme === 'light';
+  const titleClass = isLight ? 'text-2xl font-semibold text-slate-900 mb-2' : 'text-2xl font-semibold text-slate-50 mb-2';
+  const descClass = isLight ? 'text-slate-600 text-sm' : 'text-slate-400 text-sm';
+  const loadingClass = isLight ? 'text-sm text-slate-600' : 'text-sm text-slate-400';
+  const cardClass = isLight
+    ? 'rounded-2xl border border-slate-200 bg-white p-6 shadow-sm'
+    : 'rounded-2xl border border-slate-800 bg-slate-900/70 p-6';
+  const nestedCardClass = isLight
+    ? 'p-3 rounded-lg border border-slate-200 bg-slate-50'
+    : 'p-3 rounded-lg border border-slate-700 bg-slate-800/50';
+  const sectionTitleClass = isLight ? 'text-lg font-semibold text-slate-900' : 'text-lg font-semibold text-slate-50';
+  const counterTextClass = isLight ? 'text-sm text-slate-600' : 'text-sm text-slate-400';
+  const labelClass = isLight ? 'block text-sm font-medium text-slate-700 mb-2' : 'block text-sm font-medium text-slate-300 mb-2';
+  const inputClass = isLight
+    ? 'w-full px-3 py-2 rounded-lg border border-slate-300 bg-white text-slate-900 placeholder-slate-500 focus:border-emerald-500/50 focus:outline-none focus:ring-1 focus:ring-emerald-500/50'
+    : 'w-full px-3 py-2 rounded-lg border border-slate-700 bg-slate-900/70 text-slate-100 placeholder-slate-500 focus:border-emerald-500/50 focus:outline-none focus:ring-1 focus:ring-emerald-500/50';
+  const selectClass = isLight
+    ? 'w-full px-4 py-2 rounded-lg border border-slate-300 bg-white text-slate-900 focus:border-emerald-500/50 focus:outline-none focus:ring-1 focus:ring-emerald-500/50'
+    : 'w-full px-4 py-2 rounded-lg border border-slate-700 bg-slate-900/70 text-slate-100 focus:border-emerald-500/50 focus:outline-none focus:ring-1 focus:ring-emerald-500/50';
+  const primaryButtonClass = isLight
+    ? 'px-4 py-2.5 rounded-lg bg-emerald-600 text-white font-semibold hover:bg-emerald-500 transition-colors focus:outline-none focus:ring-2 focus:ring-emerald-500/50 focus:ring-offset-2 focus:ring-offset-white disabled:cursor-not-allowed disabled:opacity-50'
+    : 'px-4 py-2.5 rounded-lg bg-emerald-500 text-slate-950 font-semibold hover:bg-emerald-400 transition-colors focus:outline-none focus:ring-2 focus:ring-emerald-500/50 focus:ring-offset-2 focus:ring-offset-slate-900 disabled:cursor-not-allowed disabled:opacity-50';
+  const secondaryButtonClass = isLight
+    ? 'px-4 py-2 rounded-lg border-2 border-slate-400 bg-slate-100 text-slate-800 hover:bg-slate-200 transition-colors'
+    : 'px-4 py-2 rounded-lg border border-slate-700 bg-slate-800 text-slate-200 hover:bg-slate-700 transition-colors';
+  const tabStripClass = isLight ? 'border-b border-slate-200' : 'border-b border-slate-800';
+  const tabActiveClass = isLight
+    ? 'border-b-2 border-emerald-600 text-emerald-900 font-semibold'
+    : 'border-b-2 border-emerald-500 text-emerald-300';
+  const tabInactiveClass = isLight ? 'text-slate-600 hover:text-slate-900' : 'text-slate-400 hover:text-slate-300';
+  const modalCardClass = isLight
+    ? 'rounded-2xl border border-slate-200 bg-white p-6 max-w-md w-full mx-4 shadow-xl'
+    : 'rounded-2xl border border-slate-800 bg-slate-900 p-6 max-w-md w-full mx-4';
+  const modalCardLgClass = isLight
+    ? 'bg-white rounded-2xl border border-slate-200 p-6 max-w-2xl w-full mx-4 max-h-[90vh] overflow-y-auto shadow-xl'
+    : 'bg-slate-800 rounded-2xl border border-slate-700 p-6 max-w-2xl w-full mx-4 max-h-[90vh] overflow-y-auto';
+  const rowIconEmeraldClass = isLight
+    ? 'inline-flex items-center justify-center rounded-lg border-2 border-emerald-700 bg-white p-2 text-emerald-700 transition-colors hover:bg-emerald-50 hover:text-emerald-900'
+    : 'inline-flex items-center justify-center rounded-lg border-2 border-emerald-500/50 bg-slate-800/50 p-2 text-emerald-300 transition-colors hover:border-emerald-400 hover:bg-emerald-500/20';
+  const rowIconSecondaryClass = isLight
+    ? 'inline-flex items-center justify-center rounded-lg border-2 border-slate-400 bg-slate-100 p-2 text-slate-700 transition-colors hover:bg-slate-200 hover:text-slate-900'
+    : 'inline-flex items-center justify-center rounded-lg border-2 border-slate-600 bg-slate-800 p-2 text-slate-200 transition-colors hover:bg-slate-700';
+  const rowIconDangerClass = isLight
+    ? 'inline-flex items-center justify-center rounded-lg border-2 border-red-300 bg-white p-2 text-red-700 transition-colors hover:bg-red-50 hover:border-red-400'
+    : 'inline-flex items-center justify-center rounded-lg border-2 border-red-500/50 bg-slate-800/50 p-2 text-red-400 transition-colors hover:border-red-400 hover:bg-red-500/20';
+  const tagChipActiveClass = isLight
+    ? 'px-1.5 py-0.5 rounded text-xs font-medium border border-emerald-300 bg-emerald-50 text-emerald-800'
+    : 'px-1.5 py-0.5 rounded text-xs font-medium bg-emerald-500/20 text-emerald-300';
+  const tagChipHistoryClass = isLight
+    ? 'px-1.5 py-0.5 rounded text-xs font-medium border border-slate-300 bg-slate-100 text-slate-700'
+    : 'px-1.5 py-0.5 rounded text-xs font-medium bg-slate-600/50 text-slate-400';
+  const usageBadgeClass = isLight
+    ? 'px-2 py-1 rounded text-xs font-medium border border-slate-300 bg-white text-slate-800'
+    : 'px-2 py-1 rounded text-xs font-medium bg-slate-700 text-slate-300';
+
   const [notes, setNotes] = useState<Note[]>([]);
   const [tags, setTags] = useState<NoteTag[]>([]);
   const [activeTab, setActiveTab] = useState<'notes' | 'tags'>('notes');
@@ -1235,20 +1292,20 @@ export function NotesTool({ toolId }: NotesToolProps) {
       {/* Header */}
       <div className="flex items-center justify-between">
         <div>
-          <h2 className="text-2xl font-semibold text-slate-50 mb-2">Notes</h2>
-          <p className="text-slate-400 text-sm">
+          <h2 className={titleClass}>Notes</h2>
+          <p className={descClass}>
             Create, tag, and manage your notes
           </p>
         </div>
         {isLoading && (
-          <div className="text-sm text-slate-400">
+          <div className={loadingClass}>
             Loading...
           </div>
         )}
       </div>
 
       {/* Tabs */}
-      <div className="border-b border-slate-800">
+      <div className={tabStripClass}>
         <div className="flex gap-2">
           {[
             { id: 'notes', label: 'Notes' },
@@ -1258,9 +1315,7 @@ export function NotesTool({ toolId }: NotesToolProps) {
               key={tab.id}
               onClick={() => setActiveTab(tab.id as 'notes' | 'tags')}
               className={`px-4 py-2 text-sm font-medium transition-colors ${
-                activeTab === tab.id
-                  ? 'border-b-2 border-emerald-500 text-emerald-300'
-                  : 'text-slate-400 hover:text-slate-300'
+                activeTab === tab.id ? tabActiveClass : tabInactiveClass
               }`}
             >
               {tab.label}
@@ -1273,10 +1328,10 @@ export function NotesTool({ toolId }: NotesToolProps) {
       {activeTab === 'notes' && (
         <div className="space-y-6">
           {/* Search and Filter */}
-          <div className="rounded-2xl border border-slate-800 bg-slate-900/70 p-6">
+          <div className={cardClass}>
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <div>
-                <label className="block text-sm font-medium text-slate-300 mb-2">
+                <label className={labelClass}>
                   Search Notes
                 </label>
                 <input
@@ -1284,17 +1339,17 @@ export function NotesTool({ toolId }: NotesToolProps) {
                   value={searchQuery}
                   onChange={(e) => setSearchQuery(e.target.value)}
                   placeholder="Search by note name or content..."
-                  className="w-full px-3 py-2 rounded-lg border border-slate-700 bg-slate-900/70 text-slate-100 placeholder-slate-500 focus:border-emerald-500/50 focus:outline-none focus:ring-1 focus:ring-emerald-500/50"
+                  className={inputClass}
                 />
               </div>
               <div>
-                <label className="block text-sm font-medium text-slate-300 mb-2">
+                <label className={labelClass}>
                   Filter by Tag
                 </label>
                 <select
                   value={selectedTagFilter}
                   onChange={(e) => setSelectedTagFilter(e.target.value)}
-                  className="w-full px-4 py-2 rounded-lg border border-slate-700 bg-slate-900/70 text-slate-100 focus:border-emerald-500/50 focus:outline-none focus:ring-1 focus:ring-emerald-500/50"
+                  className={selectClass}
                 >
                   <option value="all">All Tags</option>
                   {activeTags.map(tag => (
@@ -1310,14 +1365,14 @@ export function NotesTool({ toolId }: NotesToolProps) {
             <div className="flex justify-start">
               <button
                 onClick={() => setIsAdding(true)}
-                className="px-4 py-2.5 rounded-lg bg-emerald-500 text-slate-950 font-semibold hover:bg-emerald-400 transition-colors focus:outline-none focus:ring-2 focus:ring-emerald-500/50 focus:ring-offset-2 focus:ring-offset-slate-900"
+                className={primaryButtonClass}
               >
                 + Add New Note
               </button>
             </div>
           ) : (
-            <div className="rounded-2xl border border-slate-800 bg-slate-900/70 p-6">
-              <h3 className="text-lg font-semibold text-slate-50 mb-4">Add New Note</h3>
+            <div className={cardClass}>
+              <h3 className={`${sectionTitleClass} mb-4`}>Add New Note</h3>
               <div className="space-y-4">
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                   <div>
@@ -1539,7 +1594,7 @@ export function NotesTool({ toolId }: NotesToolProps) {
                       (newNote.requiresPasswordForView && (!newNote.viewPassword.trim() || newNote.viewPassword !== newNote.confirmPassword)) ||
                       (newNote.requiresPasswordForView && newNote.securityQuestions.filter(q => q.questionId && q.answer.trim()).length !== 3)
                     }
-                    className="px-4 py-2.5 rounded-lg bg-emerald-500 text-slate-950 font-semibold hover:bg-emerald-400 transition-colors focus:outline-none focus:ring-2 focus:ring-emerald-500/50 focus:ring-offset-2 focus:ring-offset-slate-900 disabled:cursor-not-allowed disabled:opacity-50"
+                    className={primaryButtonClass}
                   >
                     Add Note
                   </button>
@@ -1562,7 +1617,7 @@ export function NotesTool({ toolId }: NotesToolProps) {
                       });
                       setShowPassword({ ...showPassword, new: false, newConfirm: false });
                     }}
-                    className="px-4 py-2 rounded-lg border border-slate-700 bg-slate-800 text-slate-200 hover:bg-slate-700 transition-colors"
+                    className={secondaryButtonClass}
                   >
                     Cancel
                   </button>
@@ -1572,17 +1627,17 @@ export function NotesTool({ toolId }: NotesToolProps) {
           )}
 
           {/* Active Notes */}
-          <div className="rounded-2xl border border-slate-800 bg-slate-900/70 p-6">
+          <div className={cardClass}>
             <div className="flex items-center justify-between mb-4">
-              <h3 className="text-lg font-semibold text-slate-50">Active Notes</h3>
-              <span className="text-sm text-slate-400">
+              <h3 className={sectionTitleClass}>Active Notes</h3>
+              <span className={counterTextClass}>
                 {activeNotes.length} {activeNotes.length === 1 ? 'note' : 'notes'}
               </span>
             </div>
             {activeNotes.length > 0 ? (
               <div className="space-y-4">
                 {activeNotes.map(note => (
-                    <div key={note.id} className="p-3 rounded-lg border border-slate-700 bg-slate-800/50">
+                    <div key={note.id} className={nestedCardClass}>
                     {editingId === note.id ? (
                       <div className="space-y-4">
                         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -1749,13 +1804,13 @@ export function NotesTool({ toolId }: NotesToolProps) {
                               (editingNote.requiresPasswordForView && editingNote.viewPassword.trim() && editingNote.viewPassword !== '••••••••' && editingNote.viewPassword !== editingNote.confirmPassword) ||
                               (editingNote.requiresPasswordForView && !editingNote.viewPassword.trim() && (!note.requiresPasswordForView || !note.viewPassword))
                             }
-                            className="px-4 py-2.5 rounded-lg bg-emerald-500 text-slate-950 font-semibold hover:bg-emerald-400 transition-colors focus:outline-none focus:ring-2 focus:ring-emerald-500/50 focus:ring-offset-2 focus:ring-offset-slate-900 disabled:cursor-not-allowed disabled:opacity-50"
+                            className={primaryButtonClass}
                           >
                             Save
                           </button>
                           <button
                             onClick={cancelEditing}
-                            className="px-4 py-2 rounded-lg border border-slate-700 bg-slate-800 text-slate-200 hover:bg-slate-700 transition-colors"
+                            className={secondaryButtonClass}
                           >
                             Cancel
                           </button>
@@ -1770,7 +1825,7 @@ export function NotesTool({ toolId }: NotesToolProps) {
                               {note.tags.map(tagId => {
                                 const tag = tags.find(t => t.id === tagId);
                                 return tag ? (
-                                  <span key={tagId} className="px-1.5 py-0.5 rounded text-xs font-medium bg-emerald-500/20 text-emerald-300">
+                                  <span key={tagId} className={tagChipActiveClass}>
                                     {tag.name}
                                   </span>
                                 ) : null;
@@ -1794,25 +1849,40 @@ export function NotesTool({ toolId }: NotesToolProps) {
                             </span>
                           </div>
                         </div>
-                        <div className="flex gap-2 flex-shrink-0">
+                        <div className="flex gap-1.5 flex-shrink-0">
                           <button
+                            type="button"
                             onClick={() => handleViewNote(note)}
-                            className="px-2.5 py-1 rounded-lg bg-blue-500/20 text-blue-300 hover:bg-blue-500/30 transition-colors text-xs whitespace-nowrap"
+                            className={rowIconSecondaryClass}
                             title="View note"
+                            aria-label="View note"
                           >
-                            View
+                            <svg className="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z" />
+                              <circle cx="12" cy="12" r="3" />
+                            </svg>
                           </button>
                           <button
+                            type="button"
                             onClick={() => startEditing(note)}
-                            className="px-2.5 py-1 rounded-lg bg-emerald-500/20 text-emerald-300 hover:bg-emerald-500/30 transition-colors text-xs whitespace-nowrap"
+                            className={rowIconEmeraldClass}
+                            title="Edit note"
+                            aria-label="Edit note"
                           >
-                            Edit
+                            <svg className="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
+                            </svg>
                           </button>
                           <button
+                            type="button"
                             onClick={() => inactivateNote(note.id)}
-                            className="px-2.5 py-1 rounded-lg bg-slate-700 text-slate-200 hover:bg-slate-600 transition-colors text-xs whitespace-nowrap"
+                            className={rowIconSecondaryClass}
+                            title="Move to history"
+                            aria-label="Move to history"
                           >
-                            Inactivate
+                            <svg className="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M20.25 7.5l-.625 10.632a2.25 2.25 0 01-2.247 2.118H6.622a2.25 2.25 0 01-2.247-2.118L3.75 7.5M10 11.25h4M3.375 7.5h17.25c.621 0 1.125-.504 1.125-1.125v-1.5c0-.621-.504-1.125-1.125-1.125H3.375c-.621 0-1.125.504-1.125 1.125v1.5c0 .621.504 1.125 1.125 1.125z" />
+                            </svg>
                           </button>
                         </div>
                       </div>
@@ -1826,12 +1896,12 @@ export function NotesTool({ toolId }: NotesToolProps) {
           </div>
 
           {/* History Section */}
-          <div className="rounded-2xl border border-slate-800 bg-slate-900/70 p-6">
+          <div className={cardClass}>
             <div className="flex items-center justify-between mb-4">
-              <h3 className="text-lg font-semibold text-slate-50">History</h3>
+              <h3 className={sectionTitleClass}>History</h3>
               <button
                 onClick={() => setShowHistory(!showHistory)}
-                className="text-sm text-slate-400 hover:text-slate-300 transition-colors"
+                className={isLight ? 'text-sm text-slate-600 hover:text-slate-900 transition-colors' : 'text-sm text-slate-400 hover:text-slate-300 transition-colors'}
               >
                 {showHistory ? 'Hide' : 'Show'} ({inactiveNotes.length})
               </button>
@@ -1849,7 +1919,7 @@ export function NotesTool({ toolId }: NotesToolProps) {
                               {note.tags.map(tagId => {
                                 const tag = tags.find(t => t.id === tagId);
                                 return tag ? (
-                                  <span key={tagId} className="px-1.5 py-0.5 rounded text-xs font-medium bg-slate-600/50 text-slate-400">
+                                  <span key={tagId} className={tagChipHistoryClass}>
                                     {tag.name}
                                   </span>
                                 ) : null;
@@ -1876,25 +1946,40 @@ export function NotesTool({ toolId }: NotesToolProps) {
                             </span>
                           </div>
                         </div>
-                        <div className="flex gap-2 flex-shrink-0">
+                        <div className="flex gap-1.5 flex-shrink-0">
                           <button
+                            type="button"
                             onClick={() => handleViewNote(note)}
-                            className="px-2.5 py-1 rounded-lg bg-blue-500/20 text-blue-300 hover:bg-blue-500/30 transition-colors text-xs whitespace-nowrap"
+                            className={rowIconSecondaryClass}
                             title="View note"
+                            aria-label="View note"
                           >
-                            View
+                            <svg className="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z" />
+                              <circle cx="12" cy="12" r="3" />
+                            </svg>
                           </button>
                           <button
+                            type="button"
                             onClick={() => activateNote(note.id)}
-                            className="px-2.5 py-1 rounded-lg bg-emerald-500/20 text-emerald-400 hover:bg-emerald-500/30 transition-colors text-xs whitespace-nowrap"
+                            className={rowIconEmeraldClass}
+                            title="Activate note"
+                            aria-label="Activate note"
                           >
-                            Activate
+                            <svg className="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 15L3 9m0 0l6-6M3 9h12a6 6 0 010 12h-3" />
+                            </svg>
                           </button>
                           <button
+                            type="button"
                             onClick={() => setDeleteConfirmId(note.id)}
-                            className="px-2.5 py-1 rounded-lg bg-red-500/20 text-red-400 hover:bg-red-500/30 transition-colors text-xs whitespace-nowrap"
+                            className={rowIconDangerClass}
+                            title="Delete note"
+                            aria-label="Delete note"
                           >
-                            Delete
+                            <svg className="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                            </svg>
                           </button>
                         </div>
                       </div>
@@ -1917,14 +2002,14 @@ export function NotesTool({ toolId }: NotesToolProps) {
             <div className="flex justify-start">
               <button
                 onClick={() => setIsAddingTag(true)}
-                className="px-4 py-2.5 rounded-lg bg-emerald-500 text-slate-950 font-semibold hover:bg-emerald-400 transition-colors focus:outline-none focus:ring-2 focus:ring-emerald-500/50 focus:ring-offset-2 focus:ring-offset-slate-900"
+                className={primaryButtonClass}
               >
                 + Add New Tag
               </button>
             </div>
           ) : (
-            <div className="rounded-2xl border border-slate-800 bg-slate-900/70 p-6">
-              <h3 className="text-lg font-semibold text-slate-50 mb-4">Add New Tag</h3>
+            <div className={cardClass}>
+              <h3 className={`${sectionTitleClass} mb-4`}>Add New Tag</h3>
               <div className="flex gap-4">
                 <input
                   type="text"
@@ -1950,7 +2035,7 @@ export function NotesTool({ toolId }: NotesToolProps) {
                     setIsAddingTag(false);
                     setNewTagName('');
                   }}
-                  className="px-4 py-2 rounded-lg border border-slate-700 bg-slate-800 text-slate-200 hover:bg-slate-700 transition-colors"
+                  className={secondaryButtonClass}
                 >
                   Cancel
                 </button>
@@ -1959,10 +2044,10 @@ export function NotesTool({ toolId }: NotesToolProps) {
           )}
 
           {/* Active Tags */}
-          <div className="rounded-2xl border border-slate-800 bg-slate-900/70 p-6">
+          <div className={cardClass}>
             <div className="flex items-center justify-between mb-4">
-              <h3 className="text-lg font-semibold text-slate-50">Active Tags</h3>
-              <span className="text-sm text-slate-400">
+              <h3 className={sectionTitleClass}>Active Tags</h3>
+              <span className={counterTextClass}>
                 {activeTags.length} {activeTags.length === 1 ? 'tag' : 'tags'}
               </span>
             </div>
@@ -1989,7 +2074,7 @@ export function NotesTool({ toolId }: NotesToolProps) {
                         <button
                           onClick={saveTagEdit}
                           disabled={!editingTagName.trim()}
-                          className="px-4 py-2.5 rounded-lg bg-emerald-500 text-slate-950 font-semibold hover:bg-emerald-400 transition-colors focus:outline-none focus:ring-2 focus:ring-emerald-500/50 focus:ring-offset-2 focus:ring-offset-slate-900 disabled:cursor-not-allowed disabled:opacity-50 text-sm"
+                          className={`${primaryButtonClass} text-sm`}
                         >
                           Save
                         </button>
@@ -2004,22 +2089,32 @@ export function NotesTool({ toolId }: NotesToolProps) {
                       <div className="flex items-center justify-between">
                         <div className="flex items-center gap-3">
                           <span className="text-lg font-medium text-slate-100">{tag.name}</span>
-                          <span className="px-2 py-1 rounded text-xs font-medium bg-slate-700 text-slate-300">
+                          <span className={usageBadgeClass}>
                             Used {getTagUsageCount(tag.id)} {getTagUsageCount(tag.id) === 1 ? 'time' : 'times'}
                           </span>
                         </div>
-                        <div className="flex gap-2">
+                        <div className="flex gap-1.5">
                           <button
+                            type="button"
                             onClick={() => startEditingTag(tag)}
-                            className="px-3 py-1 rounded-lg bg-emerald-500/20 text-emerald-300 hover:bg-emerald-500/30 transition-colors text-sm"
+                            className={rowIconEmeraldClass}
+                            title="Edit tag"
+                            aria-label="Edit tag"
                           >
-                            Edit
+                            <svg className="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
+                            </svg>
                           </button>
                           <button
+                            type="button"
                             onClick={() => inactivateTag(tag.id)}
-                            className="px-3 py-1 rounded-lg bg-slate-700 text-slate-200 hover:bg-slate-600 transition-colors text-sm"
+                            className={rowIconSecondaryClass}
+                            title="Move tag to history"
+                            aria-label="Move tag to history"
                           >
-                            Inactivate
+                            <svg className="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M20.25 7.5l-.625 10.632a2.25 2.25 0 01-2.247 2.118H6.622a2.25 2.25 0 01-2.247-2.118L3.75 7.5M10 11.25h4M3.375 7.5h17.25c.621 0 1.125-.504 1.125-1.125v-1.5c0-.621-.504-1.125-1.125-1.125H3.375c-.621 0-1.125.504-1.125 1.125v1.5c0 .621.504 1.125 1.125 1.125z" />
+                            </svg>
                           </button>
                         </div>
                       </div>
@@ -2033,10 +2128,10 @@ export function NotesTool({ toolId }: NotesToolProps) {
           </div>
 
           {/* Inactive Tags */}
-          <div className="rounded-2xl border border-slate-800 bg-slate-900/70 p-6">
+          <div className={cardClass}>
             <div className="flex items-center justify-between mb-4">
-              <h3 className="text-lg font-semibold text-slate-50">Inactive Tags</h3>
-              <span className="text-sm text-slate-400">
+              <h3 className={sectionTitleClass}>Inactive Tags</h3>
+              <span className={counterTextClass}>
                 {inactiveTags.length} {inactiveTags.length === 1 ? 'tag' : 'tags'}
               </span>
             </div>
@@ -2049,23 +2144,33 @@ export function NotesTool({ toolId }: NotesToolProps) {
                       <div className="flex items-center justify-between">
                         <div className="flex items-center gap-3">
                           <span className="text-lg font-medium text-slate-300">{tag.name}</span>
-                          <span className="px-2 py-1 rounded text-xs font-medium bg-slate-700 text-slate-400">
+                          <span className={usageBadgeClass}>
                             Used {usageCount} {usageCount === 1 ? 'time' : 'times'}
                           </span>
                         </div>
-                        <div className="flex gap-2">
+                        <div className="flex gap-1.5">
                           <button
+                            type="button"
                             onClick={() => activateTag(tag.id)}
-                            className="px-3 py-1 rounded-lg bg-emerald-500/20 text-emerald-400 hover:bg-emerald-500/30 transition-colors text-sm"
+                            className={rowIconEmeraldClass}
+                            title="Activate tag"
+                            aria-label="Activate tag"
                           >
-                            Activate
+                            <svg className="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 15L3 9m0 0l6-6M3 9h12a6 6 0 010 12h-3" />
+                            </svg>
                           </button>
                           {usageCount === 0 && (
                             <button
+                              type="button"
                               onClick={() => setDeleteTagConfirmId(tag.id)}
-                              className="px-3 py-1 rounded-lg bg-red-500/20 text-red-400 hover:bg-red-500/30 transition-colors text-sm"
+                              className={rowIconDangerClass}
+                              title="Delete tag"
+                              aria-label="Delete tag"
                             >
-                              Delete
+                              <svg className="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                              </svg>
                             </button>
                           )}
                         </div>
@@ -2084,20 +2189,25 @@ export function NotesTool({ toolId }: NotesToolProps) {
       {/* Delete Confirmation Modal */}
       {deleteConfirmId && (
         <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
-          <div className="rounded-2xl border border-slate-800 bg-slate-900 p-6 max-w-md w-full mx-4">
-            <h3 className="text-xl font-semibold text-slate-50 mb-2">Delete Note</h3>
-            <p className="text-slate-300 mb-4">
-              <strong className="text-red-400">Warning:</strong> This action cannot be undone. This note will be permanently deleted.
-            </p>
-            <p className="text-slate-400 text-sm mb-4">
-              To confirm, please type <strong className="text-slate-200">delete</strong> in the box below:
+          <div className={modalCardClass}>
+            <h3 className={isLight ? 'text-xl font-semibold text-slate-900 mb-2' : 'text-xl font-semibold text-slate-50 mb-2'}>Delete Note</h3>
+            <div className={isLight ? 'rounded-lg border border-red-300 bg-red-50 px-4 py-3 mb-4' : 'rounded-lg border border-red-500/50 bg-red-500/10 px-4 py-3 mb-4'}>
+              <p className={isLight ? 'text-red-700 font-semibold mb-2' : 'text-red-300 font-semibold mb-2'}>
+                ⚠️ Warning: This action cannot be undone!
+              </p>
+              <p className={isLight ? 'text-red-600 text-sm' : 'text-red-200 text-sm'}>
+                This note will be permanently deleted.
+              </p>
+            </div>
+            <p className={isLight ? 'text-slate-600 text-sm mb-4' : 'text-slate-400 text-sm mb-4'}>
+              To confirm, please type <strong className={isLight ? 'text-slate-900' : 'text-slate-200'}>delete</strong> in the box below:
             </p>
             <input
               type="text"
               value={deleteConfirmText}
               onChange={(e) => setDeleteConfirmText(e.target.value)}
               placeholder="Type 'delete' to confirm"
-              className="w-full px-4 py-2 rounded-lg border border-slate-700 bg-slate-800 text-slate-100 placeholder-slate-500 focus:border-red-500/50 focus:outline-none focus:ring-1 focus:ring-red-500/50 mb-4"
+              className={isLight ? 'w-full px-4 py-2 rounded-lg border border-slate-300 bg-white text-slate-900 placeholder-slate-500 focus:border-red-500/50 focus:outline-none focus:ring-1 focus:ring-red-500/50 mb-4' : 'w-full px-4 py-2 rounded-lg border border-slate-700 bg-slate-800 text-slate-100 placeholder-slate-500 focus:border-red-500/50 focus:outline-none focus:ring-1 focus:ring-red-500/50 mb-4'}
               autoFocus
               onKeyDown={(e) => {
                 if (e.key === 'Escape') {
@@ -2119,7 +2229,7 @@ export function NotesTool({ toolId }: NotesToolProps) {
                   setDeleteConfirmId(null);
                   setDeleteConfirmText('');
                 }}
-                className="px-4 py-2 rounded-lg border border-slate-700 bg-slate-800 text-slate-200 hover:bg-slate-700 transition-colors"
+                className={secondaryButtonClass}
               >
                 Cancel
               </button>
@@ -2131,9 +2241,9 @@ export function NotesTool({ toolId }: NotesToolProps) {
       {/* View Password Modal */}
       {viewPasswordModalId && (
         <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
-          <div className="bg-slate-800 rounded-2xl border border-slate-700 p-6 max-w-md w-full mx-4">
+          <div className={modalCardClass}>
             <div className="flex items-center justify-between mb-4">
-              <h3 className="text-lg font-semibold text-slate-50">
+              <h3 className={sectionTitleClass}>
                 {passwordAction === 'edit' ? 'Enter Password to Edit' : 
                  passwordAction === 'inactivate' ? 'Enter Password to Inactivate' : 
                  'Enter View Password'}
@@ -2228,7 +2338,7 @@ export function NotesTool({ toolId }: NotesToolProps) {
                     setShowViewPassword(false);
                     setPasswordAction(null);
                   }}
-                  className="px-4 py-2 rounded-lg border border-slate-700 bg-slate-800 text-slate-200 hover:bg-slate-700 transition-colors"
+                  className={secondaryButtonClass}
                 >
                   Cancel
                 </button>
@@ -2241,9 +2351,9 @@ export function NotesTool({ toolId }: NotesToolProps) {
       {/* Forgot Password Modal */}
       {showForgotPasswordModal && (
         <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
-          <div className="bg-slate-800 rounded-2xl border border-slate-700 p-6 max-w-md w-full mx-4 max-h-[90vh] overflow-y-auto">
+          <div className={isLight ? `${modalCardClass} max-h-[90vh] overflow-y-auto` : 'bg-slate-800 rounded-2xl border border-slate-700 p-6 max-w-md w-full mx-4 max-h-[90vh] overflow-y-auto'}>
             <div className="flex items-center justify-between mb-4">
-              <h3 className="text-lg font-semibold text-slate-50">
+              <h3 className={sectionTitleClass}>
                 {passwordResetStep === 'questions' ? 'Answer Security Questions' : 'Reset Password'}
               </h3>
               <button
@@ -2304,7 +2414,7 @@ export function NotesTool({ toolId }: NotesToolProps) {
                         setSecurityQuestions([]);
                         setSecurityAnswers([]);
                       }}
-                      className="px-4 py-2 rounded-lg border border-slate-700 bg-slate-800 text-slate-200 hover:bg-slate-700 transition-colors"
+                      className={secondaryButtonClass}
                     >
                       Cancel
                     </button>
@@ -2404,7 +2514,7 @@ export function NotesTool({ toolId }: NotesToolProps) {
                         setNewPassword('');
                         setConfirmNewPassword('');
                       }}
-                      className="px-4 py-2 rounded-lg border border-slate-700 bg-slate-800 text-slate-200 hover:bg-slate-700 transition-colors"
+                      className={secondaryButtonClass}
                     >
                       Cancel
                     </button>
@@ -2419,20 +2529,25 @@ export function NotesTool({ toolId }: NotesToolProps) {
       {/* Delete Tag Confirmation Modal */}
       {deleteTagConfirmId && (
         <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
-          <div className="rounded-2xl border border-slate-800 bg-slate-900 p-6 max-w-md w-full mx-4">
-            <h3 className="text-xl font-semibold text-slate-50 mb-2">Delete Tag</h3>
-            <p className="text-slate-300 mb-4">
-              <strong className="text-red-400">Warning:</strong> This action cannot be undone. This tag will be permanently deleted.
-            </p>
-            <p className="text-slate-400 text-sm mb-4">
-              To confirm, please type <strong className="text-slate-200">delete</strong> in the box below:
+          <div className={modalCardClass}>
+            <h3 className={isLight ? 'text-xl font-semibold text-slate-900 mb-2' : 'text-xl font-semibold text-slate-50 mb-2'}>Delete Tag</h3>
+            <div className={isLight ? 'rounded-lg border border-red-300 bg-red-50 px-4 py-3 mb-4' : 'rounded-lg border border-red-500/50 bg-red-500/10 px-4 py-3 mb-4'}>
+              <p className={isLight ? 'text-red-700 font-semibold mb-2' : 'text-red-300 font-semibold mb-2'}>
+                ⚠️ Warning: This action cannot be undone!
+              </p>
+              <p className={isLight ? 'text-red-600 text-sm' : 'text-red-200 text-sm'}>
+                This tag will be permanently deleted.
+              </p>
+            </div>
+            <p className={isLight ? 'text-slate-600 text-sm mb-4' : 'text-slate-400 text-sm mb-4'}>
+              To confirm, please type <strong className={isLight ? 'text-slate-900' : 'text-slate-200'}>delete</strong> in the box below:
             </p>
             <input
               type="text"
               value={deleteTagConfirmText}
               onChange={(e) => setDeleteTagConfirmText(e.target.value)}
               placeholder="Type 'delete' to confirm"
-              className="w-full px-4 py-2 rounded-lg border border-slate-700 bg-slate-800 text-slate-100 placeholder-slate-500 focus:border-red-500/50 focus:outline-none focus:ring-1 focus:ring-red-500/50 mb-4"
+              className={isLight ? 'w-full px-4 py-2 rounded-lg border border-slate-300 bg-white text-slate-900 placeholder-slate-500 focus:border-red-500/50 focus:outline-none focus:ring-1 focus:ring-red-500/50 mb-4' : 'w-full px-4 py-2 rounded-lg border border-slate-700 bg-slate-800 text-slate-100 placeholder-slate-500 focus:border-red-500/50 focus:outline-none focus:ring-1 focus:ring-red-500/50 mb-4'}
               autoFocus
               onKeyDown={(e) => {
                 if (e.key === 'Escape') {
@@ -2454,7 +2569,7 @@ export function NotesTool({ toolId }: NotesToolProps) {
                   setDeleteTagConfirmId(null);
                   setDeleteTagConfirmText('');
                 }}
-                className="px-4 py-2 rounded-lg border border-slate-700 bg-slate-800 text-slate-200 hover:bg-slate-700 transition-colors"
+                className={secondaryButtonClass}
               >
                 Cancel
               </button>
@@ -2466,9 +2581,9 @@ export function NotesTool({ toolId }: NotesToolProps) {
       {/* View Note Modal */}
       {viewNoteModal && (
         <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
-          <div className="bg-slate-800 rounded-2xl border border-slate-700 p-6 max-w-2xl w-full mx-4 max-h-[90vh] overflow-y-auto">
+          <div className={modalCardLgClass}>
             <div className="flex items-center justify-between mb-4">
-              <h3 className="text-lg font-semibold text-slate-50">View Note</h3>
+              <h3 className={sectionTitleClass}>View Note</h3>
               <button
                 onClick={() => setViewNoteModal(null)}
                 className="text-slate-400 hover:text-slate-200 transition-colors"
@@ -2514,7 +2629,9 @@ export function NotesTool({ toolId }: NotesToolProps) {
                       return tag ? (
                         <span
                           key={tagId}
-                          className="px-2.5 py-1 rounded-lg bg-emerald-500/20 text-emerald-300 text-xs"
+                          className={isLight
+                            ? 'px-2.5 py-1 rounded-lg border border-emerald-300 bg-emerald-50 text-emerald-800 text-xs'
+                            : 'px-2.5 py-1 rounded-lg bg-emerald-500/20 text-emerald-300 text-xs'}
                         >
                           {tag.name}
                         </span>
@@ -2527,7 +2644,7 @@ export function NotesTool({ toolId }: NotesToolProps) {
             <div className="mt-6 flex justify-end">
               <button
                 onClick={() => setViewNoteModal(null)}
-                className="px-4 py-2 rounded-lg border border-slate-700 bg-slate-800 text-slate-200 hover:bg-slate-700 transition-colors"
+                className={secondaryButtonClass}
               >
                 Close
               </button>

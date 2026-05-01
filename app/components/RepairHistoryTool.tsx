@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useEffect, useRef } from 'react';
+import { useTheme } from './AppThemeProvider';
 
 type HeaderRecord = {
   id: string;
@@ -207,6 +208,64 @@ const DEFAULT_AUTO_ITEMS: Omit<Item, 'id'>[] = [
 ];
 
 export function RepairHistoryTool({ toolId }: RepairHistoryToolProps) {
+  const { resolvedTheme } = useTheme();
+  const isLight = resolvedTheme === 'light';
+  const titleClass = isLight ? 'text-2xl font-semibold text-slate-900 mb-2' : 'text-2xl font-semibold text-slate-50 mb-2';
+  const descClass = isLight ? 'text-slate-600 text-sm' : 'text-slate-400 text-sm';
+  const loadingClass = isLight ? 'text-sm text-slate-600' : 'text-sm text-slate-400';
+  const cardClass = isLight
+    ? 'rounded-2xl border border-slate-200 bg-white p-6 shadow-sm'
+    : 'rounded-2xl border border-slate-800 bg-slate-900/70 p-6';
+  const compactCardClass = isLight
+    ? 'rounded-2xl border border-slate-200 bg-white p-4 shadow-sm'
+    : 'rounded-2xl border border-slate-800 bg-slate-900/70 p-4';
+  const nestedCardClass = isLight
+    ? 'rounded-2xl border border-slate-200 bg-slate-50 p-6'
+    : 'rounded-2xl border border-slate-800 bg-slate-900/70 p-6';
+  const sectionTitleClass = isLight ? 'text-lg font-semibold text-slate-900' : 'text-lg font-semibold text-slate-50';
+  const labelClass = isLight ? 'block text-xs font-medium text-slate-700 mb-1.5' : 'block text-xs font-medium text-slate-300 mb-1.5';
+  const inputClass = isLight
+    ? 'w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900 placeholder-slate-500 focus:border-emerald-500/50 focus:outline-none focus:ring-1 focus:ring-emerald-500/50'
+    : 'w-full rounded-lg border border-slate-700 bg-slate-900/70 px-3 py-2 text-sm text-slate-100 placeholder-slate-500 focus:border-emerald-500/50 focus:outline-none focus:ring-1 focus:ring-emerald-500/50';
+  const selectClass = isLight
+    ? 'w-full rounded-lg border border-slate-300 bg-white px-4 py-2 text-slate-900 focus:border-emerald-500/50 focus:outline-none focus:ring-1 focus:ring-emerald-500/50'
+    : 'w-full rounded-lg border border-slate-700 bg-slate-900/70 px-4 py-2 text-slate-100 focus:border-emerald-500/50 focus:outline-none focus:ring-1 focus:ring-emerald-500/50';
+  const primaryButtonClass = isLight
+    ? 'px-4 py-2.5 rounded-lg bg-emerald-600 text-white font-semibold hover:bg-emerald-500 transition-colors focus:outline-none focus:ring-2 focus:ring-emerald-500/50 focus:ring-offset-2 focus:ring-offset-white disabled:opacity-50 disabled:cursor-not-allowed'
+    : 'px-4 py-2.5 rounded-lg bg-emerald-500 text-slate-950 font-semibold hover:bg-emerald-400 transition-colors focus:outline-none focus:ring-2 focus:ring-emerald-500/50 focus:ring-offset-2 focus:ring-offset-slate-900 disabled:opacity-50 disabled:cursor-not-allowed';
+  const secondaryButtonClass = isLight
+    ? 'px-4 py-2 rounded-lg border-2 border-slate-400 bg-slate-100 text-slate-800 hover:bg-slate-200 transition-colors disabled:opacity-50 disabled:cursor-not-allowed'
+    : 'px-4 py-2 rounded-lg border border-slate-700 bg-slate-800 text-slate-200 hover:bg-slate-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed';
+  const tabStripClass = isLight ? 'border-b border-slate-200' : 'border-b border-slate-800';
+  const tabActiveClass = isLight ? 'border-b-2 border-emerald-600 text-emerald-900' : 'border-b-2 border-emerald-500 text-emerald-300';
+  const tabInactiveClass = isLight ? 'text-slate-600 hover:text-slate-900' : 'text-slate-400 hover:text-slate-300';
+  const popupMenuClass = isLight
+    ? 'absolute top-10 right-0 z-50 mt-1 rounded-lg border border-slate-200 bg-white shadow-lg ring-1 ring-slate-900/5 min-w-[160px] py-1'
+    : 'absolute top-10 right-0 z-50 bg-slate-800 border border-slate-700 rounded-lg shadow-lg min-w-[160px] py-1';
+  const popupItemClass = isLight
+    ? 'w-full px-4 py-2 text-left text-sm text-slate-700 transition-colors hover:bg-slate-100 flex items-center gap-2'
+    : 'w-full px-4 py-2 text-left text-sm text-slate-200 hover:bg-slate-700 transition-colors flex items-center gap-2';
+  const popupDangerItemClass = isLight
+    ? 'w-full px-4 py-2 text-left text-sm text-red-600 transition-colors hover:bg-red-50 flex items-center gap-2'
+    : 'w-full px-4 py-2 text-left text-sm text-red-400 hover:bg-slate-700 transition-colors flex items-center gap-2';
+  const modalCardClass = isLight
+    ? 'rounded-2xl border border-slate-200 bg-white p-6 max-w-md w-full mx-4 shadow-xl'
+    : 'rounded-2xl border border-slate-800 bg-slate-900 p-6 max-w-md w-full mx-4';
+  const rowIconEmeraldClass = isLight
+    ? 'inline-flex items-center justify-center rounded-lg border-2 border-emerald-700 bg-white p-2 text-emerald-700 transition-colors hover:bg-emerald-50 hover:text-emerald-900'
+    : 'inline-flex items-center justify-center rounded-lg border-2 border-emerald-500/50 bg-slate-800/50 p-2 text-emerald-300 transition-colors hover:border-emerald-400 hover:bg-emerald-500/20';
+  const rowIconDangerClass = isLight
+    ? 'inline-flex items-center justify-center rounded-lg border-2 border-red-300 bg-white p-2 text-red-700 transition-colors hover:bg-red-50 hover:border-red-400'
+    : 'inline-flex items-center justify-center rounded-lg border-2 border-red-500/50 bg-slate-800/50 p-2 text-red-400 transition-colors hover:border-red-400 hover:bg-red-500/20';
+  const checkboxClass = isLight
+    ? 'w-5 h-5 rounded border-slate-400 bg-white text-emerald-600 focus:ring-emerald-500 focus:ring-offset-white'
+    : 'w-5 h-5 rounded border-slate-600 bg-slate-700 text-emerald-500 focus:ring-emerald-500 focus:ring-offset-slate-800';
+  const insurancePanelClass = isLight
+    ? 'space-y-4 mt-4 p-4 rounded-lg border border-slate-200 bg-slate-50'
+    : 'space-y-4 mt-4 p-4 rounded-lg border border-slate-700 bg-slate-800/50';
+  const filePickerLabelClass = isLight
+    ? 'flex items-center gap-2 w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-slate-800 hover:bg-slate-50 transition-colors cursor-pointer'
+    : 'flex items-center gap-2 w-full rounded-lg border border-slate-700 bg-slate-900/70 px-3 py-2 text-sm text-slate-100 hover:bg-slate-800 transition-colors cursor-pointer';
   // Helper function to format currency
   const formatCurrency = (value: string): string => {
     // Remove all non-numeric characters except decimal point
@@ -1128,13 +1187,13 @@ export function RepairHistoryTool({ toolId }: RepairHistoryToolProps) {
       {/* Header */}
       <div className="flex items-center justify-between">
         <div>
-          <h2 className="text-2xl font-semibold text-slate-50 mb-2">Repair History</h2>
-          <p className="text-slate-400 text-sm">
+          <h2 className={titleClass}>Repair History</h2>
+          <p className={descClass}>
             Track repairs and replacements for your home and vehicles
           </p>
         </div>
         {isLoading && (
-          <div className="text-sm text-slate-400">
+          <div className={loadingClass}>
             Loading...
           </div>
         )}
@@ -1154,8 +1213,8 @@ export function RepairHistoryTool({ toolId }: RepairHistoryToolProps) {
       )}
 
       {/* Header Records */}
-      <div className="rounded-2xl border border-slate-800 bg-slate-900/70 p-4">
-        <label className="block text-sm font-medium text-slate-300 mb-3">
+      <div className={compactCardClass}>
+        <label className={isLight ? 'block text-sm font-medium text-slate-700 mb-3' : 'block text-sm font-medium text-slate-300 mb-3'}>
           Select a Category
         </label>
         
@@ -1263,22 +1322,22 @@ export function RepairHistoryTool({ toolId }: RepairHistoryToolProps) {
                       e.stopPropagation();
                       setMenuOpenHeaderId(menuOpenHeaderId === header.id ? null : header.id);
                     }}
-                    className="absolute top-1 right-1 p-1 rounded hover:bg-slate-700/50 transition-colors"
+                    className={isLight ? 'absolute top-1 right-1 p-1 rounded hover:bg-slate-100 transition-colors' : 'absolute top-1 right-1 p-1 rounded hover:bg-slate-700/50 transition-colors'}
                     title="Header options"
                   >
-                    <svg className="h-4 w-4 text-slate-400 hover:text-slate-200" fill="currentColor" viewBox="0 0 24 24">
+                    <svg className={isLight ? 'h-4 w-4 text-slate-600 hover:text-slate-900' : 'h-4 w-4 text-slate-400 hover:text-slate-200'} fill="currentColor" viewBox="0 0 24 24">
                       <path d="M12 8c1.1 0 2-.9 2-2s-.9-2-2-2-2 .9-2 2 .9 2 2 2zm0 2c-1.1 0-2 .9-2 2s.9 2 2 2 2-.9 2-2-.9-2-2-2zm0 6c-1.1 0-2 .9-2 2s.9 2 2 2 2-.9 2-2-.9-2-2-2z" />
                     </svg>
                   </button>
                   {/* Menu Popup */}
                   {menuOpenHeaderId === header.id && (
-                    <div className="absolute top-10 right-0 z-50 bg-slate-800 border border-slate-700 rounded-lg shadow-lg min-w-[160px] py-1">
+                    <div className={popupMenuClass}>
                       <button
                         onClick={(e) => {
                           e.stopPropagation();
                           startEditingHeader(header);
                         }}
-                        className="w-full px-4 py-2 text-left text-sm text-slate-200 hover:bg-slate-700 transition-colors flex items-center gap-2"
+                        className={popupItemClass}
                       >
                         <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
@@ -1292,7 +1351,7 @@ export function RepairHistoryTool({ toolId }: RepairHistoryToolProps) {
                           setDeleteConfirmHeaderId(header.id);
                           setDeleteConfirmText('');
                         }}
-                        className="w-full px-4 py-2 text-left text-sm text-red-400 hover:bg-slate-700 transition-colors flex items-center gap-2"
+                        className={popupDangerItemClass}
                       >
                         <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
@@ -1313,7 +1372,7 @@ export function RepairHistoryTool({ toolId }: RepairHistoryToolProps) {
                 setEditingHeaderId(null);
                 setNewHeaderCategoryType('Home');
               }}
-              className="px-4 py-3 rounded-lg border border-slate-700 bg-slate-800/50 text-slate-300 hover:border-emerald-500/50 hover:bg-emerald-500/10 hover:text-emerald-300 transition-all duration-200 flex items-center justify-center min-w-[60px]"
+              className={isLight ? 'px-4 py-3 rounded-lg border-2 border-slate-400 bg-slate-100 text-slate-700 hover:bg-slate-200 hover:text-slate-900 transition-all duration-200 flex items-center justify-center min-w-[60px]' : 'px-4 py-3 rounded-lg border border-slate-700 bg-slate-800/50 text-slate-300 hover:border-emerald-500/50 hover:bg-emerald-500/10 hover:text-emerald-300 transition-all duration-200 flex items-center justify-center min-w-[60px]'}
               title="Add New Category"
             >
               <svg className="h-6 w-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -1324,7 +1383,7 @@ export function RepairHistoryTool({ toolId }: RepairHistoryToolProps) {
         ) : (
           <div className="flex items-end gap-2 flex-wrap">
             <div className="flex-1 min-w-[200px]">
-              <label className="block text-sm font-medium text-slate-300 mb-2">
+              <label className={isLight ? 'block text-sm font-medium text-slate-700 mb-2' : 'block text-sm font-medium text-slate-300 mb-2'}>
                 New Category Name
               </label>
               <input
@@ -1332,7 +1391,7 @@ export function RepairHistoryTool({ toolId }: RepairHistoryToolProps) {
                 value={newHeaderName}
                 onChange={(e) => setNewHeaderName(e.target.value)}
                 placeholder="Enter category name"
-                className="w-full px-3 py-2 rounded-lg border border-slate-700 bg-slate-900/70 text-slate-100 placeholder-slate-500 focus:border-emerald-500/50 focus:outline-none focus:ring-1 focus:ring-emerald-500/50"
+                className={inputClass}
                 onKeyDown={(e) => {
                   if (e.key === 'Enter') {
                     createNewHeader();
@@ -1345,7 +1404,7 @@ export function RepairHistoryTool({ toolId }: RepairHistoryToolProps) {
               />
             </div>
             <div className="min-w-[200px]">
-              <label className="block text-sm font-medium text-slate-300 mb-2">
+              <label className={isLight ? 'block text-sm font-medium text-slate-700 mb-2' : 'block text-sm font-medium text-slate-300 mb-2'}>
                 Category Type
               </label>
               <div className="flex gap-4">
@@ -1376,7 +1435,7 @@ export function RepairHistoryTool({ toolId }: RepairHistoryToolProps) {
             <button
               onClick={createNewHeader}
               disabled={!newHeaderName.trim() || isSaving}
-              className="px-4 py-2 rounded-lg bg-emerald-500 text-slate-950 font-medium hover:bg-emerald-400 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+              className={primaryButtonClass}
             >
               Create
             </button>
@@ -1386,7 +1445,7 @@ export function RepairHistoryTool({ toolId }: RepairHistoryToolProps) {
                 setNewHeaderName('');
                 setNewHeaderCategoryType('Home');
               }}
-              className="px-4 py-2 rounded-lg border border-slate-700 bg-slate-800 text-slate-200 hover:bg-slate-700 transition-colors"
+              className={secondaryButtonClass}
             >
               Cancel
             </button>
@@ -1405,23 +1464,23 @@ export function RepairHistoryTool({ toolId }: RepairHistoryToolProps) {
       {/* Delete Header Confirmation Modal */}
       {deleteConfirmHeaderId && (
         <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
-          <div className="rounded-2xl border border-slate-800 bg-slate-900 p-6 max-w-md w-full mx-4">
-            <h3 className="text-xl font-semibold text-slate-50 mb-2">Delete Category</h3>
-            <div className="rounded-lg border border-red-500/50 bg-red-500/10 px-4 py-3 mb-4">
-              <p className="text-red-300 font-semibold mb-2">⚠️ Warning: This action cannot be undone!</p>
-              <p className="text-red-200 text-sm">
+          <div className={modalCardClass}>
+            <h3 className={isLight ? 'text-xl font-semibold text-slate-900 mb-2' : 'text-xl font-semibold text-slate-50 mb-2'}>Delete Category</h3>
+            <div className={isLight ? 'rounded-lg border border-red-300 bg-red-50 px-4 py-3 mb-4' : 'rounded-lg border border-red-500/50 bg-red-500/10 px-4 py-3 mb-4'}>
+              <p className={isLight ? 'text-red-700 font-semibold mb-2' : 'text-red-300 font-semibold mb-2'}>⚠️ Warning: This action cannot be undone!</p>
+              <p className={isLight ? 'text-red-600 text-sm' : 'text-red-200 text-sm'}>
                 All repair history records, receipts, warranties, and any other data associated with this category will be <strong>permanently deleted</strong> and cannot be recovered.
               </p>
             </div>
-            <p className="text-slate-300 mb-4">
-              To confirm deletion, please type <strong className="text-slate-200">delete</strong> in the box below:
+            <p className={isLight ? 'text-slate-700 mb-4' : 'text-slate-300 mb-4'}>
+              To confirm deletion, please type <strong className={isLight ? 'text-slate-900' : 'text-slate-200'}>delete</strong> in the box below:
             </p>
             <input
               type="text"
               value={deleteConfirmText}
               onChange={(e) => setDeleteConfirmText(e.target.value)}
               placeholder="Type 'delete' to confirm"
-              className="w-full px-4 py-2 rounded-lg border border-slate-700 bg-slate-800 text-slate-100 placeholder-slate-500 focus:border-red-500/50 focus:outline-none focus:ring-1 focus:ring-red-500/50 mb-4"
+              className={isLight ? 'w-full px-4 py-2 rounded-lg border border-slate-300 bg-white text-slate-900 placeholder-slate-500 focus:border-red-500/50 focus:outline-none focus:ring-1 focus:ring-red-500/50 mb-4' : 'w-full px-4 py-2 rounded-lg border border-slate-700 bg-slate-800 text-slate-100 placeholder-slate-500 focus:border-red-500/50 focus:outline-none focus:ring-1 focus:ring-red-500/50 mb-4'}
               autoFocus
               onKeyDown={(e) => {
                 if (e.key === 'Escape') {
@@ -1444,7 +1503,7 @@ export function RepairHistoryTool({ toolId }: RepairHistoryToolProps) {
                   setDeleteConfirmText('');
                 }}
                 disabled={isSaving}
-                className="px-4 py-2 rounded-lg border border-slate-700 bg-slate-800 text-slate-200 hover:bg-slate-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                className={secondaryButtonClass}
               >
                 Cancel
               </button>
@@ -1454,15 +1513,15 @@ export function RepairHistoryTool({ toolId }: RepairHistoryToolProps) {
       )}
 
       {!isLoading && !selectedHeaderId && !isCreatingNewHeader && (
-        <div className="rounded-2xl border border-slate-800 bg-slate-900/70 p-8 text-center">
-          <p className="text-slate-400 mb-4">Please select a category or create a new one to get started.</p>
+        <div className={isLight ? 'rounded-2xl border border-slate-200 bg-white p-8 text-center shadow-sm' : 'rounded-2xl border border-slate-800 bg-slate-900/70 p-8 text-center'}>
+          <p className={isLight ? 'text-slate-600 mb-4' : 'text-slate-400 mb-4'}>Please select a category or create a new one to get started.</p>
         </div>
       )}
 
       {selectedHeaderId && (
         <>
           {/* Navigation Tabs */}
-          <div className="border-b border-slate-800">
+          <div className={tabStripClass}>
             <div className="flex gap-2 overflow-x-auto">
               {selectedHeader && (
                 <div className="px-4 py-2 text-[18px] font-medium text-slate-200 whitespace-nowrap border-b-2 border-transparent">
@@ -1478,9 +1537,7 @@ export function RepairHistoryTool({ toolId }: RepairHistoryToolProps) {
                   key={tab.id}
                   onClick={() => setActiveTab(tab.id as 'history' | 'items' | 'export')}
                   className={`px-4 py-2 text-sm font-medium transition-colors whitespace-nowrap ${
-                    activeTab === tab.id
-                      ? 'border-b-2 border-emerald-500 text-emerald-300'
-                      : 'text-slate-400 hover:text-slate-300'
+                    activeTab === tab.id ? tabActiveClass : tabInactiveClass
                   }`}
                 >
                   {tab.label}
@@ -1497,7 +1554,7 @@ export function RepairHistoryTool({ toolId }: RepairHistoryToolProps) {
                 <div className="flex justify-start">
                   <button
                     onClick={startAddingRecord}
-                    className="px-4 py-2.5 rounded-lg bg-emerald-500 text-slate-950 font-semibold hover:bg-emerald-400 transition-colors focus:outline-none focus:ring-2 focus:ring-emerald-500/50 focus:ring-offset-2 focus:ring-offset-slate-900"
+                    className={primaryButtonClass}
                   >
                     + Add New Repair
                   </button>
@@ -1550,9 +1607,9 @@ export function RepairHistoryTool({ toolId }: RepairHistoryToolProps) {
 
               {/* Add Record Form */}
               {isAddingRecord && (
-                <div className="rounded-2xl border border-slate-800 bg-slate-900/70 p-6">
+                <div className={cardClass}>
                   <div className="flex items-center justify-between mb-4">
-                    <h3 className="text-lg font-semibold text-slate-50">Add New Repair History Item</h3>
+                    <h3 className={sectionTitleClass}>Add New Repair History Item</h3>
                     <div className="flex items-center gap-4">
                       <label className="flex items-center gap-2">
                         <input
@@ -1697,14 +1754,14 @@ export function RepairHistoryTool({ toolId }: RepairHistoryToolProps) {
                           id="submittedToInsurance"
                           checked={newRecord.submittedToInsurance || false}
                           onChange={(e) => setNewRecord({ ...newRecord, submittedToInsurance: e.target.checked })}
-                          className="w-5 h-5 rounded border-slate-600 bg-slate-700 text-emerald-500 focus:ring-emerald-500 focus:ring-offset-slate-800"
+                          className={checkboxClass}
                         />
-                        <label htmlFor="submittedToInsurance" className="text-sm text-slate-300 cursor-pointer">
+                        <label htmlFor="submittedToInsurance" className={isLight ? 'text-sm text-slate-700 cursor-pointer' : 'text-sm text-slate-300 cursor-pointer'}>
                           Was this repair submitted to your insurance?
                         </label>
                       </div>
                       {newRecord.submittedToInsurance && (
-                        <div className="space-y-4 mt-4 p-4 rounded-lg border border-slate-700 bg-slate-800/50">
+                        <div className={insurancePanelClass}>
                           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                             <div>
                               <label className="block text-xs font-medium text-slate-300 mb-1.5">
@@ -1799,12 +1856,12 @@ export function RepairHistoryTool({ toolId }: RepairHistoryToolProps) {
                         />
                         <label
                           htmlFor="receipt-file-input"
-                          className="flex items-center gap-2 w-full rounded-lg border border-slate-700 bg-slate-900/70 px-3 py-2 text-sm text-slate-100 hover:bg-slate-800 transition-colors cursor-pointer"
+                          className={filePickerLabelClass}
                         >
                           <svg className="w-5 h-5 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
                           </svg>
-                          <span className="text-slate-300">
+                          <span className={isLight ? 'text-slate-700' : 'text-slate-300'}>
                             {newRecord.receiptFile ? newRecord.receiptFile.name : 'Select file'}
                           </span>
                         </label>
@@ -1825,12 +1882,12 @@ export function RepairHistoryTool({ toolId }: RepairHistoryToolProps) {
                         />
                         <label
                           htmlFor="warranty-file-input"
-                          className="flex items-center gap-2 w-full rounded-lg border border-slate-700 bg-slate-900/70 px-3 py-2 text-sm text-slate-100 hover:bg-slate-800 transition-colors cursor-pointer"
+                          className={filePickerLabelClass}
                         >
                           <svg className="w-5 h-5 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
                           </svg>
-                          <span className="text-slate-300">
+                          <span className={isLight ? 'text-slate-700' : 'text-slate-300'}>
                             {newRecord.warrantyFile ? newRecord.warrantyFile.name : 'Select file'}
                           </span>
                         </label>
@@ -1866,12 +1923,12 @@ export function RepairHistoryTool({ toolId }: RepairHistoryToolProps) {
                         />
                         <label
                           htmlFor="repair-pictures-input"
-                          className="flex items-center gap-2 w-full rounded-lg border border-slate-700 bg-slate-900/70 px-3 py-2 text-sm text-slate-100 hover:bg-slate-800 transition-colors cursor-pointer"
+                          className={filePickerLabelClass}
                         >
                           <svg className="w-5 h-5 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
                           </svg>
-                          <span className="text-slate-300">
+                          <span className={isLight ? 'text-slate-700' : 'text-slate-300'}>
                             {newRecord.repairPictures.length > 0 
                               ? `${newRecord.repairPictures.length} image${newRecord.repairPictures.length > 1 ? 's' : ''} selected`
                               : 'Select images'}
@@ -1930,17 +1987,10 @@ export function RepairHistoryTool({ toolId }: RepairHistoryToolProps) {
                       />
                     </div>
                     <div className="flex gap-3 justify-end">
-                      <button
-                        onClick={cancelAddingRecord}
-                        className="px-4 py-2 rounded-lg border border-slate-700 bg-slate-800 text-slate-200 hover:bg-slate-700 transition-colors"
-                      >
+                      <button onClick={cancelAddingRecord} className={secondaryButtonClass}>
                         Cancel
                       </button>
-                      <button
-                        onClick={saveNewRecord}
-                        disabled={isSaving}
-                        className="rounded-lg bg-emerald-500 px-4 py-2.5 text-sm font-semibold text-slate-950 transition-colors hover:bg-emerald-400 focus:outline-none focus:ring-2 focus:ring-emerald-500/50 focus:ring-offset-2 focus:ring-offset-slate-900 disabled:opacity-50 disabled:cursor-not-allowed"
-                      >
+                      <button onClick={saveNewRecord} disabled={isSaving} className={primaryButtonClass}>
                         {isSaving ? 'Saving...' : 'Save Repair'}
                       </button>
                     </div>
@@ -1952,15 +2002,15 @@ export function RepairHistoryTool({ toolId }: RepairHistoryToolProps) {
               {!isAddingRecord && (
                 <div className="space-y-4">
                   {filteredRecords.length === 0 ? (
-                    <div className="rounded-2xl border border-slate-800 bg-slate-900/70 p-8 text-center">
-                      <p className="text-slate-400 mb-4">No records found. Add your first repair or replacement record!</p>
+                    <div className={isLight ? 'rounded-2xl border border-slate-200 bg-white p-8 text-center shadow-sm' : 'rounded-2xl border border-slate-800 bg-slate-900/70 p-8 text-center'}>
+                      <p className={isLight ? 'text-slate-600 mb-4' : 'text-slate-400 mb-4'}>No records found. Add your first repair or replacement record!</p>
                     </div>
                   ) : (
                     filteredRecords.map((record) => (
                       editingRecordId === record.id && editingRecord ? (
                         // Edit mode
-                        <div key={record.id} className="rounded-2xl border border-slate-800 bg-slate-900/70 p-6">
-                          <h3 className="text-lg font-semibold text-slate-50 mb-4">Edit Record</h3>
+                        <div key={record.id} className={nestedCardClass}>
+                          <h3 className={`${sectionTitleClass} mb-4`}>Edit Record</h3>
                           <div className="space-y-4">
                             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                               <div>
@@ -2082,12 +2132,12 @@ export function RepairHistoryTool({ toolId }: RepairHistoryToolProps) {
                                   onChange={(e) => setEditingRecord({ ...editingRecord, submittedToInsurance: e.target.checked })}
                                   className="w-5 h-5 rounded border-slate-600 bg-slate-700 text-emerald-500 focus:ring-emerald-500 focus:ring-offset-slate-800"
                                 />
-                                <label htmlFor="editSubmittedToInsurance" className="text-sm text-slate-300 cursor-pointer">
+                                <label htmlFor="editSubmittedToInsurance" className={isLight ? 'text-sm text-slate-700 cursor-pointer' : 'text-sm text-slate-300 cursor-pointer'}>
                                   Was this repair submitted to your insurance?
                                 </label>
                               </div>
                               {editingRecord.submittedToInsurance && (
-                                <div className="space-y-4 mt-4 p-4 rounded-lg border border-slate-700 bg-slate-800/50">
+                                <div className={insurancePanelClass}>
                                   <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                                     <div>
                                       <label className="block text-xs font-medium text-slate-300 mb-1.5">
@@ -2158,7 +2208,7 @@ export function RepairHistoryTool({ toolId }: RepairHistoryToolProps) {
                                 Receipt
                               </label>
                               {editingRecord.receiptFileUrl && (
-                                <div className="mb-2 text-sm text-slate-400">
+                                <div className={isLight ? 'mb-2 text-sm text-slate-600' : 'mb-2 text-sm text-slate-400'}>
                                   Current: {editingRecord.receiptFileName || 'Receipt file'}
                                 </div>
                               )}
@@ -2173,7 +2223,7 @@ export function RepairHistoryTool({ toolId }: RepairHistoryToolProps) {
                                 />
                                 <label
                                   htmlFor="edit-receipt-file-input"
-                                  className="flex items-center gap-2 w-full rounded-lg border border-slate-700 bg-slate-900/70 px-3 py-2 text-sm text-slate-100 hover:bg-slate-800 transition-colors cursor-pointer"
+                                  className={filePickerLabelClass}
                                 >
                                   <svg className="w-5 h-5 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15.172 7l-6.586 6.586a2 2 0 102.828 2.828l6.414-6.586a4 4 0 00-5.656-5.656l-6.415 6.585a6 6 0 108.486 8.486L20.5 13" />
@@ -2189,7 +2239,7 @@ export function RepairHistoryTool({ toolId }: RepairHistoryToolProps) {
                                 Warranty
                               </label>
                               {editingRecord.warrantyFileUrl && (
-                                <div className="mb-2 text-sm text-slate-400">
+                                <div className={isLight ? 'mb-2 text-sm text-slate-600' : 'mb-2 text-sm text-slate-400'}>
                                   Current: {editingRecord.warrantyFileName || 'Warranty file'}
                                 </div>
                               )}
@@ -2204,7 +2254,7 @@ export function RepairHistoryTool({ toolId }: RepairHistoryToolProps) {
                                 />
                                 <label
                                   htmlFor="edit-warranty-file-input"
-                                  className="flex items-center gap-2 w-full rounded-lg border border-slate-700 bg-slate-900/70 px-3 py-2 text-sm text-slate-100 hover:bg-slate-800 transition-colors cursor-pointer"
+                                  className={filePickerLabelClass}
                                 >
                                   <svg className="w-5 h-5 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15.172 7l-6.586 6.586a2 2 0 102.828 2.828l6.414-6.586a4 4 0 00-5.656-5.656l-6.415 6.585a6 6 0 108.486 8.486L20.5 13" />
@@ -2246,7 +2296,7 @@ export function RepairHistoryTool({ toolId }: RepairHistoryToolProps) {
                                 />
                                 <label
                                   htmlFor="edit-repair-pictures-input"
-                                  className="flex items-center gap-2 w-full rounded-lg border border-slate-700 bg-slate-900/70 px-3 py-2 text-sm text-slate-100 hover:bg-slate-800 transition-colors cursor-pointer"
+                                  className={filePickerLabelClass}
                                 >
                                   <svg className="w-5 h-5 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
@@ -2328,17 +2378,10 @@ export function RepairHistoryTool({ toolId }: RepairHistoryToolProps) {
                               />
                             </div>
                             <div className="flex gap-3 justify-end">
-                              <button
-                                onClick={cancelEditingRecord}
-                                className="px-4 py-2 rounded-lg border border-slate-700 bg-slate-800 text-slate-200 hover:bg-slate-700 transition-colors"
-                              >
+                              <button onClick={cancelEditingRecord} className={secondaryButtonClass}>
                                 Cancel
                               </button>
-                              <button
-                                onClick={saveRecordEdit}
-                                disabled={isSaving}
-                                className="rounded-lg bg-emerald-500 px-4 py-2.5 text-sm font-semibold text-slate-950 transition-colors hover:bg-emerald-400 focus:outline-none focus:ring-2 focus:ring-emerald-500/50 focus:ring-offset-2 focus:ring-offset-slate-900 disabled:opacity-50 disabled:cursor-not-allowed"
-                              >
+                              <button onClick={saveRecordEdit} disabled={isSaving} className={primaryButtonClass}>
                                 {isSaving ? 'Saving...' : 'Save Changes'}
                               </button>
                             </div>
@@ -2346,15 +2389,19 @@ export function RepairHistoryTool({ toolId }: RepairHistoryToolProps) {
                         </div>
                       ) : (
                         // Display mode
-                        <div key={record.id} className="rounded-2xl border border-slate-800 bg-slate-900/70 p-6">
+                        <div key={record.id} className={nestedCardClass}>
                           <div className="flex items-start justify-between mb-4">
                             <div className="flex-1">
                               <div className="flex items-center gap-3 mb-2">
-                                <h3 className="text-lg font-semibold text-slate-50">{record.itemName}</h3>
+                                <h3 className={isLight ? 'text-lg font-semibold text-slate-900' : 'text-lg font-semibold text-slate-50'}>{record.itemName}</h3>
                                 <span className={`px-2 py-1 rounded text-xs font-medium ${
                                   record.type === 'repair'
-                                    ? 'bg-blue-500/20 text-blue-300 border border-blue-500/50'
-                                    : 'bg-purple-500/20 text-purple-300 border border-purple-500/50'
+                                    ? (isLight
+                                      ? 'border border-emerald-300 bg-emerald-50 text-emerald-800'
+                                      : 'bg-blue-500/20 text-blue-300 border border-blue-500/50')
+                                    : (isLight
+                                      ? 'border border-slate-300 bg-slate-100 text-slate-700'
+                                      : 'bg-purple-500/20 text-purple-300 border border-purple-500/50')
                                 }`}>
                                   {record.type === 'repair' ? 'Repair' : 'Replace'}
                                 </span>
@@ -2373,18 +2420,28 @@ export function RepairHistoryTool({ toolId }: RepairHistoryToolProps) {
                                 </p>
                               )}
                             </div>
-                            <div className="flex items-center gap-2">
+                            <div className="flex items-center gap-1.5">
                               <button
+                                type="button"
                                 onClick={() => startEditingRecord(record)}
-                                className="px-3 py-1.5 rounded-lg border border-slate-700 bg-slate-800 text-slate-200 hover:bg-slate-700 transition-colors text-sm"
+                                className={rowIconEmeraldClass}
+                                title="Edit record"
+                                aria-label="Edit record"
                               >
-                                Edit
+                                <svg className="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
+                                </svg>
                               </button>
                               <button
+                                type="button"
                                 onClick={() => setDeleteConfirmRecordId(record.id)}
-                                className="px-3 py-1.5 rounded-lg border border-red-500/50 bg-red-500/10 text-red-300 hover:bg-red-500/20 transition-colors text-sm"
+                                className={rowIconDangerClass}
+                                title="Delete record"
+                                aria-label="Delete record"
                               >
-                                Delete
+                                <svg className="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                                </svg>
                               </button>
                             </div>
                           </div>
@@ -2456,10 +2513,7 @@ export function RepairHistoryTool({ toolId }: RepairHistoryToolProps) {
               {/* Add New Item Button */}
               {!isAddingItem && (
                 <div className="flex justify-start">
-                  <button
-                    onClick={startAddingItem}
-                    className="px-4 py-2.5 rounded-lg bg-emerald-500 text-slate-950 font-semibold hover:bg-emerald-400 transition-colors focus:outline-none focus:ring-2 focus:ring-emerald-500/50 focus:ring-offset-2 focus:ring-offset-slate-900"
-                  >
+                  <button onClick={startAddingItem} className={primaryButtonClass}>
                     + Add New Item
                   </button>
                 </div>
@@ -2467,8 +2521,8 @@ export function RepairHistoryTool({ toolId }: RepairHistoryToolProps) {
 
               {/* Add Item Form */}
               {isAddingItem && (
-                <div className="rounded-2xl border border-slate-800 bg-slate-900/70 p-6">
-                  <h3 className="text-lg font-semibold text-slate-50 mb-4">Add New Item</h3>
+                <div className={cardClass}>
+                  <h3 className={`${sectionTitleClass} mb-4`}>Add New Item</h3>
                   <div className="space-y-4">
                     <div>
                       <div className="flex items-center justify-between mb-1.5">
@@ -2481,7 +2535,9 @@ export function RepairHistoryTool({ toolId }: RepairHistoryToolProps) {
                             setIsCreatingNewArea(!isCreatingNewArea);
                             setNewItemArea('');
                           }}
-                          className="text-xs text-emerald-400 hover:text-emerald-300 transition-colors"
+                          className={isLight
+                            ? 'px-2 py-1 rounded-lg border-2 border-slate-400 bg-slate-100 text-xs font-medium text-slate-800 hover:bg-slate-200 transition-colors'
+                            : 'px-2 py-1 rounded border border-slate-600 bg-slate-800 text-xs font-medium text-slate-200 hover:bg-slate-700 transition-colors'}
                         >
                           {isCreatingNewArea ? 'Select existing area' : '+ Create new area'}
                         </button>
@@ -2492,13 +2548,13 @@ export function RepairHistoryTool({ toolId }: RepairHistoryToolProps) {
                           value={newItemArea}
                           onChange={(e) => setNewItemArea(e.target.value)}
                           placeholder="Enter new area name..."
-                          className="w-full rounded-lg border border-slate-700 bg-slate-900/70 px-3 py-2 text-sm text-slate-100 placeholder-slate-500 focus:border-emerald-500/50 focus:outline-none focus:ring-1 focus:ring-emerald-500/50"
+                          className={inputClass}
                         />
                       ) : (
                         <select
                           value={newItemArea}
                           onChange={(e) => setNewItemArea(e.target.value)}
-                          className="w-full rounded-lg border border-slate-700 bg-slate-900/70 px-4 py-2 text-slate-100 focus:border-emerald-500/50 focus:outline-none focus:ring-1 focus:ring-emerald-500/50"
+                          className={selectClass}
                         >
                           <option value="">Select an area...</option>
                           {getUniqueAreas().map(area => (
@@ -2518,21 +2574,14 @@ export function RepairHistoryTool({ toolId }: RepairHistoryToolProps) {
                         value={newItemName}
                         onChange={(e) => setNewItemName(e.target.value)}
                         placeholder="e.g., Washing Machine"
-                        className="w-full rounded-lg border border-slate-700 bg-slate-900/70 px-3 py-2 text-sm text-slate-100 placeholder-slate-500 focus:border-emerald-500/50 focus:outline-none focus:ring-1 focus:ring-emerald-500/50"
+                        className={inputClass}
                       />
                     </div>
                     <div className="flex gap-3 justify-end">
-                      <button
-                        onClick={cancelAddingItem}
-                        className="px-4 py-2 rounded-lg border border-slate-700 bg-slate-800 text-slate-200 hover:bg-slate-700 transition-colors"
-                      >
+                      <button onClick={cancelAddingItem} className={secondaryButtonClass}>
                         Cancel
                       </button>
-                      <button
-                        onClick={saveNewItem}
-                        disabled={isSaving}
-                        className="rounded-lg bg-emerald-500 px-4 py-2.5 text-sm font-semibold text-slate-950 transition-colors hover:bg-emerald-400 focus:outline-none focus:ring-2 focus:ring-emerald-500/50 focus:ring-offset-2 focus:ring-offset-slate-900 disabled:opacity-50 disabled:cursor-not-allowed"
-                      >
+                      <button onClick={saveNewItem} disabled={isSaving} className={primaryButtonClass}>
                         {isSaving ? 'Saving...' : 'Save Item'}
                       </button>
                     </div>
@@ -2547,12 +2596,12 @@ export function RepairHistoryTool({ toolId }: RepairHistoryToolProps) {
                     const areaItems = getItemsByArea(area);
                     const isExpanded = isAreaExpanded(area);
                     return (
-                      <div key={area} className="rounded-2xl border border-slate-800 bg-slate-900/70 p-6">
+                      <div key={area} className={cardClass}>
                         <button
                           onClick={() => toggleArea(area)}
                           className="w-full flex items-center justify-between mb-4 hover:opacity-80 transition-opacity"
                         >
-                          <h3 className="text-lg font-semibold text-slate-50">{area}</h3>
+                          <h3 className={sectionTitleClass}>{area}</h3>
                           <svg
                             className={`h-5 w-5 text-slate-400 transition-transform ${isExpanded ? 'rotate-180' : ''}`}
                             fill="none"
@@ -2567,7 +2616,7 @@ export function RepairHistoryTool({ toolId }: RepairHistoryToolProps) {
                             {areaItems.map((item) => (
                             editingItemId === item.id ? (
                               // Edit mode
-                              <div key={item.id} className="space-y-2 p-3 rounded-lg border border-slate-700 bg-slate-800/50">
+                              <div key={item.id} className={isLight ? 'space-y-2 p-3 rounded-lg border border-slate-200 bg-slate-50' : 'space-y-2 p-3 rounded-lg border border-slate-700 bg-slate-800/50'}>
                                 <div>
                                   <label className="block text-xs font-medium text-slate-300 mb-1.5">
                                     Area <span className="text-red-400">*</span>
@@ -2575,7 +2624,7 @@ export function RepairHistoryTool({ toolId }: RepairHistoryToolProps) {
                                   <select
                                     value={editingItemArea}
                                     onChange={(e) => setEditingItemArea(e.target.value)}
-                                    className="w-full rounded-lg border border-slate-700 bg-slate-900/70 px-4 py-2 text-slate-100 focus:border-emerald-500/50 focus:outline-none focus:ring-1 focus:ring-emerald-500/50"
+                                    className={selectClass}
                                   >
                                     <option value="">Select an area...</option>
                                     {getUniqueAreas().map(area => (
@@ -2593,7 +2642,7 @@ export function RepairHistoryTool({ toolId }: RepairHistoryToolProps) {
                                     type="text"
                                     value={editingItemName}
                                     onChange={(e) => setEditingItemName(e.target.value)}
-                                    className="w-full px-3 py-1.5 rounded-lg border border-slate-700 bg-slate-900 text-slate-100 text-sm focus:border-emerald-500/50 focus:outline-none focus:ring-1 focus:ring-emerald-500/50"
+                                    className={isLight ? 'w-full px-3 py-1.5 rounded-lg border border-slate-300 bg-white text-slate-900 text-sm focus:border-emerald-500/50 focus:outline-none focus:ring-1 focus:ring-emerald-500/50' : 'w-full px-3 py-1.5 rounded-lg border border-slate-700 bg-slate-900 text-slate-100 text-sm focus:border-emerald-500/50 focus:outline-none focus:ring-1 focus:ring-emerald-500/50'}
                                     onKeyDown={(e) => {
                                       if (e.key === 'Enter') {
                                         saveItemEdit();
@@ -2605,40 +2654,43 @@ export function RepairHistoryTool({ toolId }: RepairHistoryToolProps) {
                                   />
                                 </div>
                                 <div className="flex gap-2 justify-end">
-                                  <button
-                                    onClick={cancelEditingItem}
-                                    className="px-3 py-1.5 rounded border border-slate-600 bg-slate-700 text-slate-200 text-xs hover:bg-slate-600 transition-colors"
-                                  >
+                                  <button onClick={cancelEditingItem} className={isLight ? 'px-3 py-1.5 rounded border-2 border-slate-400 bg-slate-100 text-slate-800 text-xs hover:bg-slate-200 transition-colors' : 'px-3 py-1.5 rounded border border-slate-600 bg-slate-700 text-slate-200 text-xs hover:bg-slate-600 transition-colors'}>
                                     Cancel
                                   </button>
-                                  <button
-                                    onClick={saveItemEdit}
-                                    disabled={isSaving || !editingItemName.trim() || !editingItemArea.trim()}
-                                    className="px-3 py-1.5 rounded bg-emerald-500 text-slate-950 text-xs font-medium hover:bg-emerald-400 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-                                  >
+                                  <button onClick={saveItemEdit} disabled={isSaving || !editingItemName.trim() || !editingItemArea.trim()} className={isLight ? 'px-3 py-1.5 rounded bg-emerald-600 text-white text-xs font-medium hover:bg-emerald-500 transition-colors disabled:opacity-50 disabled:cursor-not-allowed' : 'px-3 py-1.5 rounded bg-emerald-500 text-slate-950 text-xs font-medium hover:bg-emerald-400 transition-colors disabled:opacity-50 disabled:cursor-not-allowed'}>
                                     Save
                                   </button>
                                 </div>
                               </div>
                             ) : (
                               // Display mode
-                              <div key={item.id} className="flex items-center justify-between p-2 rounded-lg border border-slate-700 bg-slate-800/50 hover:bg-slate-800 transition-colors">
-                                <span className="text-sm text-slate-200">{item.name}</span>
-                                <div className="flex items-center gap-2">
+                              <div key={item.id} className={isLight ? 'flex items-center justify-between p-2 rounded-lg border border-slate-200 bg-white hover:bg-slate-50 transition-colors' : 'flex items-center justify-between p-2 rounded-lg border border-slate-700 bg-slate-800/50 hover:bg-slate-800 transition-colors'}>
+                                <span className={isLight ? 'text-sm text-slate-800' : 'text-sm text-slate-200'}>{item.name}</span>
+                                <div className="flex items-center gap-1.5">
                                   <button
+                                    type="button"
                                     onClick={() => startEditingItem(item)}
-                                    className="px-2 py-1 rounded border border-slate-600 bg-slate-700 text-slate-200 hover:bg-slate-600 transition-colors text-xs"
+                                    className={rowIconEmeraldClass}
+                                    title="Edit item"
+                                    aria-label="Edit item"
                                   >
-                                    Edit
+                                    <svg className="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
+                                    </svg>
                                   </button>
                                   <button
+                                    type="button"
                                     onClick={() => {
                                       setDeleteConfirmItemId(item.id);
                                       setDeleteConfirmItemText('');
                                     }}
-                                    className="px-2 py-1 rounded border border-red-500/50 bg-red-500/10 text-red-300 hover:bg-red-500/20 transition-colors text-xs"
+                                    className={rowIconDangerClass}
+                                    title="Delete item"
+                                    aria-label="Delete item"
                                   >
-                                    Delete
+                                    <svg className="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                                    </svg>
                                   </button>
                                 </div>
                               </div>
@@ -2657,14 +2709,14 @@ export function RepairHistoryTool({ toolId }: RepairHistoryToolProps) {
           {/* Export Tab */}
           {activeTab === 'export' && (
             <div className="space-y-6">
-              <div className="rounded-2xl border border-slate-800 bg-slate-900/70 p-6">
-                <h3 className="text-lg font-semibold text-slate-50 mb-4">Export Repair History Report</h3>
-                <p className="text-slate-300 mb-4">
+              <div className={cardClass}>
+                <h3 className={`${sectionTitleClass} mb-4`}>Export Repair History Report</h3>
+                <p className={isLight ? 'text-slate-700 mb-4' : 'text-slate-300 mb-4'}>
                   Generate a comprehensive PDF report of all your repair history records. The report will include all repair and replacement details, summary statistics, and category breakdown.
                 </p>
                 <button
                   onClick={() => setShowExportPopup(true)}
-                  className="px-4 py-2.5 rounded-lg bg-emerald-500 text-slate-950 font-semibold hover:bg-emerald-400 transition-colors focus:outline-none focus:ring-2 focus:ring-emerald-500/50 focus:ring-offset-2 focus:ring-offset-slate-900"
+                  className={primaryButtonClass}
                 >
                   Generate PDF Report
                 </button>
@@ -2677,11 +2729,14 @@ export function RepairHistoryTool({ toolId }: RepairHistoryToolProps) {
       {/* Delete Record Confirmation Modal */}
       {deleteConfirmRecordId && (
         <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
-          <div className="rounded-2xl border border-slate-800 bg-slate-900 p-6 max-w-md w-full mx-4">
-            <h3 className="text-xl font-semibold text-slate-50 mb-2">Delete Record</h3>
-            <p className="text-slate-300 mb-4">
-              Are you sure you want to delete this record? This action cannot be undone.
-            </p>
+          <div className={modalCardClass}>
+            <h3 className={isLight ? 'text-xl font-semibold text-slate-900 mb-2' : 'text-xl font-semibold text-slate-50 mb-2'}>Delete Record</h3>
+            <div className={isLight ? 'rounded-lg border border-red-300 bg-red-50 px-4 py-3 mb-4' : 'rounded-lg border border-red-500/50 bg-red-500/10 px-4 py-3 mb-4'}>
+              <p className={isLight ? 'text-red-700 font-semibold mb-2' : 'text-red-300 font-semibold mb-2'}>⚠️ Warning: This action cannot be undone!</p>
+              <p className={isLight ? 'text-red-600 text-sm' : 'text-red-200 text-sm'}>
+                This record will be <strong>permanently deleted</strong> and cannot be recovered.
+              </p>
+            </div>
             <div className="flex gap-3">
               <button
                 onClick={deleteRecord}
@@ -2693,7 +2748,7 @@ export function RepairHistoryTool({ toolId }: RepairHistoryToolProps) {
               <button
                 onClick={() => setDeleteConfirmRecordId(null)}
                 disabled={isSaving}
-                className="px-4 py-2 rounded-lg border border-slate-700 bg-slate-800 text-slate-200 hover:bg-slate-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                className={secondaryButtonClass}
               >
                 Cancel
               </button>
@@ -2705,9 +2760,9 @@ export function RepairHistoryTool({ toolId }: RepairHistoryToolProps) {
       {/* Export Popup */}
       {showExportPopup && (
         <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
-          <div className="bg-slate-800 rounded-2xl border border-slate-700 p-6 max-w-md w-full mx-4">
+          <div className={modalCardClass}>
             <div className="flex items-center justify-between mb-4">
-              <h3 className="text-lg font-semibold text-slate-50">Export Options</h3>
+              <h3 className={sectionTitleClass}>Export Options</h3>
               <button
                 onClick={() => setShowExportPopup(false)}
                 className="text-slate-400 hover:text-slate-200 transition-colors"
@@ -2725,13 +2780,13 @@ export function RepairHistoryTool({ toolId }: RepairHistoryToolProps) {
                     // TODO: Implement PDF export functionality
                     setShowExportPopup(false);
                   }}
-                  className="flex-1 px-4 py-2.5 rounded-lg bg-emerald-500 text-slate-950 font-semibold hover:bg-emerald-400 transition-colors focus:outline-none focus:ring-2 focus:ring-emerald-500/50 focus:ring-offset-2 focus:ring-offset-slate-900"
+                  className={primaryButtonClass}
                 >
                   Export to PDF
                 </button>
                 <button
                   onClick={() => setShowExportPopup(false)}
-                  className="px-4 py-2 rounded-lg bg-slate-700 text-slate-200 hover:bg-slate-600 transition-colors"
+                  className={secondaryButtonClass}
                 >
                   Cancel
                 </button>
@@ -2744,23 +2799,23 @@ export function RepairHistoryTool({ toolId }: RepairHistoryToolProps) {
       {/* Delete Item Confirmation Modal */}
       {deleteConfirmItemId && (
         <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
-          <div className="rounded-2xl border border-slate-800 bg-slate-900 p-6 max-w-md w-full mx-4">
-            <h3 className="text-xl font-semibold text-slate-50 mb-2">Delete Item</h3>
-            <div className="rounded-lg border border-red-500/50 bg-red-500/10 px-4 py-3 mb-4">
-              <p className="text-red-300 font-semibold mb-2">⚠️ Warning: This action cannot be undone!</p>
-              <p className="text-red-200 text-sm">
+          <div className={modalCardClass}>
+            <h3 className={isLight ? 'text-xl font-semibold text-slate-900 mb-2' : 'text-xl font-semibold text-slate-50 mb-2'}>Delete Item</h3>
+            <div className={isLight ? 'rounded-lg border border-red-300 bg-red-50 px-4 py-3 mb-4' : 'rounded-lg border border-red-500/50 bg-red-500/10 px-4 py-3 mb-4'}>
+              <p className={isLight ? 'text-red-700 font-semibold mb-2' : 'text-red-300 font-semibold mb-2'}>⚠️ Warning: This action cannot be undone!</p>
+              <p className={isLight ? 'text-red-600 text-sm' : 'text-red-200 text-sm'}>
                 This item will be <strong>permanently deleted</strong> and cannot be recovered.
               </p>
             </div>
-            <p className="text-slate-300 mb-4">
-              To confirm deletion, please type <strong className="text-slate-200">delete</strong> in the box below:
+            <p className={isLight ? 'text-slate-700 mb-4' : 'text-slate-300 mb-4'}>
+              To confirm deletion, please type <strong className={isLight ? 'text-slate-900' : 'text-slate-200'}>delete</strong> in the box below:
             </p>
             <input
               type="text"
               value={deleteConfirmItemText}
               onChange={(e) => setDeleteConfirmItemText(e.target.value)}
               placeholder="Type 'delete' to confirm"
-              className="w-full px-4 py-2 rounded-lg border border-slate-700 bg-slate-800 text-slate-100 placeholder-slate-500 focus:border-red-500/50 focus:outline-none focus:ring-1 focus:ring-red-500/50 mb-4"
+              className={isLight ? 'w-full px-4 py-2 rounded-lg border border-slate-300 bg-white text-slate-900 placeholder-slate-500 focus:border-red-500/50 focus:outline-none focus:ring-1 focus:ring-red-500/50 mb-4' : 'w-full px-4 py-2 rounded-lg border border-slate-700 bg-slate-800 text-slate-100 placeholder-slate-500 focus:border-red-500/50 focus:outline-none focus:ring-1 focus:ring-red-500/50 mb-4'}
               autoFocus
               onKeyDown={(e) => {
                 if (e.key === 'Escape') {
@@ -2783,7 +2838,7 @@ export function RepairHistoryTool({ toolId }: RepairHistoryToolProps) {
                   setDeleteConfirmItemText('');
                 }}
                 disabled={isSaving}
-                className="px-4 py-2 rounded-lg border border-slate-700 bg-slate-800 text-slate-200 hover:bg-slate-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                className={secondaryButtonClass}
               >
                 Cancel
               </button>

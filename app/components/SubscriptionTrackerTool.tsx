@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useEffect } from 'react';
+import { useTheme } from './AppThemeProvider';
 
 type SubscriptionFrequency = 'monthly' | 'quarterly' | 'annual';
 
@@ -40,6 +41,44 @@ type SubscriptionTrackerToolProps = {
 };
 
 export function SubscriptionTrackerTool({ toolId }: SubscriptionTrackerToolProps) {
+  const { resolvedTheme } = useTheme();
+  const isLight = resolvedTheme === 'light';
+  const titleClass = isLight ? 'text-2xl font-semibold text-slate-900 mb-2' : 'text-2xl font-semibold text-slate-50 mb-2';
+  const descClass = isLight ? 'text-slate-600 text-sm' : 'text-slate-400 text-sm';
+  const cardClass = isLight
+    ? 'rounded-2xl border border-slate-200 bg-white p-6 shadow-sm'
+    : 'rounded-2xl border border-slate-800 bg-slate-900/70 p-6';
+  const nestedCardClass = isLight
+    ? 'p-4 rounded-lg border border-slate-300 bg-slate-50'
+    : 'p-4 rounded-lg border border-slate-700 bg-slate-800/50';
+  const labelClass = isLight ? 'block text-sm font-medium text-slate-700 mb-2' : 'block text-sm font-medium text-slate-300 mb-2';
+  const inputClass = isLight
+    ? 'w-full px-3 py-2 rounded-lg border border-slate-300 bg-white text-slate-900 placeholder-slate-500 focus:border-emerald-500/50 focus:outline-none focus:ring-1 focus:ring-emerald-500/50'
+    : 'w-full px-3 py-2 rounded-lg border border-slate-700 bg-slate-900/70 text-slate-100 placeholder-slate-500 focus:border-emerald-500/50 focus:outline-none focus:ring-1 focus:ring-emerald-500/50';
+  const selectClass = isLight
+    ? 'w-full px-4 py-2 rounded-lg border border-slate-300 bg-white text-slate-900 focus:border-emerald-500/50 focus:outline-none focus:ring-1 focus:ring-emerald-500/50'
+    : 'w-full px-4 py-2 rounded-lg border border-slate-700 bg-slate-900/70 text-slate-100 focus:border-emerald-500/50 focus:outline-none focus:ring-1 focus:ring-emerald-500/50';
+  const textareaClass = isLight
+    ? 'w-full px-3 py-2 rounded-lg border border-slate-300 bg-white text-slate-900 placeholder-slate-500 focus:border-emerald-500/50 focus:outline-none focus:ring-1 focus:ring-emerald-500/50 resize-none'
+    : 'w-full px-3 py-2 rounded-lg border border-slate-700 bg-slate-900/70 text-slate-100 placeholder-slate-500 focus:border-emerald-500/50 focus:outline-none focus:ring-1 focus:ring-emerald-500/50 resize-none';
+  const primaryButtonClass = isLight
+    ? 'px-4 py-2.5 rounded-lg bg-emerald-600 text-white font-semibold hover:bg-emerald-500 transition-colors focus:outline-none focus:ring-2 focus:ring-emerald-500/50 focus:ring-offset-2 focus:ring-offset-white disabled:cursor-not-allowed disabled:opacity-50'
+    : 'px-4 py-2.5 rounded-lg bg-emerald-500 text-slate-950 font-semibold hover:bg-emerald-400 transition-colors focus:outline-none focus:ring-2 focus:ring-emerald-500/50 focus:ring-offset-2 focus:ring-offset-slate-900 disabled:cursor-not-allowed disabled:opacity-50';
+  const secondaryButtonClass = isLight
+    ? 'px-4 py-2 rounded-lg border-2 border-slate-400 bg-slate-100 text-slate-800 hover:bg-slate-200 transition-colors'
+    : 'px-4 py-2 rounded-lg border border-slate-700 bg-slate-800 text-slate-200 hover:bg-slate-700 transition-colors';
+  const tabStripClass = isLight ? 'border-b border-slate-200' : 'border-b border-slate-800';
+  const tabActiveClass = isLight ? 'border-b-2 border-emerald-600 text-emerald-900' : 'border-b-2 border-emerald-500 text-emerald-300';
+  const tabInactiveClass = isLight ? 'text-slate-600 hover:text-slate-900' : 'text-slate-400 hover:text-slate-300';
+  const rowIconEmeraldClass = isLight
+    ? 'inline-flex items-center justify-center rounded-lg border-2 border-emerald-700 bg-white p-2 text-emerald-700 transition-colors hover:bg-emerald-50 hover:text-emerald-900'
+    : 'inline-flex items-center justify-center rounded-lg border-2 border-emerald-500/50 bg-slate-800/50 p-2 text-emerald-300 transition-colors hover:border-emerald-400 hover:bg-emerald-500/20';
+  const rowIconSecondaryClass = isLight
+    ? 'inline-flex items-center justify-center rounded-lg border-2 border-slate-400 bg-slate-100 p-2 text-slate-700 transition-colors hover:bg-slate-200 hover:text-slate-900'
+    : 'inline-flex items-center justify-center rounded-lg border-2 border-slate-600 bg-slate-800 p-2 text-slate-200 transition-colors hover:bg-slate-700';
+  const rowIconDangerClass = isLight
+    ? 'inline-flex items-center justify-center rounded-lg border-2 border-red-300 bg-white p-2 text-red-700 transition-colors hover:bg-red-50 hover:border-red-400'
+    : 'inline-flex items-center justify-center rounded-lg border-2 border-red-500/50 bg-slate-800/50 p-2 text-red-400 transition-colors hover:border-red-400 hover:bg-red-500/20';
   const [subscriptions, setSubscriptions] = useState<Subscription[]>([]);
   const [activeTab, setActiveTab] = useState<'subscriptions' | 'export'>('subscriptions');
   const [isLoading, setIsLoading] = useState(false);
@@ -824,15 +863,15 @@ export function SubscriptionTrackerTool({ toolId }: SubscriptionTrackerToolProps
       {/* Header */}
       <div className="flex items-center justify-between">
         <div>
-          <h2 className="text-2xl font-semibold text-slate-50 mb-2">Subscription Tracker</h2>
-          <p className="text-slate-400 text-sm">
+          <h2 className={titleClass}>Subscription Tracker</h2>
+          <p className={descClass}>
             Track and manage all your subscriptions in one place
           </p>
         </div>
       </div>
 
       {/* Tabs */}
-      <div className="border-b border-slate-800">
+      <div className={tabStripClass}>
         <div className="flex gap-2">
           {[
             { id: 'subscriptions', label: 'Subscriptions' },
@@ -842,9 +881,7 @@ export function SubscriptionTrackerTool({ toolId }: SubscriptionTrackerToolProps
               key={tab.id}
               onClick={() => setActiveTab(tab.id as 'subscriptions' | 'export')}
               className={`px-4 py-2 text-sm font-medium transition-colors ${
-                activeTab === tab.id
-                  ? 'border-b-2 border-emerald-500 text-emerald-300'
-                  : 'text-slate-400 hover:text-slate-300'
+                activeTab === tab.id ? tabActiveClass : tabInactiveClass
               }`}
             >
               {tab.label}
@@ -861,18 +898,18 @@ export function SubscriptionTrackerTool({ toolId }: SubscriptionTrackerToolProps
             <div className="flex justify-start">
               <button
                 onClick={() => setIsAdding(true)}
-                className="px-4 py-2.5 rounded-lg bg-emerald-500 text-slate-950 font-semibold hover:bg-emerald-400 transition-colors focus:outline-none focus:ring-2 focus:ring-emerald-500/50 focus:ring-offset-2 focus:ring-offset-slate-900"
+                className={primaryButtonClass}
               >
                 + Add New Subscription
               </button>
             </div>
           ) : (
-            <div className="rounded-2xl border border-slate-800 bg-slate-900/70 p-6">
-              <h3 className="text-lg font-semibold text-slate-50 mb-4">Add New Subscription</h3>
+            <div className={cardClass}>
+              <h3 className={isLight ? 'text-lg font-semibold text-slate-900 mb-4' : 'text-lg font-semibold text-slate-50 mb-4'}>Add New Subscription</h3>
               <div className="space-y-4">
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                   <div>
-                    <label className="block text-sm font-medium text-slate-300 mb-2">
+                    <label className={labelClass}>
                       Subscription Name <span className="text-red-400">*</span>
                     </label>
                     <input
@@ -880,17 +917,17 @@ export function SubscriptionTrackerTool({ toolId }: SubscriptionTrackerToolProps
                       value={newSubscription.name}
                       onChange={(e) => setNewSubscription({ ...newSubscription, name: e.target.value })}
                       placeholder="e.g., Netflix, Spotify"
-                      className="w-full px-3 py-2 rounded-lg border border-slate-700 bg-slate-900/70 text-slate-100 placeholder-slate-500 focus:border-emerald-500/50 focus:outline-none focus:ring-1 focus:ring-emerald-500/50"
+                      className={inputClass}
                     />
                   </div>
                   <div>
-                    <label className="block text-sm font-medium text-slate-300 mb-2">
+                    <label className={labelClass}>
                       Category <span className="text-red-400">*</span>
                     </label>
                     <select
                       value={showCustomCategory ? 'Other' : newSubscription.category}
                       onChange={(e) => handleCategoryChange(e.target.value)}
-                      className="w-full px-4 py-2 rounded-lg border border-slate-700 bg-slate-900/70 text-slate-100 focus:border-emerald-500/50 focus:outline-none focus:ring-1 focus:ring-emerald-500/50"
+                      className={selectClass}
                     >
                       <option value="">Select category</option>
                       {DEFAULT_CATEGORIES.map(cat => (
@@ -903,12 +940,12 @@ export function SubscriptionTrackerTool({ toolId }: SubscriptionTrackerToolProps
                         value={newSubscription.customCategory}
                         onChange={(e) => setNewSubscription({ ...newSubscription, customCategory: e.target.value })}
                         placeholder="Enter custom category"
-                        className="w-full mt-2 px-3 py-2 rounded-lg border border-slate-700 bg-slate-900/70 text-slate-100 placeholder-slate-500 focus:border-emerald-500/50 focus:outline-none focus:ring-1 focus:ring-emerald-500/50"
+                        className={`${inputClass} mt-2`}
                       />
                     )}
                   </div>
                   <div>
-                    <label className="block text-sm font-medium text-slate-300 mb-2">
+                    <label className={labelClass}>
                       Frequency <span className="text-red-400">*</span>
                     </label>
                     <select
@@ -933,7 +970,7 @@ export function SubscriptionTrackerTool({ toolId }: SubscriptionTrackerToolProps
                           });
                         }
                       }}
-                      className="w-full px-4 py-2 rounded-lg border border-slate-700 bg-slate-900/70 text-slate-100 focus:border-emerald-500/50 focus:outline-none focus:ring-1 focus:ring-emerald-500/50"
+                      className={selectClass}
                     >
                       <option value="monthly">Monthly</option>
                       <option value="quarterly">Quarterly</option>
@@ -941,7 +978,7 @@ export function SubscriptionTrackerTool({ toolId }: SubscriptionTrackerToolProps
                     </select>
                   </div>
                   <div>
-                    <label className="block text-sm font-medium text-slate-300 mb-2">
+                    <label className={labelClass}>
                       Amount ($) <span className="text-red-400">*</span>
                     </label>
                     <input
@@ -951,13 +988,13 @@ export function SubscriptionTrackerTool({ toolId }: SubscriptionTrackerToolProps
                       value={newSubscription.amount}
                       onChange={(e) => setNewSubscription({ ...newSubscription, amount: e.target.value })}
                       placeholder="0.00"
-                      className="w-full px-3 py-2 rounded-lg border border-slate-700 bg-slate-900/70 text-slate-100 placeholder-slate-500 focus:border-emerald-500/50 focus:outline-none focus:ring-1 focus:ring-emerald-500/50"
+                      className={inputClass}
                     />
                   </div>
                   {newSubscription.frequency === 'annual' ? (
                     <>
                       <div>
-                        <label className="block text-sm font-medium text-slate-300 mb-2">
+                        <label className={labelClass}>
                           Billed Date <span className="text-red-400">*</span>
                         </label>
                         <input
@@ -968,18 +1005,18 @@ export function SubscriptionTrackerTool({ toolId }: SubscriptionTrackerToolProps
                             const renewalDate = calculateRenewalDate(billedDate);
                             setNewSubscription({ ...newSubscription, billedDate, renewalDate });
                           }}
-                          className="w-full px-4 py-2 rounded-lg border border-slate-700 bg-slate-900/70 text-slate-100 focus:border-emerald-500/50 focus:outline-none focus:ring-1 focus:ring-emerald-500/50"
+                          className={selectClass}
                         />
                       </div>
                       <div>
-                        <label className="block text-sm font-medium text-slate-300 mb-2">
+                        <label className={labelClass}>
                           Renewal Date
                         </label>
                         <input
                           type="date"
                           value={newSubscription.renewalDate}
                           onChange={(e) => setNewSubscription({ ...newSubscription, renewalDate: e.target.value })}
-                          className="w-full px-4 py-2 rounded-lg border border-slate-700 bg-slate-900/70 text-slate-100 focus:border-emerald-500/50 focus:outline-none focus:ring-1 focus:ring-emerald-500/50"
+                          className={selectClass}
                         />
                       </div>
                       <div className="md:col-span-2">
@@ -989,9 +1026,9 @@ export function SubscriptionTrackerTool({ toolId }: SubscriptionTrackerToolProps
                             id="addReminderToCalendar"
                             checked={newSubscription.addReminderToCalendar}
                             onChange={(e) => setNewSubscription({ ...newSubscription, addReminderToCalendar: e.target.checked })}
-                            className="w-5 h-5 rounded border-slate-600 bg-slate-700 text-emerald-500 focus:ring-emerald-500 focus:ring-offset-slate-800"
+                            className={isLight ? 'w-5 h-5 rounded border-slate-400 bg-white text-emerald-600 focus:ring-emerald-500 focus:ring-offset-white' : 'w-5 h-5 rounded border-slate-600 bg-slate-700 text-emerald-500 focus:ring-emerald-500 focus:ring-offset-slate-800'}
                           />
-                          <label htmlFor="addReminderToCalendar" className="text-sm text-slate-300 cursor-pointer">
+                          <label htmlFor="addReminderToCalendar" className={isLight ? 'text-sm text-slate-700 cursor-pointer' : 'text-sm text-slate-300 cursor-pointer'}>
                             Add reminder to calendar 30 days before renewal
                           </label>
                         </div>
@@ -999,7 +1036,7 @@ export function SubscriptionTrackerTool({ toolId }: SubscriptionTrackerToolProps
                     </>
                   ) : (
                     <div>
-                      <label className="block text-sm font-medium text-slate-300 mb-2">
+                      <label className={labelClass}>
                         Day of Month <span className="text-red-400">*</span>
                       </label>
                       <input
@@ -1009,13 +1046,13 @@ export function SubscriptionTrackerTool({ toolId }: SubscriptionTrackerToolProps
                         value={newSubscription.dayOfMonth}
                         onChange={(e) => setNewSubscription({ ...newSubscription, dayOfMonth: e.target.value })}
                         placeholder="1-31"
-                        className="w-full px-3 py-2 rounded-lg border border-slate-700 bg-slate-900/70 text-slate-100 placeholder-slate-500 focus:border-emerald-500/50 focus:outline-none focus:ring-1 focus:ring-emerald-500/50"
+                        className={inputClass}
                       />
                     </div>
                   )}
                 </div>
                 <div>
-                  <label className="block text-sm font-medium text-slate-300 mb-2">
+                  <label className={labelClass}>
                     Notes (Optional)
                   </label>
                   <textarea
@@ -1023,7 +1060,7 @@ export function SubscriptionTrackerTool({ toolId }: SubscriptionTrackerToolProps
                     onChange={(e) => setNewSubscription({ ...newSubscription, notes: e.target.value })}
                     placeholder="Add any additional notes..."
                     rows={3}
-                    className="w-full px-3 py-2 rounded-lg border border-slate-700 bg-slate-900/70 text-slate-100 placeholder-slate-500 focus:border-emerald-500/50 focus:outline-none focus:ring-1 focus:ring-emerald-500/50 resize-none"
+                    className={textareaClass}
                   />
                 </div>
                 <div className="flex gap-2">
@@ -1036,7 +1073,7 @@ export function SubscriptionTrackerTool({ toolId }: SubscriptionTrackerToolProps
                       (showCustomCategory && !newSubscription.customCategory.trim()) ||
                       (newSubscription.frequency === 'annual' ? !newSubscription.billedDate : !newSubscription.dayOfMonth)
                     }
-                    className="px-4 py-2.5 rounded-lg bg-emerald-500 text-slate-950 font-semibold hover:bg-emerald-400 transition-colors focus:outline-none focus:ring-2 focus:ring-emerald-500/50 focus:ring-offset-2 focus:ring-offset-slate-900 disabled:cursor-not-allowed disabled:opacity-50"
+                    className={primaryButtonClass}
                   >
                     Add Subscription
                   </button>
@@ -1057,7 +1094,7 @@ export function SubscriptionTrackerTool({ toolId }: SubscriptionTrackerToolProps
                       });
                       setShowCustomCategory(false);
                     }}
-                    className="px-4 py-2 rounded-lg border border-slate-700 bg-slate-800 text-slate-200 hover:bg-slate-700 transition-colors"
+                    className={secondaryButtonClass}
                   >
                     Cancel
                   </button>
@@ -1067,17 +1104,17 @@ export function SubscriptionTrackerTool({ toolId }: SubscriptionTrackerToolProps
           )}
 
           {/* Active Subscriptions */}
-          <div className="rounded-2xl border border-slate-800 bg-slate-900/70 p-6">
+          <div className={cardClass}>
             <div className="flex items-center justify-between mb-4">
-              <h3 className="text-lg font-semibold text-slate-50">Active Subscriptions</h3>
-              <span className="text-sm text-slate-400">
+              <h3 className={isLight ? 'text-lg font-semibold text-slate-900' : 'text-lg font-semibold text-slate-50'}>Active Subscriptions</h3>
+              <span className={isLight ? 'text-sm text-slate-600' : 'text-sm text-slate-400'}>
                 {activeSubscriptions.length} {activeSubscriptions.length === 1 ? 'subscription' : 'subscriptions'}
               </span>
             </div>
             {activeSubscriptions.length > 0 ? (
               <div className="space-y-4">
                 {activeSubscriptions.map(subscription => (
-                  <div key={subscription.id} className="p-4 rounded-lg border border-slate-700 bg-slate-800/50">
+                  <div key={subscription.id} className={nestedCardClass}>
                     {editingId === subscription.id ? (
                       <div className="space-y-4">
                         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -1259,7 +1296,7 @@ export function SubscriptionTrackerTool({ toolId }: SubscriptionTrackerToolProps
                         <div className="flex-1">
                           <div className="flex items-center gap-3 mb-2">
                             <h4 className="text-lg font-semibold text-slate-100">{subscription.name}</h4>
-                            <span className="px-2 py-1 rounded text-xs font-medium bg-emerald-500/20 text-emerald-300">
+                            <span className={isLight ? 'px-2 py-1 rounded text-xs font-medium border border-emerald-300 bg-emerald-50 text-emerald-800' : 'px-2 py-1 rounded text-xs font-medium bg-emerald-500/20 text-emerald-300'}>
                               {subscription.category}
                             </span>
                           </div>
@@ -1311,18 +1348,28 @@ export function SubscriptionTrackerTool({ toolId }: SubscriptionTrackerToolProps
                             </div>
                           )}
                         </div>
-                        <div className="flex gap-2 ml-4">
+                        <div className="flex shrink-0 items-center gap-1.5 ml-4">
                           <button
+                            type="button"
                             onClick={() => startEditing(subscription)}
-                            className="px-3 py-1 rounded-lg bg-emerald-500/20 text-emerald-300 hover:bg-emerald-500/30 transition-colors text-sm"
+                            aria-label="Edit subscription"
+                            title="Edit subscription"
+                            className={rowIconEmeraldClass}
                           >
-                            Edit
+                            <svg className="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
+                            </svg>
                           </button>
                           <button
+                            type="button"
                             onClick={() => inactivateSubscription(subscription.id)}
-                            className="px-3 py-1 rounded-lg bg-slate-700 text-slate-200 hover:bg-slate-600 transition-colors text-sm"
+                            aria-label="Move to history"
+                            title="Move to history"
+                            className={rowIconSecondaryClass}
                           >
-                            Inactivate
+                            <svg className="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M20.25 7.5l-.625 10.632a2.25 2.25 0 01-2.247 2.118H6.622a2.25 2.25 0 01-2.247-2.118L3.75 7.5M10 11.25h4M3.375 7.5h17.25c.621 0 1.125-.504 1.125-1.125v-1.5c0-.621-.504-1.125-1.125-1.125H3.375c-.621 0-1.125.504-1.125 1.125v1.5c0 .621.504 1.125 1.125 1.125z" />
+                            </svg>
                           </button>
                         </div>
                       </div>
@@ -1336,12 +1383,12 @@ export function SubscriptionTrackerTool({ toolId }: SubscriptionTrackerToolProps
           </div>
 
           {/* History Section */}
-          <div className="rounded-2xl border border-slate-800 bg-slate-900/70 p-6">
+          <div className={cardClass}>
             <div className="flex items-center justify-between mb-4">
-              <h3 className="text-lg font-semibold text-slate-50">History</h3>
+              <h3 className={isLight ? 'text-lg font-semibold text-slate-900' : 'text-lg font-semibold text-slate-50'}>History</h3>
               <button
                 onClick={() => setShowHistory(!showHistory)}
-                className="text-sm text-slate-400 hover:text-slate-300 transition-colors"
+                className={isLight ? 'text-sm text-slate-600 hover:text-slate-900 transition-colors' : 'text-sm text-slate-400 hover:text-slate-300 transition-colors'}
               >
                 {showHistory ? 'Hide' : 'Show'} ({inactiveSubscriptions.length})
               </button>
@@ -1350,12 +1397,12 @@ export function SubscriptionTrackerTool({ toolId }: SubscriptionTrackerToolProps
               inactiveSubscriptions.length > 0 ? (
                 <div className="space-y-4">
                   {inactiveSubscriptions.map(subscription => (
-                    <div key={subscription.id} className="p-4 rounded-lg border border-slate-700 bg-slate-800/50 opacity-75">
+                    <div key={subscription.id} className={`${nestedCardClass} ${isLight ? '' : 'opacity-75'}`}>
                       <div className="flex items-start justify-between">
                         <div className="flex-1">
                           <div className="flex items-center gap-3 mb-2">
                             <h4 className="text-lg font-semibold text-slate-300">{subscription.name}</h4>
-                            <span className="px-2 py-1 rounded text-xs font-medium bg-slate-600/50 text-slate-400">
+                            <span className={isLight ? 'px-2 py-1 rounded text-xs font-medium border border-slate-300 bg-slate-100 text-slate-700' : 'px-2 py-1 rounded text-xs font-medium bg-slate-600/50 text-slate-400'}>
                               {subscription.category}
                             </span>
                           </div>
@@ -1382,18 +1429,28 @@ export function SubscriptionTrackerTool({ toolId }: SubscriptionTrackerToolProps
                             </div>
                           )}
                         </div>
-                        <div className="flex gap-2 ml-4">
+                        <div className="flex shrink-0 items-center gap-1.5 ml-4">
                           <button
+                            type="button"
                             onClick={() => reactivateSubscription(subscription.id)}
-                            className="px-3 py-1 rounded-lg bg-emerald-500/20 text-emerald-400 hover:bg-emerald-500/30 transition-colors text-sm"
+                            aria-label="Reactivate subscription"
+                            title="Reactivate subscription"
+                            className={rowIconEmeraldClass}
                           >
-                            Reactivate
+                            <svg className="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 15L3 9m0 0l6-6M3 9h12a6 6 0 010 12h-3" />
+                            </svg>
                           </button>
                           <button
+                            type="button"
                             onClick={() => setDeleteConfirmId(subscription.id)}
-                            className="px-3 py-1 rounded-lg bg-red-500/20 text-red-400 hover:bg-red-500/30 transition-colors text-sm"
+                            aria-label="Delete subscription"
+                            title="Delete subscription"
+                            className={rowIconDangerClass}
                           >
-                            Delete
+                            <svg className="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                            </svg>
                           </button>
                         </div>
                       </div>
@@ -1411,14 +1468,14 @@ export function SubscriptionTrackerTool({ toolId }: SubscriptionTrackerToolProps
       {/* Export Tab */}
       {activeTab === 'export' && (
         <div className="space-y-6">
-          <div className="rounded-2xl border border-slate-800 bg-slate-900/70 p-6">
-            <h3 className="text-lg font-semibold text-slate-50 mb-4">Export Subscription Report</h3>
-            <p className="text-slate-300 mb-4">
+          <div className={cardClass}>
+            <h3 className={isLight ? 'text-lg font-semibold text-slate-900 mb-4' : 'text-lg font-semibold text-slate-50 mb-4'}>Export Subscription Report</h3>
+            <p className={isLight ? 'text-slate-700 mb-4' : 'text-slate-300 mb-4'}>
               Generate a comprehensive PDF report of all your subscriptions. The report will include all subscription details, summary statistics, and category breakdown.
             </p>
             <button
               onClick={() => setShowExportPopup(true)}
-              className="px-4 py-2.5 rounded-lg bg-emerald-500 text-slate-950 font-semibold hover:bg-emerald-400 transition-colors focus:outline-none focus:ring-2 focus:ring-emerald-500/50 focus:ring-offset-2 focus:ring-offset-slate-900"
+              className={primaryButtonClass}
             >
               Generate PDF Report
             </button>
@@ -1429,12 +1486,14 @@ export function SubscriptionTrackerTool({ toolId }: SubscriptionTrackerToolProps
       {/* Export Popup */}
       {showExportPopup && (
         <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
-          <div className="bg-slate-800 rounded-2xl border border-slate-700 p-6 max-w-md w-full mx-4">
+          <div className={isLight ? 'bg-white rounded-2xl border border-slate-200 p-6 max-w-md w-full mx-4 shadow-2xl' : 'bg-slate-800 rounded-2xl border border-slate-700 p-6 max-w-md w-full mx-4'}>
             <div className="flex items-center justify-between mb-4">
-              <h3 className="text-lg font-semibold text-slate-50">Export Options</h3>
+              <h3 className={isLight ? 'text-lg font-semibold text-slate-900' : 'text-lg font-semibold text-slate-50'}>Export Options</h3>
               <button
                 onClick={() => setShowExportPopup(false)}
-                className="text-slate-400 hover:text-slate-200 transition-colors"
+                className={isLight ? 'text-slate-600 hover:text-slate-900 transition-colors' : 'text-slate-400 hover:text-slate-200 transition-colors'}
+                aria-label="Close modal"
+                title="Close modal"
               >
                 <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
@@ -1449,9 +1508,9 @@ export function SubscriptionTrackerTool({ toolId }: SubscriptionTrackerToolProps
                   id="includeHistory"
                   checked={includeHistory}
                   onChange={(e) => setIncludeHistory(e.target.checked)}
-                  className="w-5 h-5 rounded border-slate-600 bg-slate-700 text-emerald-500 focus:ring-emerald-500 focus:ring-offset-slate-800"
+                  className={isLight ? 'w-5 h-5 rounded border-slate-400 bg-white text-emerald-600 focus:ring-emerald-500 focus:ring-offset-white' : 'w-5 h-5 rounded border-slate-600 bg-slate-700 text-emerald-500 focus:ring-emerald-500 focus:ring-offset-slate-800'}
                 />
-                <label htmlFor="includeHistory" className="text-slate-300 cursor-pointer">
+                <label htmlFor="includeHistory" className={isLight ? 'text-slate-700 cursor-pointer' : 'text-slate-300 cursor-pointer'}>
                   Include inactive subscriptions in the report
                 </label>
               </div>
@@ -1459,13 +1518,13 @@ export function SubscriptionTrackerTool({ toolId }: SubscriptionTrackerToolProps
               <div className="flex gap-3 pt-4">
                 <button
                   onClick={exportToPDF}
-                  className="flex-1 px-4 py-2.5 rounded-lg bg-emerald-500 text-slate-950 font-semibold hover:bg-emerald-400 transition-colors focus:outline-none focus:ring-2 focus:ring-emerald-500/50 focus:ring-offset-2 focus:ring-offset-slate-900"
+                  className={`flex-1 ${primaryButtonClass}`}
                 >
                   Export to PDF
                 </button>
                 <button
                   onClick={() => setShowExportPopup(false)}
-                  className="px-4 py-2 rounded-lg bg-slate-700 text-slate-200 hover:bg-slate-600 transition-colors"
+                  className={secondaryButtonClass}
                 >
                   Cancel
                 </button>
@@ -1478,20 +1537,25 @@ export function SubscriptionTrackerTool({ toolId }: SubscriptionTrackerToolProps
       {/* Delete Confirmation Modal */}
       {deleteConfirmId && (
         <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
-          <div className="rounded-2xl border border-slate-800 bg-slate-900 p-6 max-w-md w-full mx-4">
-            <h3 className="text-xl font-semibold text-slate-50 mb-2">Delete Subscription</h3>
-            <p className="text-slate-300 mb-4">
-              <strong className="text-red-400">Warning:</strong> This action cannot be undone. This subscription will be permanently deleted.
-            </p>
-            <p className="text-slate-400 text-sm mb-4">
-              To confirm, please type <strong className="text-slate-200">delete</strong> in the box below:
+          <div className={isLight ? 'rounded-2xl border border-slate-200 bg-white p-6 max-w-md w-full mx-4 shadow-2xl' : 'rounded-2xl border border-slate-800 bg-slate-900 p-6 max-w-md w-full mx-4'}>
+            <h3 className={isLight ? 'text-xl font-semibold text-slate-900 mb-2' : 'text-xl font-semibold text-slate-50 mb-2'}>Delete Subscription</h3>
+            <div className={isLight ? 'rounded-lg border border-red-300 bg-red-50 px-4 py-3 mb-4' : 'rounded-lg border border-red-500/50 bg-red-500/10 px-4 py-3 mb-4'}>
+              <p className={isLight ? 'text-red-700 font-semibold mb-2' : 'text-red-300 font-semibold mb-2'}>
+                ⚠️ Warning: This action cannot be undone!
+              </p>
+              <p className={isLight ? 'text-red-600 text-sm' : 'text-red-200 text-sm'}>
+                This subscription will be permanently deleted.
+              </p>
+            </div>
+            <p className={isLight ? 'text-slate-600 text-sm mb-4' : 'text-slate-400 text-sm mb-4'}>
+              To confirm, please type <strong className={isLight ? 'text-slate-900' : 'text-slate-200'}>delete</strong> in the box below:
             </p>
             <input
               type="text"
               value={deleteConfirmText}
               onChange={(e) => setDeleteConfirmText(e.target.value)}
               placeholder="Type 'delete' to confirm"
-              className="w-full px-4 py-2 rounded-lg border border-slate-700 bg-slate-800 text-slate-100 placeholder-slate-500 focus:border-red-500/50 focus:outline-none focus:ring-1 focus:ring-red-500/50 mb-4"
+              className={isLight ? 'w-full px-4 py-2 rounded-lg border border-slate-300 bg-white text-slate-900 placeholder-slate-500 focus:border-red-500/50 focus:outline-none focus:ring-1 focus:ring-red-500/50 mb-4' : 'w-full px-4 py-2 rounded-lg border border-slate-700 bg-slate-800 text-slate-100 placeholder-slate-500 focus:border-red-500/50 focus:outline-none focus:ring-1 focus:ring-red-500/50 mb-4'}
               autoFocus
               onKeyDown={(e) => {
                 if (e.key === 'Escape') {
@@ -1513,7 +1577,7 @@ export function SubscriptionTrackerTool({ toolId }: SubscriptionTrackerToolProps
                   setDeleteConfirmId(null);
                   setDeleteConfirmText('');
                 }}
-                className="px-4 py-2 rounded-lg border border-slate-700 bg-slate-800 text-slate-200 hover:bg-slate-700 transition-colors"
+                className={secondaryButtonClass}
               >
                 Cancel
               </button>

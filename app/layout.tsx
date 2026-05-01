@@ -28,7 +28,7 @@ export default function RootLayout({
       <head>
         <script
           dangerouslySetInnerHTML={{
-            __html: `(function(){try{var k='household-toolbox-theme';var t=localStorage.getItem(k);var d=(t==='light'||t==='dark')?t:'dark';var r=document.documentElement;r.classList.remove('light','dark');r.classList.add(d);r.setAttribute('data-theme',d);}catch(e){document.documentElement.classList.add('dark');}})();`,
+            __html: `(function(){try{var r=document.documentElement;r.classList.remove('light','dark');r.classList.add('dark');r.setAttribute('data-theme','dark');}catch(e){document.documentElement.classList.add('dark');}})();`,
           }}
         />
       </head>

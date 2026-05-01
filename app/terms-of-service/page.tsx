@@ -1,10 +1,10 @@
 'use client';
 
-import Image from 'next/image';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { useState, useEffect } from 'react';
 import { HelpMenu } from '../components/HelpMenu';
+import { SideLogo } from '../components/SideLogo';
 
 export default function TermsOfService() {
   const router = useRouter();
@@ -39,14 +39,7 @@ export default function TermsOfService() {
               onClick={() => router.push('/')}
               className="flex items-center"
             >
-              <Image
-                src="/images/logo/Logo_Side_White.png"
-                alt="Household Toolbox"
-                width={200}
-                height={40}
-                className="h-auto"
-                priority
-              />
+              <SideLogo priority />
             </button>
           </div>
 

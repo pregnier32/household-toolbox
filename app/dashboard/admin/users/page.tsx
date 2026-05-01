@@ -2,7 +2,8 @@
 
 import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
-import Image from 'next/image';
+import { SideLogo } from '../../../components/SideLogo';
+import { useTheme } from '../../../components/AppThemeProvider';
 
 type User = {
   id: string;
@@ -25,6 +26,78 @@ type UserFormData = {
 };
 
 export default function UsersPage() {
+  const { resolvedTheme } = useTheme();
+  const isLight = resolvedTheme === 'light';
+  const headerBarClass = isLight
+    ? 'border-b-2 border-slate-400 bg-slate-900/50'
+    : 'border-b border-slate-800 bg-slate-900/50';
+  const backLinkClass = isLight
+    ? 'mb-4 flex items-center gap-2 text-sm text-slate-700 transition-colors hover:text-slate-900'
+    : 'mb-4 flex items-center gap-2 text-sm text-slate-400 transition-colors hover:text-slate-300';
+  const pageTitleClass = isLight ? 'text-2xl font-semibold text-slate-900' : 'text-2xl font-semibold text-slate-50';
+  const pageSubtitleClass = isLight ? 'mt-1 text-sm text-slate-600' : 'mt-1 text-sm text-slate-400';
+  const searchInputClass = isLight
+    ? 'w-full rounded-lg border border-slate-300 bg-white px-4 py-2.5 pl-10 text-sm text-slate-900 placeholder-slate-500 focus:border-emerald-500/50 focus:outline-none focus:ring-1 focus:ring-emerald-500/50'
+    : 'w-full rounded-lg border border-slate-700 bg-slate-900/70 px-4 py-2.5 pl-10 text-sm text-slate-100 placeholder-slate-500 focus:border-emerald-500/50 focus:outline-none focus:ring-1 focus:ring-emerald-500/50';
+  const searchIconClass = isLight
+    ? 'absolute left-3 top-1/2 h-5 w-5 -translate-y-1/2 text-slate-500'
+    : 'absolute left-3 top-1/2 h-5 w-5 -translate-y-1/2 text-slate-400';
+  const errorAlertClass = isLight
+    ? 'mb-4 rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-800'
+    : 'mb-4 rounded-lg border border-red-500/50 bg-red-500/10 px-4 py-3 text-sm text-red-300';
+  const successAlertClass = isLight
+    ? 'mb-4 rounded-lg border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-900'
+    : 'mb-4 rounded-lg border border-emerald-500/50 bg-emerald-500/10 px-4 py-3 text-sm text-emerald-300';
+  const tableWrapClass = isLight
+    ? 'overflow-hidden rounded-lg border border-slate-200 bg-white shadow-sm'
+    : 'overflow-hidden rounded-lg border border-slate-800 bg-slate-900/70';
+  const tableHeadClass = isLight ? 'bg-slate-100' : 'bg-slate-800/50';
+  const tableHeadCellClass = isLight
+    ? 'px-6 py-3 text-left text-xs font-medium uppercase tracking-wider text-slate-600'
+    : 'px-6 py-3 text-left text-xs font-medium uppercase tracking-wider text-slate-300';
+  const tableBodyClass = isLight ? 'divide-y divide-slate-200' : 'divide-y divide-slate-800';
+  const tableRowClass = isLight ? 'hover:bg-slate-50' : 'hover:bg-slate-800/30';
+  const bodyTextPrimaryClass = isLight ? 'text-sm text-slate-900' : 'text-sm text-slate-100';
+  const bodyTextMutedClass = isLight ? 'text-sm text-slate-600' : 'text-sm text-slate-400';
+  const activeBadgeClass = isLight
+    ? 'inline-flex rounded-full bg-emerald-100 px-2 py-1 text-xs font-medium text-emerald-900'
+    : 'inline-flex rounded-full bg-emerald-500/20 px-2 py-1 text-xs font-medium text-emerald-300';
+  const inactiveBadgeClass = isLight
+    ? 'inline-flex rounded-full bg-red-100 px-2 py-1 text-xs font-medium text-red-900'
+    : 'inline-flex rounded-full bg-red-500/20 px-2 py-1 text-xs font-medium text-red-300';
+  const actionViewClass = isLight ? 'text-blue-700 hover:text-blue-800 transition-colors' : 'text-blue-400 hover:text-blue-300 transition-colors';
+  const actionEditClass = isLight ? 'text-emerald-700 hover:text-emerald-800 transition-colors' : 'text-emerald-400 hover:text-emerald-300 transition-colors';
+  const actionDeleteClass = isLight
+    ? 'text-red-700 hover:text-red-800 transition-colors disabled:cursor-not-allowed disabled:opacity-50'
+    : 'text-red-400 hover:text-red-300 transition-colors disabled:cursor-not-allowed disabled:opacity-50';
+  const modalCardClass = isLight
+    ? 'w-full max-w-2xl rounded-lg border border-slate-200 bg-white p-6 shadow-xl'
+    : 'w-full max-w-2xl rounded-lg border border-slate-700 bg-slate-900 p-6 shadow-xl';
+  const modalTitleClass = isLight ? 'text-xl font-semibold text-slate-900' : 'text-xl font-semibold text-slate-50';
+  const modalCloseClass = isLight ? 'text-slate-500 hover:text-slate-700 transition-colors' : 'text-slate-400 hover:text-slate-300 transition-colors';
+  const modalBodyTextClass = isLight ? 'text-sm text-slate-600' : 'text-sm text-slate-400';
+  const modalSubCardClass = isLight
+    ? 'rounded-lg border border-slate-200 bg-slate-50 p-4'
+    : 'rounded-lg border border-slate-700 bg-slate-800/50 p-4';
+  const modalInputClass = isLight
+    ? 'rounded border border-slate-300 bg-white px-3 py-1.5 text-xs text-slate-900 focus:border-emerald-500/50 focus:outline-none focus:ring-1 focus:ring-emerald-500/50 disabled:cursor-not-allowed disabled:opacity-50'
+    : 'rounded border border-slate-600 bg-slate-900 px-3 py-1.5 text-xs text-slate-100 focus:border-emerald-500/50 focus:outline-none focus:ring-1 focus:ring-emerald-500/50 disabled:cursor-not-allowed disabled:opacity-50';
+  const modalSectionBorderClass = isLight ? 'border-t border-slate-200 pt-6 mt-6' : 'border-t border-slate-700 pt-6 mt-6';
+  const modalCloseButtonClass = isLight
+    ? 'rounded border border-slate-300 bg-white px-4 py-2 text-sm font-medium text-slate-700 transition-colors hover:bg-slate-100'
+    : 'rounded border border-slate-700 bg-slate-800 px-4 py-2 text-sm font-medium text-slate-300 transition-colors hover:bg-slate-700';
+  const deleteModalCardClass = isLight
+    ? 'w-full max-w-md rounded-lg border border-slate-200 bg-white p-6 shadow-xl'
+    : 'w-full max-w-md rounded-lg border border-slate-700 bg-slate-900 p-6 shadow-xl';
+  const deleteModalTextClass = isLight ? 'text-sm text-slate-700 mb-4' : 'text-sm text-slate-300 mb-4';
+  const deleteEmailClass = isLight ? 'font-semibold text-slate-900' : 'font-semibold text-slate-100';
+  const deleteWarningBoxClass = isLight
+    ? 'rounded-lg border border-red-200 bg-red-50 p-3 mb-4'
+    : 'rounded-lg border border-red-500/50 bg-red-500/10 p-3 mb-4';
+  const deleteCancelClass = isLight
+    ? 'rounded border border-slate-300 bg-white px-4 py-2 text-sm font-medium text-slate-700 transition-colors hover:bg-slate-100 disabled:cursor-not-allowed disabled:opacity-50'
+    : 'rounded border border-slate-700 bg-slate-800 px-4 py-2 text-sm font-medium text-slate-300 transition-colors hover:bg-slate-700 disabled:cursor-not-allowed disabled:opacity-50';
+
   const [users, setUsers] = useState<User[]>([]);
   const [filteredUsers, setFilteredUsers] = useState<User[]>([]);
   const [isLoading, setIsLoading] = useState(true);
@@ -433,17 +506,10 @@ export default function UsersPage() {
   return (
     <main className="min-h-screen bg-slate-950 text-slate-100">
       {/* Header */}
-      <header className="border-b border-slate-800 bg-slate-900/50">
+      <header className={headerBarClass}>
         <div className="mx-auto flex max-w-7xl items-center justify-between px-4 py-4 sm:px-6 lg:px-8">
           <div className="flex items-center">
-            <Image
-              src="/images/logo/Logo_Side_White.png"
-              alt="Household Toolbox"
-              width={200}
-              height={40}
-              className="h-auto"
-              priority
-            />
+            <SideLogo priority />
           </div>
         </div>
       </header>
@@ -452,8 +518,9 @@ export default function UsersPage() {
       <div className="mx-auto max-w-7xl px-4 py-8 sm:px-6 lg:px-8">
         <div className="mb-6">
           <button
+            type="button"
             onClick={() => router.push('/dashboard/admin/site-maintenance')}
-            className="mb-4 flex items-center gap-2 text-sm text-slate-400 transition-colors hover:text-slate-300"
+            className={backLinkClass}
           >
             <svg
               className="h-4 w-4"
@@ -473,8 +540,8 @@ export default function UsersPage() {
         </div>
         <div className="mb-6 flex items-center justify-between">
           <div>
-            <h1 className="text-2xl font-semibold text-slate-50">Users Management</h1>
-            <p className="mt-1 text-sm text-slate-400">
+            <h1 className={pageTitleClass}>Users Management</h1>
+            <p className={pageSubtitleClass}>
               View and manage all users in the system
             </p>
           </div>
@@ -488,10 +555,10 @@ export default function UsersPage() {
               placeholder="Search by email, first name, or last name..."
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
-              className="w-full rounded-lg border border-slate-700 bg-slate-900/70 px-4 py-2.5 pl-10 text-sm text-slate-100 placeholder-slate-500 focus:border-emerald-500/50 focus:outline-none focus:ring-1 focus:ring-emerald-500/50"
+              className={searchInputClass}
             />
             <svg
-              className="absolute left-3 top-1/2 h-5 w-5 -translate-y-1/2 text-slate-400"
+              className={searchIconClass}
               fill="none"
               stroke="currentColor"
               viewBox="0 0 24 24"
@@ -508,59 +575,59 @@ export default function UsersPage() {
 
         {/* Messages */}
         {error && (
-          <div className="mb-4 rounded-lg border border-red-500/50 bg-red-500/10 px-4 py-3 text-sm text-red-300">
+          <div className={errorAlertClass}>
             {error}
           </div>
         )}
 
         {success && (
-          <div className="mb-4 rounded-lg border border-emerald-500/50 bg-emerald-500/10 px-4 py-3 text-sm text-emerald-300">
+          <div className={successAlertClass}>
             {success}
           </div>
         )}
 
         {/* Users Table */}
-        <div className="overflow-hidden rounded-lg border border-slate-800 bg-slate-900/70">
+        <div className={tableWrapClass}>
           <div className="overflow-x-auto">
             <table className="w-full">
-              <thead className="bg-slate-800/50">
+              <thead className={tableHeadClass}>
                 <tr>
-                  <th className="px-6 py-3 text-left text-xs font-medium uppercase tracking-wider text-slate-300">
+                  <th className={tableHeadCellClass}>
                     Email
                   </th>
-                  <th className="px-6 py-3 text-left text-xs font-medium uppercase tracking-wider text-slate-300">
+                  <th className={tableHeadCellClass}>
                     First Name
                   </th>
-                  <th className="px-6 py-3 text-left text-xs font-medium uppercase tracking-wider text-slate-300">
+                  <th className={tableHeadCellClass}>
                     Last Name
                   </th>
-                  <th className="px-6 py-3 text-left text-xs font-medium uppercase tracking-wider text-slate-300">
+                  <th className={tableHeadCellClass}>
                     Status
                   </th>
-                  <th className="px-6 py-3 text-left text-xs font-medium uppercase tracking-wider text-slate-300">
+                  <th className={tableHeadCellClass}>
                     User Status
                   </th>
-                  <th className="px-6 py-3 text-left text-xs font-medium uppercase tracking-wider text-slate-300">
+                  <th className={tableHeadCellClass}>
                     Active Tools
                   </th>
-                  <th className="px-6 py-3 text-left text-xs font-medium uppercase tracking-wider text-slate-300">
+                  <th className={tableHeadCellClass}>
                     Created
                   </th>
-                  <th className="px-6 py-3 text-left text-xs font-medium uppercase tracking-wider text-slate-300">
+                  <th className={tableHeadCellClass}>
                     Actions
                   </th>
                 </tr>
               </thead>
-              <tbody className="divide-y divide-slate-800">
+              <tbody className={tableBodyClass}>
                 {filteredUsers.length === 0 ? (
                   <tr>
-                    <td colSpan={8} className="px-6 py-8 text-center text-sm text-slate-400">
+                    <td colSpan={8} className={`px-6 py-8 text-center ${bodyTextMutedClass}`}>
                       {searchQuery ? 'No users found matching your search.' : 'No users found.'}
                     </td>
                   </tr>
                 ) : (
                   filteredUsers.map((tableUser) => (
-                    <tr key={tableUser.id} className="hover:bg-slate-800/30">
+                    <tr key={tableUser.id} className={tableRowClass}>
                       {editingId === tableUser.id ? (
                         <>
                           <td className="px-6 py-4">
@@ -616,10 +683,10 @@ export default function UsersPage() {
                               className="w-full rounded border border-slate-700 bg-slate-900 px-2 py-1 text-sm text-slate-100 focus:border-emerald-500/50 focus:outline-none"
                             />
                           </td>
-                          <td className="px-6 py-4 text-sm text-slate-300 text-center">
+                          <td className={`px-6 py-4 ${isLight ? 'text-sm text-slate-700 text-center' : 'text-sm text-slate-300 text-center'}`}>
                             {tableUser.active_tools_count ?? 0}
                           </td>
-                          <td className="px-6 py-4 text-sm text-slate-400">
+                          <td className={`px-6 py-4 ${bodyTextMutedClass}`}>
                             {formatDate(tableUser.created_at)}
                           </td>
                           <td className="px-6 py-4">
@@ -657,38 +724,38 @@ export default function UsersPage() {
                         </>
                       ) : (
                         <>
-                          <td className="px-6 py-4 text-sm text-slate-100">{tableUser.email}</td>
-                          <td className="px-6 py-4 text-sm text-slate-100">
+                          <td className={`px-6 py-4 ${bodyTextPrimaryClass}`}>{tableUser.email}</td>
+                          <td className={`px-6 py-4 ${bodyTextPrimaryClass}`}>
                             {tableUser.first_name}
                           </td>
-                          <td className="px-6 py-4 text-sm text-slate-100">
+                          <td className={`px-6 py-4 ${bodyTextPrimaryClass}`}>
                             {tableUser.last_name || '—'}
                           </td>
                           <td className="px-6 py-4">
                             <span
                               className={`inline-flex rounded-full px-2 py-1 text-xs font-medium ${
                                 tableUser.active === 'Y'
-                                  ? 'bg-emerald-500/20 text-emerald-300'
-                                  : 'bg-red-500/20 text-red-300'
+                                  ? activeBadgeClass
+                                  : inactiveBadgeClass
                               }`}
                             >
                               {tableUser.active === 'Y' ? 'Active' : 'Inactive'}
                             </span>
                           </td>
-                          <td className="px-6 py-4 text-sm text-slate-300">
+                          <td className={`px-6 py-4 ${isLight ? 'text-sm text-slate-700' : 'text-sm text-slate-300'}`}>
                             {tableUser.user_status || 'user'}
                           </td>
-                          <td className="px-6 py-4 text-sm text-slate-300 text-center">
+                          <td className={`px-6 py-4 ${isLight ? 'text-sm text-slate-700 text-center' : 'text-sm text-slate-300 text-center'}`}>
                             {tableUser.active_tools_count ?? 0}
                           </td>
-                          <td className="px-6 py-4 text-sm text-slate-400">
+                          <td className={`px-6 py-4 ${bodyTextMutedClass}`}>
                             {formatDate(tableUser.created_at)}
                           </td>
                           <td className="px-6 py-4">
                             <div className="flex items-center gap-2">
                               <button
                                 onClick={() => handleViewTools(tableUser)}
-                                className="text-blue-400 hover:text-blue-300 transition-colors"
+                                className={actionViewClass}
                                 title="View user tools"
                               >
                                 <svg className="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -698,7 +765,7 @@ export default function UsersPage() {
                               </button>
                               <button
                                 onClick={() => handleEdit(tableUser)}
-                                className="text-emerald-400 hover:text-emerald-300 transition-colors"
+                                className={actionEditClass}
                                 title="Edit user"
                               >
                                 <svg className="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -708,7 +775,7 @@ export default function UsersPage() {
                               <button
                                 onClick={() => handleDeleteClick(tableUser)}
                                 disabled={user?.id === tableUser.id}
-                                className="text-red-400 hover:text-red-300 transition-colors disabled:cursor-not-allowed disabled:opacity-50"
+                                className={actionDeleteClass}
                                 title={user?.id === tableUser.id ? 'Cannot delete your own account' : 'Delete user'}
                               >
                                 <svg className="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -728,7 +795,7 @@ export default function UsersPage() {
         </div>
 
         {/* Results count */}
-        <div className="mt-4 text-sm text-slate-400">
+        <div className={`mt-4 ${bodyTextMutedClass}`}>
           Showing {filteredUsers.length} of {users.length} users
           {searchQuery && ` matching "${searchQuery}"`}
         </div>
@@ -737,14 +804,14 @@ export default function UsersPage() {
       {/* User Tools Modal */}
       {toolsModal.isOpen && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4" onClick={handleCloseToolsModal}>
-          <div className="w-full max-w-2xl rounded-lg border border-slate-700 bg-slate-900 p-6 shadow-xl" onClick={(e) => e.stopPropagation()}>
+          <div className={modalCardClass} onClick={(e) => e.stopPropagation()}>
             <div className="flex items-center justify-between mb-4">
-              <h2 className="text-xl font-semibold text-slate-50">
+              <h2 className={modalTitleClass}>
                 Active Tools for {toolsModal.userName}
               </h2>
               <button
                 onClick={handleCloseToolsModal}
-                className="text-slate-400 hover:text-slate-300 transition-colors"
+                className={modalCloseClass}
               >
                 <svg className="h-6 w-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
@@ -752,19 +819,19 @@ export default function UsersPage() {
               </button>
             </div>
             {error && (
-              <div className="mb-4 rounded-lg border border-red-500/50 bg-red-500/10 px-4 py-3 text-sm text-red-300">
+              <div className={errorAlertClass}>
                 {error}
               </div>
             )}
             {success && (
-              <div className="mb-4 rounded-lg border border-emerald-500/50 bg-emerald-500/10 px-4 py-3 text-sm text-emerald-300">
+              <div className={successAlertClass}>
                 {success}
               </div>
             )}
             {isLoadingTools ? (
-              <div className="py-8 text-center text-slate-400">Loading tools...</div>
+              <div className={`py-8 text-center ${bodyTextMutedClass}`}>Loading tools...</div>
             ) : userTools.length === 0 ? (
-              <div className="py-8 text-center text-slate-400">
+              <div className={`py-8 text-center ${bodyTextMutedClass}`}>
                 <p>This user has no active tools.</p>
               </div>
             ) : (
@@ -775,27 +842,27 @@ export default function UsersPage() {
                   return (
                     <div
                       key={userTool.id}
-                      className="rounded-lg border border-slate-700 bg-slate-800/50 p-4"
+                      className={modalSubCardClass}
                     >
                       <div className="flex items-start justify-between gap-4">
                         <div className="flex-1">
                           <div className="flex items-center gap-2 mb-2">
-                            <h3 className="text-sm font-semibold text-slate-100">{tool?.name || 'Unknown Tool'}</h3>
+                            <h3 className={isLight ? 'text-sm font-semibold text-slate-900' : 'text-sm font-semibold text-slate-100'}>{tool?.name || 'Unknown Tool'}</h3>
                             {userTool.status === 'active' && (
-                              <span className="inline-flex rounded-full bg-emerald-500/20 px-2 py-0.5 text-xs font-medium text-emerald-300">
+                              <span className={activeBadgeClass}>
                                 Active
                               </span>
                             )}
                             {userTool.status === 'inactive' && (
-                              <span className="inline-flex rounded-full bg-slate-500/20 px-2 py-0.5 text-xs font-medium text-slate-300">
+                              <span className={isLight ? 'inline-flex rounded-full bg-slate-200 px-2 py-0.5 text-xs font-medium text-slate-700' : 'inline-flex rounded-full bg-slate-500/20 px-2 py-0.5 text-xs font-medium text-slate-300'}>
                                 Inactive
                               </span>
                             )}
                           </div>
                           {tool?.tool_tip && (
-                            <p className="text-xs text-slate-400 mb-2">{tool.tool_tip}</p>
+                            <p className={isLight ? 'text-xs text-slate-600 mb-2' : 'text-xs text-slate-400 mb-2'}>{tool.tool_tip}</p>
                           )}
-                          <div className="flex items-center gap-4 text-xs text-slate-400">
+                          <div className={isLight ? 'flex items-center gap-4 text-xs text-slate-600' : 'flex items-center gap-4 text-xs text-slate-400'}>
                             <span>Price: ${userTool.price?.toFixed(2) || tool?.price?.toFixed(2) || '0.00'}/month</span>
                           </div>
                         </div>
@@ -804,13 +871,13 @@ export default function UsersPage() {
                             value={userTool.status}
                             onChange={(e) => handleUpdateToolStatus(userTool.id, e.target.value)}
                             disabled={isUpdating}
-                            className="rounded border border-slate-600 bg-slate-900 px-3 py-1.5 text-xs text-slate-100 focus:border-emerald-500/50 focus:outline-none focus:ring-1 focus:ring-emerald-500/50 disabled:cursor-not-allowed disabled:opacity-50"
+                            className={modalInputClass}
                           >
                             <option value="active">Active</option>
                             <option value="inactive">Inactive</option>
                           </select>
                           {isUpdating && (
-                            <p className="text-xs text-slate-400 mt-1 text-center">Updating...</p>
+                            <p className={`text-xs mt-1 text-center ${isLight ? 'text-slate-600' : 'text-slate-400'}`}>Updating...</p>
                           )}
                         </div>
                       </div>
@@ -822,14 +889,14 @@ export default function UsersPage() {
 
             {/* Assign Custom Tool Section - Always visible when not loading */}
             {!isLoadingTools && (
-              <div className="border-t border-slate-700 pt-6 mt-6">
-                <h3 className="text-sm font-semibold text-slate-300 mb-3">Assign Custom Tool</h3>
+              <div className={modalSectionBorderClass}>
+                <h3 className={isLight ? 'text-sm font-semibold text-slate-700 mb-3' : 'text-sm font-semibold text-slate-300 mb-3'}>Assign Custom Tool</h3>
                 <div className="flex gap-3">
                   <select
                     value={selectedCustomToolId}
                     onChange={(e) => setSelectedCustomToolId(e.target.value)}
                     disabled={isLoadingCustomTools || isAssigningTool}
-                    className="flex-1 rounded border border-slate-600 bg-slate-900 px-3 py-2 text-sm text-slate-100 focus:border-emerald-500/50 focus:outline-none focus:ring-1 focus:ring-emerald-500/50 disabled:cursor-not-allowed disabled:opacity-50"
+                    className={isLight ? 'flex-1 rounded border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900 focus:border-emerald-500/50 focus:outline-none focus:ring-1 focus:ring-emerald-500/50 disabled:cursor-not-allowed disabled:opacity-50' : 'flex-1 rounded border border-slate-600 bg-slate-900 px-3 py-2 text-sm text-slate-100 focus:border-emerald-500/50 focus:outline-none focus:ring-1 focus:ring-emerald-500/50 disabled:cursor-not-allowed disabled:opacity-50'}
                   >
                     <option value="">Select a custom tool...</option>
                     {customTools.map((tool) => (
@@ -841,20 +908,20 @@ export default function UsersPage() {
                   <button
                     onClick={handleAssignCustomTool}
                     disabled={!selectedCustomToolId || isAssigningTool || isLoadingCustomTools}
-                    className="rounded border border-emerald-500/50 bg-emerald-500/10 px-4 py-2 text-sm font-medium text-emerald-300 transition-colors hover:bg-emerald-500/20 disabled:cursor-not-allowed disabled:opacity-50"
+                    className={isLight ? 'rounded border border-emerald-300 bg-emerald-50 px-4 py-2 text-sm font-medium text-emerald-900 transition-colors hover:bg-emerald-100 disabled:cursor-not-allowed disabled:opacity-50' : 'rounded border border-emerald-500/50 bg-emerald-500/10 px-4 py-2 text-sm font-medium text-emerald-300 transition-colors hover:bg-emerald-500/20 disabled:cursor-not-allowed disabled:opacity-50'}
                   >
                     {isAssigningTool ? 'Assigning...' : 'Assign Tool'}
                   </button>
                 </div>
                 {customTools.length === 0 && !isLoadingCustomTools && (
-                  <p className="text-xs text-slate-500 mt-2">No custom tools available</p>
+                  <p className={`text-xs mt-2 ${isLight ? 'text-slate-600' : 'text-slate-500'}`}>No custom tools available</p>
                 )}
               </div>
             )}
             <div className="mt-6 flex justify-end">
               <button
                 onClick={handleCloseToolsModal}
-                className="rounded border border-slate-700 bg-slate-800 px-4 py-2 text-sm font-medium text-slate-300 transition-colors hover:bg-slate-700"
+                className={modalCloseButtonClass}
               >
                 Close
               </button>
@@ -866,17 +933,17 @@ export default function UsersPage() {
       {/* Delete Confirmation Modal */}
       {deleteConfirm.isOpen && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
-          <div className="w-full max-w-md rounded-lg border border-slate-700 bg-slate-900 p-6 shadow-xl">
-            <h2 className="text-xl font-semibold text-slate-50 mb-2">Delete User</h2>
-            <p className="text-sm text-slate-300 mb-4">
-              Are you sure you want to delete <span className="font-semibold text-slate-100">{deleteConfirm.userEmail}</span>?
+          <div className={deleteModalCardClass}>
+            <h2 className={modalTitleClass + ' mb-2'}>Delete User</h2>
+            <p className={deleteModalTextClass}>
+              Are you sure you want to delete <span className={deleteEmailClass}>{deleteConfirm.userEmail}</span>?
             </p>
-            <div className="rounded-lg border border-red-500/50 bg-red-500/10 p-3 mb-4">
-              <p className="text-sm text-red-300 font-medium mb-1">⚠️ This action cannot be undone</p>
-              <p className="text-xs text-red-300/80">
+            <div className={deleteWarningBoxClass}>
+              <p className={isLight ? 'text-sm text-red-900 font-medium mb-1' : 'text-sm text-red-300 font-medium mb-1'}>⚠️ This action cannot be undone</p>
+              <p className={isLight ? 'text-xs text-red-800/90' : 'text-xs text-red-300/80'}>
                 This will permanently delete the user account and all related records including:
               </p>
-              <ul className="text-xs text-red-300/80 mt-2 ml-4 list-disc">
+              <ul className={isLight ? 'text-xs text-red-800/90 mt-2 ml-4 list-disc' : 'text-xs text-red-300/80 mt-2 ml-4 list-disc'}>
                 <li>User account</li>
                 <li>All user tools and subscriptions</li>
                 <li>Password reset tokens</li>
@@ -887,7 +954,7 @@ export default function UsersPage() {
               <button
                 onClick={handleDeleteCancel}
                 disabled={isDeleting}
-                className="rounded border border-slate-700 bg-slate-800 px-4 py-2 text-sm font-medium text-slate-300 transition-colors hover:bg-slate-700 disabled:cursor-not-allowed disabled:opacity-50"
+                className={deleteCancelClass}
               >
                 Cancel
               </button>

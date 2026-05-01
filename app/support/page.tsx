@@ -1,13 +1,58 @@
 'use client';
 
-import Image from 'next/image';
 import { useRouter } from 'next/navigation';
 import { useEffect, useState } from 'react';
 import { UserMenu } from '../components/UserMenu';
+import { SideLogo } from '../components/SideLogo';
+import { useTheme } from '../components/AppThemeProvider';
 
 type RequestType = 'question' | 'support' | 'feature' | 'custom_tool';
 
 export default function Support() {
+  const { resolvedTheme } = useTheme();
+  const isLight = resolvedTheme === 'light';
+  const headerBarClass = isLight
+    ? 'border-b-2 border-slate-400 bg-slate-900/50'
+    : 'border-b border-slate-800 bg-slate-900/50';
+  const headerChromeButtonClass = isLight
+    ? 'flex items-center gap-2 rounded-lg px-3 py-2 text-sm font-medium text-slate-700 transition-colors hover:bg-slate-100 hover:text-slate-900'
+    : 'flex items-center gap-2 rounded-lg px-3 py-2 text-sm font-medium text-slate-300 transition-colors hover:bg-slate-800 hover:text-slate-100';
+  const topNavHomeClass = isLight
+    ? 'text-slate-700 transition-colors hover:text-emerald-700'
+    : 'text-slate-300 transition-colors hover:text-emerald-300';
+  const pageTitleClass = isLight ? 'text-4xl font-semibold text-slate-900 mb-4' : 'text-4xl font-semibold text-slate-50 mb-4';
+  const pageSubtitleClass = isLight ? 'text-slate-600 max-w-2xl mx-auto' : 'text-slate-400 max-w-2xl mx-auto';
+  const sectionLabelClass = isLight ? 'block text-sm font-medium text-slate-700 mb-4' : 'block text-sm font-medium text-slate-300 mb-4';
+  const requestCardSelectedClass = isLight
+    ? 'border-emerald-300 bg-emerald-50'
+    : 'border-emerald-500 bg-emerald-500/10';
+  const requestCardUnselectedClass = isLight
+    ? 'border-slate-200 bg-white hover:border-slate-300 shadow-sm'
+    : 'border-slate-800 bg-slate-900/70 hover:border-slate-700';
+  const requestCardTitleClass = isLight ? 'font-semibold text-slate-900 mb-1' : 'font-semibold text-slate-100 mb-1';
+  const requestCardDescClass = isLight ? 'text-xs text-slate-600' : 'text-xs text-slate-400';
+  const errorAlertClass = isLight
+    ? 'rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-800'
+    : 'rounded-lg border border-red-500/50 bg-red-500/10 px-4 py-3 text-sm text-red-300';
+  const successAlertClass = isLight
+    ? 'rounded-lg border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-900'
+    : 'rounded-lg border border-emerald-500/50 bg-emerald-500/10 px-4 py-3 text-sm text-emerald-300';
+  const inputLabelClass = isLight ? 'block text-sm font-medium text-slate-700 mb-2' : 'block text-sm font-medium text-slate-300 mb-2';
+  const inputClass = isLight
+    ? 'w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900 placeholder-slate-500 focus:border-emerald-500/50 focus:outline-none focus:ring-1 focus:ring-emerald-500/50'
+    : 'w-full rounded-lg border border-slate-700 bg-slate-900/70 px-3 py-2 text-sm text-slate-100 placeholder-slate-500 focus:border-emerald-500/50 focus:outline-none focus:ring-1 focus:ring-emerald-500/50';
+  const submitMetaClass = isLight ? 'text-xs text-slate-600' : 'text-xs text-slate-500';
+  const submitButtonClass = isLight
+    ? 'rounded-lg bg-emerald-500 px-6 py-2.5 text-sm font-semibold text-slate-950 transition-colors hover:bg-emerald-400 focus:outline-none focus:ring-2 focus:ring-emerald-500/50 focus:ring-offset-2 focus:ring-offset-white disabled:cursor-not-allowed disabled:opacity-50'
+    : 'rounded-lg bg-emerald-500 px-6 py-2.5 text-sm font-semibold text-slate-950 transition-colors hover:bg-emerald-400 focus:outline-none focus:ring-2 focus:ring-emerald-500/50 focus:ring-offset-2 focus:ring-offset-slate-900 disabled:cursor-not-allowed disabled:opacity-50';
+  const helpCardClass = isLight
+    ? 'mt-12 rounded-2xl border border-slate-200 bg-white p-6 shadow-sm'
+    : 'mt-12 rounded-2xl border border-slate-800 bg-slate-900/70 p-6';
+  const helpTitleClass = isLight ? 'text-lg font-semibold text-slate-900 mb-3' : 'text-lg font-semibold text-slate-100 mb-3';
+  const helpListClass = isLight ? 'space-y-2 text-sm text-slate-700' : 'space-y-2 text-sm text-slate-400';
+  const helpBulletClass = isLight ? 'text-emerald-700 mt-0.5' : 'text-emerald-400 mt-0.5';
+  const helpLinkClass = isLight ? 'text-emerald-700 hover:text-emerald-800 underline' : 'text-emerald-400 hover:text-emerald-300 underline';
+
   const router = useRouter();
   const [user, setUser] = useState<{ firstName: string; lastName?: string } | null>(null);
   const [requestType, setRequestType] = useState<RequestType>('question');
@@ -111,26 +156,20 @@ export default function Support() {
   return (
     <main className="min-h-screen bg-slate-950 text-slate-100">
       {/* Header */}
-      <header className="border-b border-slate-800 bg-slate-900/50">
+      <header className={headerBarClass}>
         <div className="mx-auto flex max-w-7xl items-center justify-between px-4 py-4 sm:px-6 lg:px-8">
           <div className="flex items-center">
             <button onClick={() => router.push('/')} className="flex items-center">
-              <Image
-                src="/images/logo/Logo_Side_White.png"
-                alt="Household Toolbox"
-                width={200}
-                height={40}
-                className="h-auto"
-                priority
-              />
+                <SideLogo priority />
             </button>
           </div>
 
           {user ? (
             <div className="flex items-center gap-3">
               <button
+                type="button"
                 onClick={() => router.push('/dashboard')}
-                className="flex items-center gap-2 rounded-lg px-3 py-2 text-sm font-medium text-slate-300 transition-colors hover:bg-slate-800 hover:text-slate-100"
+                className={headerChromeButtonClass}
               >
                 <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 19l-7-7m0 0l7-7m-7 7h18" />
@@ -143,10 +182,11 @@ export default function Support() {
               />
             </div>
           ) : (
-            <nav className="hidden gap-6 text-sm text-slate-300 sm:flex items-center">
+            <nav className="hidden gap-6 text-sm sm:flex items-center">
               <button
+                type="button"
                 onClick={() => router.push('/')}
-                className="hover:text-emerald-300 transition-colors"
+                className={topNavHomeClass}
               >
                 Home
               </button>
@@ -158,17 +198,17 @@ export default function Support() {
       {/* Content */}
       <div className="mx-auto max-w-3xl px-4 py-12 sm:px-6 lg:px-8">
         <div className="mb-8 text-center">
-          <h1 className="text-4xl font-semibold text-slate-50 mb-4">
+          <h1 className={pageTitleClass}>
             Contact Support
           </h1>
-          <p className="text-slate-400 max-w-2xl mx-auto">
+          <p className={pageSubtitleClass}>
             We're here to help! Choose how you'd like to reach out and we'll get back to you as soon as possible.
           </p>
         </div>
 
         {/* Request Type Selection */}
         <div className="mb-8">
-          <label className="block text-sm font-medium text-slate-300 mb-4">
+          <label className={sectionLabelClass}>
             How can we help you?
           </label>
           <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
@@ -179,15 +219,15 @@ export default function Support() {
                 onClick={() => setRequestType(option.value)}
                 className={`rounded-2xl border p-5 text-left transition-all ${
                   requestType === option.value
-                    ? 'border-emerald-500 bg-emerald-500/10'
-                    : 'border-slate-800 bg-slate-900/70 hover:border-slate-700'
+                    ? requestCardSelectedClass
+                    : requestCardUnselectedClass
                 }`}
               >
                 <div className="text-3xl mb-2">{option.icon}</div>
-                <div className="font-semibold text-slate-100 mb-1">
+                <div className={requestCardTitleClass}>
                   {option.label}
                 </div>
-                <div className="text-xs text-slate-400">
+                <div className={requestCardDescClass}>
                   {option.description}
                 </div>
               </button>
@@ -198,14 +238,14 @@ export default function Support() {
         {/* Form */}
         <form onSubmit={handleSubmit} className="space-y-6">
           {error && (
-            <div className="rounded-lg border border-red-500/50 bg-red-500/10 px-4 py-3 text-sm text-red-300">
+            <div className={errorAlertClass}>
               {error}
             </div>
           )}
 
           <div className="grid gap-6 md:grid-cols-2">
             <div>
-              <label htmlFor="name" className="block text-sm font-medium text-slate-300 mb-2">
+              <label htmlFor="name" className={inputLabelClass}>
                 Name <span className="text-red-400">*</span>
               </label>
               <input
@@ -214,14 +254,14 @@ export default function Support() {
                 value={name}
                 onChange={(e) => setName(e.target.value)}
                 required
-                className="w-full rounded-lg border border-slate-700 bg-slate-900/70 px-3 py-2 text-sm text-slate-100 placeholder-slate-500 focus:border-emerald-500/50 focus:outline-none focus:ring-1 focus:ring-emerald-500/50"
+                className={inputClass}
                 placeholder="Your name"
                 disabled={isSubmitting}
               />
             </div>
 
             <div>
-              <label htmlFor="email" className="block text-sm font-medium text-slate-300 mb-2">
+              <label htmlFor="email" className={inputLabelClass}>
                 Email <span className="text-red-400">*</span>
               </label>
               <input
@@ -230,7 +270,7 @@ export default function Support() {
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
                 required
-                className="w-full rounded-lg border border-slate-700 bg-slate-900/70 px-3 py-2 text-sm text-slate-100 placeholder-slate-500 focus:border-emerald-500/50 focus:outline-none focus:ring-1 focus:ring-emerald-500/50"
+                className={inputClass}
                 placeholder="your@email.com"
                 disabled={isSubmitting}
               />
@@ -238,7 +278,7 @@ export default function Support() {
           </div>
 
           <div>
-            <label htmlFor="subject" className="block text-sm font-medium text-slate-300 mb-2">
+            <label htmlFor="subject" className={inputLabelClass}>
               Subject <span className="text-red-400">*</span>
             </label>
             <input
@@ -247,14 +287,14 @@ export default function Support() {
               value={subject}
               onChange={(e) => setSubject(e.target.value)}
               required
-              className="w-full rounded-lg border border-slate-700 bg-slate-900/70 px-3 py-2 text-sm text-slate-100 placeholder-slate-500 focus:border-emerald-500/50 focus:outline-none focus:ring-1 focus:ring-emerald-500/50"
+              className={inputClass}
               placeholder="Brief summary of your request"
               disabled={isSubmitting}
             />
           </div>
 
           <div>
-            <label htmlFor="message" className="block text-sm font-medium text-slate-300 mb-2">
+            <label htmlFor="message" className={inputLabelClass}>
               Message <span className="text-red-400">*</span>
             </label>
             <textarea
@@ -263,27 +303,27 @@ export default function Support() {
               onChange={(e) => setMessage(e.target.value)}
               required
               rows={8}
-              className="w-full rounded-lg border border-slate-700 bg-slate-900/70 px-3 py-2 text-sm text-slate-100 placeholder-slate-500 focus:border-emerald-500/50 focus:outline-none focus:ring-1 focus:ring-emerald-500/50 resize-none"
+              className={`${inputClass} resize-none`}
               placeholder="Please provide as much detail as possible..."
               disabled={isSubmitting}
             />
           </div>
 
           <div className="flex items-center justify-between pt-4">
-            <p className="text-xs text-slate-500">
+            <p className={submitMetaClass}>
               Your message will be sent to support@householdtoolbox.com
             </p>
             <button
               type="submit"
               disabled={isSubmitting}
-              className="rounded-lg bg-emerald-500 px-6 py-2.5 text-sm font-semibold text-slate-950 transition-colors hover:bg-emerald-400 focus:outline-none focus:ring-2 focus:ring-emerald-500/50 focus:ring-offset-2 focus:ring-offset-slate-900 disabled:cursor-not-allowed disabled:opacity-50"
+              className={submitButtonClass}
             >
               {isSubmitting ? 'Sending...' : 'Send Message'}
             </button>
           </div>
 
           {success && (
-            <div className="rounded-lg border border-emerald-500/50 bg-emerald-500/10 px-4 py-3 text-sm text-emerald-300">
+            <div className={successAlertClass}>
               Thank you for contacting us! We've received your message and will get back to you soon.
               <br />
               Please monitor your Junk Mail folder for our reply.
@@ -292,21 +332,21 @@ export default function Support() {
         </form>
 
         {/* Additional Help Section */}
-        <div className="mt-12 rounded-2xl border border-slate-800 bg-slate-900/70 p-6">
-          <h2 className="text-lg font-semibold text-slate-100 mb-3">
+        <div className={helpCardClass}>
+          <h2 className={helpTitleClass}>
             Before you contact us
           </h2>
-          <ul className="space-y-2 text-sm text-slate-400">
+          <ul className={helpListClass}>
             <li className="flex items-start gap-2">
-              <span className="text-emerald-400 mt-0.5">•</span>
-              <span>Check our <button onClick={() => router.push('/faq')} className="text-emerald-400 hover:text-emerald-300 underline">FAQ page</button> for common questions</span>
+              <span className={helpBulletClass}>•</span>
+              <span>Check our <button type="button" onClick={() => router.push('/faq')} className={helpLinkClass}>FAQ page</button> for common questions</span>
             </li>
             <li className="flex items-start gap-2">
-              <span className="text-emerald-400 mt-0.5">•</span>
+              <span className={helpBulletClass}>•</span>
               <span>Include as much detail as possible in your message</span>
             </li>
             <li className="flex items-start gap-2">
-              <span className="text-emerald-400 mt-0.5">•</span>
+              <span className={helpBulletClass}>•</span>
               <span>We typically respond within 24-48 hours</span>
             </li>
           </ul>

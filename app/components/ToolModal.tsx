@@ -3,6 +3,7 @@
 import { useEffect } from 'react';
 import Image from 'next/image';
 import { DynamicIcon } from './DynamicIcon';
+import { useTheme } from './AppThemeProvider';
 
 type ToolIcon = {
   id: string;
@@ -34,6 +35,15 @@ type ToolModalProps = {
 };
 
 export function ToolModal({ tool, isOpen, onClose, onBuy, isBuying = false, buyMessage }: ToolModalProps) {
+  const { resolvedTheme } = useTheme();
+  const isLight = resolvedTheme === 'light';
+  const trialNoticeWrapClass = isLight
+    ? 'mb-4 rounded-lg border border-amber-300 bg-amber-100 px-3 py-2'
+    : 'mb-4 rounded-lg border border-amber-500/50 bg-amber-500/10 px-3 py-2';
+  const trialNoticeTextClass = isLight
+    ? 'text-sm text-amber-900 text-center'
+    : 'text-sm text-amber-300 text-center';
+
   // Close modal on Escape key
   useEffect(() => {
     const handleEscape = (e: KeyboardEvent) => {
@@ -113,8 +123,8 @@ export function ToolModal({ tool, isOpen, onClose, onBuy, isBuying = false, buyM
 
         {/* Trial Notice - Not shown for coming_soon or custom tools */}
         {tool.status !== 'coming_soon' && tool.status !== 'custom' && (
-          <div className="mb-4 rounded-lg border border-amber-500/50 bg-amber-500/10 px-3 py-2">
-            <p className="text-sm text-amber-300 text-center">
+          <div className={trialNoticeWrapClass}>
+            <p className={trialNoticeTextClass}>
               <span className="font-semibold">7-day free trial</span> - Start your trial today, no charge until after 7 days
             </p>
           </div>

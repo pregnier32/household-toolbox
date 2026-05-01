@@ -2,6 +2,7 @@
 
 import { useState, useRef, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
+import { useTheme } from './AppThemeProvider';
 
 type AdminMenuProps = {
   className?: string;
@@ -12,6 +13,20 @@ export function AdminMenu({ className = '', onOverviewClick }: AdminMenuProps) {
   const [isOpen, setIsOpen] = useState(false);
   const menuRef = useRef<HTMLDivElement>(null);
   const router = useRouter();
+  const { resolvedTheme } = useTheme();
+  const isLight = resolvedTheme === 'light';
+
+  const triggerClass = isLight
+    ? 'flex items-center gap-2 rounded-lg px-3 py-2 text-sm font-medium text-slate-700 transition-colors hover:bg-slate-100 hover:text-slate-900'
+    : 'flex items-center gap-2 rounded-lg px-3 py-2 text-sm font-medium text-slate-300 transition-colors hover:bg-slate-800 hover:text-slate-100';
+
+  const menuPanelClass = isLight
+    ? 'absolute right-0 z-50 mt-2 w-56 rounded-lg border border-slate-200 bg-white shadow-lg ring-1 ring-slate-900/5'
+    : 'absolute right-0 z-50 mt-2 w-56 rounded-lg border border-slate-700 bg-slate-800 shadow-lg';
+
+  const menuItemClass = isLight
+    ? 'flex w-full items-center gap-3 px-4 py-2 text-sm text-slate-700 transition-colors hover:bg-slate-100'
+    : 'flex w-full items-center gap-3 px-4 py-2 text-sm text-slate-300 transition-colors hover:bg-slate-700';
 
   // Close menu when clicking outside
   useEffect(() => {
@@ -32,12 +47,9 @@ export function AdminMenu({ className = '', onOverviewClick }: AdminMenuProps) {
 
   return (
     <div className={`relative ${className}`} ref={menuRef}>
-      <button
-        onClick={() => setIsOpen(!isOpen)}
-        className="flex items-center gap-2 rounded-lg px-3 py-2 text-sm font-medium text-slate-300 transition-colors hover:bg-slate-800 hover:text-slate-100"
-      >
+      <button type="button" onClick={() => setIsOpen(!isOpen)} className={triggerClass}>
         <svg
-          className="h-4 w-4"
+          className="h-4 w-4 shrink-0"
           fill="none"
           stroke="currentColor"
           viewBox="0 0 24 24"
@@ -57,7 +69,7 @@ export function AdminMenu({ className = '', onOverviewClick }: AdminMenuProps) {
         </svg>
         <span>Admin</span>
         <svg
-          className={`h-4 w-4 transition-transform ${isOpen ? 'rotate-180' : ''}`}
+          className={`h-4 w-4 shrink-0 transition-transform ${isOpen ? 'rotate-180' : ''}`}
           fill="none"
           stroke="currentColor"
           viewBox="0 0 24 24"
@@ -72,18 +84,19 @@ export function AdminMenu({ className = '', onOverviewClick }: AdminMenuProps) {
       </button>
 
       {isOpen && (
-        <div className="absolute right-0 mt-2 w-56 rounded-lg border border-slate-700 bg-slate-800 shadow-lg z-50">
+        <div className={menuPanelClass}>
           <div className="py-1">
             {onOverviewClick && (
               <button
+                type="button"
                 onClick={() => {
                   onOverviewClick();
                   setIsOpen(false);
                 }}
-                className="flex w-full items-center gap-3 px-4 py-2 text-sm text-slate-300 transition-colors hover:bg-slate-700"
+                className={menuItemClass}
               >
                 <svg
-                  className="h-4 w-4"
+                  className="h-4 w-4 shrink-0"
                   fill="none"
                   stroke="currentColor"
                   viewBox="0 0 24 24"
@@ -99,14 +112,15 @@ export function AdminMenu({ className = '', onOverviewClick }: AdminMenuProps) {
               </button>
             )}
             <button
+              type="button"
               onClick={() => {
                 router.push('/dashboard/admin/site-maintenance');
                 setIsOpen(false);
               }}
-              className="flex w-full items-center gap-3 px-4 py-2 text-sm text-slate-300 transition-colors hover:bg-slate-700"
+              className={menuItemClass}
             >
               <svg
-                className="h-4 w-4"
+                className="h-4 w-4 shrink-0"
                 fill="none"
                 stroke="currentColor"
                 viewBox="0 0 24 24"
@@ -132,4 +146,3 @@ export function AdminMenu({ className = '', onOverviewClick }: AdminMenuProps) {
     </div>
   );
 }
-

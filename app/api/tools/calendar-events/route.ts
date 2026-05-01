@@ -81,7 +81,7 @@ export async function POST(request: NextRequest) {
 
   try {
     const body = await request.json();
-    const { toolId, category, event, action } = body;
+    const { toolId, category, event, action, forceDeleteEvents } = body;
 
     if (!toolId) {
       return NextResponse.json({ error: 'Tool ID is required' }, { status: 400 });
@@ -130,6 +130,22 @@ export async function POST(request: NextRequest) {
     }
 
     if (action === 'delete_category' && category?.id) {
+      // Explicitly remove events attached to this category before deleting category.
+      // This ensures category delete always cascades even if DB FK cascade is absent.
+      if (forceDeleteEvents) {
+        const { error: eventsDeleteError } = await supabaseServer
+          .from('tools_ce_events')
+          .delete()
+          .eq('category_id', category.id)
+          .eq('user_id', user.id)
+          .eq('tool_id', toolId);
+
+        if (eventsDeleteError) {
+          console.error('Error deleting category events:', eventsDeleteError);
+          return NextResponse.json({ error: 'Failed to delete category events' }, { status: 500 });
+        }
+      }
+
       const { error } = await supabaseServer
         .from('tools_ce_categories')
         .delete()

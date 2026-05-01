@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useEffect, useCallback, createContext, useContext } from 'react';
+import { useTheme } from './AppThemeProvider';
 
 // --- Types (exported for dashboard / context) ---
 export type Category = {
@@ -138,6 +139,157 @@ type GoalsTrackingToolProps = {
 
 export function GoalsTrackingTool({ toolId }: GoalsTrackingToolProps) {
   const ctx = useGoalsContext();
+  const { resolvedTheme } = useTheme();
+  const isLight = resolvedTheme === 'light';
+
+  const cardClass = isLight
+    ? 'rounded-2xl border border-slate-200 bg-white p-4 shadow-sm'
+    : 'rounded-2xl border border-slate-800 bg-slate-900/70 p-4';
+  const cardMutedClass = isLight
+    ? 'rounded-2xl border border-slate-200 bg-white p-8 text-center shadow-sm'
+    : 'rounded-2xl border border-slate-800 bg-slate-900/70 p-8 text-center';
+  const cardPad6Class = isLight
+    ? 'rounded-2xl border border-slate-200 bg-white p-6 shadow-sm'
+    : 'rounded-2xl border border-slate-800 bg-slate-900/70 p-6';
+  const titleClass = isLight ? 'text-2xl font-semibold text-slate-900 mb-2' : 'text-2xl font-semibold text-slate-50 mb-2';
+  const descClass = isLight ? 'text-slate-600 text-sm' : 'text-slate-400 text-sm';
+  const sectionTitleClass = isLight ? 'text-lg font-semibold text-slate-900 mb-4' : 'text-lg font-semibold text-slate-50 mb-4';
+  const labelClass = isLight ? 'block text-sm font-medium text-slate-700 mb-3' : 'block text-sm font-medium text-slate-300 mb-3';
+  const labelClassSm = isLight ? 'block text-xs font-medium text-slate-700 mb-1.5' : 'block text-xs font-medium text-slate-300 mb-1.5';
+  const inputClass = isLight
+    ? 'w-full rounded-lg border border-slate-300 bg-white text-slate-900 placeholder-slate-500 focus:border-emerald-500/50 focus:outline-none focus:ring-1 focus:ring-emerald-500/50'
+    : 'w-full rounded-lg border border-slate-700 bg-slate-900/70 text-slate-100 placeholder-slate-500 focus:border-emerald-500/50 focus:outline-none focus:ring-1 focus:ring-emerald-500/50';
+  const inputClassPad = isLight
+    ? 'w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900 placeholder-slate-500 focus:border-emerald-500/50 focus:outline-none focus:ring-1 focus:ring-emerald-500/50'
+    : 'w-full rounded-lg border border-slate-700 bg-slate-900/70 px-3 py-2 text-sm text-slate-100 placeholder-slate-500 focus:border-emerald-500/50 focus:outline-none focus:ring-1 focus:ring-emerald-500/50';
+  const primaryButtonClass = isLight
+    ? 'rounded-lg bg-emerald-600 px-4 py-2.5 text-sm font-semibold text-white shadow-sm transition-colors hover:bg-emerald-500 focus:outline-none focus:ring-2 focus:ring-emerald-500/50 focus:ring-offset-2 focus:ring-offset-white disabled:cursor-not-allowed disabled:opacity-50'
+    : 'rounded-lg bg-emerald-500 px-4 py-2.5 text-sm font-semibold text-slate-950 transition-colors hover:bg-emerald-400 focus:outline-none focus:ring-2 focus:ring-emerald-500/50 focus:ring-offset-2 focus:ring-offset-slate-900 disabled:cursor-not-allowed disabled:opacity-50';
+  const primaryButtonSmClass = isLight
+    ? 'rounded-lg bg-emerald-600 px-3 py-2 text-sm font-semibold text-white hover:bg-emerald-500 disabled:opacity-50'
+    : 'rounded-lg bg-emerald-500 px-3 py-2 text-sm font-semibold text-slate-950 hover:bg-emerald-400 disabled:opacity-50';
+  const primaryButtonXsClass = isLight
+    ? 'flex-1 rounded px-2 py-1 text-xs font-semibold text-white bg-emerald-600 hover:bg-emerald-500 disabled:opacity-50 disabled:cursor-not-allowed'
+    : 'flex-1 rounded bg-emerald-500 px-2 py-1 text-xs font-medium text-slate-950 hover:bg-emerald-400 disabled:opacity-50 disabled:cursor-not-allowed';
+  const primaryButtonTinyClass = isLight
+    ? 'px-2 py-1 rounded-lg text-xs font-semibold text-white bg-emerald-600 hover:bg-emerald-500'
+    : 'px-2 py-1 rounded bg-emerald-500 text-slate-950 text-xs font-medium hover:bg-emerald-400';
+  const secondaryButtonClass = isLight
+    ? 'px-4 py-2 rounded-lg border-2 border-slate-400 bg-slate-100 text-slate-800 hover:bg-slate-200 transition-colors'
+    : 'px-4 py-2 rounded-lg border border-slate-700 bg-slate-800 text-slate-200 hover:bg-slate-700 transition-colors';
+  const secondaryButtonSmClass = isLight
+    ? 'px-2 py-1 rounded-lg border-2 border-slate-400 bg-slate-100 text-slate-800 text-xs hover:bg-slate-200'
+    : 'px-2 py-1 rounded border border-slate-600 bg-slate-700 text-slate-200 text-xs hover:bg-slate-600';
+  const successAlertClass = isLight
+    ? 'rounded-lg px-4 py-2 text-sm bg-emerald-50 text-emerald-900 border border-emerald-200'
+    : 'rounded-lg px-4 py-2 text-sm bg-emerald-500/20 text-emerald-300';
+  const errorAlertClass = isLight
+    ? 'rounded-lg px-4 py-2 text-sm bg-red-50 text-red-800 border border-red-200'
+    : 'rounded-lg px-4 py-2 text-sm bg-red-500/20 text-red-300';
+  const loadingOverlayClass = isLight
+    ? 'absolute inset-0 bg-white/80 z-10 flex items-center justify-center rounded-2xl'
+    : 'absolute inset-0 bg-slate-950/60 z-10 flex items-center justify-center rounded-2xl';
+  const loadingTextClass = isLight ? 'text-slate-600' : 'text-slate-400';
+  const tabActiveClass = isLight
+    ? 'border-b-2 border-emerald-600 text-emerald-900 font-semibold'
+    : 'border-b-2 border-emerald-500 text-emerald-300';
+  const tabInactiveClass = isLight
+    ? 'border-b-2 border-transparent text-slate-600 hover:text-slate-900'
+    : 'border-b-2 border-transparent text-slate-400 hover:text-slate-300';
+  const goalSubTabActiveClass = isLight
+    ? 'border-b-2 border-emerald-600 text-emerald-900 font-semibold'
+    : 'border-b-2 border-emerald-500 text-emerald-300 font-semibold';
+  const goalSubTabInactiveClass = isLight
+    ? 'border-b-2 border-transparent text-slate-600 hover:text-slate-900'
+    : 'border-b-2 border-transparent text-slate-400 hover:text-slate-300';
+  const popupMenuClass = isLight
+    ? 'absolute top-10 right-0 z-50 mt-1 rounded-lg border border-slate-200 bg-white shadow-lg ring-1 ring-slate-900/5 min-w-[160px] py-1'
+    : 'absolute top-10 right-0 z-50 bg-slate-800 border border-slate-700 rounded-lg shadow-lg min-w-[160px] py-1';
+  const popupItemClass = isLight
+    ? 'w-full px-4 py-2 text-left text-sm text-slate-700 transition-colors hover:bg-slate-100 flex items-center gap-2'
+    : 'w-full px-4 py-2 text-left text-sm text-slate-200 hover:bg-slate-700 transition-colors flex items-center gap-2';
+  const popupItemDangerClass = isLight
+    ? 'w-full px-4 py-2 text-left text-sm text-red-600 transition-colors hover:bg-red-50 flex items-center gap-2'
+    : 'w-full px-4 py-2 text-left text-sm text-red-400 hover:bg-slate-700 transition-colors flex items-center gap-2';
+  const modalBackdropClass = 'fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4';
+  const modalCardClass = isLight
+    ? 'w-full max-w-2xl max-h-[90vh] overflow-y-auto rounded-2xl border border-slate-200 bg-white p-6 shadow-2xl'
+    : 'w-full max-w-2xl max-h-[90vh] overflow-y-auto rounded-2xl border border-slate-800 bg-slate-900 p-6 shadow-2xl';
+  const modalCardSmClass = isLight
+    ? 'w-full max-w-lg max-h-[80vh] overflow-hidden flex flex-col rounded-2xl border border-slate-200 bg-white shadow-2xl'
+    : 'w-full max-w-lg max-h-[80vh] overflow-hidden flex flex-col rounded-2xl border border-slate-800 bg-slate-900 shadow-2xl';
+  const modalCardConfirmClass = isLight
+    ? 'rounded-2xl border border-slate-200 bg-white p-6 max-w-md w-full mx-4 shadow-2xl'
+    : 'rounded-2xl border border-slate-800 bg-slate-900 p-6 max-w-md w-full mx-4';
+  const modalTitleClass = isLight ? 'text-xl font-semibold text-slate-900' : 'text-xl font-semibold text-slate-50';
+  const deleteWarningBoxClass = isLight
+    ? 'rounded-lg border border-red-300 bg-red-50 px-4 py-3 mb-4'
+    : 'rounded-lg border border-red-500/50 bg-red-500/10 px-4 py-3 mb-4';
+  const deleteWarningTextClass = isLight ? 'text-red-700 font-semibold mb-2' : 'text-red-300 font-semibold mb-2';
+  const deleteWarningDetailClass = isLight ? 'text-red-600 text-sm' : 'text-red-200 text-sm';
+  const deleteInstructionTextClass = isLight ? 'text-slate-700 mb-4' : 'text-slate-300 mb-4';
+  const deleteInstructionKeywordClass = isLight ? 'text-slate-900' : 'text-slate-200';
+  const deleteConfirmInputClass = isLight
+    ? 'w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900 placeholder-slate-500 focus:border-red-500/50 focus:outline-none focus:ring-1 focus:ring-red-500/50 mb-4'
+    : 'w-full rounded-lg border border-slate-700 bg-slate-900/70 px-3 py-2 text-sm text-slate-100 placeholder-slate-500 focus:border-red-500/50 focus:outline-none focus:ring-1 focus:ring-red-500/50 mb-4';
+  const modalHeadingClass = isLight ? 'text-lg font-semibold text-slate-900' : 'text-lg font-semibold text-slate-50';
+  const modalCloseClass = isLight
+    ? 'rounded-lg p-1.5 text-slate-600 hover:bg-slate-100 hover:text-slate-900 transition-colors'
+    : 'rounded-lg p-1.5 text-slate-400 hover:bg-slate-800 hover:text-slate-200 transition-colors';
+  const nestedGoalCardClass = isLight
+    ? 'rounded-2xl border border-slate-200 bg-white p-5 shadow-sm transition-colors hover:border-slate-300'
+    : 'rounded-2xl border border-slate-800 bg-slate-900/70 p-5 transition-colors hover:border-slate-700';
+  const goalTitleHeroClass = isLight ? 'text-3xl font-semibold text-slate-900' : 'text-3xl font-semibold text-slate-50';
+  const percentDisplayClass = isLight ? 'text-5xl font-semibold text-emerald-800' : 'text-5xl font-semibold text-emerald-300';
+  const progressTrackClass = isLight ? 'h-8 rounded-full bg-slate-200 overflow-hidden w-full' : 'h-8 rounded-full bg-slate-800 overflow-hidden w-full';
+  const tableWrapClass = isLight ? 'rounded-lg border border-slate-200 overflow-hidden' : 'rounded-lg border border-slate-700/70 overflow-hidden';
+  const tableHeadClass = isLight ? 'border-b border-slate-200 bg-slate-100' : 'border-b border-slate-700 bg-slate-800/50';
+  const tableThClass = isLight
+    ? 'text-left text-xs font-medium text-slate-600 uppercase tracking-wider py-2 px-3'
+    : 'text-left text-xs font-medium text-slate-400 uppercase tracking-wider py-2 px-3';
+  const tableTdClass = isLight ? 'text-sm text-slate-800' : 'text-sm text-slate-200';
+  const recentUpdatesBoxClass = isLight
+    ? 'mt-3 rounded-lg border border-slate-200 px-3 py-3 bg-slate-50'
+    : 'mt-3 rounded-lg border border-slate-700/70 px-3 py-3 bg-slate-800/30';
+  const mutedSmallClass = isLight ? 'text-xs text-slate-600' : 'text-xs text-slate-400';
+  const bodyMutedClass = isLight ? 'text-sm text-slate-600' : 'text-sm text-slate-500';
+  const bodyTextClass = isLight ? 'text-sm text-slate-700' : 'text-sm text-slate-300';
+  const editGoalIconClass = isLight
+    ? 'inline-flex items-center justify-center rounded-lg border-2 border-emerald-700 bg-white p-2 text-emerald-700 transition-colors hover:bg-emerald-50 hover:text-emerald-900 focus:outline-none focus:ring-2 focus:ring-emerald-500/50 focus:ring-offset-2 focus:ring-offset-white'
+    : 'inline-flex items-center justify-center rounded-lg border-2 border-emerald-500/50 bg-slate-800/50 p-2 text-emerald-300 transition-colors hover:border-emerald-400 hover:bg-emerald-500/20 focus:outline-none focus:ring-2 focus:ring-emerald-500/50 focus:ring-offset-2 focus:ring-offset-slate-900';
+  const iconGhostClass = isLight
+    ? 'rounded p-0.5 text-slate-600 hover:bg-slate-200 hover:text-slate-900 transition-colors'
+    : 'rounded p-0.5 text-slate-400 hover:bg-slate-700 hover:text-slate-200 transition-colors';
+  const sectionPanelClass = isLight ? 'rounded-lg border border-slate-200 bg-slate-50 p-4' : 'rounded-lg border border-slate-700 bg-slate-800/50 p-4';
+  const sectionPanelInnerClass = isLight ? 'rounded-lg border border-slate-200 bg-white p-3' : 'rounded-lg border border-slate-700 bg-slate-900/70 p-3';
+  const borderDividerClass = isLight ? 'border-slate-200' : 'border-slate-700';
+  const goalColumnBorderClass = isLight ? 'border-slate-200' : 'border-slate-700';
+  const tabStripBorderClass = isLight ? 'border-slate-200' : 'border-slate-800';
+  const inlineInputClass = isLight
+    ? 'flex-1 rounded border border-slate-300 bg-white px-2 py-1 text-sm text-slate-900'
+    : 'flex-1 rounded border border-slate-600 bg-slate-800 px-2 py-1 text-sm text-slate-100';
+  const rangeClass = isLight
+    ? 'w-full h-2 rounded-full bg-slate-200 appearance-none accent-emerald-600'
+    : 'w-full h-2 rounded-full bg-slate-700 appearance-none accent-emerald-500';
+  const checkboxClass = isLight
+    ? 'rounded border-slate-400 bg-white text-emerald-600 focus:ring-emerald-500 focus:ring-offset-white'
+    : 'rounded border-slate-600 bg-slate-700 text-emerald-500 focus:ring-emerald-500 focus:ring-offset-slate-800';
+  const addCategorySquareClass = isLight
+    ? 'px-4 py-3 rounded-lg border border-slate-300 bg-white text-slate-700 hover:border-emerald-500/50 hover:bg-emerald-50 hover:text-emerald-800 transition-all duration-200 flex items-center justify-center min-w-[60px]'
+    : 'px-4 py-3 rounded-lg border border-slate-700 bg-slate-800/50 text-slate-300 hover:border-emerald-500/50 hover:bg-emerald-500/10 hover:text-emerald-300 transition-all duration-200 flex items-center justify-center min-w-[60px]';
+  const modalHeaderBorderClass = isLight ? 'border-slate-200' : 'border-slate-700';
+  const modalFooterBtnClass = isLight
+    ? 'w-full px-4 py-2 rounded-lg border-2 border-slate-400 bg-slate-100 text-slate-800 hover:bg-slate-200 transition-colors'
+    : 'w-full px-4 py-2 rounded-lg border border-slate-700 bg-slate-800 text-slate-200 hover:bg-slate-700 transition-colors';
+  const deleteGoalOutlineClass = isLight
+    ? 'px-4 py-2 rounded-lg border-2 border-red-400 bg-white text-red-800 hover:bg-red-50 text-sm font-medium transition-colors focus:outline-none focus:ring-2 focus:ring-red-500/40 focus:ring-offset-2 focus:ring-offset-white'
+    : 'px-4 py-2 rounded-lg bg-red-600/90 text-white text-sm font-medium hover:bg-red-600 transition-colors focus:outline-none focus:ring-2 focus:ring-red-500/50 focus:ring-offset-2 focus:ring-offset-slate-900';
+  const panelHeadingClass = isLight ? 'text-sm font-medium text-slate-800' : 'text-sm font-medium text-slate-200';
+  const panelStrongTextClass = isLight ? 'text-slate-900' : 'text-slate-200';
+  const addTaskLinkClass = isLight
+    ? 'mt-2 text-xs font-medium text-emerald-700 hover:text-emerald-900'
+    : 'mt-2 text-xs text-emerald-400 hover:text-emerald-300';
+
   const [localGoals, setLocalGoals] = useState<Goal[]>([]);
   const [localCategories, setLocalCategories] = useState<Category[]>([]);
   const goals = ctx ? ctx.goals : localGoals;
@@ -679,30 +831,26 @@ export function GoalsTrackingTool({ toolId }: GoalsTrackingToolProps) {
   return (
     <div className="space-y-6 relative">
       {toolId && isLoadingData && (
-        <div className="absolute inset-0 bg-slate-950/60 z-10 flex items-center justify-center rounded-2xl">
-          <span className="text-slate-400">Loading...</span>
+        <div className={loadingOverlayClass}>
+          <span className={loadingTextClass}>Loading...</span>
         </div>
       )}
       {saveMessage && (
-        <div
-          className={`rounded-lg px-4 py-2 text-sm ${
-            saveMessage.type === 'success' ? 'bg-emerald-500/20 text-emerald-300' : 'bg-red-500/20 text-red-300'
-          }`}
-        >
+        <div className={saveMessage.type === 'success' ? successAlertClass : errorAlertClass}>
           {saveMessage.text}
         </div>
       )}
       {/* Title and description */}
       <div>
-        <h2 className="text-2xl font-semibold text-slate-50 mb-2">Goals Tracking</h2>
-        <p className="text-slate-400 text-sm">
+        <h2 className={titleClass}>Goals Tracking</h2>
+        <p className={descClass}>
           Create goals by category, track progress with phases and tasks, and get reminders when updates are due.
         </p>
       </div>
 
       {/* Category selector */}
-      <div className="rounded-2xl border border-slate-800 bg-slate-900/70 p-4">
-        <label className="block text-sm font-medium text-slate-300 mb-3">Select your Category</label>
+      <div className={cardClass}>
+        <label className={labelClass}>Select your Category</label>
 
         {!isCreatingNewCategory ? (
           <div className="flex items-center gap-3 flex-wrap">
@@ -710,39 +858,39 @@ export function GoalsTrackingTool({ toolId }: GoalsTrackingToolProps) {
               editingCategoryId === cat.id ? (
                 <div
                   key={cat.id}
-                  className="px-4 py-3 rounded-lg border border-slate-600 bg-slate-800 min-w-[200px]"
-                  style={{ borderColor: editingCategoryColor, backgroundColor: `${editingCategoryColor}15` }}
+                  className={`px-4 py-3 rounded-lg border min-w-[200px] ${isLight ? 'bg-white' : 'border-slate-600 bg-slate-800'}`}
+                  style={{ borderColor: editingCategoryColor, backgroundColor: isLight ? `${editingCategoryColor}12` : `${editingCategoryColor}15` }}
                 >
                   <div className="flex items-center gap-2 mb-2">
                     <input
                       type="text"
                       value={editingCategoryName}
                       onChange={(e) => setEditingCategoryName(e.target.value)}
-                      className="flex-1 px-2 py-1 rounded border border-slate-600 bg-slate-900 text-slate-100 text-sm focus:border-emerald-500/50 focus:outline-none"
+                      className={`flex-1 px-2 py-1 rounded border text-sm focus:border-emerald-500/50 focus:outline-none ${isLight ? 'border-slate-300 bg-white text-slate-900' : 'border-slate-600 bg-slate-900 text-slate-100'}`}
                       placeholder="Category name"
                       autoFocus
                     />
                   </div>
                   <div className="flex items-center gap-2 mb-2">
-                    <label className="text-xs text-slate-400">Color:</label>
+                    <label className={mutedSmallClass}>Color:</label>
                     <input
                       type="color"
                       value={editingCategoryColor}
                       onChange={(e) => setEditingCategoryColor(e.target.value)}
-                      className="h-6 w-12 rounded border border-slate-600 cursor-pointer"
+                      className={`h-6 w-12 rounded cursor-pointer ${isLight ? 'border border-slate-300' : 'border border-slate-600'}`}
                     />
                   </div>
                   <div className="flex items-center gap-2">
                     <button
                       onClick={saveCategoryEdit}
                       disabled={!editingCategoryName.trim()}
-                      className="flex-1 px-2 py-1 rounded bg-emerald-500 text-slate-950 text-xs font-medium hover:bg-emerald-400 disabled:opacity-50 disabled:cursor-not-allowed"
+                      className={primaryButtonXsClass}
                     >
                       Save
                     </button>
                     <button
                       onClick={() => setEditingCategoryId(null)}
-                      className="px-2 py-1 rounded border border-slate-600 bg-slate-700 text-slate-200 text-xs hover:bg-slate-600"
+                      className={secondaryButtonSmClass}
                     >
                       Cancel
                     </button>
@@ -753,7 +901,11 @@ export function GoalsTrackingTool({ toolId }: GoalsTrackingToolProps) {
                   <button
                     onClick={() => selectCategory(cat.id)}
                     className={`px-4 py-3 rounded-lg border transition-all duration-200 min-w-[120px] relative ${
-                      selectedCategoryId === cat.id ? 'shadow-lg' : 'hover:border-slate-600'
+                      selectedCategoryId === cat.id
+                        ? 'shadow-lg'
+                        : isLight
+                          ? 'hover:border-slate-400'
+                          : 'hover:border-slate-600'
                     }`}
                     style={{
                       borderColor: cat.card_color,
@@ -768,38 +920,44 @@ export function GoalsTrackingTool({ toolId }: GoalsTrackingToolProps) {
                       e.stopPropagation();
                       setMenuOpenCategoryId(menuOpenCategoryId === cat.id ? null : cat.id);
                     }}
-                    className="absolute top-1 right-1 p-1 rounded hover:bg-slate-700/50 transition-colors"
+                    className={`absolute top-1 right-1 p-1 rounded transition-colors ${isLight ? 'hover:bg-slate-200/80' : 'hover:bg-slate-700/50'}`}
                     title="Category options"
                     aria-label="Category options"
                   >
-                    <svg className="h-4 w-4 text-slate-400 hover:text-slate-200" fill="currentColor" viewBox="0 0 24 24">
+                    <svg
+                      className={`h-4 w-4 ${isLight ? 'text-slate-600 hover:text-slate-900' : 'text-slate-400 hover:text-slate-200'}`}
+                      fill="currentColor"
+                      viewBox="0 0 24 24"
+                    >
                       <path d="M12 8c1.1 0 2-.9 2-2s-.9-2-2-2-2 .9-2 2 .9 2 2 2zm0 2c-1.1 0-2 .9-2 2s.9 2 2 2 2-.9 2-2-.9-2-2-2zm0 6c-1.1 0-2 .9-2 2s.9 2 2 2 2-.9 2-2-.9-2-2-2z" />
                     </svg>
                   </button>
                   {menuOpenCategoryId === cat.id && (
-                    <div className="absolute top-10 right-0 z-50 bg-slate-800 border border-slate-700 rounded-lg shadow-lg min-w-[160px] py-1">
+                    <div className={popupMenuClass}>
                       <button
+                        type="button"
                         onClick={(e) => {
                           e.stopPropagation();
                           startEditingCategory(cat);
                         }}
-                        className="w-full px-4 py-2 text-left text-sm text-slate-200 hover:bg-slate-700 transition-colors flex items-center gap-2"
+                        className={popupItemClass}
                       >
-                        <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <svg className="h-4 w-4 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
                         </svg>
                         Edit
                       </button>
                       <button
+                        type="button"
                         onClick={(e) => {
                           e.stopPropagation();
                           setMenuOpenCategoryId(null);
                           setDeleteConfirmCategoryId(cat.id);
                           setDeleteConfirmText('');
                         }}
-                        className="w-full px-4 py-2 text-left text-sm text-red-400 hover:bg-slate-700 transition-colors flex items-center gap-2"
+                        className={popupItemDangerClass}
                       >
-                        <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <svg className="h-4 w-4 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
                         </svg>
                         Delete
@@ -810,13 +968,14 @@ export function GoalsTrackingTool({ toolId }: GoalsTrackingToolProps) {
               )
             )}
             <button
+              type="button"
               onClick={() => {
                 setIsCreatingNewCategory(true);
                 setSelectedCategoryId(null);
                 setEditingCategoryId(null);
                 setNewCategoryColor('#10b981');
               }}
-              className="px-4 py-3 rounded-lg border border-slate-700 bg-slate-800/50 text-slate-300 hover:border-emerald-500/50 hover:bg-emerald-500/10 hover:text-emerald-300 transition-all duration-200 flex items-center justify-center min-w-[60px]"
+              className={addCategorySquareClass}
               title="Add New Category"
               aria-label="Add New Category"
             >
@@ -828,13 +987,13 @@ export function GoalsTrackingTool({ toolId }: GoalsTrackingToolProps) {
         ) : (
           <div className="flex items-end gap-2 flex-wrap">
             <div className="flex-1 min-w-[200px]">
-              <label className="block text-sm font-medium text-slate-300 mb-2">New Category Name</label>
+              <label className={`block text-sm font-medium mb-2 ${isLight ? 'text-slate-700' : 'text-slate-300'}`}>New Category Name</label>
               <input
                 type="text"
                 value={newCategoryName}
                 onChange={(e) => setNewCategoryName(e.target.value)}
                 placeholder="Enter category name"
-                className="w-full px-3 py-2 rounded-lg border border-slate-700 bg-slate-900/70 text-slate-100 placeholder-slate-500 focus:border-emerald-500/50 focus:outline-none focus:ring-1 focus:ring-emerald-500/50"
+                className={inputClassPad}
                 onKeyDown={(e) => {
                   if (e.key === 'Enter') createCategory();
                   if (e.key === 'Escape') {
@@ -846,27 +1005,29 @@ export function GoalsTrackingTool({ toolId }: GoalsTrackingToolProps) {
               />
             </div>
             <div className="flex items-center gap-2">
-              <label className="text-sm text-slate-400">Color:</label>
+              <label className={isLight ? 'text-sm text-slate-600' : 'text-sm text-slate-400'}>Color:</label>
               <input
                 type="color"
                 value={newCategoryColor}
                 onChange={(e) => setNewCategoryColor(e.target.value)}
-                className="h-8 w-12 rounded border border-slate-600 cursor-pointer"
+                className={`h-8 w-12 rounded cursor-pointer ${isLight ? 'border border-slate-300' : 'border border-slate-600'}`}
               />
             </div>
             <button
+              type="button"
               onClick={createCategory}
               disabled={!newCategoryName.trim()}
-              className="rounded-lg bg-emerald-500 px-4 py-2.5 text-sm font-semibold text-slate-950 transition-colors hover:bg-emerald-400 focus:outline-none focus:ring-2 focus:ring-emerald-500/50 focus:ring-offset-2 focus:ring-offset-slate-900 disabled:opacity-50 disabled:cursor-not-allowed"
+              className={primaryButtonClass}
             >
               Create
             </button>
             <button
+              type="button"
               onClick={() => {
                 setIsCreatingNewCategory(false);
                 setNewCategoryName('');
               }}
-              className="px-4 py-2 rounded-lg border border-slate-700 bg-slate-800 text-slate-200 hover:bg-slate-700 transition-colors"
+              className={secondaryButtonClass}
             >
               Cancel
             </button>
@@ -880,28 +1041,29 @@ export function GoalsTrackingTool({ toolId }: GoalsTrackingToolProps) {
 
       {/* Delete category confirmation */}
       {deleteConfirmCategoryId && (
-        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
-          <div className="rounded-2xl border border-slate-800 bg-slate-900 p-6 max-w-md w-full mx-4">
-            <h3 className="text-xl font-semibold text-slate-50 mb-2">Delete Category</h3>
-            <div className="rounded-lg border border-red-500/50 bg-red-500/10 px-4 py-3 mb-4">
-              <p className="text-red-300 font-semibold mb-2">⚠️ Warning: This action cannot be undone!</p>
-              <p className="text-red-200 text-sm">
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+          <div className={modalCardConfirmClass}>
+            <h3 className={`${modalTitleClass} mb-2`}>Delete Category</h3>
+            <div className={deleteWarningBoxClass}>
+              <p className={deleteWarningTextClass}>Warning: This action cannot be undone.</p>
+              <p className={deleteWarningDetailClass}>
                 All goals, phases, tasks, and update notes in this category will be permanently deleted.
               </p>
             </div>
-            <p className="text-slate-300 mb-4">
-              To confirm, type <strong className="text-slate-200">delete</strong> below:
+            <p className={deleteInstructionTextClass}>
+              To confirm, type <strong className={deleteInstructionKeywordClass}>delete</strong> below:
             </p>
             <input
               type="text"
               value={deleteConfirmText}
               onChange={(e) => setDeleteConfirmText(e.target.value)}
               placeholder="Type 'delete' to confirm"
-              className="w-full px-4 py-2 rounded-lg border border-slate-700 bg-slate-800 text-slate-100 placeholder-slate-500 focus:border-red-500/50 focus:outline-none focus:ring-1 focus:ring-red-500/50 mb-4"
+              className={deleteConfirmInputClass}
               autoFocus
             />
             <div className="flex gap-3">
               <button
+                type="button"
                 onClick={deleteCategory}
                 disabled={deleteConfirmText.toLowerCase() !== 'delete'}
                 className="flex-1 px-4 py-2 rounded-lg bg-red-600 text-white font-medium hover:bg-red-700 disabled:opacity-50 disabled:cursor-not-allowed"
@@ -909,11 +1071,12 @@ export function GoalsTrackingTool({ toolId }: GoalsTrackingToolProps) {
                 Delete Category
               </button>
               <button
+                type="button"
                 onClick={() => {
                   setDeleteConfirmCategoryId(null);
                   setDeleteConfirmText('');
                 }}
-                className="px-4 py-2 rounded-lg border border-slate-700 bg-slate-800 text-slate-200 hover:bg-slate-700"
+                className={secondaryButtonClass}
               >
                 Cancel
               </button>
@@ -923,41 +1086,43 @@ export function GoalsTrackingTool({ toolId }: GoalsTrackingToolProps) {
       )}
 
       {!selectedCategoryId && !isCreatingNewCategory && (
-        <div className="rounded-2xl border border-slate-800 bg-slate-900/70 p-8 text-center">
-          <p className="text-slate-400">Select a category or create one to manage goals.</p>
+        <div className={cardMutedClass}>
+          <p className={isLight ? 'text-slate-600' : 'text-slate-400'}>Select a category or create one to manage goals.</p>
         </div>
       )}
 
       {selectedCategoryId && selectedCategory && (
         <>
           {/* Category name + one tab per goal + Add Goal tab */}
-          <div className="border-b border-slate-800">
+          <div className={`border-b ${tabStripBorderClass}`}>
             <div className="flex gap-2 items-center flex-wrap">
-              <div className="px-4 py-2 text-[18px] font-medium text-slate-200 whitespace-nowrap border-b-2 border-transparent">
+              <div
+                className={`px-4 py-2 text-[18px] font-medium whitespace-nowrap border-b-2 border-transparent ${
+                  isLight ? 'text-slate-800' : 'text-slate-200'
+                }`}
+              >
                 {selectedCategory.name}:
               </div>
               {goalsInCategory.map((goal) => (
                 <button
+                  type="button"
                   key={goal.id}
                   onClick={() => {
                     setSelectedGoalId(goal.id);
                     setIsAddingGoal(false);
                   }}
                   className={`px-4 py-2 text-sm font-medium transition-colors whitespace-nowrap ${
-                    selectedGoalId === goal.id && !isAddingGoal
-                      ? 'border-b-2 border-emerald-500 text-emerald-300'
-                      : 'border-b-2 border-transparent text-slate-400 hover:text-slate-300'
+                    selectedGoalId === goal.id && !isAddingGoal ? goalSubTabActiveClass : goalSubTabInactiveClass
                   }`}
                 >
                   {goal.title}
                 </button>
               ))}
               <button
+                type="button"
                 onClick={startAddingGoal}
-                className={`px-4 py-2 text-sm font-medium transition-colors whitespace-nowrap border-b-2 ${
-                  isAddingGoal
-                    ? 'border-emerald-500 text-emerald-300'
-                    : 'border-transparent text-slate-400 hover:text-slate-300'
+                className={`px-4 py-2 text-sm font-medium transition-colors whitespace-nowrap ${
+                  isAddingGoal ? goalSubTabActiveClass : goalSubTabInactiveClass
                 }`}
               >
                 + Add Goal
@@ -967,11 +1132,11 @@ export function GoalsTrackingTool({ toolId }: GoalsTrackingToolProps) {
 
           {/* Add goal form */}
           {isAddingGoal && (
-            <div className="rounded-2xl border border-slate-800 bg-slate-900/70 p-6">
-              <h3 className="text-lg font-semibold text-slate-50 mb-4">New Goal</h3>
+            <div className={cardPad6Class}>
+              <h3 className={sectionTitleClass}>New Goal</h3>
               <div className="space-y-4">
                 <div>
-                  <label className="block text-xs font-medium text-slate-300 mb-1.5">
+                  <label className={labelClassSm}>
                     Goal Title <span className="text-red-400">*</span>
                   </label>
                   <input
@@ -979,35 +1144,35 @@ export function GoalsTrackingTool({ toolId }: GoalsTrackingToolProps) {
                     value={newGoal.title}
                     onChange={(e) => setNewGoal((p) => ({ ...p, title: e.target.value }))}
                     placeholder="e.g. Save for vacation"
-                    className="w-full rounded-lg border border-slate-700 bg-slate-900/70 px-3 py-2 text-sm text-slate-100 placeholder-slate-500 focus:border-emerald-500/50 focus:outline-none focus:ring-1 focus:ring-emerald-500/50"
+                    className={inputClassPad}
                   />
                 </div>
                 <div>
-                  <label className="block text-xs font-medium text-slate-300 mb-1.5">Description</label>
+                  <label className={labelClassSm}>Description</label>
                   <textarea
                     value={newGoal.description}
                     onChange={(e) => setNewGoal((p) => ({ ...p, description: e.target.value }))}
                     placeholder="Optional details"
                     rows={2}
-                    className="w-full rounded-lg border border-slate-700 bg-slate-900/70 px-3 py-2 text-sm text-slate-100 placeholder-slate-500 focus:border-emerald-500/50 focus:outline-none focus:ring-1 focus:ring-emerald-500/50 resize-none"
+                    className={`${inputClassPad} resize-none`}
                   />
                 </div>
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                   <div>
-                    <label className="block text-xs font-medium text-slate-300 mb-1.5">Target Date</label>
+                    <label className={labelClassSm}>Target Date</label>
                     <input
                       type="date"
                       value={newGoal.targetDate}
                       onChange={(e) => setNewGoal((p) => ({ ...p, targetDate: e.target.value }))}
-                      className="w-full rounded-lg border border-slate-700 bg-slate-900/70 px-3 py-2 text-sm text-slate-100 focus:border-emerald-500/50 focus:outline-none focus:ring-1 focus:ring-emerald-500/50"
+                      className={inputClassPad}
                     />
                   </div>
                   <div>
-                    <label className="block text-xs font-medium text-slate-300 mb-1.5">Priority</label>
+                    <label className={labelClassSm}>Priority</label>
                     <select
                       value={newGoal.priority}
                       onChange={(e) => setNewGoal((p) => ({ ...p, priority: e.target.value as Priority }))}
-                      className="w-full rounded-lg border border-slate-700 bg-slate-900/70 px-3 py-2 text-sm text-slate-100 focus:border-emerald-500/50 focus:outline-none focus:ring-1 focus:ring-emerald-500/50"
+                      className={inputClassPad}
                     >
                       <option value="High">High</option>
                       <option value="Medium">Medium</option>
@@ -1015,11 +1180,11 @@ export function GoalsTrackingTool({ toolId }: GoalsTrackingToolProps) {
                     </select>
                   </div>
                   <div>
-                    <label className="block text-xs font-medium text-slate-300 mb-1.5">Status</label>
+                    <label className={labelClassSm}>Status</label>
                     <select
                       value={newGoal.status}
                       onChange={(e) => setNewGoal((p) => ({ ...p, status: e.target.value as GoalStatus }))}
-                      className="w-full rounded-lg border border-slate-700 bg-slate-900/70 px-3 py-2 text-sm text-slate-100 focus:border-emerald-500/50 focus:outline-none focus:ring-1 focus:ring-emerald-500/50"
+                      className={inputClassPad}
                     >
                       <option value="Not Started">Not Started</option>
                       <option value="In Progress">In Progress</option>
@@ -1030,16 +1195,14 @@ export function GoalsTrackingTool({ toolId }: GoalsTrackingToolProps) {
                 </div>
                 <div className="flex gap-2">
                   <button
+                    type="button"
                     onClick={addGoal}
                     disabled={!newGoal.title.trim()}
-                    className="rounded-lg bg-emerald-500 px-4 py-2.5 text-sm font-semibold text-slate-950 hover:bg-emerald-400 focus:outline-none focus:ring-2 focus:ring-emerald-500/50 focus:ring-offset-2 focus:ring-offset-slate-900 disabled:opacity-50 disabled:cursor-not-allowed"
+                    className={primaryButtonClass}
                   >
                     Create Goal
                   </button>
-                  <button
-                    onClick={cancelAddingGoal}
-                    className="px-4 py-2 rounded-lg border border-slate-700 bg-slate-800 text-slate-200 hover:bg-slate-700"
-                  >
+                  <button type="button" onClick={cancelAddingGoal} className={secondaryButtonClass}>
                     Cancel
                   </button>
                 </div>
@@ -1051,12 +1214,11 @@ export function GoalsTrackingTool({ toolId }: GoalsTrackingToolProps) {
           {!isAddingGoal && (
             <div className="mt-4">
               {!selectedGoal ? (
-                <div className="rounded-2xl border border-slate-800 bg-slate-900/70 p-8 text-center">
-                  <p className="text-slate-400 mb-4">No goal selected. Click &quot;+ Add Goal&quot; to create one.</p>
-                  <button
-                    onClick={startAddingGoal}
-                    className="px-4 py-2.5 rounded-lg bg-emerald-500 text-slate-950 font-semibold hover:bg-emerald-400 transition-colors focus:outline-none focus:ring-2 focus:ring-emerald-500/50 focus:ring-offset-2 focus:ring-offset-slate-900"
-                  >
+                <div className={cardMutedClass}>
+                  <p className={`mb-4 ${isLight ? 'text-slate-600' : 'text-slate-400'}`}>
+                    No goal selected. Click &quot;+ Add Goal&quot; to create one.
+                  </p>
+                  <button type="button" onClick={startAddingGoal} className={primaryButtonClass}>
                     + Add Goal
                   </button>
                 </div>
@@ -1077,13 +1239,15 @@ export function GoalsTrackingTool({ toolId }: GoalsTrackingToolProps) {
                     : Infinity;
                   const showReminderWarning = goal.reminderDays != null && daysSinceLastUpdate >= goal.reminderDays;
                   return (
-                    <div className="rounded-2xl border border-slate-800 bg-slate-900/70 p-5 transition-colors hover:border-slate-700">
+                    <div className={nestedGoalCardClass}>
                       <div className="flex flex-col md:flex-row items-stretch gap-6">
                         {/* Left 25%: Goal name, status bar, % complete */}
-                        <div className="w-full md:w-1/4 min-w-0 flex flex-col pb-4 border-b border-slate-700 md:pb-0 md:border-b-0 md:pr-4 md:border-r text-center md:min-h-[180px]">
+                        <div
+                          className={`w-full md:w-1/4 min-w-0 flex flex-col pb-4 border-b md:pb-0 md:border-b-0 md:pr-4 md:border-r text-center md:min-h-[180px] ${goalColumnBorderClass}`}
+                        >
                           <div>
                             <div className="flex items-center justify-center gap-2 mb-3">
-                              <h3 className="text-3xl font-semibold text-slate-50">{goal.title}</h3>
+                              <h3 className={goalTitleHeroClass}>{goal.title}</h3>
                               {showReminderWarning && (
                                 <span
                                   className="inline-flex text-amber-400 shrink-0"
@@ -1097,8 +1261,8 @@ export function GoalsTrackingTool({ toolId }: GoalsTrackingToolProps) {
                               )}
                             </div>
                             <div className="mb-3 w-full">
-                              <div className="text-xs text-slate-400 mb-1">Progress</div>
-                              <div className="h-8 rounded-full bg-slate-800 overflow-hidden w-full">
+                              <div className={`${mutedSmallClass} mb-1`}>Progress</div>
+                              <div className={progressTrackClass}>
                                 <div
                                   className="h-full rounded-full bg-emerald-500 transition-all duration-300"
                                   style={{ width: `${percent}%` }}
@@ -1107,24 +1271,25 @@ export function GoalsTrackingTool({ toolId }: GoalsTrackingToolProps) {
                             </div>
                           </div>
                           <div className="flex-1 flex flex-col justify-center">
-                            <div className="text-5xl font-semibold text-emerald-300">{percent}%</div>
+                            <div className={percentDisplayClass}>{percent}%</div>
                           </div>
                         </div>
                         {/* Right 75%: Priority/Status/Target row + Recent updates below */}
                         <div className="flex-1 min-w-0 flex flex-col">
-                          <div className="rounded-lg border border-slate-700/70 overflow-hidden">
+                          <div className={tableWrapClass}>
                             <table className="w-full text-sm">
                               <thead>
-                                <tr className="border-b border-slate-700 bg-slate-800/50">
-                                  <th className="text-left text-xs font-medium text-slate-400 uppercase tracking-wider py-2 px-3">Priority</th>
-                                  <th className="text-left text-xs font-medium text-slate-400 uppercase tracking-wider py-2 px-3">Status</th>
-                                  <th className="text-left text-xs font-medium text-slate-400 uppercase tracking-wider py-2 px-3">Target</th>
-                                  <th className="text-left text-xs font-medium text-slate-400 uppercase tracking-wider py-2 px-3">Tasks</th>
+                                <tr className={tableHeadClass}>
+                                  <th className={tableThClass}>Priority</th>
+                                  <th className={tableThClass}>Status</th>
+                                  <th className={tableThClass}>Target</th>
+                                  <th className={tableThClass}>Tasks</th>
                                   <th className="text-right py-2 px-2 align-middle" scope="col">
                                     <div className="flex items-center justify-end gap-3">
                                       <button
+                                        type="button"
                                         onClick={() => startEditingGoal(goal)}
-                                        className="rounded-lg p-1.5 text-slate-400 hover:bg-slate-800 hover:text-slate-200 transition-colors"
+                                        className={editGoalIconClass}
                                         title="Edit goal"
                                         aria-label="Edit goal"
                                       >
@@ -1142,10 +1307,16 @@ export function GoalsTrackingTool({ toolId }: GoalsTrackingToolProps) {
                                     <span
                                       className={`inline-flex rounded-full px-2.5 py-1 text-xs font-medium ${
                                         goal.priority === 'High'
-                                          ? 'bg-red-500/20 text-red-300'
+                                          ? isLight
+                                            ? 'bg-red-100 text-red-800'
+                                            : 'bg-red-500/20 text-red-300'
                                           : goal.priority === 'Medium'
-                                            ? 'bg-amber-500/20 text-amber-300'
-                                            : 'bg-slate-500/20 text-slate-300'
+                                            ? isLight
+                                              ? 'bg-amber-100 text-amber-900'
+                                              : 'bg-amber-500/20 text-amber-300'
+                                            : isLight
+                                              ? 'bg-slate-100 text-slate-700'
+                                              : 'bg-slate-500/20 text-slate-300'
                                       }`}
                                     >
                                       {goal.priority}
@@ -1155,21 +1326,29 @@ export function GoalsTrackingTool({ toolId }: GoalsTrackingToolProps) {
                                     <span
                                       className={`inline-flex rounded-full px-2.5 py-1 text-xs font-medium ${
                                         goal.status === 'Completed'
-                                          ? 'bg-emerald-500/20 text-emerald-300'
+                                          ? isLight
+                                            ? 'bg-emerald-100 text-emerald-900'
+                                            : 'bg-emerald-500/20 text-emerald-300'
                                           : goal.status === 'Delayed'
-                                            ? 'bg-amber-500/20 text-amber-300'
+                                            ? isLight
+                                              ? 'bg-amber-100 text-amber-900'
+                                              : 'bg-amber-500/20 text-amber-300'
                                             : goal.status === 'In Progress'
-                                              ? 'bg-blue-500/20 text-blue-300'
-                                              : 'bg-slate-500/20 text-slate-300'
+                                              ? isLight
+                                                ? 'bg-blue-100 text-blue-900'
+                                                : 'bg-blue-500/20 text-blue-300'
+                                              : isLight
+                                                ? 'bg-slate-100 text-slate-700'
+                                                : 'bg-slate-500/20 text-slate-300'
                                       }`}
                                     >
                                       {goal.status}
                                     </span>
                                   </td>
-                                  <td className="py-2 px-3 text-slate-300 align-top">
+                                  <td className={`py-2 px-3 align-top ${tableTdClass}`}>
                                     {goal.targetDate ? formatDateForDisplay(goal.targetDate) : '—'}
                                   </td>
-                                  <td className="py-2 px-3 text-slate-300 align-top">
+                                  <td className={`py-2 px-3 align-top ${tableTdClass}`}>
                                     {goal.tasks.length > 0
                                       ? `${goal.tasks.filter((t) => t.completed).length}/${goal.tasks.length}`
                                       : '—'}
@@ -1179,15 +1358,16 @@ export function GoalsTrackingTool({ toolId }: GoalsTrackingToolProps) {
                               </tbody>
                             </table>
                           </div>
-                          <div className="mt-3 rounded-lg border border-slate-700/70 px-3 py-3 bg-slate-800/30">
+                          <div className={recentUpdatesBoxClass}>
                             <div className="flex items-center gap-2 mb-2">
-                              <span className="text-xs font-medium text-slate-400 uppercase tracking-wider">
+                              <span className={`text-xs font-medium uppercase tracking-wider ${mutedSmallClass}`}>
                                 Recent updates
                               </span>
                               {goal.updateNotes.length > 0 && (
                                 <button
+                                  type="button"
                                   onClick={() => setShowAllUpdatesGoalId(goal.id)}
-                                  className="rounded p-0.5 text-slate-400 hover:bg-slate-700 hover:text-slate-200 transition-colors"
+                                  className={iconGhostClass}
                                   title="View all update history"
                                   aria-label="View all update history"
                                 >
@@ -1199,12 +1379,12 @@ export function GoalsTrackingTool({ toolId }: GoalsTrackingToolProps) {
                               )}
                             </div>
                             {recentUpdates.length === 0 ? (
-                              <p className="text-sm text-slate-500">No updates yet.</p>
+                              <p className={bodyMutedClass}>No updates yet.</p>
                             ) : (
-                              <ul className="space-y-2 text-sm text-slate-300">
+                              <ul className={`space-y-2 ${bodyTextClass}`}>
                                 {recentUpdates.map((n) => (
                                   <li key={n.id}>
-                                    <span className="text-slate-500">{formatDateForDisplay(n.noteDate)}</span>
+                                    <span className={bodyMutedClass}>{formatDateForDisplay(n.noteDate)}</span>
                                     {' — '}
                                     {n.note}
                                   </li>
@@ -1227,14 +1407,16 @@ export function GoalsTrackingTool({ toolId }: GoalsTrackingToolProps) {
             if (!allUpdatesGoal) return null;
             const allNotes = [...allUpdatesGoal.updateNotes].sort((a, b) => b.noteDate.localeCompare(a.noteDate));
             return (
-              <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4">
-                <div className="w-full max-w-lg max-h-[80vh] overflow-hidden flex flex-col rounded-2xl border border-slate-800 bg-slate-900 shadow-2xl">
-                  <div className="flex items-center justify-between p-4 border-b border-slate-700">
-                    <h3 className="text-lg font-semibold text-slate-50">Update history — {allUpdatesGoal.title}</h3>
+              <div className={modalBackdropClass}>
+                <div className={modalCardSmClass}>
+                  <div className={`flex items-center justify-between p-4 border-b ${modalHeaderBorderClass}`}>
+                    <h3 className={modalHeadingClass}>Update history — {allUpdatesGoal.title}</h3>
                     <button
+                      type="button"
                       onClick={() => setShowAllUpdatesGoalId(null)}
-                      className="rounded-lg p-1.5 text-slate-400 hover:bg-slate-800 hover:text-slate-200 transition-colors"
+                      className={modalCloseClass}
                       aria-label="Close"
+                      title="Close"
                     >
                       <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
@@ -1243,22 +1425,22 @@ export function GoalsTrackingTool({ toolId }: GoalsTrackingToolProps) {
                   </div>
                   <div className="overflow-y-auto p-4 space-y-2">
                     {allNotes.length === 0 ? (
-                      <p className="text-sm text-slate-500">No updates yet.</p>
+                      <p className={bodyMutedClass}>No updates yet.</p>
                     ) : (
                       allNotes.map((n) => (
-                        <div key={n.id} className="rounded-lg border border-slate-700/70 bg-slate-800/30 px-3 py-2 text-sm text-slate-300">
-                          <span className="text-slate-500">{formatDateForDisplay(n.noteDate)}</span>
+                        <div
+                          key={n.id}
+                          className={`rounded-lg px-3 py-2 text-sm border ${isLight ? 'border-slate-200 bg-slate-50 text-slate-700' : 'border-slate-700/70 bg-slate-800/30 text-slate-300'}`}
+                        >
+                          <span className={bodyMutedClass}>{formatDateForDisplay(n.noteDate)}</span>
                           {' — '}
                           <span className="whitespace-pre-wrap">{n.note}</span>
                         </div>
                       ))
                     )}
                   </div>
-                  <div className="p-4 border-t border-slate-700">
-                    <button
-                      onClick={() => setShowAllUpdatesGoalId(null)}
-                      className="w-full px-4 py-2 rounded-lg border border-slate-700 bg-slate-800 text-slate-200 hover:bg-slate-700 transition-colors"
-                    >
+                  <div className={`p-4 border-t ${modalHeaderBorderClass}`}>
+                    <button type="button" onClick={() => setShowAllUpdatesGoalId(null)} className={modalFooterBtnClass}>
                       Close
                     </button>
                   </div>
@@ -1269,14 +1451,16 @@ export function GoalsTrackingTool({ toolId }: GoalsTrackingToolProps) {
 
           {/* Edit goal modal */}
           {editingGoalId && editingGoal && (
-            <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4">
-              <div className="w-full max-w-2xl max-h-[90vh] overflow-y-auto rounded-2xl border border-slate-800 bg-slate-900 p-6 shadow-2xl">
+            <div className={modalBackdropClass}>
+              <div className={modalCardClass}>
                 <div className="flex items-center justify-between mb-4">
-                  <h3 className="text-xl font-semibold text-slate-50">Edit Goal</h3>
+                  <h3 className={modalTitleClass}>Edit Goal</h3>
                   <button
+                    type="button"
                     onClick={cancelEditingGoal}
-                    className="rounded-lg p-1 text-slate-400 hover:bg-slate-800 hover:text-slate-200 transition-colors"
+                    className={modalCloseClass}
                     aria-label="Close modal"
+                    title="Close modal"
                   >
                     <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
@@ -1286,39 +1470,39 @@ export function GoalsTrackingTool({ toolId }: GoalsTrackingToolProps) {
 
                 <div className="space-y-4">
                   <div>
-                    <label className="block text-xs font-medium text-slate-300 mb-1.5">Goal Title</label>
+                    <label className={labelClassSm}>Goal Title</label>
                     <input
                       type="text"
                       value={editingGoal.title}
                       onChange={(e) => updateEditingGoal({ title: e.target.value })}
-                      className="w-full rounded-lg border border-slate-700 bg-slate-900/70 px-3 py-2 text-sm text-slate-100 focus:border-emerald-500/50 focus:outline-none focus:ring-1 focus:ring-emerald-500/50"
+                      className={inputClassPad}
                     />
                   </div>
                   <div>
-                    <label className="block text-xs font-medium text-slate-300 mb-1.5">Description</label>
+                    <label className={labelClassSm}>Description</label>
                     <textarea
                       value={editingGoal.description}
                       onChange={(e) => updateEditingGoal({ description: e.target.value })}
                       rows={2}
-                      className="w-full rounded-lg border border-slate-700 bg-slate-900/70 px-3 py-2 text-sm text-slate-100 focus:border-emerald-500/50 focus:outline-none focus:ring-1 focus:ring-emerald-500/50 resize-none"
+                      className={`${inputClassPad} resize-none`}
                     />
                   </div>
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                     <div>
-                      <label className="block text-xs font-medium text-slate-300 mb-1.5">Target Date</label>
+                      <label className={labelClassSm}>Target Date</label>
                       <input
                         type="date"
                         value={editingGoal.targetDate}
                         onChange={(e) => updateEditingGoal({ targetDate: e.target.value })}
-                        className="w-full rounded-lg border border-slate-700 bg-slate-900/70 px-3 py-2 text-sm text-slate-100 focus:border-emerald-500/50 focus:outline-none focus:ring-1 focus:ring-emerald-500/50"
+                        className={inputClassPad}
                       />
                     </div>
                     <div>
-                      <label className="block text-xs font-medium text-slate-300 mb-1.5">Priority</label>
+                      <label className={labelClassSm}>Priority</label>
                       <select
                         value={editingGoal.priority}
                         onChange={(e) => updateEditingGoal({ priority: e.target.value as Priority })}
-                        className="w-full rounded-lg border border-slate-700 bg-slate-900/70 px-3 py-2 text-sm text-slate-100 focus:border-emerald-500/50 focus:outline-none focus:ring-1 focus:ring-emerald-500/50"
+                        className={inputClassPad}
                       >
                         <option value="High">High</option>
                         <option value="Medium">Medium</option>
@@ -1326,11 +1510,11 @@ export function GoalsTrackingTool({ toolId }: GoalsTrackingToolProps) {
                       </select>
                     </div>
                     <div>
-                      <label className="block text-xs font-medium text-slate-300 mb-1.5">Status</label>
+                      <label className={labelClassSm}>Status</label>
                       <select
                         value={editingGoal.status}
                         onChange={(e) => updateEditingGoal({ status: e.target.value as GoalStatus })}
-                        className="w-full rounded-lg border border-slate-700 bg-slate-900/70 px-3 py-2 text-sm text-slate-100 focus:border-emerald-500/50 focus:outline-none focus:ring-1 focus:ring-emerald-500/50"
+                        className={inputClassPad}
                       >
                         <option value="Not Started">Not Started</option>
                         <option value="In Progress">In Progress</option>
@@ -1341,36 +1525,35 @@ export function GoalsTrackingTool({ toolId }: GoalsTrackingToolProps) {
                   </div>
 
                   {/* Phases & Tasks */}
-                  <div className="rounded-lg border border-slate-700 bg-slate-800/50 p-4">
+                  <div className={sectionPanelClass}>
                     <div className="flex items-center justify-between mb-3">
-                      <h4 className="text-sm font-medium text-slate-200">Phases & Tasks (Optional)</h4>
-                      <button
-                        onClick={addPhaseToEditingGoal}
-                        className="px-2 py-1 rounded bg-emerald-500 text-slate-950 text-xs font-medium hover:bg-emerald-400"
-                      >
+                      <h4 className={panelHeadingClass}>Phases & Tasks (Optional)</h4>
+                      <button type="button" onClick={addPhaseToEditingGoal} className={primaryButtonTinyClass}>
                         + Phase
                       </button>
                     </div>
                     {editingGoal.phases.length === 0 ? (
-                      <p className="text-slate-400 text-sm">No phases. Add a phase, then add tasks inside it.</p>
+                      <p className={bodyMutedClass}>No phases. Add a phase, then add tasks inside it.</p>
                     ) : (
                       <div className="space-y-4">
                         {editingGoal.phases
                           .slice()
                           .sort((a, b) => a.order - b.order)
                           .map((phase) => (
-                            <div key={phase.id} className="rounded-lg border border-slate-700 bg-slate-900/70 p-3">
+                            <div key={phase.id} className={sectionPanelInnerClass}>
                               <div className="flex items-center gap-2 mb-2">
                                 <input
                                   type="text"
                                   value={phase.name}
                                   onChange={(e) => updatePhaseName(phase.id, e.target.value)}
-                                  className="flex-1 rounded border border-slate-600 bg-slate-800 px-2 py-1 text-sm text-slate-100"
+                                  className={inlineInputClass}
                                 />
                                 <button
+                                  type="button"
                                   onClick={() => deletePhaseFromEditingGoal(phase.id)}
-                                  className="rounded p-1 text-slate-400 hover:bg-slate-700 hover:text-red-300"
+                                  className={`rounded p-1 ${isLight ? 'text-slate-500 hover:bg-red-50 hover:text-red-700' : 'text-slate-400 hover:bg-slate-700 hover:text-red-300'}`}
                                   aria-label="Delete phase"
+                                  title="Delete phase"
                                 >
                                   <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
@@ -1386,18 +1569,20 @@ export function GoalsTrackingTool({ toolId }: GoalsTrackingToolProps) {
                                         type="checkbox"
                                         checked={task.completed}
                                         onChange={() => toggleTaskCompleted(task.id)}
-                                        className="rounded border-slate-600 bg-slate-700 text-emerald-500 focus:ring-emerald-500"
+                                        className={checkboxClass}
                                       />
                                       <input
                                         type="text"
                                         value={task.title}
                                         onChange={(e) => updateTask(task.id, { title: e.target.value })}
-                                        className="flex-1 rounded border border-slate-600 bg-slate-800 px-2 py-1 text-sm text-slate-100"
+                                        className={inlineInputClass}
                                       />
                                       <button
+                                        type="button"
                                         onClick={() => deleteTask(task.id)}
-                                        className="rounded p-1 text-slate-400 hover:text-red-300"
+                                        className={`rounded p-1 ${isLight ? 'text-slate-500 hover:text-red-700' : 'text-slate-400 hover:text-red-300'}`}
                                         aria-label="Delete task"
+                                        title="Delete task"
                                       >
                                         <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
@@ -1406,10 +1591,7 @@ export function GoalsTrackingTool({ toolId }: GoalsTrackingToolProps) {
                                     </li>
                                   ))}
                               </ul>
-                              <button
-                                onClick={() => addTaskToPhase(phase.id)}
-                                className="mt-2 text-xs text-emerald-400 hover:text-emerald-300"
-                              >
+                              <button type="button" onClick={() => addTaskToPhase(phase.id)} className={addTaskLinkClass}>
                                 + Add task
                               </button>
                             </div>
@@ -1419,10 +1601,10 @@ export function GoalsTrackingTool({ toolId }: GoalsTrackingToolProps) {
                   </div>
 
                   {/* Completion % */}
-                  <div className="rounded-lg border border-slate-700 bg-slate-800/50 p-4">
+                  <div className={sectionPanelClass}>
                     <div className="flex items-center justify-between mb-2">
-                      <label className="text-sm font-medium text-slate-300">Completion %</label>
-                      <span className="text-slate-200">{editingGoal.useTaskProgressForPercent ? 'From tasks' : editingGoal.percentComplete + '%'}</span>
+                      <label className={`text-sm font-medium ${isLight ? 'text-slate-700' : 'text-slate-300'}`}>Completion %</label>
+                      <span className={panelStrongTextClass}>{editingGoal.useTaskProgressForPercent ? 'From tasks' : editingGoal.percentComplete + '%'}</span>
                     </div>
                     {!editingGoal.useTaskProgressForPercent && (
                       <input
@@ -1431,7 +1613,7 @@ export function GoalsTrackingTool({ toolId }: GoalsTrackingToolProps) {
                         max={100}
                         value={editingGoal.percentComplete}
                         onChange={(e) => updateEditingGoal({ percentComplete: Number(e.target.value) })}
-                        className="w-full h-2 rounded-full bg-slate-700 appearance-none accent-emerald-500"
+                        className={rangeClass}
                       />
                     )}
                     <label className="flex items-center gap-2 mt-2 cursor-pointer">
@@ -1439,70 +1621,74 @@ export function GoalsTrackingTool({ toolId }: GoalsTrackingToolProps) {
                         type="checkbox"
                         checked={editingGoal.useTaskProgressForPercent}
                         onChange={(e) => updateEditingGoal({ useTaskProgressForPercent: e.target.checked })}
-                        className="rounded border-slate-600 bg-slate-700 text-emerald-500 focus:ring-emerald-500 focus:ring-offset-slate-800"
+                        className={checkboxClass}
                       />
-                      <span className="text-sm text-slate-300">Use task completion for progress (each task = equal share of 100%)</span>
+                      <span className={`text-sm ${isLight ? 'text-slate-700' : 'text-slate-300'}`}>
+                        Use task completion for progress (each task = equal share of 100%)
+                      </span>
                     </label>
                   </div>
 
                   {/* Update note */}
-                  <div className="rounded-lg border border-slate-700 bg-slate-800/50 p-4">
-                    <h4 className="text-sm font-medium text-slate-200 mb-2">Add update note</h4>
-                    <div className="flex gap-2 mb-2">
+                  <div className={sectionPanelClass}>
+                    <h4 className={`${panelHeadingClass} mb-2`}>Add update note</h4>
+                    <div className="flex flex-wrap gap-2 mb-2">
                       <input
                         type="date"
                         value={newUpdateNoteDate}
                         onChange={(e) => setNewUpdateNoteDate(e.target.value)}
-                        className="rounded-lg border border-slate-700 bg-slate-900/70 px-3 py-2 text-sm text-slate-100 focus:border-emerald-500/50 focus:outline-none"
+                        className={`${inputClassPad} w-auto min-w-[140px]`}
                       />
                       <input
                         type="text"
                         value={newUpdateNoteText}
                         onChange={(e) => setNewUpdateNoteText(e.target.value)}
                         placeholder="What did you do?"
-                        className="flex-1 rounded-lg border border-slate-700 bg-slate-900/70 px-3 py-2 text-sm text-slate-100 placeholder-slate-500 focus:border-emerald-500/50 focus:outline-none"
+                        className={`${inputClassPad} flex-1 min-w-[160px]`}
                       />
                       <button
+                        type="button"
                         onClick={addUpdateNoteToEditingGoal}
                         disabled={!newUpdateNoteText.trim()}
-                        className="px-3 py-2 rounded-lg bg-emerald-500 text-slate-950 text-sm font-medium hover:bg-emerald-400 disabled:opacity-50"
+                        className={primaryButtonSmClass}
                       >
                         Add
                       </button>
                     </div>
                     {editingGoal.updateNotes.length > 0 && (
-                      <ul className="mt-2 space-y-2 text-sm text-slate-300">
+                      <ul className={`mt-2 space-y-2 ${bodyTextClass}`}>
                         {editingGoal.updateNotes
                           .slice()
                           .sort((a, b) => b.noteDate.localeCompare(a.noteDate))
                           .map((n) => (
-                            <li key={n.id} className="rounded-lg border border-slate-700/50 bg-slate-800/30 p-2">
+                            <li
+                              key={n.id}
+                              className={`rounded-lg border p-2 ${isLight ? 'border-slate-200 bg-white' : 'border-slate-700/50 bg-slate-800/30'}`}
+                            >
                               {editingNoteId === n.id ? (
                                 <div className="space-y-2">
                                   <input
                                     type="date"
                                     value={editNoteDate}
                                     onChange={(e) => setEditNoteDate(e.target.value)}
-                                    className="rounded border border-slate-600 bg-slate-800 px-2 py-1 text-slate-100 text-sm w-full"
+                                    className={`${inlineInputClass} w-full`}
                                   />
                                   <input
                                     type="text"
                                     value={editNoteText}
                                     onChange={(e) => setEditNoteText(e.target.value)}
-                                    className="rounded border border-slate-600 bg-slate-800 px-2 py-1 text-slate-100 text-sm w-full"
+                                    className={`${inlineInputClass} w-full`}
                                   />
                                   <div className="flex gap-2">
                                     <button
+                                      type="button"
                                       onClick={saveEditedNote}
                                       disabled={!editNoteText.trim()}
-                                      className="px-2 py-1 rounded bg-emerald-500 text-slate-950 text-xs font-medium hover:bg-emerald-400 disabled:opacity-50"
+                                      className={`${primaryButtonTinyClass} disabled:opacity-50 disabled:cursor-not-allowed`}
                                     >
                                       Save
                                     </button>
-                                    <button
-                                      onClick={cancelEditingNote}
-                                      className="px-2 py-1 rounded border border-slate-600 bg-slate-700 text-slate-200 text-xs hover:bg-slate-600"
-                                    >
+                                    <button type="button" onClick={cancelEditingNote} className={secondaryButtonSmClass}>
                                       Cancel
                                     </button>
                                   </div>
@@ -1510,12 +1696,13 @@ export function GoalsTrackingTool({ toolId }: GoalsTrackingToolProps) {
                               ) : (
                                 <div className="flex items-start justify-between gap-2">
                                   <span>
-                                    <span className="text-slate-400">{formatDateForDisplay(n.noteDate)}:</span> {n.note}
+                                    <span className={mutedSmallClass}>{formatDateForDisplay(n.noteDate)}:</span> {n.note}
                                   </span>
                                   <div className="flex items-center gap-0.5 shrink-0">
                                     <button
+                                      type="button"
                                       onClick={() => startEditingNote(n)}
-                                      className="rounded p-1 text-slate-400 hover:bg-slate-700 hover:text-slate-200"
+                                      className={iconGhostClass}
                                       title="Edit note"
                                       aria-label="Edit note"
                                     >
@@ -1524,8 +1711,9 @@ export function GoalsTrackingTool({ toolId }: GoalsTrackingToolProps) {
                                       </svg>
                                     </button>
                                     <button
+                                      type="button"
                                       onClick={() => deleteUpdateNote(n.id)}
-                                      className="rounded p-1 text-slate-400 hover:bg-slate-700 hover:text-red-300"
+                                      className={`rounded p-1 ${isLight ? 'text-slate-500 hover:bg-red-50 hover:text-red-700' : 'text-slate-400 hover:bg-slate-700 hover:text-red-300'}`}
                                       title="Delete note"
                                       aria-label="Delete note"
                                     >
@@ -1543,9 +1731,9 @@ export function GoalsTrackingTool({ toolId }: GoalsTrackingToolProps) {
                   </div>
 
                   {/* Reminders */}
-                  <div className="rounded-lg border border-slate-700 bg-slate-800/50 p-4">
-                    <div className="flex items-center gap-2">
-                      <label className="text-sm text-slate-300">Remind if no update in</label>
+                  <div className={sectionPanelClass}>
+                    <div className="flex items-center gap-2 flex-wrap">
+                      <label className={`text-sm ${isLight ? 'text-slate-700' : 'text-slate-300'}`}>Remind if no update in</label>
                       <input
                         type="number"
                         min={1}
@@ -1557,14 +1745,19 @@ export function GoalsTrackingTool({ toolId }: GoalsTrackingToolProps) {
                           })
                         }
                         placeholder="Off"
-                        className="w-20 rounded-lg border border-slate-700 bg-slate-900/70 px-2 py-1 text-sm text-slate-100 focus:border-emerald-500/50 focus:outline-none"
+                        className={`w-20 rounded-lg px-2 py-1 text-sm focus:border-emerald-500/50 focus:outline-none ${
+                          isLight
+                            ? 'border border-slate-300 bg-white text-slate-900'
+                            : 'border border-slate-700 bg-slate-900/70 text-slate-100'
+                        }`}
                       />
-                      <span className="text-sm text-slate-400">days</span>
+                      <span className={`text-sm ${mutedSmallClass}`}>days</span>
                     </div>
                   </div>
 
-                  <div className="flex items-center justify-between gap-4 pt-4 mt-4 border-t border-slate-700">
+                  <div className={`flex flex-col-reverse sm:flex-row sm:items-center sm:justify-between gap-4 pt-4 mt-4 border-t ${borderDividerClass}`}>
                     <button
+                      type="button"
                       onClick={() => {
                         if (editingGoal) {
                           setDeleteConfirmGoalId(editingGoal.id);
@@ -1573,21 +1766,15 @@ export function GoalsTrackingTool({ toolId }: GoalsTrackingToolProps) {
                           setEditingGoal(null);
                         }
                       }}
-                      className="px-4 py-2 rounded-lg bg-red-600/90 text-white text-sm font-medium hover:bg-red-600 transition-colors focus:outline-none focus:ring-2 focus:ring-red-500/50 focus:ring-offset-2 focus:ring-offset-slate-900"
+                      className={deleteGoalOutlineClass}
                     >
                       Delete goal
                     </button>
-                    <div className="flex gap-2">
-                      <button
-                        onClick={saveGoalEdit}
-                        className="rounded-lg bg-emerald-500 px-4 py-2.5 text-sm font-semibold text-slate-950 hover:bg-emerald-400 focus:outline-none focus:ring-2 focus:ring-emerald-500/50 focus:ring-offset-2 focus:ring-offset-slate-900"
-                      >
+                    <div className="flex gap-2 justify-end">
+                      <button type="button" onClick={saveGoalEdit} className={primaryButtonClass}>
                         Save changes
                       </button>
-                      <button
-                        onClick={cancelEditingGoal}
-                        className="px-4 py-2 rounded-lg border border-slate-700 bg-slate-800 text-slate-200 hover:bg-slate-700"
-                      >
+                      <button type="button" onClick={cancelEditingGoal} className={secondaryButtonClass}>
                         Cancel
                       </button>
                     </div>
@@ -1599,22 +1786,28 @@ export function GoalsTrackingTool({ toolId }: GoalsTrackingToolProps) {
 
           {/* Delete goal confirmation */}
           {deleteConfirmGoalId && (
-            <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
-              <div className="rounded-2xl border border-slate-800 bg-slate-900 p-6 max-w-md w-full mx-4">
-                <h3 className="text-xl font-semibold text-slate-50 mb-2">Delete Goal</h3>
-                <div className="rounded-lg border border-red-500/50 bg-red-500/10 px-4 py-3 mb-4">
-                  <p className="text-red-300 font-semibold">This goal and all its phases, tasks, and notes will be permanently deleted.</p>
+            <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+              <div className={modalCardConfirmClass}>
+                <h3 className={`${modalTitleClass} mb-2`}>Delete Goal</h3>
+                <div className={deleteWarningBoxClass}>
+                  <p className={deleteWarningTextClass}>Warning: This action cannot be undone.</p>
+                  <p className={deleteWarningDetailClass}>
+                    This goal and all its phases, tasks, and notes will be permanently deleted.
+                  </p>
                 </div>
-                <p className="text-slate-300 mb-4">Type <strong className="text-slate-200">delete</strong> to confirm:</p>
+                <p className={deleteInstructionTextClass}>
+                  Type <strong className={deleteInstructionKeywordClass}>delete</strong> to confirm:
+                </p>
                 <input
                   type="text"
                   value={deleteGoalConfirmText}
                   onChange={(e) => setDeleteGoalConfirmText(e.target.value)}
                   placeholder="Type 'delete' to confirm"
-                  className="w-full px-4 py-2 rounded-lg border border-slate-700 bg-slate-800 text-slate-100 placeholder-slate-500 mb-4"
+                  className={deleteConfirmInputClass}
                 />
                 <div className="flex gap-3">
                   <button
+                    type="button"
                     onClick={deleteGoal}
                     disabled={deleteGoalConfirmText.toLowerCase() !== 'delete'}
                     className="flex-1 px-4 py-2 rounded-lg bg-red-600 text-white font-medium hover:bg-red-700 disabled:opacity-50 disabled:cursor-not-allowed"
@@ -1622,11 +1815,12 @@ export function GoalsTrackingTool({ toolId }: GoalsTrackingToolProps) {
                     Delete Goal
                   </button>
                   <button
+                    type="button"
                     onClick={() => {
                       setDeleteConfirmGoalId(null);
                       setDeleteGoalConfirmText('');
                     }}
-                    className="px-4 py-2 rounded-lg border border-slate-700 bg-slate-800 text-slate-200 hover:bg-slate-700"
+                    className={secondaryButtonClass}
                   >
                     Cancel
                   </button>

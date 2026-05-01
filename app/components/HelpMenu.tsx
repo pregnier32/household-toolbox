@@ -2,6 +2,7 @@
 
 import { useState, useRef, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
+import { useTheme } from './AppThemeProvider';
 
 type HelpMenuProps = {
   className?: string;
@@ -11,6 +12,20 @@ export function HelpMenu({ className = '' }: HelpMenuProps) {
   const [isOpen, setIsOpen] = useState(false);
   const menuRef = useRef<HTMLDivElement>(null);
   const router = useRouter();
+  const { resolvedTheme } = useTheme();
+  const isLight = resolvedTheme === 'light';
+
+  const triggerClass = isLight
+    ? 'flex items-center gap-2 rounded-lg px-3 py-2 text-sm font-medium text-slate-700 transition-colors hover:bg-slate-100 hover:text-emerald-700'
+    : 'flex items-center gap-2 rounded-lg px-3 py-2 text-sm font-medium text-slate-300 transition-colors hover:bg-slate-800/50 hover:text-emerald-300';
+
+  const menuPanelClass = isLight
+    ? 'absolute right-0 z-50 mt-2 w-48 rounded-lg border border-slate-200 bg-white shadow-lg ring-1 ring-slate-900/5'
+    : 'absolute right-0 z-50 mt-2 w-48 rounded-lg border border-slate-700 bg-slate-800 shadow-lg';
+
+  const menuItemClass = isLight
+    ? 'flex w-full items-center gap-3 px-4 py-2 text-sm text-slate-700 transition-colors hover:bg-slate-100'
+    : 'flex w-full items-center gap-3 px-4 py-2 text-sm text-slate-300 transition-colors hover:bg-slate-700';
 
   // Close menu when clicking outside
   useEffect(() => {
@@ -31,10 +46,7 @@ export function HelpMenu({ className = '' }: HelpMenuProps) {
 
   return (
     <div className={`relative ${className}`} ref={menuRef}>
-      <button
-        onClick={() => setIsOpen(!isOpen)}
-        className="flex items-center gap-2 rounded-lg px-3 py-2 text-sm font-medium text-slate-300 transition-colors hover:text-emerald-300 hover:bg-slate-800/50"
-      >
+      <button type="button" onClick={() => setIsOpen(!isOpen)} className={triggerClass}>
         <span>Help</span>
         <svg
           className={`h-4 w-4 transition-transform ${isOpen ? 'rotate-180' : ''}`}
@@ -52,17 +64,18 @@ export function HelpMenu({ className = '' }: HelpMenuProps) {
       </button>
 
       {isOpen && (
-        <div className="absolute right-0 mt-2 w-48 rounded-lg border border-slate-700 bg-slate-800 shadow-lg z-50">
+        <div className={menuPanelClass}>
           <div className="py-1">
             <button
+              type="button"
               onClick={() => {
                 router.push('/faq');
                 setIsOpen(false);
               }}
-              className="flex w-full items-center gap-3 px-4 py-2 text-sm text-slate-300 transition-colors hover:bg-slate-700"
+              className={menuItemClass}
             >
               <svg
-                className="h-4 w-4"
+                className="h-4 w-4 shrink-0"
                 fill="none"
                 stroke="currentColor"
                 viewBox="0 0 24 24"
@@ -77,14 +90,15 @@ export function HelpMenu({ className = '' }: HelpMenuProps) {
               <span>FAQ</span>
             </button>
             <button
+              type="button"
               onClick={() => {
                 router.push('/support');
                 setIsOpen(false);
               }}
-              className="flex w-full items-center gap-3 px-4 py-2 text-sm text-slate-300 transition-colors hover:bg-slate-700"
+              className={menuItemClass}
             >
               <svg
-                className="h-4 w-4"
+                className="h-4 w-4 shrink-0"
                 fill="none"
                 stroke="currentColor"
                 viewBox="0 0 24 24"
@@ -104,4 +118,3 @@ export function HelpMenu({ className = '' }: HelpMenuProps) {
     </div>
   );
 }
-

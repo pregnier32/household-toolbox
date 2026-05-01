@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useEffect } from 'react';
+import { useTheme } from './AppThemeProvider';
 
 type Category = {
   id: string;
@@ -47,6 +48,47 @@ function formatDateForDisplay(isoDate: string): string {
 }
 
 export function ToDoListTool({ toolId }: ToDoListToolProps) {
+  const { resolvedTheme } = useTheme();
+  const isLight = resolvedTheme === 'light';
+  const titleClass = isLight ? 'text-2xl font-semibold text-slate-900 mb-2' : 'text-2xl font-semibold text-slate-50 mb-2';
+  const descClass = isLight ? 'text-slate-600 text-sm' : 'text-slate-400 text-sm';
+  const cardClass = isLight
+    ? 'rounded-2xl border border-slate-200 bg-white p-6 shadow-sm'
+    : 'rounded-2xl border border-slate-800 bg-slate-900/70 p-6';
+  const compactCardClass = isLight
+    ? 'rounded-2xl border border-slate-200 bg-white p-4 shadow-sm'
+    : 'rounded-2xl border border-slate-800 bg-slate-900/70 p-4';
+  const labelClass = isLight ? 'block text-sm font-medium text-slate-700 mb-2' : 'block text-sm font-medium text-slate-300 mb-2';
+  const inputClass = isLight
+    ? 'w-full px-3 py-2 rounded-lg border border-slate-300 bg-white text-slate-900 placeholder-slate-500 focus:border-emerald-500/50 focus:outline-none focus:ring-1 focus:ring-emerald-500/50'
+    : 'w-full px-3 py-2 rounded-lg border border-slate-700 bg-slate-900/70 text-slate-100 placeholder-slate-500 focus:border-emerald-500/50 focus:outline-none focus:ring-1 focus:ring-emerald-500/50';
+  const selectClass = isLight
+    ? 'w-full rounded-lg border border-slate-300 bg-white px-4 py-2 text-slate-900 focus:border-emerald-500/50 focus:outline-none focus:ring-1 focus:ring-emerald-500/50'
+    : 'w-full rounded-lg border border-slate-700 bg-slate-900/70 px-4 py-2 text-slate-100 focus:border-emerald-500/50 focus:outline-none focus:ring-1 focus:ring-emerald-500/50';
+  const textareaClass = isLight
+    ? 'w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900 placeholder-slate-500 focus:border-emerald-500/50 focus:outline-none focus:ring-1 focus:ring-emerald-500/50 resize-none'
+    : 'w-full rounded-lg border border-slate-700 bg-slate-900/70 px-3 py-2 text-sm text-slate-100 placeholder-slate-500 focus:border-emerald-500/50 focus:outline-none focus:ring-1 focus:ring-emerald-500/50 resize-none';
+  const primaryButtonClass = isLight
+    ? 'px-4 py-2.5 rounded-lg bg-emerald-600 text-white font-semibold hover:bg-emerald-500 transition-colors disabled:opacity-50 disabled:cursor-not-allowed'
+    : 'px-4 py-2.5 rounded-lg bg-emerald-500 text-slate-950 font-semibold hover:bg-emerald-400 transition-colors disabled:opacity-50 disabled:cursor-not-allowed';
+  const secondaryButtonClass = isLight
+    ? 'px-4 py-2 rounded-lg border-2 border-slate-400 bg-slate-100 text-slate-800 hover:bg-slate-200 transition-colors'
+    : 'px-4 py-2 rounded-lg border border-slate-700 bg-slate-800 text-slate-200 hover:bg-slate-700 transition-colors';
+  const popupMenuClass = isLight
+    ? 'absolute top-10 right-0 z-50 mt-1 rounded-lg border border-slate-200 bg-white shadow-lg ring-1 ring-slate-900/5 min-w-[180px] py-1'
+    : 'absolute top-10 right-0 z-50 bg-slate-800 border border-slate-700 rounded-lg shadow-lg min-w-[180px] py-1';
+  const popupMenuItemClass = isLight
+    ? 'w-full px-4 py-2 text-left text-sm text-slate-700 hover:bg-slate-100 flex items-center gap-2'
+    : 'w-full px-4 py-2 text-left text-sm text-slate-200 hover:bg-slate-700 flex items-center gap-2';
+  const popupMenuDangerClass = isLight
+    ? 'w-full px-4 py-2 text-left text-sm text-red-600 hover:bg-red-50 flex items-center gap-2'
+    : 'w-full px-4 py-2 text-left text-sm text-red-400 hover:bg-slate-700 flex items-center gap-2';
+  const rowIconEmeraldClass = isLight
+    ? 'inline-flex items-center justify-center rounded-lg border-2 border-emerald-700 bg-white p-1.5 text-emerald-700 hover:bg-emerald-50 transition-colors'
+    : 'inline-flex items-center justify-center rounded-lg border-2 border-emerald-500/50 bg-slate-800/50 p-1.5 text-emerald-300 hover:bg-emerald-500/20 transition-colors';
+  const rowIconDangerClass = isLight
+    ? 'inline-flex items-center justify-center rounded-lg border-2 border-red-300 bg-white p-1.5 text-red-700 hover:bg-red-50 transition-colors'
+    : 'inline-flex items-center justify-center rounded-lg border-2 border-red-500/50 bg-slate-800/50 p-1.5 text-red-400 hover:bg-red-500/20 transition-colors';
   const [categories, setCategories] = useState<Category[]>([]);
   const [isLoadingCategories, setIsLoadingCategories] = useState(true);
   const [selectedCategoryId, setSelectedCategoryId] = useState<string | null>(null);
@@ -457,8 +499,8 @@ export function ToDoListTool({ toolId }: ToDoListToolProps) {
   return (
     <div className="space-y-6">
       <div>
-        <h1 className="text-2xl font-semibold text-slate-50 mb-2">To Do List</h1>
-        <p className="text-slate-400 text-sm">
+        <h1 className={titleClass}>To Do List</h1>
+        <p className={descClass}>
           Manage tasks by category. Add and edit categories, then add tasks with due date, priority, and status.
         </p>
       </div>
@@ -476,8 +518,8 @@ export function ToDoListTool({ toolId }: ToDoListToolProps) {
       )}
 
       {/* Category selector */}
-      <div className="rounded-2xl border border-slate-800 bg-slate-900/70 p-4">
-        <label className="block text-sm font-medium text-slate-300 mb-3">
+      <div className={compactCardClass}>
+        <label className={`${labelClass} mb-3`}>
           Select a category
         </label>
 
@@ -487,10 +529,10 @@ export function ToDoListTool({ toolId }: ToDoListToolProps) {
               editingCategoryId === cat.id ? (
                 <div
                   key={cat.id}
-                  className="px-4 py-3 rounded-lg border border-slate-600 bg-slate-800 min-w-[200px]"
+                  className={isLight ? 'px-4 py-3 rounded-lg border-2 min-w-[200px] shadow-sm' : 'px-4 py-3 rounded-lg border border-slate-600 bg-slate-800 min-w-[200px]'}
                   style={{
                     borderColor: editingCategoryColor,
-                    backgroundColor: `${editingCategoryColor}15`,
+                    backgroundColor: `${editingCategoryColor}${isLight ? '12' : '15'}`,
                   }}
                 >
                   <div className="flex items-center gap-2 mb-2">
@@ -498,31 +540,31 @@ export function ToDoListTool({ toolId }: ToDoListToolProps) {
                       type="text"
                       value={editingCategoryName}
                       onChange={(e) => setEditingCategoryName(e.target.value)}
-                      className="flex-1 px-2 py-1 rounded border border-slate-600 bg-slate-900 text-slate-100 text-sm focus:border-emerald-500/50 focus:outline-none"
+                      className={isLight ? 'flex-1 px-2 py-1 rounded border border-slate-300 bg-white text-slate-900 text-sm focus:border-emerald-500/50 focus:outline-none' : 'flex-1 px-2 py-1 rounded border border-slate-600 bg-slate-900 text-slate-100 text-sm focus:border-emerald-500/50 focus:outline-none'}
                       placeholder="Category name"
                       autoFocus
                     />
                   </div>
                   <div className="flex items-center gap-2 mb-2">
-                    <label className="text-xs text-slate-400">Color:</label>
+                    <label className={isLight ? 'text-xs text-slate-700' : 'text-xs text-slate-400'}>Color:</label>
                     <input
                       type="color"
                       value={editingCategoryColor}
                       onChange={(e) => setEditingCategoryColor(e.target.value)}
-                      className="h-6 w-12 rounded border border-slate-600 cursor-pointer"
+                      className={isLight ? 'h-6 w-12 rounded border border-slate-300 cursor-pointer bg-white' : 'h-6 w-12 rounded border border-slate-600 cursor-pointer'}
                     />
                   </div>
                   <div className="flex items-center gap-2">
                     <button
                       onClick={saveCategoryEdit}
                       disabled={!editingCategoryName.trim() || isSaving}
-                      className="flex-1 px-2 py-1 rounded bg-emerald-500 text-slate-950 text-xs font-medium hover:bg-emerald-400 disabled:opacity-50 disabled:cursor-not-allowed"
+                      className={isLight ? 'flex-1 px-2 py-1 rounded bg-emerald-600 text-white text-xs font-semibold hover:bg-emerald-500 disabled:opacity-50 disabled:cursor-not-allowed' : 'flex-1 px-2 py-1 rounded bg-emerald-500 text-slate-950 text-xs font-medium hover:bg-emerald-400 disabled:opacity-50 disabled:cursor-not-allowed'}
                     >
                       Save
                     </button>
                     <button
                       onClick={cancelEditingCategory}
-                      className="px-2 py-1 rounded border border-slate-600 bg-slate-700 text-slate-200 text-xs hover:bg-slate-600"
+                      className={isLight ? 'px-2 py-1 rounded border-2 border-slate-400 bg-slate-100 text-slate-800 text-xs hover:bg-slate-200' : 'px-2 py-1 rounded border border-slate-600 bg-slate-700 text-slate-200 text-xs hover:bg-slate-600'}
                     >
                       Cancel
                     </button>
@@ -551,12 +593,12 @@ export function ToDoListTool({ toolId }: ToDoListToolProps) {
                       e.stopPropagation();
                       setMenuOpenCategoryId(menuOpenCategoryId === cat.id ? null : cat.id);
                     }}
-                    className="absolute top-1 right-1 p-1 rounded hover:bg-slate-700/50 transition-colors"
+                    className={isLight ? 'absolute top-1 right-1 p-1 rounded hover:bg-slate-200/80 transition-colors' : 'absolute top-1 right-1 p-1 rounded hover:bg-slate-700/50 transition-colors'}
                     title="Category options"
                     aria-label="Category options"
                   >
                     <svg
-                      className="h-4 w-4 text-slate-400 hover:text-slate-200"
+                      className={isLight ? 'h-4 w-4 text-slate-600 hover:text-slate-900' : 'h-4 w-4 text-slate-400 hover:text-slate-200'}
                       fill="currentColor"
                       viewBox="0 0 24 24"
                     >
@@ -564,13 +606,13 @@ export function ToDoListTool({ toolId }: ToDoListToolProps) {
                     </svg>
                   </button>
                   {menuOpenCategoryId === cat.id && (
-                    <div className="absolute top-10 right-0 z-50 bg-slate-800 border border-slate-700 rounded-lg shadow-lg min-w-[180px] py-1">
+                    <div className={popupMenuClass}>
                       <button
                         onClick={(e) => {
                           e.stopPropagation();
                           startEditingCategory(cat);
                         }}
-                        className="w-full px-4 py-2 text-left text-sm text-slate-200 hover:bg-slate-700 flex items-center gap-2"
+                        className={popupMenuItemClass}
                       >
                         <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
@@ -584,7 +626,7 @@ export function ToDoListTool({ toolId }: ToDoListToolProps) {
                           setDeleteConfirmCategoryId(cat.id);
                           setDeleteConfirmText('');
                         }}
-                        className="w-full px-4 py-2 text-left text-sm text-red-400 hover:bg-slate-700 flex items-center gap-2"
+                        className={popupMenuDangerClass}
                       >
                         <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
@@ -602,7 +644,7 @@ export function ToDoListTool({ toolId }: ToDoListToolProps) {
                 setNewCategoryName('');
                 setNewCategoryColor('#10b981');
               }}
-              className="px-4 py-3 rounded-lg border border-slate-700 bg-slate-800/50 text-slate-300 hover:border-emerald-500/50 hover:bg-emerald-500/10 hover:text-emerald-300 transition-all duration-200 flex items-center justify-center min-w-[60px]"
+              className={isLight ? 'px-4 py-3 rounded-lg border-2 border-slate-400 bg-slate-100 text-slate-700 hover:border-emerald-600 hover:bg-emerald-50 hover:text-emerald-800 transition-all duration-200 flex items-center justify-center min-w-[60px]' : 'px-4 py-3 rounded-lg border border-slate-700 bg-slate-800/50 text-slate-300 hover:border-emerald-500/50 hover:bg-emerald-500/10 hover:text-emerald-300 transition-all duration-200 flex items-center justify-center min-w-[60px]'}
               title="Add New Category"
               aria-label="Add New Category"
             >
@@ -614,13 +656,13 @@ export function ToDoListTool({ toolId }: ToDoListToolProps) {
         ) : (
           <div className="flex items-end gap-2 flex-wrap">
             <div className="flex-1 min-w-[200px]">
-              <label className="block text-sm font-medium text-slate-300 mb-2">New category name</label>
+              <label className={labelClass}>New category name</label>
               <input
                 type="text"
                 value={newCategoryName}
                 onChange={(e) => setNewCategoryName(e.target.value)}
                 placeholder="Enter category name"
-                className="w-full px-3 py-2 rounded-lg border border-slate-700 bg-slate-900/70 text-slate-100 placeholder-slate-500 focus:border-emerald-500/50 focus:outline-none focus:ring-1 focus:ring-emerald-500/50"
+                className={inputClass}
                 onKeyDown={(e) => {
                   if (e.key === 'Enter') createCategory();
                   if (e.key === 'Escape') {
@@ -632,18 +674,18 @@ export function ToDoListTool({ toolId }: ToDoListToolProps) {
               />
             </div>
             <div>
-              <label className="block text-sm font-medium text-slate-300 mb-2">Color</label>
+              <label className={labelClass}>Color</label>
               <input
                 type="color"
                 value={newCategoryColor}
                 onChange={(e) => setNewCategoryColor(e.target.value)}
-                className="h-10 w-14 rounded border border-slate-600 cursor-pointer"
+                className={isLight ? 'h-10 w-14 rounded border border-slate-300 cursor-pointer bg-white' : 'h-10 w-14 rounded border border-slate-600 cursor-pointer'}
               />
             </div>
             <button
               onClick={createCategory}
               disabled={!newCategoryName.trim() || isSaving}
-              className="px-4 py-2 rounded-lg bg-emerald-500 text-slate-950 font-medium hover:bg-emerald-400 disabled:opacity-50 disabled:cursor-not-allowed"
+              className={primaryButtonClass}
             >
               Create
             </button>
@@ -652,7 +694,7 @@ export function ToDoListTool({ toolId }: ToDoListToolProps) {
                 setIsCreatingCategory(false);
                 setNewCategoryName('');
               }}
-              className="px-4 py-2 rounded-lg border border-slate-700 bg-slate-800 text-slate-200 hover:bg-slate-700"
+              className={secondaryButtonClass}
             >
               Cancel
             </button>
@@ -671,15 +713,15 @@ export function ToDoListTool({ toolId }: ToDoListToolProps) {
       {/* Delete category confirmation */}
       {deleteConfirmCategoryId && (
         <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
-          <div className="rounded-2xl border border-slate-800 bg-slate-900 p-6 max-w-md w-full mx-4">
-            <h3 className="text-xl font-semibold text-slate-50 mb-2">Delete category</h3>
-            <div className="rounded-lg border border-red-500/50 bg-red-500/10 px-4 py-3 mb-4">
-              <p className="text-red-300 font-semibold mb-2">⚠️ This action cannot be undone.</p>
-              <p className="text-red-200 text-sm">
+          <div className={isLight ? 'rounded-2xl border border-slate-200 bg-white p-6 max-w-md w-full mx-4 shadow-2xl' : 'rounded-2xl border border-slate-800 bg-slate-900 p-6 max-w-md w-full mx-4'}>
+            <h3 className={isLight ? 'text-xl font-semibold text-slate-900 mb-2' : 'text-xl font-semibold text-slate-50 mb-2'}>Delete category</h3>
+            <div className={isLight ? 'rounded-lg border border-red-300 bg-red-50 px-4 py-3 mb-4' : 'rounded-lg border border-red-500/50 bg-red-500/10 px-4 py-3 mb-4'}>
+              <p className={isLight ? 'text-red-700 font-semibold mb-2' : 'text-red-300 font-semibold mb-2'}>⚠️ This action cannot be undone.</p>
+              <p className={isLight ? 'text-red-600 text-sm' : 'text-red-200 text-sm'}>
                 All tasks in this category will be permanently deleted.
               </p>
             </div>
-            <p className="text-slate-300 mb-4">
+            <p className={isLight ? 'text-slate-700 mb-4' : 'text-slate-300 mb-4'}>
               Type <strong className="text-slate-200">delete</strong> to confirm:
             </p>
             <input
@@ -687,7 +729,7 @@ export function ToDoListTool({ toolId }: ToDoListToolProps) {
               value={deleteConfirmText}
               onChange={(e) => setDeleteConfirmText(e.target.value)}
               placeholder="Type 'delete' to confirm"
-              className="w-full px-4 py-2 rounded-lg border border-slate-700 bg-slate-800 text-slate-100 placeholder-slate-500 focus:border-red-500/50 focus:outline-none focus:ring-1 focus:ring-red-500/50 mb-4"
+              className={isLight ? 'w-full px-4 py-2 rounded-lg border border-slate-300 bg-white text-slate-900 placeholder-slate-500 focus:border-red-500/50 focus:outline-none focus:ring-1 focus:ring-red-500/50 mb-4' : 'w-full px-4 py-2 rounded-lg border border-slate-700 bg-slate-800 text-slate-100 placeholder-slate-500 focus:border-red-500/50 focus:outline-none focus:ring-1 focus:ring-red-500/50 mb-4'}
               autoFocus
               onKeyDown={(e) => {
                 if (e.key === 'Escape') {
@@ -709,7 +751,7 @@ export function ToDoListTool({ toolId }: ToDoListToolProps) {
                   setDeleteConfirmCategoryId(null);
                   setDeleteConfirmText('');
                 }}
-                className="px-4 py-2 rounded-lg border border-slate-700 bg-slate-800 text-slate-200 hover:bg-slate-700"
+                className={secondaryButtonClass}
               >
                 Cancel
               </button>
@@ -727,24 +769,22 @@ export function ToDoListTool({ toolId }: ToDoListToolProps) {
       {selectedCategoryId && selectedCategory && (
         <>
           {/* Single card: category task list */}
-          <div className="rounded-2xl border border-slate-800 bg-slate-900/70 p-6">
+          <div className={cardClass}>
             {/* Card header: category name + add task icon (left) | print + filter (right) */}
             <div className="flex items-center justify-between gap-4 flex-wrap mb-6">
-              <div className="flex items-center gap-2">
-                <h2 className="text-2xl sm:text-3xl font-semibold text-slate-50">
+              <div className="flex items-center gap-3">
+                <h2 className={isLight ? 'text-2xl sm:text-3xl font-semibold text-slate-900' : 'text-2xl sm:text-3xl font-semibold text-slate-50'}>
                   {selectedCategory.name}
                 </h2>
                 {!isAddingTask && (
                   <button
                     type="button"
                     onClick={startAddingTask}
-                    className="rounded-lg p-2 bg-emerald-500 text-slate-950 hover:bg-emerald-400 transition-colors"
+                    className={isLight ? 'px-3 py-2 rounded-lg bg-emerald-600 text-white text-sm font-semibold hover:bg-emerald-500 transition-colors disabled:opacity-50 disabled:cursor-not-allowed' : 'px-3 py-2 rounded-lg bg-emerald-500 text-slate-950 text-sm font-semibold hover:bg-emerald-400 transition-colors disabled:opacity-50 disabled:cursor-not-allowed'}
                     aria-label="Add new task"
-                    title="Add new task"
+                    title="+ Add Task"
                   >
-                    <svg className="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
-                    </svg>
+                    + Add Task
                   </button>
                 )}
               </div>
@@ -752,7 +792,7 @@ export function ToDoListTool({ toolId }: ToDoListToolProps) {
                 <button
                   type="button"
                   onClick={() => typeof window !== 'undefined' && window.print()}
-                  className="rounded-lg p-2 text-slate-400 hover:bg-slate-800 hover:text-slate-200 transition-colors"
+                  className={isLight ? 'rounded-lg p-2 text-slate-600 hover:bg-slate-100 hover:text-slate-900 transition-colors' : 'rounded-lg p-2 text-slate-400 hover:bg-slate-800 hover:text-slate-200 transition-colors'}
                   aria-label="Print list"
                   title="Print list (or save to PDF)"
                 >
@@ -764,7 +804,7 @@ export function ToDoListTool({ toolId }: ToDoListToolProps) {
                   <button
                     type="button"
                     onClick={() => setFilterPopoverOpen((v) => !v)}
-                    className="rounded-lg p-2 text-slate-400 hover:bg-slate-800 hover:text-slate-200 transition-colors"
+                    className={isLight ? 'rounded-lg p-2 text-slate-600 hover:bg-slate-100 hover:text-slate-900 transition-colors' : 'rounded-lg p-2 text-slate-400 hover:bg-slate-800 hover:text-slate-200 transition-colors'}
                     aria-label="Sort and filter options"
                     title="Sort and filter"
                   >
@@ -779,21 +819,21 @@ export function ToDoListTool({ toolId }: ToDoListToolProps) {
                         onClick={() => setFilterPopoverOpen(false)}
                         aria-hidden="true"
                       />
-                      <div className="absolute right-0 top-full z-50 mt-1 w-72 rounded-lg border border-slate-700 bg-slate-800 py-3 px-4 shadow-lg">
+                      <div className={isLight ? 'absolute right-0 top-full z-50 mt-1 w-72 rounded-lg border border-slate-200 bg-white py-3 px-4 shadow-lg ring-1 ring-slate-900/5' : 'absolute right-0 top-full z-50 mt-1 w-72 rounded-lg border border-slate-700 bg-slate-800 py-3 px-4 shadow-lg'}>
                         <div className="space-y-4">
                           <div>
-                            <label className="block text-xs font-medium text-slate-300 mb-1.5">Sort by</label>
+                            <label className={isLight ? 'block text-xs font-medium text-slate-700 mb-1.5' : 'block text-xs font-medium text-slate-300 mb-1.5'}>Sort by</label>
                             <select
                               value={sortBy}
                               onChange={(e) => setSortBy(e.target.value as 'priority' | 'dueDate')}
-                              className="w-full rounded-lg border border-slate-700 bg-slate-900/70 px-3 py-2 text-sm text-slate-100 focus:border-emerald-500/50 focus:outline-none focus:ring-1 focus:ring-emerald-500/50"
+                              className={inputClass}
                             >
                               <option value="dueDate">Due date</option>
                               <option value="priority">Priority</option>
                             </select>
                           </div>
                           <div>
-                            <label className="block text-xs font-medium text-slate-300 mb-1.5">Filter by status</label>
+                            <label className={isLight ? 'block text-xs font-medium text-slate-700 mb-1.5' : 'block text-xs font-medium text-slate-300 mb-1.5'}>Filter by status</label>
                             <div className="flex flex-wrap gap-2">
                               {STATUSES.map((status) => (
                                 <label key={status} className="flex items-center gap-2 cursor-pointer">
@@ -801,9 +841,9 @@ export function ToDoListTool({ toolId }: ToDoListToolProps) {
                                     type="checkbox"
                                     checked={statusFilter.has(status)}
                                     onChange={() => toggleStatusFilter(status)}
-                                    className="rounded border-slate-600 bg-slate-700 text-emerald-500 focus:ring-emerald-500 focus:ring-offset-slate-800 w-4 h-4"
+                                    className={isLight ? 'rounded border-slate-400 bg-white text-emerald-600 focus:ring-emerald-500 focus:ring-offset-white w-4 h-4' : 'rounded border-slate-600 bg-slate-700 text-emerald-500 focus:ring-emerald-500 focus:ring-offset-slate-800 w-4 h-4'}
                                   />
-                                  <span className="text-sm text-slate-200">{status}</span>
+                                  <span className={isLight ? 'text-sm text-slate-800' : 'text-sm text-slate-200'}>{status}</span>
                                 </label>
                               ))}
                             </div>
@@ -818,17 +858,17 @@ export function ToDoListTool({ toolId }: ToDoListToolProps) {
 
             {/* Add task form */}
             {isAddingTask && (
-            <div className="border-t border-slate-700/70 pt-6 mb-6">
-              <h3 className="text-lg font-semibold text-slate-50 mb-4">New task</h3>
+            <div className={isLight ? 'border-t border-slate-200 pt-6 mb-6' : 'border-t border-slate-700/70 pt-6 mb-6'}>
+              <h3 className={isLight ? 'text-lg font-semibold text-slate-900 mb-4' : 'text-lg font-semibold text-slate-50 mb-4'}>New task</h3>
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4 space-y-4">
                 <div className="md:col-span-2">
-                  <label className="block text-xs font-medium text-slate-300 mb-1.5">Task name <span className="text-red-400">*</span></label>
+                  <label className={isLight ? 'block text-xs font-medium text-slate-700 mb-1.5' : 'block text-xs font-medium text-slate-300 mb-1.5'}>Task name <span className="text-red-400">*</span></label>
                   <input
                     type="text"
                     value={newTask.taskName}
                     onChange={(e) => setNewTask((p) => ({ ...p, taskName: e.target.value }))}
                     placeholder="Task name"
-                    className="w-full rounded-lg border border-slate-700 bg-slate-900/70 px-3 py-2 text-sm text-slate-100 placeholder-slate-500 focus:border-emerald-500/50 focus:outline-none focus:ring-1 focus:ring-emerald-500/50"
+                    className={inputClass}
                   />
                 </div>
                 <div className="md:col-span-2">
@@ -845,28 +885,28 @@ export function ToDoListTool({ toolId }: ToDoListToolProps) {
                           setNewTask((p) => ({ ...p, dueDate: '' }));
                         }
                       }}
-                      className="rounded border-slate-600 bg-slate-700 text-emerald-500 focus:ring-emerald-500 focus:ring-offset-slate-800 w-5 h-5"
+                      className={isLight ? 'rounded border-slate-400 bg-white text-emerald-600 focus:ring-emerald-500 focus:ring-offset-white w-5 h-5' : 'rounded border-slate-600 bg-slate-700 text-emerald-500 focus:ring-emerald-500 focus:ring-offset-slate-800 w-5 h-5'}
                     />
-                    <span className="text-sm text-slate-200">This task has a due date</span>
+                    <span className={isLight ? 'text-sm text-slate-800' : 'text-sm text-slate-200'}>This task has a due date</span>
                   </label>
                   {newTaskHasDueDate && (
                     <div className="mt-2">
-                      <label className="block text-xs font-medium text-slate-300 mb-1.5">Due date</label>
+                      <label className={isLight ? 'block text-xs font-medium text-slate-700 mb-1.5' : 'block text-xs font-medium text-slate-300 mb-1.5'}>Due date</label>
                       <input
                         type="date"
                         value={newTask.dueDate}
                         onChange={(e) => setNewTask((p) => ({ ...p, dueDate: e.target.value }))}
-                        className="w-full rounded-lg border border-slate-700 bg-slate-900/70 px-3 py-2 text-sm text-slate-100 focus:border-emerald-500/50 focus:outline-none focus:ring-1 focus:ring-emerald-500/50"
+                        className={inputClass}
                       />
                     </div>
                   )}
                 </div>
                 <div>
-                  <label className="block text-xs font-medium text-slate-300 mb-1.5">Priority</label>
+                  <label className={isLight ? 'block text-xs font-medium text-slate-700 mb-1.5' : 'block text-xs font-medium text-slate-300 mb-1.5'}>Priority</label>
                   <select
                     value={newTask.priority}
                     onChange={(e) => setNewTask((p) => ({ ...p, priority: e.target.value as Priority }))}
-                    className="w-full rounded-lg border border-slate-700 bg-slate-900/70 px-4 py-2 text-slate-100 focus:border-emerald-500/50 focus:outline-none focus:ring-1 focus:ring-emerald-500/50"
+                    className={selectClass}
                   >
                     {PRIORITIES.map((p) => (
                       <option key={p} value={p}>{p}</option>
@@ -874,11 +914,11 @@ export function ToDoListTool({ toolId }: ToDoListToolProps) {
                   </select>
                 </div>
                 <div>
-                  <label className="block text-xs font-medium text-slate-300 mb-1.5">Status</label>
+                  <label className={isLight ? 'block text-xs font-medium text-slate-700 mb-1.5' : 'block text-xs font-medium text-slate-300 mb-1.5'}>Status</label>
                   <select
                     value={newTask.status}
                     onChange={(e) => setNewTask((p) => ({ ...p, status: e.target.value as TaskStatus }))}
-                    className="w-full rounded-lg border border-slate-700 bg-slate-900/70 px-4 py-2 text-slate-100 focus:border-emerald-500/50 focus:outline-none focus:ring-1 focus:ring-emerald-500/50"
+                    className={selectClass}
                   >
                     {STATUSES.map((s) => (
                       <option key={s} value={s}>{s}</option>
@@ -886,13 +926,13 @@ export function ToDoListTool({ toolId }: ToDoListToolProps) {
                   </select>
                 </div>
                 <div className="md:col-span-2">
-                  <label className="block text-xs font-medium text-slate-300 mb-1.5">Notes</label>
+                  <label className={isLight ? 'block text-xs font-medium text-slate-700 mb-1.5' : 'block text-xs font-medium text-slate-300 mb-1.5'}>Notes</label>
                   <textarea
                     value={newTask.notes}
                     onChange={(e) => setNewTask((p) => ({ ...p, notes: e.target.value }))}
                     placeholder="Notes"
                     rows={3}
-                    className="w-full rounded-lg border border-slate-700 bg-slate-900/70 px-3 py-2 text-sm text-slate-100 placeholder-slate-500 focus:border-emerald-500/50 focus:outline-none focus:ring-1 focus:ring-emerald-500/50 resize-none"
+                    className={textareaClass}
                   />
                 </div>
               </div>
@@ -900,13 +940,13 @@ export function ToDoListTool({ toolId }: ToDoListToolProps) {
                 <button
                   onClick={saveNewTask}
                   disabled={!newTask.taskName.trim() || isSaving}
-                  className="px-4 py-2.5 rounded-lg bg-emerald-500 text-slate-950 font-semibold hover:bg-emerald-400 disabled:opacity-50 disabled:cursor-not-allowed"
+                  className={primaryButtonClass}
                 >
                   Save task
                 </button>
                 <button
                   onClick={cancelAddingTask}
-                  className="px-4 py-2 rounded-lg border border-slate-700 bg-slate-800 text-slate-200 hover:bg-slate-700"
+                  className={secondaryButtonClass}
                 >
                   Cancel
                 </button>
@@ -916,16 +956,16 @@ export function ToDoListTool({ toolId }: ToDoListToolProps) {
 
             {/* Edit task form */}
             {editingTaskId && editingTask && (
-              <div className="border-t border-slate-700/70 pt-6 mb-6">
-                <h3 className="text-lg font-semibold text-slate-50 mb-4">Edit task</h3>
+              <div className={isLight ? 'border-t border-slate-200 pt-6 mb-6' : 'border-t border-slate-700/70 pt-6 mb-6'}>
+                <h3 className={isLight ? 'text-lg font-semibold text-slate-900 mb-4' : 'text-lg font-semibold text-slate-50 mb-4'}>Edit task</h3>
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                   <div className="md:col-span-2">
-                    <label className="block text-xs font-medium text-slate-300 mb-1.5">Task name</label>
+                    <label className={isLight ? 'block text-xs font-medium text-slate-700 mb-1.5' : 'block text-xs font-medium text-slate-300 mb-1.5'}>Task name</label>
                     <input
                       type="text"
                       value={editingTask.taskName}
                       onChange={(e) => setEditingTask((p) => p ? { ...p, taskName: e.target.value } : null)}
-                      className="w-full rounded-lg border border-slate-700 bg-slate-900/70 px-3 py-2 text-sm text-slate-100 focus:border-emerald-500/50 focus:outline-none focus:ring-1 focus:ring-emerald-500/50"
+                      className={inputClass}
                     />
                   </div>
                   <div className="md:col-span-2">
@@ -946,28 +986,28 @@ export function ToDoListTool({ toolId }: ToDoListToolProps) {
                               : null
                           );
                         }}
-                        className="rounded border-slate-600 bg-slate-700 text-emerald-500 focus:ring-emerald-500 focus:ring-offset-slate-800 w-5 h-5"
+                        className={isLight ? 'rounded border-slate-400 bg-white text-emerald-600 focus:ring-emerald-500 focus:ring-offset-white w-5 h-5' : 'rounded border-slate-600 bg-slate-700 text-emerald-500 focus:ring-emerald-500 focus:ring-offset-slate-800 w-5 h-5'}
                       />
-                      <span className="text-sm text-slate-200">This task has a due date</span>
+                      <span className={isLight ? 'text-sm text-slate-800' : 'text-sm text-slate-200'}>This task has a due date</span>
                     </label>
                     {editingTask.dueDate && (
                       <div className="mt-2">
-                        <label className="block text-xs font-medium text-slate-300 mb-1.5">Due date</label>
+                        <label className={isLight ? 'block text-xs font-medium text-slate-700 mb-1.5' : 'block text-xs font-medium text-slate-300 mb-1.5'}>Due date</label>
                         <input
                           type="date"
                           value={editingTask.dueDate}
                           onChange={(e) => setEditingTask((p) => (p ? { ...p, dueDate: e.target.value } : null))}
-                          className="w-full rounded-lg border border-slate-700 bg-slate-900/70 px-3 py-2 text-sm text-slate-100 focus:border-emerald-500/50 focus:outline-none focus:ring-1 focus:ring-emerald-500/50"
+                          className={inputClass}
                         />
                       </div>
                     )}
                   </div>
                   <div>
-                    <label className="block text-xs font-medium text-slate-300 mb-1.5">Priority</label>
+                    <label className={isLight ? 'block text-xs font-medium text-slate-700 mb-1.5' : 'block text-xs font-medium text-slate-300 mb-1.5'}>Priority</label>
                     <select
                       value={editingTask.priority}
                       onChange={(e) => setEditingTask((p) => p ? { ...p, priority: e.target.value as Priority } : null)}
-                      className="w-full rounded-lg border border-slate-700 bg-slate-900/70 px-4 py-2 text-slate-100 focus:border-emerald-500/50 focus:outline-none focus:ring-1 focus:ring-emerald-500/50"
+                      className={selectClass}
                     >
                       {PRIORITIES.map((p) => (
                         <option key={p} value={p}>{p}</option>
@@ -975,11 +1015,11 @@ export function ToDoListTool({ toolId }: ToDoListToolProps) {
                     </select>
                   </div>
                   <div>
-                    <label className="block text-xs font-medium text-slate-300 mb-1.5">Status</label>
+                    <label className={isLight ? 'block text-xs font-medium text-slate-700 mb-1.5' : 'block text-xs font-medium text-slate-300 mb-1.5'}>Status</label>
                     <select
                       value={editingTask.status}
                       onChange={(e) => setEditingTask((p) => p ? { ...p, status: e.target.value as TaskStatus } : null)}
-                      className="w-full rounded-lg border border-slate-700 bg-slate-900/70 px-4 py-2 text-slate-100 focus:border-emerald-500/50 focus:outline-none focus:ring-1 focus:ring-emerald-500/50"
+                      className={selectClass}
                     >
                       {STATUSES.map((s) => (
                         <option key={s} value={s}>{s}</option>
@@ -987,12 +1027,12 @@ export function ToDoListTool({ toolId }: ToDoListToolProps) {
                     </select>
                   </div>
                   <div className="md:col-span-2">
-                    <label className="block text-xs font-medium text-slate-300 mb-1.5">Notes</label>
+                    <label className={isLight ? 'block text-xs font-medium text-slate-700 mb-1.5' : 'block text-xs font-medium text-slate-300 mb-1.5'}>Notes</label>
                     <textarea
                       value={editingTask.notes}
                       onChange={(e) => setEditingTask((p) => p ? { ...p, notes: e.target.value } : null)}
                       rows={3}
-                      className="w-full rounded-lg border border-slate-700 bg-slate-900/70 px-3 py-2 text-sm text-slate-100 focus:border-emerald-500/50 focus:outline-none focus:ring-1 focus:ring-emerald-500/50 resize-none"
+                      className={textareaClass}
                     />
                   </div>
                 </div>
@@ -1000,13 +1040,13 @@ export function ToDoListTool({ toolId }: ToDoListToolProps) {
                   <button
                     onClick={saveTaskEdit}
                     disabled={isSaving}
-                    className="px-4 py-2.5 rounded-lg bg-emerald-500 text-slate-950 font-semibold hover:bg-emerald-400 disabled:opacity-50"
+                    className={primaryButtonClass}
                   >
                     Save
                   </button>
                   <button
                     onClick={cancelEditingTask}
-                    className="px-4 py-2 rounded-lg border border-slate-700 bg-slate-800 text-slate-200 hover:bg-slate-700"
+                    className={secondaryButtonClass}
                   >
                     Cancel
                   </button>
@@ -1024,35 +1064,35 @@ export function ToDoListTool({ toolId }: ToDoListToolProps) {
                 ) : (
                   <table className="w-full min-w-[500px]">
                     <thead>
-                      <tr className="border-b border-slate-700">
-                        <th className="text-left text-xs font-semibold uppercase tracking-wider text-slate-400 py-3 px-2">Name</th>
-                        <th className="text-left text-xs font-semibold uppercase tracking-wider text-slate-400 py-3 px-2">Due Date</th>
-                        <th className="text-left text-xs font-semibold uppercase tracking-wider text-slate-400 py-3 px-2">Priority</th>
-                        <th className="text-left text-xs font-semibold uppercase tracking-wider text-slate-400 py-3 px-2">Status</th>
-                        <th className="w-20 text-right text-xs font-semibold uppercase tracking-wider text-slate-400 py-3 px-2">Actions</th>
+                      <tr className={isLight ? 'border-b border-slate-300' : 'border-b border-slate-700'}>
+                        <th className={isLight ? 'text-left text-xs font-semibold uppercase tracking-wider text-slate-600 py-3 px-2' : 'text-left text-xs font-semibold uppercase tracking-wider text-slate-400 py-3 px-2'}>Name</th>
+                        <th className={isLight ? 'text-left text-xs font-semibold uppercase tracking-wider text-slate-600 py-3 px-2' : 'text-left text-xs font-semibold uppercase tracking-wider text-slate-400 py-3 px-2'}>Due Date</th>
+                        <th className={isLight ? 'text-left text-xs font-semibold uppercase tracking-wider text-slate-600 py-3 px-2' : 'text-left text-xs font-semibold uppercase tracking-wider text-slate-400 py-3 px-2'}>Priority</th>
+                        <th className={isLight ? 'text-left text-xs font-semibold uppercase tracking-wider text-slate-600 py-3 px-2' : 'text-left text-xs font-semibold uppercase tracking-wider text-slate-400 py-3 px-2'}>Status</th>
+                        <th className={isLight ? 'w-20 text-right text-xs font-semibold uppercase tracking-wider text-slate-600 py-3 px-2' : 'w-20 text-right text-xs font-semibold uppercase tracking-wider text-slate-400 py-3 px-2'}>Actions</th>
                       </tr>
                     </thead>
                     <tbody>
                       {filteredAndSortedTasks.map((task) => (
                         <tr
                           key={task.id}
-                          className="border-b border-slate-800 hover:bg-slate-800/30 transition-colors"
+                          className={isLight ? 'border-b border-slate-200 hover:bg-slate-50 transition-colors' : 'border-b border-slate-800 hover:bg-slate-800/30 transition-colors'}
                         >
                           <td className="py-3 px-2">
-                            <div className="font-medium text-slate-100">{task.taskName}</div>
+                            <div className={isLight ? 'font-medium text-slate-900' : 'font-medium text-slate-100'}>{task.taskName}</div>
                             {task.notes && (
-                              <div className="text-xs text-slate-400 mt-0.5 line-clamp-2">{task.notes}</div>
+                              <div className={isLight ? 'text-xs text-slate-600 mt-0.5 line-clamp-2' : 'text-xs text-slate-400 mt-0.5 line-clamp-2'}>{task.notes}</div>
                             )}
                           </td>
-                          <td className="py-3 px-2 text-sm text-slate-300">
+                          <td className={isLight ? 'py-3 px-2 text-sm text-slate-700' : 'py-3 px-2 text-sm text-slate-300'}>
                             {task.dueDate ? formatDateForDisplay(task.dueDate) : '—'}
                           </td>
-                          <td className="py-3 px-2 text-sm text-slate-300">{task.priority}</td>
+                          <td className={isLight ? 'py-3 px-2 text-sm text-slate-700' : 'py-3 px-2 text-sm text-slate-300'}>{task.priority}</td>
                           <td className="py-3 px-2">
                             <select
                               value={task.status}
                               onChange={(e) => updateTaskStatus(task.id, e.target.value as TaskStatus)}
-                              className="rounded-md border border-slate-600 bg-slate-800 px-2 py-1 text-sm text-slate-200 focus:border-emerald-500/50 focus:outline-none focus:ring-1 focus:ring-emerald-500/50"
+                              className={isLight ? 'rounded-md border border-slate-300 bg-white px-2 py-1 text-sm text-slate-800 focus:border-emerald-500/50 focus:outline-none focus:ring-1 focus:ring-emerald-500/50' : 'rounded-md border border-slate-600 bg-slate-800 px-2 py-1 text-sm text-slate-200 focus:border-emerald-500/50 focus:outline-none focus:ring-1 focus:ring-emerald-500/50'}
                               aria-label={`Update status for ${task.taskName}`}
                             >
                               {STATUSES.map((s) => (
@@ -1064,7 +1104,7 @@ export function ToDoListTool({ toolId }: ToDoListToolProps) {
                             <div className="flex items-center justify-end gap-1">
                               <button
                                 onClick={() => startEditingTask(task)}
-                                className="rounded-lg p-1.5 text-slate-400 hover:bg-slate-700 hover:text-slate-200 transition-colors"
+                                className={rowIconEmeraldClass}
                                 aria-label="Edit task"
                               >
                                 <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -1073,7 +1113,7 @@ export function ToDoListTool({ toolId }: ToDoListToolProps) {
                               </button>
                               <button
                                 onClick={() => setDeleteConfirmTaskId(task.id)}
-                                className="rounded-lg p-1.5 text-slate-400 hover:bg-slate-700 hover:text-red-400 transition-colors"
+                                className={rowIconDangerClass}
                                 aria-label="Delete task"
                               >
                                 <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -1094,9 +1134,9 @@ export function ToDoListTool({ toolId }: ToDoListToolProps) {
           {/* Delete task confirmation */}
           {deleteConfirmTaskId && (
             <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
-              <div className="rounded-2xl border border-slate-800 bg-slate-900 p-6 max-w-md w-full mx-4">
-                <h3 className="text-xl font-semibold text-slate-50 mb-2">Delete task</h3>
-                <p className="text-slate-300 mb-4">Are you sure you want to delete this task? This cannot be undone.</p>
+              <div className={isLight ? 'rounded-2xl border border-slate-200 bg-white p-6 max-w-md w-full mx-4 shadow-2xl' : 'rounded-2xl border border-slate-800 bg-slate-900 p-6 max-w-md w-full mx-4'}>
+                <h3 className={isLight ? 'text-xl font-semibold text-slate-900 mb-2' : 'text-xl font-semibold text-slate-50 mb-2'}>Delete task</h3>
+                <p className={isLight ? 'text-slate-700 mb-4' : 'text-slate-300 mb-4'}>Are you sure you want to delete this task? This cannot be undone.</p>
                 <div className="flex gap-3">
                   <button
                     onClick={() => deleteTask(deleteConfirmTaskId)}
@@ -1106,7 +1146,7 @@ export function ToDoListTool({ toolId }: ToDoListToolProps) {
                   </button>
                   <button
                     onClick={() => setDeleteConfirmTaskId(null)}
-                    className="px-4 py-2 rounded-lg border border-slate-700 bg-slate-800 text-slate-200 hover:bg-slate-700"
+                    className={secondaryButtonClass}
                   >
                     Cancel
                   </button>

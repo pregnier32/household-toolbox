@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useEffect, useRef } from 'react';
+import { useTheme } from './AppThemeProvider';
 
 const MAX_FILE_SIZE_BYTES = 10 * 1024 * 1024; // 10MB
 
@@ -147,6 +148,71 @@ const defaultRecord = (headerId: string): Omit<AppointmentRecord, 'id'> => ({
 });
 
 export function HealthcareApptsHistoryTool({ toolId }: HealthcareApptsHistoryToolProps) {
+  const { resolvedTheme } = useTheme();
+  const isLight = resolvedTheme === 'light';
+
+  const titleClass = isLight ? 'text-2xl font-semibold text-slate-900 mb-2' : 'text-2xl font-semibold text-slate-50 mb-2';
+  const descClass = isLight ? 'text-slate-600 text-sm' : 'text-slate-400 text-sm';
+  const cardClass = isLight
+    ? 'rounded-2xl border border-slate-200 bg-white p-4 shadow-sm'
+    : 'rounded-2xl border border-slate-800 bg-slate-900/70 p-4';
+  const cardPad6Class = isLight
+    ? 'rounded-2xl border border-slate-200 bg-white p-6 shadow-sm'
+    : 'rounded-2xl border border-slate-800 bg-slate-900/70 p-6';
+  const cardMutedClass = isLight
+    ? 'rounded-2xl border border-slate-200 bg-white p-8 text-center text-slate-600 shadow-sm'
+    : 'rounded-2xl border border-slate-800 bg-slate-900/70 p-8 text-center text-slate-400';
+  const labelClass = isLight ? 'block text-sm font-medium text-slate-700 mb-3' : 'block text-sm font-medium text-slate-300 mb-3';
+  const labelClassSm = isLight ? 'block text-xs font-medium text-slate-700 mb-1.5' : 'block text-xs font-medium text-slate-300 mb-1.5';
+  const inputClass = isLight
+    ? 'w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900 placeholder-slate-500 focus:border-emerald-500/50 focus:outline-none focus:ring-1 focus:ring-emerald-500/50'
+    : 'w-full rounded-lg border border-slate-700 bg-slate-900/70 px-3 py-2 text-sm text-slate-100 placeholder-slate-500 focus:border-emerald-500/50 focus:outline-none focus:ring-1 focus:ring-emerald-500/50';
+  const primaryButtonClass = isLight
+    ? 'px-4 py-2.5 rounded-lg bg-emerald-600 text-white font-semibold hover:bg-emerald-500 transition-colors focus:outline-none focus:ring-2 focus:ring-emerald-500/50 focus:ring-offset-2 focus:ring-offset-white disabled:opacity-50 disabled:cursor-not-allowed'
+    : 'px-4 py-2.5 rounded-lg bg-emerald-500 text-slate-950 font-semibold hover:bg-emerald-400 transition-colors focus:outline-none focus:ring-2 focus:ring-emerald-500/50 focus:ring-offset-2 focus:ring-offset-slate-900 disabled:opacity-50 disabled:cursor-not-allowed';
+  const secondaryButtonClass = isLight
+    ? 'px-4 py-2 rounded-lg border-2 border-slate-400 bg-slate-100 text-slate-800 hover:bg-slate-200 transition-colors disabled:opacity-50'
+    : 'px-4 py-2 rounded-lg border border-slate-700 bg-slate-800 text-slate-200 hover:bg-slate-700 transition-colors disabled:opacity-50';
+  const tabStripBorderClass = isLight ? 'border-slate-200' : 'border-slate-800';
+  const tabActiveClass = isLight
+    ? 'border-b-2 border-emerald-600 text-emerald-900 font-semibold'
+    : 'border-b-2 border-emerald-500 text-emerald-300';
+  const tabInactiveClass = isLight
+    ? 'text-slate-600 hover:text-slate-900 border-b-2 border-transparent'
+    : 'text-slate-400 hover:text-slate-300 border-b-2 border-transparent';
+  const popupMenuClass = isLight
+    ? 'absolute top-10 right-0 z-50 mt-1 rounded-lg border border-slate-200 bg-white shadow-lg ring-1 ring-slate-900/5 min-w-[160px] py-1'
+    : 'absolute top-10 right-0 z-50 bg-slate-800 border border-slate-700 rounded-lg shadow-lg min-w-[160px] py-1';
+  const popupItemClass = isLight
+    ? 'w-full px-4 py-2 text-left text-sm text-slate-700 hover:bg-slate-100 transition-colors flex items-center gap-2'
+    : 'w-full px-4 py-2 text-left text-sm text-slate-200 hover:bg-slate-700 transition-colors flex items-center gap-2';
+  const popupItemDangerClass = isLight
+    ? 'w-full px-4 py-2 text-left text-sm text-red-600 hover:bg-red-50 transition-colors flex items-center gap-2'
+    : 'w-full px-4 py-2 text-left text-sm text-red-400 hover:bg-slate-700 transition-colors flex items-center gap-2';
+  const modalCardClass = isLight
+    ? 'rounded-2xl border border-slate-200 bg-white p-6 max-w-md w-full mx-4 shadow-xl'
+    : 'rounded-2xl border border-slate-800 bg-slate-900 p-6 max-w-md w-full mx-4';
+  const modalTitleClass = isLight ? 'text-xl font-semibold text-slate-900 mb-2' : 'text-xl font-semibold text-slate-50 mb-2';
+  const deleteModalCardClass = isLight
+    ? 'rounded-2xl border border-slate-200 bg-white p-6 max-w-md w-full mx-4 shadow-2xl'
+    : 'rounded-2xl border border-slate-800 bg-slate-900 p-6 max-w-md w-full mx-4';
+  const deleteWarningBoxClass = isLight
+    ? 'rounded-lg border border-red-300 bg-red-50 px-4 py-3 mb-4'
+    : 'rounded-lg border border-red-500/50 bg-red-500/10 px-4 py-3 mb-4';
+  const deleteWarningTextClass = isLight ? 'text-red-700 font-semibold mb-2' : 'text-red-300 font-semibold mb-2';
+  const deleteWarningDetailClass = isLight ? 'text-red-600 text-sm' : 'text-red-200 text-sm';
+  const deleteInstructionTextClass = isLight ? 'text-slate-700 mb-4' : 'text-slate-300 mb-4';
+  const deleteInstructionKeywordClass = isLight ? 'text-slate-900' : 'text-slate-200';
+  const deleteConfirmInputClass = isLight
+    ? 'w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900 placeholder-slate-500 focus:border-red-500/50 focus:outline-none focus:ring-1 focus:ring-red-500/50 mb-4'
+    : 'w-full rounded-lg border border-slate-700 bg-slate-900/70 px-3 py-2 text-sm text-slate-100 placeholder-slate-500 focus:border-red-500/50 focus:outline-none focus:ring-1 focus:ring-red-500/50 mb-4';
+  const rowIconEmeraldClass = isLight
+    ? 'inline-flex items-center justify-center rounded-lg border-2 border-emerald-700 bg-white p-2 text-emerald-700 transition-colors hover:bg-emerald-50 hover:text-emerald-900 focus:outline-none focus:ring-2 focus:ring-emerald-500/50 focus:ring-offset-2 focus:ring-offset-white'
+    : 'inline-flex items-center justify-center rounded-lg border-2 border-emerald-500/50 bg-slate-800/50 p-2 text-emerald-300 transition-colors hover:border-emerald-400 hover:bg-emerald-500/20 focus:outline-none focus:ring-2 focus:ring-emerald-500/50 focus:ring-offset-2 focus:ring-offset-slate-900';
+  const rowIconDangerClass = isLight
+    ? 'inline-flex items-center justify-center rounded-lg border-2 border-red-300 bg-white p-2 text-red-700 transition-colors hover:bg-red-50 hover:border-red-400 focus:outline-none focus:ring-2 focus:ring-red-500/40 focus:ring-offset-2 focus:ring-offset-white'
+    : 'inline-flex items-center justify-center rounded-lg border-2 border-red-500/50 bg-slate-800/50 p-2 text-red-400 transition-colors hover:border-red-400 hover:bg-red-500/20 focus:outline-none focus:ring-2 focus:ring-red-500/50 focus:ring-offset-2 focus:ring-offset-slate-900';
+
   const [headers, setHeaders] = useState<HeaderRecord[]>([]);
   const [selectedHeaderId, setSelectedHeaderId] = useState<string | null>(null);
   const [isCreatingNewHeader, setIsCreatingNewHeader] = useState(false);
@@ -171,6 +237,7 @@ export function HealthcareApptsHistoryTool({ toolId }: HealthcareApptsHistoryToo
   const [editingRecord, setEditingRecord] = useState<AppointmentRecord | null>(null);
 
   const [deleteConfirmRecordId, setDeleteConfirmRecordId] = useState<string | null>(null);
+  const [deleteConfirmRecordText, setDeleteConfirmRecordText] = useState('');
 
   const [searchQuery, setSearchQuery] = useState('');
   const [filterType, setFilterType] = useState<'all' | 'upcoming' | 'history'>('all');
@@ -505,7 +572,7 @@ export function HealthcareApptsHistoryTool({ toolId }: HealthcareApptsHistoryToo
   };
 
   const deleteRecord = async () => {
-    if (!deleteConfirmRecordId || !toolId) return;
+    if (!deleteConfirmRecordId || deleteConfirmRecordText.toLowerCase() !== 'delete' || !toolId) return;
     setIsSaving(true);
     setSaveMessage(null);
     try {
@@ -518,6 +585,7 @@ export function HealthcareApptsHistoryTool({ toolId }: HealthcareApptsHistoryToo
         throw new Error((err as { error?: string }).error || 'Failed to delete');
       }
       setDeleteConfirmRecordId(null);
+      setDeleteConfirmRecordText('');
       if (editingRecordId === deleteConfirmRecordId) cancelEditingRecord();
       if (selectedHeaderId) await loadRecords(selectedHeaderId);
       setSaveMessage({ type: 'success', text: 'Deleted.' });
@@ -769,8 +837,8 @@ export function HealthcareApptsHistoryTool({ toolId }: HealthcareApptsHistoryToo
   return (
     <div className="space-y-6">
       <div>
-        <h2 className="text-2xl font-semibold text-slate-50 mb-2">Healthcare Appts &amp; History</h2>
-        <p className="text-slate-400 text-sm">
+        <h2 className={titleClass}>Healthcare Appts &amp; History</h2>
+        <p className={descClass}>
           Track upcoming appointments and healthcare history for each family member.
         </p>
         {saveMessage && (
@@ -782,8 +850,8 @@ export function HealthcareApptsHistoryTool({ toolId }: HealthcareApptsHistoryToo
         )}
       </div>
 
-      <div className="rounded-2xl border border-slate-800 bg-slate-900/70 p-4">
-        <label className="block text-sm font-medium text-slate-300 mb-3">
+      <div className={cardClass}>
+        <label className={labelClass}>
           Select family member
         </label>
         {isLoadingHeaders ? (
@@ -805,31 +873,35 @@ export function HealthcareApptsHistoryTool({ toolId }: HealthcareApptsHistoryToo
                     type="text"
                     value={editingHeaderName}
                     onChange={(e) => setEditingHeaderName(e.target.value)}
-                    className="w-full px-2 py-1 rounded border border-slate-600 bg-slate-900 text-slate-100 text-sm mb-2 focus:border-emerald-500/50 focus:outline-none"
+                    className={`${inputClass} px-2 py-1 mb-2`}
                     placeholder="Name"
                     autoFocus
                   />
                   <div className="flex items-center gap-2 mb-2">
-                    <label className="text-xs text-slate-400">Color:</label>
+                    <label className={isLight ? 'text-xs text-slate-600' : 'text-xs text-slate-400'}>Color:</label>
                     <input
                       type="color"
                       value={editingHeaderColor}
                       onChange={(e) => setEditingHeaderColor(e.target.value)}
-                      className="h-6 w-12 rounded border border-slate-600 cursor-pointer"
+                      className={`h-6 w-12 rounded cursor-pointer ${isLight ? 'border border-slate-300' : 'border border-slate-600'}`}
                     />
                   </div>
                   <div className="flex gap-2">
                     <button
                       onClick={saveHeaderEdit}
                       disabled={!editingHeaderName.trim() || isSaving}
-                      className="flex-1 px-2 py-1 rounded bg-emerald-500 text-slate-950 text-xs font-medium hover:bg-emerald-400 disabled:opacity-50 disabled:cursor-not-allowed"
+                      className={isLight
+                        ? 'flex-1 px-2 py-1 rounded text-xs font-semibold text-white bg-emerald-600 hover:bg-emerald-500 disabled:opacity-50 disabled:cursor-not-allowed'
+                        : 'flex-1 px-2 py-1 rounded bg-emerald-500 text-slate-950 text-xs font-medium hover:bg-emerald-400 disabled:opacity-50 disabled:cursor-not-allowed'}
                     >
                       Save
                     </button>
                     <button
                       onClick={cancelEditingHeader}
                       disabled={isSaving}
-                      className="px-2 py-1 rounded border border-slate-600 bg-slate-700 text-slate-200 text-xs hover:bg-slate-600 transition-colors disabled:opacity-50"
+                      className={isLight
+                        ? 'px-2 py-1 rounded border-2 border-slate-400 bg-slate-100 text-slate-800 text-xs hover:bg-slate-200 transition-colors disabled:opacity-50'
+                        : 'px-2 py-1 rounded border border-slate-600 bg-slate-700 text-slate-200 text-xs hover:bg-slate-600 transition-colors disabled:opacity-50'}
                     >
                       Cancel
                     </button>
@@ -858,21 +930,23 @@ export function HealthcareApptsHistoryTool({ toolId }: HealthcareApptsHistoryToo
                       e.stopPropagation();
                       setMenuOpenHeaderId(menuOpenHeaderId === header.id ? null : header.id);
                     }}
-                    className="absolute top-1 right-1 p-1 rounded hover:bg-slate-700/50 transition-colors"
+                    className={`absolute top-1 right-1 p-1 rounded transition-colors ${isLight ? 'hover:bg-slate-200' : 'hover:bg-slate-700/50'}`}
                     aria-label="Options"
+                    title="Options"
                   >
-                    <svg className="h-4 w-4 text-slate-400 hover:text-slate-200" fill="currentColor" viewBox="0 0 24 24">
+                    <svg className={`h-4 w-4 ${isLight ? 'text-slate-600 hover:text-slate-900' : 'text-slate-400 hover:text-slate-200'}`} fill="currentColor" viewBox="0 0 24 24">
                       <path d="M12 8c1.1 0 2-.9 2-2s-.9-2-2-2-2 .9-2 2 .9 2 2 2zm0 2c-1.1 0-2 .9-2 2s.9 2 2 2 2-.9 2-2-.9-2-2-2zm0 6c-1.1 0-2 .9-2 2s.9 2 2 2 2-.9 2-2-.9-2-2-2z" />
                     </svg>
                   </button>
                   {menuOpenHeaderId === header.id && (
-                    <div className="absolute top-10 right-0 z-50 bg-slate-800 border border-slate-700 rounded-lg shadow-lg min-w-[160px] py-1">
+                    <div className={popupMenuClass}>
                       <button
                         onClick={(e) => {
                           e.stopPropagation();
                           startEditingHeader(header);
                         }}
-                        className="w-full px-4 py-2 text-left text-sm text-slate-200 hover:bg-slate-700 transition-colors flex items-center gap-2"
+                        className={popupItemClass}
+                        type="button"
                       >
                         <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
@@ -886,7 +960,8 @@ export function HealthcareApptsHistoryTool({ toolId }: HealthcareApptsHistoryToo
                           setDeleteConfirmHeaderId(header.id);
                           setDeleteConfirmText('');
                         }}
-                        className="w-full px-4 py-2 text-left text-sm text-red-400 hover:bg-slate-700 transition-colors flex items-center gap-2"
+                        className={popupItemDangerClass}
+                        type="button"
                       >
                         <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
@@ -906,7 +981,9 @@ export function HealthcareApptsHistoryTool({ toolId }: HealthcareApptsHistoryToo
                 setNewHeaderName('');
                 setNewHeaderColor('#10b981');
               }}
-              className="px-4 py-3 rounded-lg border border-slate-700 bg-slate-800/50 text-slate-300 hover:border-emerald-500/50 hover:bg-emerald-500/10 hover:text-emerald-300 transition-all duration-200 flex items-center justify-center min-w-[60px]"
+              className={isLight
+                ? 'px-4 py-3 rounded-lg border border-slate-300 bg-white text-slate-700 hover:border-emerald-500/50 hover:bg-emerald-50 hover:text-emerald-800 transition-all duration-200 flex items-center justify-center min-w-[60px]'
+                : 'px-4 py-3 rounded-lg border border-slate-700 bg-slate-800/50 text-slate-300 hover:border-emerald-500/50 hover:bg-emerald-500/10 hover:text-emerald-300 transition-all duration-200 flex items-center justify-center min-w-[60px]'}
               title="Add new family member"
             >
               <svg className="h-6 w-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -917,7 +994,7 @@ export function HealthcareApptsHistoryTool({ toolId }: HealthcareApptsHistoryToo
         ) : (
           <div className="flex items-end gap-2 flex-wrap">
             <div className="flex-1 min-w-[200px]">
-              <label className="block text-sm font-medium text-slate-300 mb-2">
+              <label className={labelClass}>
                 New family member name
               </label>
               <input
@@ -925,7 +1002,7 @@ export function HealthcareApptsHistoryTool({ toolId }: HealthcareApptsHistoryToo
                 value={newHeaderName}
                 onChange={(e) => setNewHeaderName(e.target.value)}
                 placeholder="e.g. Family3"
-                className="w-full px-3 py-2 rounded-lg border border-slate-700 bg-slate-900/70 text-slate-100 placeholder-slate-500 focus:border-emerald-500/50 focus:outline-none focus:ring-1 focus:ring-emerald-500/50"
+                className={inputClass}
                 onKeyDown={(e) => {
                   if (e.key === 'Enter') createNewHeader();
                   if (e.key === 'Escape') setIsCreatingNewHeader(false);
@@ -934,25 +1011,25 @@ export function HealthcareApptsHistoryTool({ toolId }: HealthcareApptsHistoryToo
               />
             </div>
             <div className="min-w-[200px]">
-              <label className="block text-sm font-medium text-slate-300 mb-2">Color</label>
+              <label className={labelClass}>Color</label>
               <input
                 type="color"
                 value={newHeaderColor}
                 onChange={(e) => setNewHeaderColor(e.target.value)}
-                className="h-9 w-14 rounded border border-slate-600 cursor-pointer"
+                className={`h-9 w-14 rounded cursor-pointer ${isLight ? 'border border-slate-300' : 'border border-slate-600'}`}
               />
             </div>
             <button
               onClick={createNewHeader}
               disabled={!newHeaderName.trim() || isSaving}
-              className="px-4 py-2 rounded-lg bg-emerald-500 text-slate-950 font-medium hover:bg-emerald-400 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+              className={primaryButtonClass}
             >
               Create
             </button>
             <button
               onClick={() => setIsCreatingNewHeader(false)}
               disabled={isSaving}
-              className="px-4 py-2 rounded-lg border border-slate-700 bg-slate-800 text-slate-200 hover:bg-slate-700 transition-colors disabled:opacity-50"
+              className={secondaryButtonClass}
             >
               Cancel
             </button>
@@ -967,23 +1044,23 @@ export function HealthcareApptsHistoryTool({ toolId }: HealthcareApptsHistoryToo
       {/* Delete header confirmation */}
       {deleteConfirmHeaderId && (
         <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
-          <div className="rounded-2xl border border-slate-800 bg-slate-900 p-6 max-w-md w-full mx-4">
-            <h3 className="text-xl font-semibold text-slate-50 mb-2">Delete group</h3>
-            <div className="rounded-lg border border-red-500/50 bg-red-500/10 px-4 py-3 mb-4">
-              <p className="text-red-300 font-semibold mb-2">⚠️ This action cannot be undone.</p>
-              <p className="text-red-200 text-sm">
+          <div className={deleteModalCardClass}>
+            <h3 className={modalTitleClass}>Delete group</h3>
+            <div className={deleteWarningBoxClass}>
+              <p className={deleteWarningTextClass}>Warning: This action cannot be undone.</p>
+              <p className={deleteWarningDetailClass}>
                 All appointment records and documents in this group will be permanently deleted.
               </p>
             </div>
-            <p className="text-slate-300 mb-4">
-              Type <strong className="text-slate-200">delete</strong> to confirm:
+            <p className={deleteInstructionTextClass}>
+              Type <strong className={deleteInstructionKeywordClass}>delete</strong> to confirm:
             </p>
             <input
               type="text"
               value={deleteConfirmText}
               onChange={(e) => setDeleteConfirmText(e.target.value)}
               placeholder="Type 'delete' to confirm"
-              className="w-full px-4 py-2 rounded-lg border border-slate-700 bg-slate-800 text-slate-100 placeholder-slate-500 focus:border-red-500/50 focus:outline-none focus:ring-1 focus:ring-red-500/50 mb-4"
+              className={deleteConfirmInputClass}
               onKeyDown={(e) => e.key === 'Escape' && (setDeleteConfirmHeaderId(null), setDeleteConfirmText(''))}
             />
             <div className="flex gap-3">
@@ -996,7 +1073,7 @@ export function HealthcareApptsHistoryTool({ toolId }: HealthcareApptsHistoryToo
               </button>
               <button
                 onClick={() => { setDeleteConfirmHeaderId(null); setDeleteConfirmText(''); }}
-                className="px-4 py-2 rounded-lg border border-slate-700 bg-slate-800 text-slate-200 hover:bg-slate-700"
+                className={secondaryButtonClass}
               >
                 Cancel
               </button>
@@ -1006,16 +1083,16 @@ export function HealthcareApptsHistoryTool({ toolId }: HealthcareApptsHistoryToo
       )}
 
       {!selectedHeaderId && !isCreatingNewHeader && headers.length > 0 && (
-        <div className="rounded-2xl border border-slate-800 bg-slate-900/70 p-8 text-center">
-          <p className="text-slate-400">Select a group above to view or add appointments.</p>
+        <div className={cardMutedClass}>
+          <p>Select a group above to view or add appointments.</p>
         </div>
       )}
 
       {selectedHeaderId && selectedHeader && (
         <>
-          <div className="border-b border-slate-800">
+          <div className={`border-b ${tabStripBorderClass}`}>
             <div className="flex gap-2 overflow-x-auto">
-              <div className="px-4 py-2 text-[18px] font-medium text-slate-200 whitespace-nowrap border-b-2 border-transparent">
+              <div className={`px-4 py-2 text-[18px] font-medium whitespace-nowrap border-b-2 border-transparent ${isLight ? 'text-slate-800' : 'text-slate-200'}`}>
                 {selectedHeader.name}:
               </div>
               {[
@@ -1025,11 +1102,7 @@ export function HealthcareApptsHistoryTool({ toolId }: HealthcareApptsHistoryToo
                 <button
                   key={tab.id}
                   onClick={() => setActiveTab(tab.id as 'history' | 'report')}
-                  className={`px-4 py-2 text-sm font-medium transition-colors whitespace-nowrap ${
-                    activeTab === tab.id
-                      ? 'border-b-2 border-emerald-500 text-emerald-300'
-                      : 'text-slate-400 hover:text-slate-300'
-                  }`}
+                  className={`px-4 py-2 text-sm font-medium transition-colors whitespace-nowrap ${activeTab === tab.id ? tabActiveClass : tabInactiveClass}`}
                 >
                   {tab.label}
                 </button>
@@ -1044,9 +1117,9 @@ export function HealthcareApptsHistoryTool({ toolId }: HealthcareApptsHistoryToo
                   <button
                     onClick={startAddingRecord}
                     disabled={isSaving || isLoadingRecords}
-                    className="px-4 py-2.5 rounded-lg bg-emerald-500 text-slate-950 font-semibold hover:bg-emerald-400 transition-colors focus:outline-none focus:ring-2 focus:ring-emerald-500/50 focus:ring-offset-2 focus:ring-offset-slate-900 disabled:opacity-50 disabled:cursor-not-allowed"
+                    className={primaryButtonClass}
                   >
-                    + Add New Record
+                    + Add Appointment
                   </button>
                 </div>
               )}
@@ -1113,13 +1186,13 @@ export function HealthcareApptsHistoryTool({ toolId }: HealthcareApptsHistoryToo
                   <div className="flex gap-3 mt-4">
                     <button
                       onClick={confirmRecordTypeAndShowForm}
-                      className="px-4 py-2.5 rounded-lg bg-emerald-500 text-slate-950 font-semibold hover:bg-emerald-400"
+                      className={primaryButtonClass}
                     >
                       Continue
                     </button>
                     <button
                       onClick={cancelAddingRecord}
-                      className="px-4 py-2 rounded-lg border border-slate-700 bg-slate-800 text-slate-200 hover:bg-slate-700"
+                      className={secondaryButtonClass}
                     >
                       Cancel
                     </button>
@@ -1129,7 +1202,7 @@ export function HealthcareApptsHistoryTool({ toolId }: HealthcareApptsHistoryToo
 
               {/* Add record: step 2 form */}
               {isAddingRecord && recordTypeStep === 'form' && (
-                <div className="rounded-2xl border border-slate-800 bg-slate-900/70 p-6 space-y-4">
+                <div className={`${cardPad6Class} space-y-4`}>
                   <h3 className="text-lg font-semibold text-slate-50">
                     {newRecord.isUpcoming ? 'New upcoming appointment' : 'New history record'}
                   </h3>
@@ -1323,14 +1396,14 @@ export function HealthcareApptsHistoryTool({ toolId }: HealthcareApptsHistoryToo
                     <button
                       onClick={cancelAddingRecord}
                       disabled={isSaving}
-                      className="px-4 py-2 rounded-lg border border-slate-700 bg-slate-800 text-slate-200 hover:bg-slate-700 disabled:opacity-50"
+                      className={secondaryButtonClass}
                     >
                       Cancel
                     </button>
                     <button
                       onClick={addRecord}
                       disabled={isSaving}
-                      className="px-4 py-2.5 rounded-lg bg-emerald-500 text-slate-950 font-semibold hover:bg-emerald-400 focus:outline-none focus:ring-2 focus:ring-emerald-500/50 focus:ring-offset-2 focus:ring-offset-slate-900 disabled:opacity-50 disabled:cursor-not-allowed"
+                      className={primaryButtonClass}
                     >
                       Save record
                     </button>
@@ -1340,7 +1413,7 @@ export function HealthcareApptsHistoryTool({ toolId }: HealthcareApptsHistoryToo
 
               {/* Edit record form */}
               {editingRecordId && editingRecord && (
-                <div className="rounded-2xl border border-slate-800 bg-slate-900/70 p-6 space-y-4">
+                <div className={`${cardPad6Class} space-y-4`}>
                   <h3 className="text-lg font-semibold text-slate-50">Edit appointment</h3>
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                     <div>
@@ -1502,14 +1575,14 @@ export function HealthcareApptsHistoryTool({ toolId }: HealthcareApptsHistoryToo
                     <button
                       onClick={cancelEditingRecord}
                       disabled={isSaving}
-                      className="px-4 py-2 rounded-lg border border-slate-700 bg-slate-800 text-slate-200 hover:bg-slate-700 disabled:opacity-50"
+                      className={secondaryButtonClass}
                     >
                       Cancel
                     </button>
                     <button
                       onClick={saveEditingRecord}
                       disabled={isSaving}
-                      className="px-4 py-2.5 rounded-lg bg-emerald-500 text-slate-950 font-semibold hover:bg-emerald-400 disabled:opacity-50 disabled:cursor-not-allowed"
+                      className={primaryButtonClass}
                     >
                       Save changes
                     </button>
@@ -1521,15 +1594,12 @@ export function HealthcareApptsHistoryTool({ toolId }: HealthcareApptsHistoryToo
               {!isAddingRecord && !editingRecordId && (
                 <div className="space-y-4">
                   {filteredRecords.length === 0 ? (
-                    <div className="rounded-2xl border border-slate-800 bg-slate-900/70 p-8 text-center text-slate-400">
+                    <div className={cardMutedClass}>
                       No records found. Add one to get started!
                     </div>
                   ) : (
                     filteredRecords.map((record) => (
-                      <div
-                        key={record.id}
-                        className="rounded-2xl border border-slate-800 bg-slate-900/70 p-4"
-                      >
+                      <div key={record.id} className={cardClass}>
                         <div className="flex flex-wrap items-start justify-between gap-2">
                           <div>
                             <div className="flex items-center gap-2 flex-wrap">
@@ -1540,8 +1610,12 @@ export function HealthcareApptsHistoryTool({ toolId }: HealthcareApptsHistoryToo
                               <span
                                 className={`text-xs px-2 py-0.5 rounded ${
                                   record.isUpcoming
-                                    ? 'bg-emerald-500/20 text-emerald-300'
-                                    : 'bg-slate-600 text-slate-300'
+                                    ? isLight
+                                      ? 'bg-emerald-100 text-emerald-800'
+                                      : 'bg-emerald-500/20 text-emerald-300'
+                                    : isLight
+                                      ? 'bg-slate-100 text-slate-700'
+                                      : 'bg-slate-600 text-slate-300'
                                 }`}
                               >
                                 {record.isUpcoming ? 'Upcoming' : 'History'}
@@ -1563,18 +1637,28 @@ export function HealthcareApptsHistoryTool({ toolId }: HealthcareApptsHistoryToo
                               </div>
                             )}
                           </div>
-                          <div className="flex gap-2">
+                          <div className="flex shrink-0 items-center gap-1.5 ml-4">
                             <button
+                              type="button"
                               onClick={() => startEditingRecord(record)}
-                              className="px-3 py-1.5 rounded-lg border border-slate-700 bg-slate-800 text-slate-200 text-sm hover:bg-slate-700"
+                              className={rowIconEmeraldClass}
+                              aria-label="Edit record"
+                              title="Edit record"
                             >
-                              Edit
+                              <svg className="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
+                              </svg>
                             </button>
                             <button
+                              type="button"
                               onClick={() => setDeleteConfirmRecordId(record.id)}
-                              className="px-3 py-1.5 rounded-lg border border-red-500/50 bg-red-500/10 text-red-300 text-sm hover:bg-red-500/20"
+                              className={rowIconDangerClass}
+                              aria-label="Delete record"
+                              title="Delete record"
                             >
-                              Delete
+                              <svg className="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                              </svg>
                             </button>
                           </div>
                         </div>
@@ -1588,14 +1672,14 @@ export function HealthcareApptsHistoryTool({ toolId }: HealthcareApptsHistoryToo
 
           {activeTab === 'report' && (
             <div className="space-y-6">
-              <div className="rounded-2xl border border-slate-800 bg-slate-900/70 p-6">
+              <div className={cardPad6Class}>
                 <h3 className="text-lg font-semibold text-slate-50 mb-4">Export Healthcare Report</h3>
                 <p className="text-slate-300 mb-4">
                   Generate a report of all appointment history records for {selectedHeader.name}. The report will include appointments, provider and facility details, and financial summary.
                 </p>
                 <button
                   onClick={() => setShowExportPopup(true)}
-                  className="px-4 py-2.5 rounded-lg bg-emerald-500 text-slate-950 font-semibold hover:bg-emerald-400 transition-colors focus:outline-none focus:ring-2 focus:ring-emerald-500/50 focus:ring-offset-2 focus:ring-offset-slate-900"
+                  className={primaryButtonClass}
                 >
                   Generate PDF Report
                 </button>
@@ -1606,14 +1690,15 @@ export function HealthcareApptsHistoryTool({ toolId }: HealthcareApptsHistoryToo
           {/* Export popup */}
           {showExportPopup && selectedHeader && (
             <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
-              <div className="bg-slate-800 rounded-2xl border border-slate-700 p-6 max-w-md w-full mx-4">
+              <div className={modalCardClass}>
                 <div className="flex items-center justify-between mb-4">
-                  <h3 className="text-lg font-semibold text-slate-50">Export Options</h3>
+                  <h3 className={isLight ? 'text-lg font-semibold text-slate-900' : 'text-lg font-semibold text-slate-50'}>Export Options</h3>
                   <button
                     onClick={() => setShowExportPopup(false)}
                     disabled={isExportingPdf}
-                    className="text-slate-400 hover:text-slate-200 transition-colors disabled:opacity-50"
+                    className={isLight ? 'rounded-lg p-1 text-slate-600 hover:bg-slate-100 hover:text-slate-900 transition-colors disabled:opacity-50' : 'rounded-lg p-1 text-slate-400 hover:bg-slate-800 hover:text-slate-200 transition-colors disabled:opacity-50'}
                     aria-label="Close"
+                    title="Close"
                   >
                     <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
@@ -1706,14 +1791,14 @@ export function HealthcareApptsHistoryTool({ toolId }: HealthcareApptsHistoryToo
                     <button
                       onClick={() => exportHealthcareReportToPdf()}
                       disabled={isExportingPdf}
-                      className="flex-1 px-4 py-2.5 rounded-lg bg-emerald-500 text-slate-950 font-semibold hover:bg-emerald-400 focus:outline-none focus:ring-2 focus:ring-emerald-500/50 focus:ring-offset-2 focus:ring-offset-slate-900 disabled:opacity-50 disabled:cursor-not-allowed"
+                      className={`flex-1 ${primaryButtonClass}`}
                     >
                       {isExportingPdf ? 'Generating…' : 'Export to PDF'}
                     </button>
                     <button
                       onClick={() => setShowExportPopup(false)}
                       disabled={isExportingPdf}
-                      className="px-4 py-2 rounded-lg bg-slate-700 text-slate-200 hover:bg-slate-600 transition-colors disabled:opacity-50"
+                      className={secondaryButtonClass}
                     >
                       Cancel
                     </button>
@@ -1728,23 +1813,46 @@ export function HealthcareApptsHistoryTool({ toolId }: HealthcareApptsHistoryToo
       {/* Delete record confirmation */}
       {deleteConfirmRecordId && (
         <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
-          <div className="rounded-2xl border border-slate-800 bg-slate-900 p-6 max-w-md w-full mx-4">
-            <h3 className="text-xl font-semibold text-slate-50 mb-2">Delete record</h3>
-            <p className="text-slate-300 mb-4">
-              Are you sure you want to delete this appointment record? This cannot be undone.
+          <div className={deleteModalCardClass}>
+            <h3 className={modalTitleClass}>Delete record</h3>
+            <div className={deleteWarningBoxClass}>
+              <p className={deleteWarningTextClass}>Warning: This action cannot be undone.</p>
+              <p className={deleteWarningDetailClass}>
+                This appointment record will be permanently deleted.
+              </p>
+            </div>
+            <p className={deleteInstructionTextClass}>
+              To confirm, type <strong className={deleteInstructionKeywordClass}>delete</strong> below.
             </p>
+            <input
+              type="text"
+              value={deleteConfirmRecordText}
+              onChange={(e) => setDeleteConfirmRecordText(e.target.value)}
+              placeholder="Type 'delete' to confirm"
+              className={deleteConfirmInputClass}
+              autoFocus
+              onKeyDown={(e) => {
+                if (e.key === 'Escape') {
+                  setDeleteConfirmRecordId(null);
+                  setDeleteConfirmRecordText('');
+                }
+              }}
+            />
             <div className="flex gap-3">
               <button
                 onClick={deleteRecord}
-                disabled={isSaving}
+                disabled={deleteConfirmRecordText.toLowerCase() !== 'delete' || isSaving}
                 className="flex-1 px-4 py-2 rounded-lg bg-red-600 text-white font-medium hover:bg-red-700 disabled:opacity-50 disabled:cursor-not-allowed"
               >
                 Delete
               </button>
               <button
-                onClick={() => setDeleteConfirmRecordId(null)}
+                onClick={() => {
+                  setDeleteConfirmRecordId(null);
+                  setDeleteConfirmRecordText('');
+                }}
                 disabled={isSaving}
-                className="px-4 py-2 rounded-lg border border-slate-700 bg-slate-800 text-slate-200 hover:bg-slate-700 disabled:opacity-50"
+                className={secondaryButtonClass}
               >
                 Cancel
               </button>

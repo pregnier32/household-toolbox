@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useEffect, useCallback, useRef } from 'react';
+import { useTheme } from './AppThemeProvider';
 
 type PetType = {
   id: string;
@@ -122,6 +123,59 @@ type PetCareScheduleToolProps = {
 };
 
 export function PetCareScheduleTool({ toolId }: PetCareScheduleToolProps) {
+  const { resolvedTheme } = useTheme();
+  const isLight = resolvedTheme === 'light';
+  const titleClass = isLight ? 'text-2xl font-semibold text-slate-900 mb-2' : 'text-2xl font-semibold text-slate-50 mb-2';
+  const descClass = isLight ? 'text-slate-600 text-sm' : 'text-slate-400 text-sm';
+  const cardClass = isLight
+    ? 'rounded-2xl border border-slate-200 bg-white p-6 shadow-sm'
+    : 'rounded-2xl border border-slate-800 bg-slate-900/70 p-6';
+  const cardCompactClass = isLight
+    ? 'rounded-2xl border border-slate-200 bg-white p-4 shadow-sm'
+    : 'rounded-2xl border border-slate-800 bg-slate-900/70 p-4';
+  const labelClass = isLight ? 'block text-sm font-medium text-slate-700 mb-2' : 'block text-sm font-medium text-slate-300 mb-2';
+  const inputClass = isLight
+    ? 'w-full px-3 py-2 rounded-lg border border-slate-300 bg-white text-slate-900 placeholder-slate-500 focus:border-emerald-500/50 focus:outline-none focus:ring-1 focus:ring-emerald-500/50'
+    : 'w-full px-3 py-2 rounded-lg border border-slate-700 bg-slate-900/70 text-slate-100 placeholder-slate-500 focus:border-emerald-500/50 focus:outline-none focus:ring-1 focus:ring-emerald-500/50';
+  const selectClass = isLight
+    ? 'w-full px-4 py-2 rounded-lg border border-slate-300 bg-white text-slate-900 focus:border-emerald-500/50 focus:outline-none focus:ring-1 focus:ring-emerald-500/50'
+    : 'w-full px-4 py-2 rounded-lg border border-slate-700 bg-slate-900/70 text-slate-100 focus:border-emerald-500/50 focus:outline-none focus:ring-1 focus:ring-emerald-500/50';
+  const primaryButtonClass = isLight
+    ? 'px-4 py-2 rounded-lg bg-emerald-600 text-white font-medium hover:bg-emerald-500 transition-colors disabled:opacity-50 disabled:cursor-not-allowed'
+    : 'px-4 py-2 rounded-lg bg-emerald-500 text-slate-950 font-medium hover:bg-emerald-400 transition-colors disabled:opacity-50 disabled:cursor-not-allowed';
+  const secondaryButtonClass = isLight
+    ? 'px-4 py-2 rounded-lg border-2 border-slate-400 bg-slate-100 text-slate-800 hover:bg-slate-200 transition-colors disabled:opacity-50 disabled:cursor-not-allowed'
+    : 'px-4 py-2 rounded-lg border border-slate-700 bg-slate-800 text-slate-200 hover:bg-slate-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed';
+  const tabStripClass = isLight ? 'border-b-2 border-slate-300' : 'border-b border-slate-800';
+  const tabActiveClass = isLight
+    ? 'border-b-2 border-emerald-600 text-emerald-900'
+    : 'border-b-2 border-emerald-500 text-emerald-300';
+  const tabInactiveClass = isLight ? 'text-slate-600 hover:text-slate-900' : 'text-slate-400 hover:text-slate-300';
+  const popupMenuClass = isLight
+    ? 'absolute top-10 right-0 z-50 mt-1 rounded-lg border border-slate-200 bg-white shadow-lg ring-1 ring-slate-900/5 min-w-[160px] py-1'
+    : 'absolute top-10 right-0 z-50 bg-slate-800 border border-slate-700 rounded-lg shadow-lg min-w-[160px] py-1';
+  const popupMenuItemClass = isLight
+    ? 'w-full px-4 py-2 text-left text-sm text-slate-700 hover:bg-slate-100 transition-colors flex items-center gap-2'
+    : 'w-full px-4 py-2 text-left text-sm text-slate-200 hover:bg-slate-700 transition-colors flex items-center gap-2';
+  const popupMenuDangerItemClass = isLight
+    ? 'w-full px-4 py-2 text-left text-sm text-red-600 transition-colors hover:bg-red-50 flex items-center gap-2'
+    : 'w-full px-4 py-2 text-left text-sm text-red-400 hover:bg-slate-700 transition-colors flex items-center gap-2';
+  const modalCardClass = isLight
+    ? 'rounded-2xl border border-slate-200 bg-white p-6 max-w-md w-full mx-4 shadow-xl'
+    : 'rounded-2xl border border-slate-800 bg-slate-900 p-6 max-w-md w-full mx-4';
+  const nestedCardClass = isLight
+    ? 'p-4 rounded-lg border border-slate-200 bg-slate-50'
+    : 'p-4 rounded-lg border border-slate-700 bg-slate-800/50';
+  const sectionTitleClass = isLight ? 'text-lg font-semibold text-slate-900 mb-4' : 'text-lg font-semibold text-slate-50 mb-4';
+  const rowIconEmeraldClass = isLight
+    ? 'inline-flex items-center justify-center rounded-lg border-2 border-emerald-700 bg-white p-2 text-emerald-700 transition-colors hover:bg-emerald-50 hover:text-emerald-900'
+    : 'inline-flex items-center justify-center rounded-lg border-2 border-emerald-500/50 bg-slate-800/50 p-2 text-emerald-300 transition-colors hover:border-emerald-400 hover:bg-emerald-500/20';
+  const rowIconSecondaryClass = isLight
+    ? 'inline-flex items-center justify-center rounded-lg border-2 border-slate-400 bg-slate-100 p-2 text-slate-700 transition-colors hover:bg-slate-200 hover:text-slate-900'
+    : 'inline-flex items-center justify-center rounded-lg border-2 border-slate-600 bg-slate-800 p-2 text-slate-200 transition-colors hover:bg-slate-700';
+  const rowIconDangerClass = isLight
+    ? 'inline-flex items-center justify-center rounded-lg border-2 border-red-300 bg-white p-2 text-red-700 transition-colors hover:bg-red-50 hover:border-red-400'
+    : 'inline-flex items-center justify-center rounded-lg border-2 border-red-500/50 bg-slate-800/50 p-2 text-red-400 transition-colors hover:border-red-400 hover:bg-red-500/20';
   // Pet management
   const [pets, setPets] = useState<Pet[]>([]);
   const [selectedPetId, setSelectedPetId] = useState<string | null>(null);
@@ -141,6 +195,8 @@ export function PetCareScheduleTool({ toolId }: PetCareScheduleToolProps) {
   // Delete confirmation
   const [deleteConfirmPetId, setDeleteConfirmPetId] = useState<string | null>(null);
   const [deleteConfirmText, setDeleteConfirmText] = useState('');
+  const [deleteEntryConfirm, setDeleteEntryConfirm] = useState<{ label: string; onConfirm: () => void } | null>(null);
+  const [deleteEntryConfirmText, setDeleteEntryConfirmText] = useState('');
   const [isSaving, setIsSaving] = useState(false);
   const isSavingRef = useRef(false);
   const [saveMessage, setSaveMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
@@ -202,6 +258,8 @@ export function PetCareScheduleTool({ toolId }: PetCareScheduleToolProps) {
   // Appointments
   const [appointments, setAppointments] = useState<Appointment[]>([]);
   const [newAppointment, setNewAppointment] = useState({ date: '', time: '', type: '', veterinarian: '', notes: '', addToDashboard: false });
+  const [editingAppointmentId, setEditingAppointmentId] = useState<string | null>(null);
+  const [editingAppointment, setEditingAppointment] = useState({ date: '', time: '', type: '', veterinarian: '', notes: '' });
   
   // Documents
   const [documents, setDocuments] = useState<Document[]>([]);
@@ -1054,6 +1112,16 @@ export function PetCareScheduleTool({ toolId }: PetCareScheduleToolProps) {
     setTimeout(() => savePetData(), 100);
   };
 
+  const returnFoodToActive = (foodId: string) => {
+    setFoods(prev => prev.map(f =>
+      f.id === foodId
+        ? { ...f, isCurrent: true, endDate: '' }
+        : f
+    ));
+    // Save to database immediately
+    setTimeout(() => savePetData(), 100);
+  };
+
   const startEditingFood = (food: FoodEntry) => {
     setEditingFoodId(food.id);
     setEditingFood({ 
@@ -1244,11 +1312,12 @@ export function PetCareScheduleTool({ toolId }: PetCareScheduleToolProps) {
   };
 
   const addAppointment = async () => {
+    const todayKey = new Date().toISOString().split('T')[0];
     if (newAppointment.date && newAppointment.type.trim()) {
       const appointment: Appointment = {
         id: Date.now().toString(),
         ...newAppointment,
-        isUpcoming: new Date(newAppointment.date) >= new Date(),
+        isUpcoming: newAppointment.date >= todayKey,
         addToDashboard: false
       };
       setAppointments(prev => [...prev, appointment]);
@@ -1256,6 +1325,48 @@ export function PetCareScheduleTool({ toolId }: PetCareScheduleToolProps) {
       // Save to database immediately
       setTimeout(() => savePetData(), 100);
     }
+  };
+
+  const startEditingAppointment = (appointment: Appointment) => {
+    setEditingAppointmentId(appointment.id);
+    setEditingAppointment({
+      date: appointment.date,
+      time: appointment.time || '',
+      type: appointment.type,
+      veterinarian: appointment.veterinarian || '',
+      notes: appointment.notes || ''
+    });
+  };
+
+  const cancelEditingAppointment = () => {
+    setEditingAppointmentId(null);
+    setEditingAppointment({ date: '', time: '', type: '', veterinarian: '', notes: '' });
+  };
+
+  const saveAppointmentEdit = async () => {
+    if (!editingAppointmentId || !editingAppointment.date || !editingAppointment.type.trim()) return;
+    const todayKey = new Date().toISOString().split('T')[0];
+    const updatedAppointments = appointments.map((appointment) =>
+      appointment.id === editingAppointmentId
+        ? {
+            ...appointment,
+            date: editingAppointment.date,
+            time: editingAppointment.time || '',
+            type: editingAppointment.type.trim(),
+            veterinarian: editingAppointment.veterinarian || '',
+            notes: editingAppointment.notes || '',
+            isUpcoming: editingAppointment.date >= todayKey
+          }
+        : appointment
+    );
+
+    setAppointments(updatedAppointments);
+    setEditingAppointmentId(null);
+    setEditingAppointment({ date: '', time: '', type: '', veterinarian: '', notes: '' });
+
+    setTimeout(() => {
+      savePetData(undefined, undefined, undefined, undefined, updatedAppointments);
+    }, 100);
   };
 
   const addVeterinaryRecord = async () => {
@@ -1449,6 +1560,12 @@ export function PetCareScheduleTool({ toolId }: PetCareScheduleToolProps) {
   const archiveNote = (noteId: string) => {
     setNotes(prev => prev.map(n => 
       n.id === noteId ? { ...n, isCurrent: false } : n
+    ));
+  };
+
+  const reactivateNote = (noteId: string) => {
+    setNotes(prev => prev.map(n =>
+      n.id === noteId ? { ...n, isCurrent: true } : n
     ));
   };
 
@@ -1777,6 +1894,18 @@ export function PetCareScheduleTool({ toolId }: PetCareScheduleToolProps) {
     setter(array.filter(item => item.id !== id));
   };
 
+  const requestDeleteEntry = (label: string, onConfirm: () => void) => {
+    setDeleteEntryConfirm({ label, onConfirm });
+    setDeleteEntryConfirmText('');
+  };
+
+  const confirmDeleteEntry = () => {
+    if (!deleteEntryConfirm || deleteEntryConfirmText.toLowerCase() !== 'delete') return;
+    deleteEntryConfirm.onConfirm();
+    setDeleteEntryConfirm(null);
+    setDeleteEntryConfirmText('');
+  };
+
   const renderStars = (rating: number | null, onChange?: (rating: number) => void) => {
     return (
       <div className="flex gap-1">
@@ -1788,7 +1917,7 @@ export function PetCareScheduleTool({ toolId }: PetCareScheduleToolProps) {
             className={`text-2xl transition-colors ${
               rating && star <= rating
                 ? 'text-yellow-400'
-                : 'text-slate-600 hover:text-slate-400'
+                : isLight ? 'text-slate-400 hover:text-slate-600' : 'text-slate-600 hover:text-slate-400'
             }`}
             disabled={!onChange}
           >
@@ -1805,22 +1934,11 @@ export function PetCareScheduleTool({ toolId }: PetCareScheduleToolProps) {
     <div className="space-y-6">
       <div className="flex items-center justify-between">
         <div>
-          <h2 className="text-2xl font-semibold text-slate-50 mb-2">Pet Care Schedule</h2>
-          <p className="text-slate-400 text-sm">
+          <h2 className={titleClass}>Pet Care Schedule</h2>
+          <p className={descClass}>
             Manage all aspects of your pet's care, from basic information to veterinary records.
           </p>
         </div>
-        {selectedPetId && (
-          <div className="flex items-center gap-3">
-            <button
-              onClick={() => savePetData()}
-              disabled={isSaving}
-              className="px-4 py-2 rounded-lg font-medium transition-colors disabled:opacity-50 disabled:cursor-not-allowed bg-emerald-500 text-slate-950 hover:bg-emerald-400"
-            >
-              {isSaving ? 'Saving...' : 'Save All'}
-            </button>
-          </div>
-        )}
       </div>
 
       {/* Save Message */}
@@ -1835,8 +1953,8 @@ export function PetCareScheduleTool({ toolId }: PetCareScheduleToolProps) {
       )}
 
       {/* Pet Selector */}
-      <div className="rounded-2xl border border-slate-800 bg-slate-900/70 p-4">
-        <label className="block text-sm font-medium text-slate-300 mb-3">
+      <div className={cardCompactClass}>
+        <label className={isLight ? 'block text-sm font-medium text-slate-700 mb-3' : 'block text-sm font-medium text-slate-300 mb-3'}>
           Select your Pet
         </label>
         
@@ -1877,13 +1995,13 @@ export function PetCareScheduleTool({ toolId }: PetCareScheduleToolProps) {
                     <button
                       onClick={savePetEdit}
                       disabled={isSaving || !editingPetName.trim()}
-                      className="flex-1 px-2 py-1 rounded bg-emerald-500 text-slate-950 text-xs font-medium hover:bg-emerald-400 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                      className={isLight ? 'flex-1 px-2 py-1 rounded text-xs font-semibold text-white bg-emerald-600 hover:bg-emerald-500 disabled:cursor-not-allowed disabled:opacity-50' : 'flex-1 px-2 py-1 rounded bg-emerald-500 text-slate-950 text-xs font-medium hover:bg-emerald-400 transition-colors disabled:opacity-50 disabled:cursor-not-allowed'}
                     >
                       Save
                     </button>
                     <button
                       onClick={cancelEditingPet}
-                      className="px-2 py-1 rounded border border-slate-600 bg-slate-700 text-slate-200 text-xs hover:bg-slate-600 transition-colors"
+                      className={isLight ? 'px-2 py-1 rounded border-2 border-slate-400 bg-slate-100 text-slate-800 text-xs hover:bg-slate-200 transition-colors' : 'px-2 py-1 rounded border border-slate-600 bg-slate-700 text-slate-200 text-xs hover:bg-slate-600 transition-colors'}
                     >
                       Cancel
                     </button>
@@ -1915,7 +2033,7 @@ export function PetCareScheduleTool({ toolId }: PetCareScheduleToolProps) {
                     <button
                       onClick={handleSaveColorOnly}
                       disabled={isSaving}
-                      className="flex-1 px-2 py-1 rounded bg-emerald-500 text-slate-950 text-xs font-medium hover:bg-emerald-400 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                      className={isLight ? 'flex-1 px-2 py-1 rounded text-xs font-semibold text-white bg-emerald-600 hover:bg-emerald-500 disabled:cursor-not-allowed disabled:opacity-50' : 'flex-1 px-2 py-1 rounded bg-emerald-500 text-slate-950 text-xs font-medium hover:bg-emerald-400 transition-colors disabled:opacity-50 disabled:cursor-not-allowed'}
                     >
                       {isSaving ? 'Saving...' : 'Save'}
                     </button>
@@ -1924,7 +2042,7 @@ export function PetCareScheduleTool({ toolId }: PetCareScheduleToolProps) {
                         setEditingPetId(null);
                         setShowColorPicker(false);
                       }}
-                      className="px-2 py-1 rounded border border-slate-600 bg-slate-700 text-slate-200 text-xs hover:bg-slate-600 transition-colors"
+                      className={isLight ? 'px-2 py-1 rounded border-2 border-slate-400 bg-slate-100 text-slate-800 text-xs hover:bg-slate-200 transition-colors' : 'px-2 py-1 rounded border border-slate-600 bg-slate-700 text-slate-200 text-xs hover:bg-slate-600 transition-colors'}
                     >
                       Cancel
                     </button>
@@ -1959,27 +2077,27 @@ export function PetCareScheduleTool({ toolId }: PetCareScheduleToolProps) {
                       e.stopPropagation();
                       setMenuOpenPetId(menuOpenPetId === pet.id ? null : pet.id);
                     }}
-                    className="absolute top-1 right-1 p-1 rounded hover:bg-slate-700/50 transition-colors"
+                    className={isLight ? 'absolute top-1 right-1 p-1 rounded hover:bg-slate-100 transition-colors' : 'absolute top-1 right-1 p-1 rounded hover:bg-slate-700/50 transition-colors'}
                     title="Pet options"
                   >
-                    <svg className="h-4 w-4 text-slate-400 hover:text-slate-200" fill="currentColor" viewBox="0 0 24 24">
+                    <svg className={isLight ? 'h-4 w-4 text-slate-600 hover:text-slate-900' : 'h-4 w-4 text-slate-400 hover:text-slate-200'} fill="currentColor" viewBox="0 0 24 24">
                       <path d="M12 8c1.1 0 2-.9 2-2s-.9-2-2-2-2 .9-2 2 .9 2 2 2zm0 2c-1.1 0-2 .9-2 2s.9 2 2 2 2-.9 2-2-.9-2-2-2zm0 6c-1.1 0-2 .9-2 2s.9 2 2 2 2-.9 2-2-.9-2-2-2z" />
                     </svg>
                   </button>
                   {/* Menu Popup */}
                   {menuOpenPetId === pet.id && (
-                    <div className="absolute top-10 right-0 z-50 bg-slate-800 border border-slate-700 rounded-lg shadow-lg min-w-[160px] py-1">
+                    <div className={popupMenuClass}>
                       <button
                         onClick={(e) => {
                           e.stopPropagation();
                           handleChangeColor(pet);
                         }}
-                        className="w-full px-4 py-2 text-left text-sm text-slate-200 hover:bg-slate-700 transition-colors flex items-center gap-2"
+                        className={popupMenuItemClass}
                       >
                         <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 21a4 4 0 01-4-4V5a2 2 0 012-2h4a2 2 0 012 2v12a4 4 0 01-4 4zm0 0h12a2 2 0 002-2v-4a2 2 0 00-2-2h-2.343M11 7.343l1.657-1.657a2 2 0 012.828 0l2.829 2.829a2 2 0 010 2.828l-8.486 8.485M7 17h.01" />
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
                         </svg>
-                        Change Color
+                        Edit
                       </button>
                       <button
                         onClick={(e) => {
@@ -1988,7 +2106,7 @@ export function PetCareScheduleTool({ toolId }: PetCareScheduleToolProps) {
                           setDeleteConfirmPetId(pet.id);
                           setDeleteConfirmText('');
                         }}
-                        className="w-full px-4 py-2 text-left text-sm text-red-400 hover:bg-slate-700 transition-colors flex items-center gap-2"
+                        className={popupMenuDangerItemClass}
                       >
                         <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
@@ -2008,7 +2126,7 @@ export function PetCareScheduleTool({ toolId }: PetCareScheduleToolProps) {
                 setSelectedPetId(null);
                 setEditingPetId(null);
               }}
-              className="px-4 py-3 rounded-lg border border-slate-700 bg-slate-800/50 text-slate-300 hover:border-emerald-500/50 hover:bg-emerald-500/10 hover:text-emerald-300 transition-all duration-200 flex items-center justify-center min-w-[60px]"
+              className={isLight ? 'px-4 py-3 rounded-lg border-2 border-slate-400 bg-slate-100 text-slate-700 hover:bg-slate-200 hover:text-slate-900 transition-all duration-200 flex items-center justify-center min-w-[60px]' : 'px-4 py-3 rounded-lg border border-slate-700 bg-slate-800/50 text-slate-300 hover:border-emerald-500/50 hover:bg-emerald-500/10 hover:text-emerald-300 transition-all duration-200 flex items-center justify-center min-w-[60px]'}
               title="Add New Pet"
             >
               <svg className="h-6 w-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -2019,7 +2137,7 @@ export function PetCareScheduleTool({ toolId }: PetCareScheduleToolProps) {
         ) : (
           <div className="flex items-end gap-2 flex-wrap">
             <div className="flex-1 min-w-[200px]">
-              <label className="block text-sm font-medium text-slate-300 mb-2">
+              <label className={labelClass}>
                 New Pet Name
               </label>
               <input
@@ -2027,7 +2145,7 @@ export function PetCareScheduleTool({ toolId }: PetCareScheduleToolProps) {
                 value={newPetName}
                 onChange={(e) => setNewPetName(e.target.value)}
                 placeholder="Enter pet name"
-                className="w-full px-3 py-2 rounded-lg border border-slate-700 bg-slate-900/70 text-slate-100 placeholder-slate-500 focus:border-emerald-500/50 focus:outline-none focus:ring-1 focus:ring-emerald-500/50"
+                className={inputClass}
                 onKeyDown={(e) => {
                   if (e.key === 'Enter') {
                     createNewPet();
@@ -2042,7 +2160,7 @@ export function PetCareScheduleTool({ toolId }: PetCareScheduleToolProps) {
             <button
               onClick={createNewPet}
               disabled={!newPetName.trim()}
-              className="px-4 py-2 rounded-lg bg-emerald-500 text-slate-950 font-medium hover:bg-emerald-400 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+              className={primaryButtonClass}
             >
               Create
             </button>
@@ -2051,7 +2169,7 @@ export function PetCareScheduleTool({ toolId }: PetCareScheduleToolProps) {
                 setIsCreatingNewPet(false);
                 setNewPetName('');
               }}
-              className="px-4 py-2 rounded-lg border border-slate-700 bg-slate-800 text-slate-200 hover:bg-slate-700 transition-colors"
+              className={secondaryButtonClass}
             >
               Cancel
             </button>
@@ -2060,8 +2178,8 @@ export function PetCareScheduleTool({ toolId }: PetCareScheduleToolProps) {
       </div>
 
       {isLoading && (
-        <div className="rounded-2xl border border-slate-800 bg-slate-900/70 p-8 text-center">
-          <p className="text-slate-400">Loading pets...</p>
+        <div className={isLight ? 'rounded-2xl border border-slate-200 bg-white p-8 text-center shadow-sm' : 'rounded-2xl border border-slate-800 bg-slate-900/70 p-8 text-center'}>
+          <p className={isLight ? 'text-slate-600' : 'text-slate-400'}>Loading pets...</p>
         </div>
       )}
 
@@ -2076,20 +2194,25 @@ export function PetCareScheduleTool({ toolId }: PetCareScheduleToolProps) {
       {/* Delete Confirmation Modal */}
       {deleteConfirmPetId && (
         <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
-          <div className="rounded-2xl border border-slate-800 bg-slate-900 p-6 max-w-md w-full mx-4">
-            <h3 className="text-xl font-semibold text-slate-50 mb-2">Delete Pet</h3>
-            <p className="text-slate-300 mb-4">
-              <strong className="text-red-400">Warning:</strong> This action cannot be undone. All entered history for this pet will be permanently deleted and cannot be retrieved.
-            </p>
-            <p className="text-slate-400 text-sm mb-4">
-              To confirm, please type <strong className="text-slate-200">delete</strong> in the box below:
+          <div className={isLight ? 'rounded-2xl border border-slate-200 bg-white p-6 max-w-md w-full mx-4 shadow-2xl' : 'rounded-2xl border border-slate-800 bg-slate-900 p-6 max-w-md w-full mx-4'}>
+            <h3 className={isLight ? 'text-xl font-semibold text-slate-900 mb-2' : 'text-xl font-semibold text-slate-50 mb-2'}>Delete Pet</h3>
+            <div className={isLight ? 'rounded-lg border border-red-300 bg-red-50 px-4 py-3 mb-4' : 'rounded-lg border border-red-500/50 bg-red-500/10 px-4 py-3 mb-4'}>
+              <p className={isLight ? 'text-red-700 font-semibold mb-2' : 'text-red-300 font-semibold mb-2'}>
+                ⚠️ Warning: This action cannot be undone!
+              </p>
+              <p className={isLight ? 'text-red-600 text-sm' : 'text-red-200 text-sm'}>
+                All entered history for this pet will be permanently deleted and cannot be retrieved.
+              </p>
+            </div>
+            <p className={isLight ? 'text-slate-600 text-sm mb-4' : 'text-slate-400 text-sm mb-4'}>
+              To confirm, please type <strong className={isLight ? 'text-slate-900' : 'text-slate-200'}>delete</strong> in the box below:
             </p>
             <input
               type="text"
               value={deleteConfirmText}
               onChange={(e) => setDeleteConfirmText(e.target.value)}
               placeholder="Type 'delete' to confirm"
-              className="w-full px-4 py-2 rounded-lg border border-slate-700 bg-slate-800 text-slate-100 placeholder-slate-500 focus:border-red-500/50 focus:outline-none focus:ring-1 focus:ring-red-500/50 mb-4"
+              className={isLight ? 'w-full px-4 py-2 rounded-lg border border-slate-300 bg-white text-slate-900 placeholder-slate-500 focus:border-red-500/50 focus:outline-none focus:ring-1 focus:ring-red-500/50 mb-4' : 'w-full px-4 py-2 rounded-lg border border-slate-700 bg-slate-800 text-slate-100 placeholder-slate-500 focus:border-red-500/50 focus:outline-none focus:ring-1 focus:ring-red-500/50 mb-4'}
               autoFocus
               onKeyDown={(e) => {
                 if (e.key === 'Escape') {
@@ -2112,7 +2235,58 @@ export function PetCareScheduleTool({ toolId }: PetCareScheduleToolProps) {
                   setDeleteConfirmText('');
                 }}
                 disabled={isSaving}
-                className="px-4 py-2 rounded-lg border border-slate-700 bg-slate-800 text-slate-200 hover:bg-slate-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                className={secondaryButtonClass}
+              >
+                Cancel
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {deleteEntryConfirm && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
+          <div className={isLight ? 'rounded-2xl border border-slate-200 bg-white p-6 max-w-md w-full mx-4 shadow-2xl' : 'rounded-2xl border border-slate-800 bg-slate-900 p-6 max-w-md w-full mx-4'}>
+            <h3 className={isLight ? 'text-xl font-semibold text-slate-900 mb-2' : 'text-xl font-semibold text-slate-50 mb-2'}>Delete Record</h3>
+            <div className={isLight ? 'rounded-lg border border-red-300 bg-red-50 px-4 py-3 mb-4' : 'rounded-lg border border-red-500/50 bg-red-500/10 px-4 py-3 mb-4'}>
+              <p className={isLight ? 'text-red-700 font-semibold mb-2' : 'text-red-300 font-semibold mb-2'}>
+                Warning: This action cannot be undone.
+              </p>
+              <p className={isLight ? 'text-red-600 text-sm' : 'text-red-200 text-sm'}>
+                This {deleteEntryConfirm.label} will be permanently deleted.
+              </p>
+            </div>
+            <p className={isLight ? 'text-slate-700 mb-4' : 'text-slate-300 mb-4'}>
+              To confirm, type <strong className={isLight ? 'text-slate-900' : 'text-slate-200'}>delete</strong> below.
+            </p>
+            <input
+              type="text"
+              value={deleteEntryConfirmText}
+              onChange={(e) => setDeleteEntryConfirmText(e.target.value)}
+              placeholder="Type 'delete' to confirm"
+              className={isLight ? 'w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900 placeholder-slate-500 focus:border-red-500/50 focus:outline-none focus:ring-1 focus:ring-red-500/50 mb-4' : 'w-full rounded-lg border border-slate-700 bg-slate-900/70 px-3 py-2 text-sm text-slate-100 placeholder-slate-500 focus:border-red-500/50 focus:outline-none focus:ring-1 focus:ring-red-500/50 mb-4'}
+              autoFocus
+              onKeyDown={(e) => {
+                if (e.key === 'Escape') {
+                  setDeleteEntryConfirm(null);
+                  setDeleteEntryConfirmText('');
+                }
+              }}
+            />
+            <div className="flex gap-3">
+              <button
+                onClick={confirmDeleteEntry}
+                disabled={deleteEntryConfirmText.toLowerCase() !== 'delete'}
+                className="flex-1 px-4 py-2 rounded-lg bg-red-600 text-white font-medium hover:bg-red-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                Delete Record
+              </button>
+              <button
+                onClick={() => {
+                  setDeleteEntryConfirm(null);
+                  setDeleteEntryConfirmText('');
+                }}
+                className={secondaryButtonClass}
               >
                 Cancel
               </button>
@@ -2122,8 +2296,8 @@ export function PetCareScheduleTool({ toolId }: PetCareScheduleToolProps) {
       )}
 
       {!isLoading && !selectedPetId && !isCreatingNewPet && (
-        <div className="rounded-2xl border border-slate-800 bg-slate-900/70 p-8 text-center">
-          <p className="text-slate-400 mb-4">Please select a pet or create a new one to get started.</p>
+        <div className={isLight ? 'rounded-2xl border border-slate-200 bg-white p-8 text-center shadow-sm' : 'rounded-2xl border border-slate-800 bg-slate-900/70 p-8 text-center'}>
+          <p className={isLight ? 'text-slate-600 mb-4' : 'text-slate-400 mb-4'}>Please select a pet or create a new one to get started.</p>
         </div>
       )}
 
@@ -2131,7 +2305,7 @@ export function PetCareScheduleTool({ toolId }: PetCareScheduleToolProps) {
         <>
 
           {/* Navigation Tabs */}
-          <div className="border-b border-slate-800">
+          <div className={tabStripClass}>
             <div className="flex gap-2 overflow-x-auto">
               {/* Pet Name as First Tab */}
               {selectedPet && (
@@ -2155,9 +2329,7 @@ export function PetCareScheduleTool({ toolId }: PetCareScheduleToolProps) {
                   key={tab.id}
                   onClick={() => setActiveSection(tab.id)}
                   className={`px-4 py-2 text-sm font-medium transition-colors whitespace-nowrap ${
-                    activeSection === tab.id
-                      ? 'border-b-2 border-emerald-500 text-emerald-300'
-                      : 'text-slate-400 hover:text-slate-300'
+                    activeSection === tab.id ? tabActiveClass : tabInactiveClass
                   }`}
                 >
                   {tab.label}
@@ -2169,9 +2341,9 @@ export function PetCareScheduleTool({ toolId }: PetCareScheduleToolProps) {
           {/* Pet Info Section */}
       {activeSection === 'info' && (
         <div className="space-y-6">
-          <div className="rounded-2xl border border-slate-800 bg-slate-900/70 p-6">
+          <div className={cardClass}>
             <div className="flex items-center justify-between mb-4">
-              <h3 className="text-lg font-semibold text-slate-50">Basic Information</h3>
+              <h3 className={isLight ? 'text-lg font-semibold text-slate-900' : 'text-lg font-semibold text-slate-50'}>Basic Information</h3>
               {selectedPet && (
                 <span className="text-sm text-slate-400">
                   Editing: <span className="text-emerald-400 font-medium">{selectedPet.name}</span>
@@ -2180,7 +2352,7 @@ export function PetCareScheduleTool({ toolId }: PetCareScheduleToolProps) {
             </div>
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <div>
-                <label className="block text-sm font-medium text-slate-300 mb-2">
+                <label className={labelClass}>
                   Pet Name <span className="text-red-400">*</span>
                 </label>
                 <input
@@ -2188,17 +2360,17 @@ export function PetCareScheduleTool({ toolId }: PetCareScheduleToolProps) {
                   value={petName}
                   onChange={(e) => setPetName(e.target.value)}
                   placeholder="Enter pet's name"
-                  className="w-full px-3 py-2 rounded-lg border border-slate-700 bg-slate-900/70 text-slate-100 placeholder-slate-500 focus:border-emerald-500/50 focus:outline-none focus:ring-1 focus:ring-emerald-500/50"
+                  className={inputClass}
                 />
               </div>
               <div>
-                <label className="block text-sm font-medium text-slate-300 mb-2">
+                <label className={labelClass}>
                   Pet Type <span className="text-red-400">*</span>
                 </label>
                 <select
                   value={petType?.name || ''}
                   onChange={(e) => handlePetTypeChange(e.target.value)}
-                  className="w-full px-4 py-2 rounded-lg border border-slate-700 bg-slate-900/70 text-slate-100 focus:border-emerald-500/50 focus:outline-none focus:ring-1 focus:ring-emerald-500/50"
+                  className={selectClass}
                 >
                   <option value="">Select pet type</option>
                   {COMMON_PET_TYPES.map(type => (
@@ -2212,67 +2384,67 @@ export function PetCareScheduleTool({ toolId }: PetCareScheduleToolProps) {
                     onChange={(e) => setCustomPetType(e.target.value)}
                     onBlur={handleCustomPetTypeBlur}
                     placeholder="Enter custom pet type"
-                    className="w-full mt-2 px-3 py-2 rounded-lg border border-slate-700 bg-slate-900/70 text-slate-100 placeholder-slate-500 focus:border-emerald-500/50 focus:outline-none focus:ring-1 focus:ring-emerald-500/50"
+                    className={`${inputClass} mt-2`}
                   />
                 )}
               </div>
               <div>
-                <label className="block text-sm font-medium text-slate-300 mb-2">Birthdate</label>
+                <label className={labelClass}>Birthdate</label>
                 <input
                   type="date"
                   value={birthdate}
                   onChange={(e) => setBirthdate(e.target.value)}
-                  className="w-full px-4 py-2 rounded-lg border border-slate-700 bg-slate-900/70 text-slate-100 focus:border-emerald-500/50 focus:outline-none focus:ring-1 focus:ring-emerald-500/50"
+                  className={selectClass}
                 />
               </div>
               <div>
-                <label className="block text-sm font-medium text-slate-300 mb-2">Breed</label>
+                <label className={labelClass}>Breed</label>
                 <input
                   type="text"
                   value={breed}
                   onChange={(e) => setBreed(e.target.value)}
                   placeholder="Enter breed"
-                  className="w-full px-3 py-2 rounded-lg border border-slate-700 bg-slate-900/70 text-slate-100 placeholder-slate-500 focus:border-emerald-500/50 focus:outline-none focus:ring-1 focus:ring-emerald-500/50"
+                  className={inputClass}
                 />
               </div>
               <div>
-                <label className="block text-sm font-medium text-slate-300 mb-2">Where did you get your pet?</label>
+                <label className={labelClass}>Where did you get your pet?</label>
                 <input
                   type="text"
                   value={whereGotPet}
                   onChange={(e) => setWhereGotPet(e.target.value)}
                   placeholder="e.g., Animal shelter, breeder, pet store"
-                  className="w-full px-3 py-2 rounded-lg border border-slate-700 bg-slate-900/70 text-slate-100 placeholder-slate-500 focus:border-emerald-500/50 focus:outline-none focus:ring-1 focus:ring-emerald-500/50"
+                  className={inputClass}
                 />
               </div>
               <div>
-                <label className="block text-sm font-medium text-slate-300 mb-2">Weight</label>
+                <label className={labelClass}>Weight</label>
                 <input
                   type="text"
                   value={weight}
                   onChange={(e) => setWeight(e.target.value)}
                   placeholder="e.g., 25 lbs or 11 kg"
-                  className="w-full px-3 py-2 rounded-lg border border-slate-700 bg-slate-900/70 text-slate-100 placeholder-slate-500 focus:border-emerald-500/50 focus:outline-none focus:ring-1 focus:ring-emerald-500/50"
+                  className={inputClass}
                 />
               </div>
               <div>
-                <label className="block text-sm font-medium text-slate-300 mb-2">Color/Markings</label>
+                <label className={labelClass}>Color/Markings</label>
                 <input
                   type="text"
                   value={color}
                   onChange={(e) => setColor(e.target.value)}
                   placeholder="Enter color or markings"
-                  className="w-full px-3 py-2 rounded-lg border border-slate-700 bg-slate-900/70 text-slate-100 placeholder-slate-500 focus:border-emerald-500/50 focus:outline-none focus:ring-1 focus:ring-emerald-500/50"
+                  className={inputClass}
                 />
               </div>
               <div>
-                <label className="block text-sm font-medium text-slate-300 mb-2">Microchip Number</label>
+                <label className={labelClass}>Microchip Number</label>
                 <input
                   type="text"
                   value={microchipNumber}
                   onChange={(e) => setMicrochipNumber(e.target.value)}
                   placeholder="Enter microchip number"
-                  className="w-full px-3 py-2 rounded-lg border border-slate-700 bg-slate-900/70 text-slate-100 placeholder-slate-500 focus:border-emerald-500/50 focus:outline-none focus:ring-1 focus:ring-emerald-500/50"
+                  className={inputClass}
                 />
               </div>
             </div>
@@ -2282,7 +2454,7 @@ export function PetCareScheduleTool({ toolId }: PetCareScheduleToolProps) {
               <button
                 onClick={() => savePetData()}
                 disabled={isSaving}
-                className="px-6 py-2 rounded-lg font-medium transition-colors disabled:opacity-50 disabled:cursor-not-allowed bg-emerald-500 text-slate-950 hover:bg-emerald-400"
+                className={isLight ? 'px-6 py-2 rounded-lg font-medium transition-colors disabled:opacity-50 disabled:cursor-not-allowed bg-emerald-600 text-white hover:bg-emerald-500' : 'px-6 py-2 rounded-lg font-medium transition-colors disabled:opacity-50 disabled:cursor-not-allowed bg-emerald-500 text-slate-950 hover:bg-emerald-400'}
               >
                 {isSaving ? 'Saving...' : 'Save Pet Info'}
               </button>
@@ -2325,7 +2497,7 @@ export function PetCareScheduleTool({ toolId }: PetCareScheduleToolProps) {
               </div>
               <button
                 onClick={addCurrentFood}
-                className="px-4 py-2 rounded-lg bg-emerald-500 text-slate-950 font-medium hover:bg-emerald-400 transition-colors"
+                className={primaryButtonClass}
               >
                 Add Current Food
               </button>
@@ -2337,7 +2509,7 @@ export function PetCareScheduleTool({ toolId }: PetCareScheduleToolProps) {
               <h3 className="text-lg font-semibold text-slate-50 mb-4">Active Foods</h3>
               <div className="space-y-4">
                 {foods.filter(f => f.isCurrent).map(food => (
-                  <div key={food.id} className="p-4 rounded-lg border border-slate-700 bg-slate-800/50">
+                  <div key={food.id} className={nestedCardClass}>
                     {editingFoodId === food.id ? (
                       <div className="space-y-4">
                         <div>
@@ -2399,18 +2571,30 @@ export function PetCareScheduleTool({ toolId }: PetCareScheduleToolProps) {
                             <p className="text-sm text-slate-300 mt-2 italic">"{food.notes}"</p>
                           )}
                         </div>
-                        <div className="flex gap-2">
+                        <div className="flex gap-1.5">
                           <button
                             onClick={() => startEditingFood(food)}
-                            className="px-3 py-1 rounded-lg bg-emerald-500/20 text-emerald-300 hover:bg-emerald-500/30 transition-colors text-sm"
+                            className={rowIconEmeraldClass}
+                            title="Edit food"
+                            aria-label="Edit food"
                           >
-                            Edit
+                            <svg className="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" /></svg>
                           </button>
                           <button
                             onClick={() => moveFoodToHistory(food.id)}
-                            className="px-3 py-1 rounded-lg bg-slate-700 text-slate-200 hover:bg-slate-600 transition-colors text-sm"
+                            className={rowIconSecondaryClass}
+                            title="Move to history"
+                            aria-label="Move to history"
                           >
-                            Move to History
+                            <svg className="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M20.25 7.5l-.625 10.632a2.25 2.25 0 01-2.247 2.118H6.622a2.25 2.25 0 01-2.247-2.118L3.75 7.5M10 11.25h4M3.375 7.5h17.25c.621 0 1.125-.504 1.125-1.125v-1.5c0-.621-.504-1.125-1.125-1.125H3.375c-.621 0-1.125.504-1.125 1.125v1.5c0 .621.504 1.125 1.125 1.125z" /></svg>
+                          </button>
+                          <button
+                            onClick={() => requestDeleteEntry('active food item', () => deleteItem(foods, setFoods, food.id))}
+                            className={rowIconDangerClass}
+                            title="Delete food"
+                            aria-label="Delete food"
+                          >
+                            <svg className="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" /></svg>
                           </button>
                         </div>
                       </div>
@@ -2426,7 +2610,7 @@ export function PetCareScheduleTool({ toolId }: PetCareScheduleToolProps) {
               <h3 className="text-lg font-semibold text-slate-50 mb-4">Food History</h3>
               <div className="space-y-4">
                 {foods.filter(f => !f.isCurrent).map(food => (
-                  <div key={food.id} className="p-4 rounded-lg border border-slate-700 bg-slate-800/50">
+                  <div key={food.id} className={nestedCardClass}>
                     {editingFoodId === food.id ? (
                       <div className="space-y-4">
                         <div>
@@ -2499,18 +2683,32 @@ export function PetCareScheduleTool({ toolId }: PetCareScheduleToolProps) {
                             <p className="text-sm text-slate-300 mt-2 italic">"{food.notes}"</p>
                           )}
                         </div>
-                        <div className="flex gap-2">
+                        <div className="flex gap-1.5">
                           <button
                             onClick={() => startEditingFood(food)}
-                            className="px-3 py-1 rounded-lg bg-emerald-500/20 text-emerald-300 hover:bg-emerald-500/30 transition-colors text-sm"
+                            className={rowIconEmeraldClass}
+                            title="Edit food"
+                            aria-label="Edit food"
                           >
-                            Edit
+                            <svg className="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" /></svg>
                           </button>
                           <button
-                            onClick={() => deleteItem(foods, setFoods, food.id)}
-                            className="px-3 py-1 rounded-lg bg-red-500/20 text-red-400 hover:bg-red-500/30 transition-colors text-sm"
+                            onClick={() => returnFoodToActive(food.id)}
+                            className={rowIconSecondaryClass}
+                            title="Return to active"
+                            aria-label="Return food to active"
                           >
-                            Delete
+                            <svg className="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 15L3 9m0 0l6-6M3 9h12a6 6 0 010 12h-3" />
+                            </svg>
+                          </button>
+                          <button
+                            onClick={() => requestDeleteEntry('food history item', () => deleteItem(foods, setFoods, food.id))}
+                            className={rowIconDangerClass}
+                            title="Delete food"
+                            aria-label="Delete food"
+                          >
+                            <svg className="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" /></svg>
                           </button>
                         </div>
                       </div>
@@ -2526,97 +2724,97 @@ export function PetCareScheduleTool({ toolId }: PetCareScheduleToolProps) {
       {/* Veterinary Contact Section */}
       {activeSection === 'vet' && (
         <div className="space-y-6">
-          <div className="rounded-2xl border border-slate-800 bg-slate-900/70 p-6">
-            <h3 className="text-lg font-semibold text-slate-50 mb-4">Add Veterinary Contact</h3>
+          <div className={cardClass}>
+            <h3 className={sectionTitleClass}>Add Veterinary Contact</h3>
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <div>
-                <label className="block text-sm font-medium text-slate-300 mb-2">Veterinarian Name</label>
+                <label className={labelClass}>Veterinarian Name</label>
                 <input
                   type="text"
                   value={newVetRecord.veterinarianName}
                   onChange={(e) => setNewVetRecord({ ...newVetRecord, veterinarianName: e.target.value })}
                   placeholder="Dr. Smith"
-                  className="w-full px-3 py-2 rounded-lg border border-slate-700 bg-slate-900/70 text-slate-100 placeholder-slate-500 focus:border-emerald-500/50 focus:outline-none focus:ring-1 focus:ring-emerald-500/50"
+                  className={inputClass}
                 />
               </div>
               <div>
-                <label className="block text-sm font-medium text-slate-300 mb-2">Clinic Name</label>
+                <label className={labelClass}>Clinic Name</label>
                 <input
                   type="text"
                   value={newVetRecord.clinicName}
                   onChange={(e) => setNewVetRecord({ ...newVetRecord, clinicName: e.target.value })}
                   placeholder="Animal Hospital"
-                  className="w-full px-3 py-2 rounded-lg border border-slate-700 bg-slate-900/70 text-slate-100 placeholder-slate-500 focus:border-emerald-500/50 focus:outline-none focus:ring-1 focus:ring-emerald-500/50"
+                  className={inputClass}
                 />
               </div>
               <div>
-                <label className="block text-sm font-medium text-slate-300 mb-2">Phone</label>
+                <label className={labelClass}>Phone</label>
                 <input
                   type="tel"
                   value={newVetRecord.phone}
                   onChange={(e) => setNewVetRecord({ ...newVetRecord, phone: e.target.value })}
                   placeholder="(555) 123-4567"
-                  className="w-full px-3 py-2 rounded-lg border border-slate-700 bg-slate-900/70 text-slate-100 placeholder-slate-500 focus:border-emerald-500/50 focus:outline-none focus:ring-1 focus:ring-emerald-500/50"
+                  className={inputClass}
                 />
               </div>
               <div>
-                <label className="block text-sm font-medium text-slate-300 mb-2">Email</label>
+                <label className={labelClass}>Email</label>
                 <input
                   type="email"
                   value={newVetRecord.email}
                   onChange={(e) => setNewVetRecord({ ...newVetRecord, email: e.target.value })}
                   placeholder="vet@example.com"
-                  className="w-full px-3 py-2 rounded-lg border border-slate-700 bg-slate-900/70 text-slate-100 placeholder-slate-500 focus:border-emerald-500/50 focus:outline-none focus:ring-1 focus:ring-emerald-500/50"
+                  className={inputClass}
                 />
               </div>
               <div className="md:col-span-2">
-                <label className="block text-sm font-medium text-slate-300 mb-2">Address</label>
+                <label className={labelClass}>Address</label>
                 <input
                   type="text"
                   value={newVetRecord.address}
                   onChange={(e) => setNewVetRecord({ ...newVetRecord, address: e.target.value })}
                   placeholder="123 Main St, City, State ZIP"
-                  className="w-full px-3 py-2 rounded-lg border border-slate-700 bg-slate-900/70 text-slate-100 placeholder-slate-500 focus:border-emerald-500/50 focus:outline-none focus:ring-1 focus:ring-emerald-500/50"
+                  className={inputClass}
                 />
               </div>
               <div>
-                <label className="block text-sm font-medium text-slate-300 mb-2">Status</label>
+                <label className={labelClass}>Status</label>
                 <select
                   value={newVetRecord.status}
                   onChange={(e) => setNewVetRecord({ ...newVetRecord, status: e.target.value as 'Active' | 'History' })}
-                  className="w-full px-4 py-2 rounded-lg border border-slate-700 bg-slate-900/70 text-slate-100 focus:border-emerald-500/50 focus:outline-none focus:ring-1 focus:ring-emerald-500/50"
+                  className={selectClass}
                 >
                   <option value="Active">Active</option>
                   <option value="History">History</option>
                 </select>
               </div>
               <div className="md:col-span-2">
-                <label className="block text-sm font-medium text-slate-300 mb-2">Notes (Optional)</label>
+                <label className={labelClass}>Notes (Optional)</label>
                 <textarea
                   value={newVetRecord.notes}
                   onChange={(e) => setNewVetRecord({ ...newVetRecord, notes: e.target.value })}
                   placeholder="Add any additional notes about this veterinary contact..."
                   rows={3}
-                  className="w-full px-3 py-2 rounded-lg border border-slate-700 bg-slate-900/70 text-slate-100 placeholder-slate-500 focus:border-emerald-500/50 focus:outline-none focus:ring-1 focus:ring-emerald-500/50 resize-none"
+                  className={`${inputClass} resize-none`}
                 />
               </div>
             </div>
             <button
               onClick={addVeterinaryRecord}
-              className="mt-4 px-4 py-2 rounded-lg bg-emerald-500 text-slate-950 font-medium hover:bg-emerald-400 transition-colors"
+              className={`mt-4 ${primaryButtonClass}`}
             >
               Add Veterinary Contact
             </button>
           </div>
 
           {veterinaryRecords.filter(r => r.status === 'Active').length > 0 && (
-            <div className="rounded-2xl border border-slate-800 bg-slate-900/70 p-6">
-              <h3 className="text-lg font-semibold text-slate-50 mb-4">Active Veterinary Contacts</h3>
+            <div className={cardClass}>
+              <h3 className={sectionTitleClass}>Active Veterinary Contacts</h3>
               <div className="space-y-4">
                 {veterinaryRecords
                   .filter(r => r.status === 'Active')
                   .map(record => (
-                    <div key={record.id} className="p-4 rounded-lg border border-slate-700 bg-slate-800/50">
+                    <div key={record.id} className={nestedCardClass}>
                       {editingVetRecordId === record.id ? (
                         <div className="space-y-4">
                           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -2715,7 +2913,7 @@ export function PetCareScheduleTool({ toolId }: PetCareScheduleToolProps) {
                               <h4 className="text-slate-100 font-medium">
                                 {record.veterinarianName || record.clinicName || 'Unnamed Contact'}
                               </h4>
-                              <span className="inline-flex items-center rounded-full bg-emerald-500/20 px-2 py-0.5 text-xs font-medium text-emerald-300">
+                              <span className={isLight ? 'inline-flex items-center rounded-full border border-emerald-300 bg-emerald-50 px-2 py-0.5 text-xs font-medium text-emerald-800' : 'inline-flex items-center rounded-full bg-emerald-500/20 px-2 py-0.5 text-xs font-medium text-emerald-300'}>
                                 Active
                               </span>
                             </div>
@@ -2742,24 +2940,27 @@ export function PetCareScheduleTool({ toolId }: PetCareScheduleToolProps) {
                             )}
                             <p className="text-xs text-slate-500 mt-2">Added: {new Date(record.dateAdded).toLocaleDateString()}</p>
                           </div>
-                          <div className="flex gap-2 ml-4">
+                          <div className="flex gap-1.5 ml-4">
                             <button
                               onClick={() => startEditingVetRecord(record)}
-                              className="px-3 py-1 rounded-lg bg-emerald-500/20 text-emerald-300 hover:bg-emerald-500/30 transition-colors text-sm"
+                              className={rowIconEmeraldClass}
+                              title="Edit contact"
                             >
-                              Edit
+                              <svg className="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" /></svg>
                             </button>
                             <button
                               onClick={() => toggleVetRecordStatus(record.id)}
-                              className="px-3 py-1 rounded-lg bg-slate-700 text-slate-200 hover:bg-slate-600 transition-colors text-sm"
+                              className={rowIconSecondaryClass}
+                              title="Move to history"
                             >
-                              Move to History
+                              <svg className="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M20.25 7.5l-.625 10.632a2.25 2.25 0 01-2.247 2.118H6.622a2.25 2.25 0 01-2.247-2.118L3.75 7.5M10 11.25h4M3.375 7.5h17.25c.621 0 1.125-.504 1.125-1.125v-1.5c0-.621-.504-1.125-1.125-1.125H3.375c-.621 0-1.125.504-1.125 1.125v1.5c0 .621.504 1.125 1.125 1.125z" /></svg>
                             </button>
                             <button
-                              onClick={() => deleteItem(veterinaryRecords, setVeterinaryRecords, record.id)}
-                              className="px-3 py-1 rounded-lg bg-red-500/20 text-red-400 hover:bg-red-500/30 transition-colors text-sm"
+                              onClick={() => requestDeleteEntry('veterinary contact', () => deleteItem(veterinaryRecords, setVeterinaryRecords, record.id))}
+                              className={rowIconDangerClass}
+                              title="Delete contact"
                             >
-                              Delete
+                              <svg className="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" /></svg>
                             </button>
                           </div>
                         </div>
@@ -2771,13 +2972,13 @@ export function PetCareScheduleTool({ toolId }: PetCareScheduleToolProps) {
           )}
 
           {veterinaryRecords.filter(r => r.status === 'History').length > 0 && (
-            <div className="rounded-2xl border border-slate-800 bg-slate-900/70 p-6">
-              <h3 className="text-lg font-semibold text-slate-50 mb-4">Veterinary Contact History</h3>
+            <div className={cardClass}>
+              <h3 className={sectionTitleClass}>Veterinary Contact History</h3>
               <div className="space-y-4">
                 {veterinaryRecords
                   .filter(r => r.status === 'History')
                   .map(record => (
-                    <div key={record.id} className="p-4 rounded-lg border border-slate-700 bg-slate-800/50">
+                    <div key={record.id} className={nestedCardClass}>
                       {editingVetRecordId === record.id ? (
                         <div className="space-y-4">
                           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -2876,7 +3077,7 @@ export function PetCareScheduleTool({ toolId }: PetCareScheduleToolProps) {
                               <h4 className="text-slate-100 font-medium">
                                 {record.veterinarianName || record.clinicName || 'Unnamed Contact'}
                               </h4>
-                              <span className="inline-flex items-center rounded-full bg-slate-500/20 px-2 py-0.5 text-xs font-medium text-slate-400">
+                              <span className={isLight ? 'inline-flex items-center rounded-full border border-slate-300 bg-slate-100 px-2 py-0.5 text-xs font-medium text-slate-700' : 'inline-flex items-center rounded-full bg-slate-500/20 px-2 py-0.5 text-xs font-medium text-slate-400'}>
                                 History
                               </span>
                             </div>
@@ -2903,24 +3104,24 @@ export function PetCareScheduleTool({ toolId }: PetCareScheduleToolProps) {
                             )}
                             <p className="text-xs text-slate-500 mt-2">Added: {new Date(record.dateAdded).toLocaleDateString()}</p>
                           </div>
-                          <div className="flex gap-2 ml-4">
+                          <div className="flex gap-1.5 ml-4">
                             <button
                               onClick={() => startEditingVetRecord(record)}
-                              className="px-3 py-1 rounded-lg bg-emerald-500/20 text-emerald-300 hover:bg-emerald-500/30 transition-colors text-sm"
+                              className={rowIconEmeraldClass}
                             >
-                              Edit
+                              <svg className="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" /></svg>
                             </button>
                             <button
                               onClick={() => toggleVetRecordStatus(record.id)}
-                              className="px-3 py-1 rounded-lg bg-slate-700 text-slate-200 hover:bg-slate-600 transition-colors text-sm"
+                              className={rowIconSecondaryClass}
                             >
-                              Move to Active
+                              <svg className="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 15L3 9m0 0l6-6M3 9h12a6 6 0 010 12h-3" /></svg>
                             </button>
                             <button
-                              onClick={() => deleteItem(veterinaryRecords, setVeterinaryRecords, record.id)}
-                              className="px-3 py-1 rounded-lg bg-red-500/20 text-red-400 hover:bg-red-500/30 transition-colors text-sm"
+                              onClick={() => requestDeleteEntry('veterinary contact history record', () => deleteItem(veterinaryRecords, setVeterinaryRecords, record.id))}
+                              className={rowIconDangerClass}
                             >
-                              Delete
+                              <svg className="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" /></svg>
                             </button>
                           </div>
                         </div>
@@ -2936,25 +3137,25 @@ export function PetCareScheduleTool({ toolId }: PetCareScheduleToolProps) {
       {/* Care Plan Section */}
       {activeSection === 'care' && (
         <div className="space-y-6">
-          <div className="rounded-2xl border border-slate-800 bg-slate-900/70 p-6">
-            <h3 className="text-lg font-semibold text-slate-50 mb-4">Add Care Plan Item</h3>
+          <div className={cardClass}>
+            <h3 className={sectionTitleClass}>Add Care Plan Item</h3>
             <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
               <div className="md:col-span-2">
-                <label className="block text-sm font-medium text-slate-300 mb-2">Care Item Name</label>
+                <label className={labelClass}>Care Item Name</label>
                 <input
                   type="text"
                   value={newCareItem.name}
                   onChange={(e) => setNewCareItem({ ...newCareItem, name: e.target.value })}
                   placeholder="e.g., Nail trimming, Grooming, Exercise"
-                  className="w-full px-3 py-2 rounded-lg border border-slate-700 bg-slate-900/70 text-slate-100 placeholder-slate-500 focus:border-emerald-500/50 focus:outline-none focus:ring-1 focus:ring-emerald-500/50"
+                  className={inputClass}
                 />
               </div>
               <div>
-                <label className="block text-sm font-medium text-slate-300 mb-2">Frequency</label>
+                <label className={labelClass}>Frequency</label>
                 <select
                   value={newCareItem.frequency}
                   onChange={(e) => setNewCareItem({ ...newCareItem, frequency: e.target.value })}
-                  className="w-full px-4 py-2 rounded-lg border border-slate-700 bg-slate-900/70 text-slate-100 focus:border-emerald-500/50 focus:outline-none focus:ring-1 focus:ring-emerald-500/50"
+                  className={selectClass}
                 >
                   {FREQUENCY_OPTIONS.map(freq => (
                     <option key={freq} value={freq}>{freq}</option>
@@ -2962,11 +3163,11 @@ export function PetCareScheduleTool({ toolId }: PetCareScheduleToolProps) {
                 </select>
               </div>
               <div>
-                <label className="block text-sm font-medium text-slate-300 mb-2">Priority</label>
+                <label className={labelClass}>Priority</label>
                 <select
                   value={newCareItem.priority}
                   onChange={(e) => setNewCareItem({ ...newCareItem, priority: e.target.value as 'low' | 'medium' | 'high' })}
-                  className="w-full px-4 py-2 rounded-lg border border-slate-700 bg-slate-900/70 text-slate-100 focus:border-emerald-500/50 focus:outline-none focus:ring-1 focus:ring-emerald-500/50"
+                  className={selectClass}
                 >
                   <option value="low">Low</option>
                   <option value="medium">Medium</option>
@@ -2975,18 +3176,18 @@ export function PetCareScheduleTool({ toolId }: PetCareScheduleToolProps) {
               </div>
             </div>
             <div className="mt-4">
-              <label className="block text-sm font-medium text-slate-300 mb-2">Notes (Optional)</label>
+              <label className={labelClass}>Notes (Optional)</label>
               <textarea
                 value={newCareItem.notes}
                 onChange={(e) => setNewCareItem({ ...newCareItem, notes: e.target.value })}
                 placeholder="Add any additional notes about this care item..."
                 rows={3}
-                className="w-full px-4 py-2 rounded-lg border border-slate-700 bg-slate-900/70 text-slate-100 placeholder-slate-500 focus:border-emerald-500/50 focus:outline-none focus:ring-1 focus:ring-emerald-500/50 resize-none"
+                className={`${selectClass} placeholder-slate-500 resize-none`}
               />
             </div>
             <button
               onClick={addCarePlanItem}
-              className="mt-4 px-4 py-2 rounded-lg bg-emerald-500 text-slate-950 font-medium hover:bg-emerald-400 transition-colors"
+              className={`mt-4 ${primaryButtonClass}`}
             >
               Add Care Item
             </button>
@@ -2997,7 +3198,7 @@ export function PetCareScheduleTool({ toolId }: PetCareScheduleToolProps) {
               <h3 className="text-lg font-semibold text-slate-50 mb-4">Active Care Plan</h3>
               <div className="space-y-3">
                 {carePlanItems.filter(item => item.isActive).map(item => (
-                  <div key={item.id} className="p-4 rounded-lg border border-slate-700 bg-slate-800/50">
+                  <div key={item.id} className={nestedCardClass}>
                     {editingCareItemId === item.id ? (
                       <div className="space-y-4">
                         <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
@@ -3084,18 +3285,30 @@ export function PetCareScheduleTool({ toolId }: PetCareScheduleToolProps) {
                             <p className="text-sm text-slate-300 mt-2 italic">"{item.notes}"</p>
                           )}
                         </div>
-                        <div className="flex gap-2 flex-shrink-0">
+                        <div className="flex gap-1.5 flex-shrink-0">
                           <button
                             onClick={() => startEditingCareItem(item)}
-                            className="px-3 py-1 rounded-lg bg-emerald-500/20 text-emerald-300 hover:bg-emerald-500/30 transition-colors text-sm"
+                            className={rowIconEmeraldClass}
+                            title="Edit care item"
+                            aria-label="Edit care item"
                           >
-                            Edit
+                            <svg className="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" /></svg>
                           </button>
                           <button
                             onClick={() => toggleCarePlanItem(item.id)}
-                            className="px-3 py-1 rounded-lg bg-slate-700 text-slate-200 hover:bg-slate-600 transition-colors text-sm"
+                            className={rowIconSecondaryClass}
+                            title="Move to history"
+                            aria-label="Move to history"
                           >
-                            Move to History
+                            <svg className="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M20.25 7.5l-.625 10.632a2.25 2.25 0 01-2.247 2.118H6.622a2.25 2.25 0 01-2.247-2.118L3.75 7.5M10 11.25h4M3.375 7.5h17.25c.621 0 1.125-.504 1.125-1.125v-1.5c0-.621-.504-1.125-1.125-1.125H3.375c-.621 0-1.125.504-1.125 1.125v1.5c0 .621.504 1.125 1.125 1.125z" /></svg>
+                          </button>
+                          <button
+                            onClick={() => requestDeleteEntry('active care plan item', () => deleteItem(carePlanItems, setCarePlanItems, item.id))}
+                            className={rowIconDangerClass}
+                            title="Delete care item"
+                            aria-label="Delete care item"
+                          >
+                            <svg className="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" /></svg>
                           </button>
                         </div>
                       </div>
@@ -3111,7 +3324,7 @@ export function PetCareScheduleTool({ toolId }: PetCareScheduleToolProps) {
               <h3 className="text-lg font-semibold text-slate-50 mb-4">Care Plan History</h3>
               <div className="space-y-3">
                 {carePlanItems.filter(item => !item.isActive).map(item => (
-                  <div key={item.id} className="p-4 rounded-lg border border-slate-700 bg-slate-800/50">
+                  <div key={item.id} className={nestedCardClass}>
                     {editingCareItemId === item.id ? (
                       <div className="space-y-4">
                         <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
@@ -3200,18 +3413,32 @@ export function PetCareScheduleTool({ toolId }: PetCareScheduleToolProps) {
                             <p className="text-sm text-slate-300 mt-2 italic">"{item.notes}"</p>
                           )}
                         </div>
-                        <div className="flex gap-2 flex-shrink-0">
+                        <div className="flex gap-1.5 flex-shrink-0">
                           <button
                             onClick={() => startEditingCareItem(item)}
-                            className="px-3 py-1 rounded-lg bg-emerald-500/20 text-emerald-300 hover:bg-emerald-500/30 transition-colors text-sm"
+                            className={rowIconEmeraldClass}
+                            title="Edit care item"
+                            aria-label="Edit care item"
                           >
-                            Edit
+                            <svg className="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" /></svg>
                           </button>
                           <button
-                            onClick={() => deleteItem(carePlanItems, setCarePlanItems, item.id)}
-                            className="px-3 py-1 rounded-lg bg-red-500/20 text-red-400 hover:bg-red-500/30 transition-colors text-sm"
+                            onClick={() => toggleCarePlanItem(item.id)}
+                            className={rowIconSecondaryClass}
+                            title="Return to active"
+                            aria-label="Return care item to active"
                           >
-                            Delete
+                            <svg className="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 15L3 9m0 0l6-6M3 9h12a6 6 0 010 12h-3" />
+                            </svg>
+                          </button>
+                          <button
+                            onClick={() => requestDeleteEntry('care plan history item', () => deleteItem(carePlanItems, setCarePlanItems, item.id))}
+                            className={rowIconDangerClass}
+                            title="Delete care item"
+                            aria-label="Delete care item"
+                          >
+                            <svg className="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" /></svg>
                           </button>
                         </div>
                       </div>
@@ -3227,8 +3454,8 @@ export function PetCareScheduleTool({ toolId }: PetCareScheduleToolProps) {
       {/* Vaccinations Section */}
       {activeSection === 'vaccinations' && (
         <div className="space-y-6">
-          <div className="rounded-2xl border border-slate-800 bg-slate-900/70 p-6">
-            <h3 className="text-lg font-semibold text-slate-50 mb-4">Add Vaccination</h3>
+          <div className={cardClass}>
+            <h3 className={sectionTitleClass}>Add Vaccination</h3>
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <div>
                 <label className="block text-sm font-medium text-slate-300 mb-2">Vaccination Name</label>
@@ -3272,20 +3499,20 @@ export function PetCareScheduleTool({ toolId }: PetCareScheduleToolProps) {
             </div>
             <button
               onClick={addVaccination}
-              className="mt-4 px-4 py-2 rounded-lg bg-emerald-500 text-slate-950 font-medium hover:bg-emerald-400 transition-colors"
+              className={`mt-4 ${primaryButtonClass}`}
             >
               Add Vaccination
             </button>
           </div>
 
           {vaccinations.length > 0 && (
-            <div className="rounded-2xl border border-slate-800 bg-slate-900/70 p-6">
-              <h3 className="text-lg font-semibold text-slate-50 mb-4">Vaccination History</h3>
+            <div className={cardClass}>
+              <h3 className={sectionTitleClass}>Vaccination History</h3>
               <div className="space-y-3">
                 {vaccinations
                   .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime())
                   .map(vaccination => (
-                    <div key={vaccination.id} className="p-4 rounded-lg border border-slate-700 bg-slate-800/50">
+                    <div key={vaccination.id} className={nestedCardClass}>
                       {editingVaccinationId === vaccination.id ? (
                         <div className="space-y-4">
                           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -3357,18 +3584,18 @@ export function PetCareScheduleTool({ toolId }: PetCareScheduleToolProps) {
                               <p className="text-sm text-slate-400 mt-1">Notes: {vaccination.notes}</p>
                             )}
                           </div>
-                          <div className="flex gap-2 ml-4">
+                          <div className="flex gap-1.5 ml-4">
                             <button
                               onClick={() => startEditingVaccination(vaccination)}
-                              className="px-3 py-1 rounded-lg bg-emerald-500/20 text-emerald-300 hover:bg-emerald-500/30 transition-colors text-sm"
+                              className={rowIconEmeraldClass}
                             >
-                              Edit
+                              <svg className="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" /></svg>
                             </button>
                             <button
-                              onClick={() => deleteItem(vaccinations, setVaccinations, vaccination.id)}
-                              className="px-3 py-1 rounded-lg bg-red-500/20 text-red-400 hover:bg-red-500/30 transition-colors text-sm"
+                              onClick={() => requestDeleteEntry('vaccination record', () => deleteItem(vaccinations, setVaccinations, vaccination.id))}
+                              className={rowIconDangerClass}
                             >
-                              Delete
+                              <svg className="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" /></svg>
                             </button>
                           </div>
                         </div>
@@ -3384,8 +3611,19 @@ export function PetCareScheduleTool({ toolId }: PetCareScheduleToolProps) {
       {/* Appointments Section */}
       {activeSection === 'appointments' && (
         <div className="space-y-6">
-          <div className="rounded-2xl border border-slate-800 bg-slate-900/70 p-6">
-            <h3 className="text-lg font-semibold text-slate-50 mb-4">Add Appointment</h3>
+          {(() => {
+            const todayKey = new Date().toISOString().split('T')[0];
+            const upcomingAppointments = appointments
+              .filter((a) => a.date >= todayKey)
+              .sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
+            const historyAppointments = appointments
+              .filter((a) => a.date < todayKey)
+              .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
+
+            return (
+              <>
+          <div className={cardClass}>
+            <h3 className={sectionTitleClass}>Add Appointment</h3>
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <div>
                 <label className="block text-sm font-medium text-slate-300 mb-2">Date</label>
@@ -3438,89 +3676,244 @@ export function PetCareScheduleTool({ toolId }: PetCareScheduleToolProps) {
             </div>
             <button
               onClick={addAppointment}
-              className="mt-4 px-4 py-2 rounded-lg bg-emerald-500 text-slate-950 font-medium hover:bg-emerald-400 transition-colors"
+              className={`mt-4 ${primaryButtonClass}`}
             >
               Add Appointment
             </button>
           </div>
 
-          {appointments.filter(a => a.isUpcoming).length > 0 && (
-            <div className="rounded-2xl border border-slate-800 bg-slate-900/70 p-6">
-              <h3 className="text-lg font-semibold text-slate-50 mb-4">Upcoming Appointments</h3>
+          {upcomingAppointments.length > 0 && (
+            <div className={cardClass}>
+              <h3 className={sectionTitleClass}>Upcoming Appointments</h3>
               <div className="space-y-3">
-                {appointments
-                  .filter(a => a.isUpcoming)
-                  .sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime())
-                  .map(appointment => (
-                    <div key={appointment.id} className="p-4 rounded-lg border border-emerald-500/30 bg-slate-800/50">
-                      <div className="flex items-start justify-between">
-                        <div className="flex-1">
-                          <h4 className="text-slate-100 font-medium">{appointment.type}</h4>
-                          <p className="text-sm text-slate-400">
-                            {new Date(appointment.date).toLocaleDateString()} {appointment.time && `at ${appointment.time}`}
-                          </p>
-                          {appointment.veterinarian && (
-                            <p className="text-sm text-slate-400">Veterinarian: {appointment.veterinarian}</p>
-                          )}
-                          {appointment.notes && (
-                            <p className="text-sm text-slate-400 mt-1">Notes: {appointment.notes}</p>
-                          )}
+                {upcomingAppointments.map(appointment => (
+                    <div key={appointment.id} className={nestedCardClass}>
+                      {editingAppointmentId === appointment.id ? (
+                        <div className="space-y-4">
+                          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                            <div>
+                              <label className={labelClass}>Date</label>
+                              <input
+                                type="date"
+                                value={editingAppointment.date}
+                                onChange={(e) => setEditingAppointment({ ...editingAppointment, date: e.target.value })}
+                                className={selectClass}
+                              />
+                            </div>
+                            <div>
+                              <label className={labelClass}>Time</label>
+                              <input
+                                type="time"
+                                value={editingAppointment.time}
+                                onChange={(e) => setEditingAppointment({ ...editingAppointment, time: e.target.value })}
+                                className={selectClass}
+                              />
+                            </div>
+                            <div>
+                              <label className={labelClass}>Appointment Type</label>
+                              <input
+                                type="text"
+                                value={editingAppointment.type}
+                                onChange={(e) => setEditingAppointment({ ...editingAppointment, type: e.target.value })}
+                                className={inputClass}
+                              />
+                            </div>
+                            <div>
+                              <label className={labelClass}>Veterinarian</label>
+                              <input
+                                type="text"
+                                value={editingAppointment.veterinarian}
+                                onChange={(e) => setEditingAppointment({ ...editingAppointment, veterinarian: e.target.value })}
+                                className={inputClass}
+                              />
+                            </div>
+                            <div className="md:col-span-2">
+                              <label className={labelClass}>Notes</label>
+                              <textarea
+                                rows={3}
+                                value={editingAppointment.notes}
+                                onChange={(e) => setEditingAppointment({ ...editingAppointment, notes: e.target.value })}
+                                className={`${inputClass} resize-none`}
+                              />
+                            </div>
+                          </div>
+                          <div className="flex gap-2">
+                            <button
+                              onClick={saveAppointmentEdit}
+                              disabled={!editingAppointment.date || !editingAppointment.type.trim() || isSaving}
+                              className="px-4 py-2 rounded-lg bg-emerald-500 text-slate-950 font-medium hover:bg-emerald-400 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                            >
+                              {isSaving ? 'Saving...' : 'Save'}
+                            </button>
+                            <button
+                              onClick={cancelEditingAppointment}
+                              className="px-4 py-2 rounded-lg bg-slate-700 text-slate-200 hover:bg-slate-600 transition-colors"
+                            >
+                              Cancel
+                            </button>
+                          </div>
                         </div>
-                        <button
-                          onClick={() => deleteItem(appointments, setAppointments, appointment.id)}
-                          className="px-3 py-1 rounded-lg bg-red-500/20 text-red-400 hover:bg-red-500/30 transition-colors text-sm"
-                        >
-                          Delete
-                        </button>
-                      </div>
+                      ) : (
+                        <div className="flex items-start justify-between">
+                          <div className="flex-1">
+                            <h4 className="text-slate-100 font-medium">{appointment.type}</h4>
+                            <p className="text-sm text-slate-400">
+                              {new Date(appointment.date).toLocaleDateString()} {appointment.time && `at ${appointment.time}`}
+                            </p>
+                            {appointment.veterinarian && (
+                              <p className="text-sm text-slate-400">Veterinarian: {appointment.veterinarian}</p>
+                            )}
+                            {appointment.notes && (
+                              <p className="text-sm text-slate-400 mt-1">Notes: {appointment.notes}</p>
+                            )}
+                          </div>
+                          <div className="flex gap-1.5 ml-4">
+                            <button
+                              onClick={() => startEditingAppointment(appointment)}
+                              className={rowIconEmeraldClass}
+                              title="Edit appointment"
+                              aria-label="Edit appointment"
+                            >
+                              <svg className="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" /></svg>
+                            </button>
+                            <button
+                              onClick={() => requestDeleteEntry('upcoming appointment', () => deleteItem(appointments, setAppointments, appointment.id))}
+                              className={rowIconDangerClass}
+                              title="Delete appointment"
+                              aria-label="Delete appointment"
+                            >
+                              <svg className="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" /></svg>
+                            </button>
+                          </div>
+                        </div>
+                      )}
                     </div>
                   ))}
               </div>
             </div>
           )}
 
-          {appointments.filter(a => !a.isUpcoming).length > 0 && (
-            <div className="rounded-2xl border border-slate-800 bg-slate-900/70 p-6">
-              <h3 className="text-lg font-semibold text-slate-50 mb-4">Appointment History</h3>
+          {historyAppointments.length > 0 && (
+            <div className={cardClass}>
+              <h3 className={sectionTitleClass}>Appointment History</h3>
               <div className="space-y-3">
-                {appointments
-                  .filter(a => !a.isUpcoming)
-                  .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime())
-                  .map(appointment => (
-                    <div key={appointment.id} className="p-4 rounded-lg border border-slate-700 bg-slate-800/50">
-                      <div className="flex items-start justify-between">
-                        <div className="flex-1">
-                          <h4 className="text-slate-100 font-medium">{appointment.type}</h4>
-                          <p className="text-sm text-slate-400">
-                            {new Date(appointment.date).toLocaleDateString()} {appointment.time && `at ${appointment.time}`}
-                          </p>
-                          {appointment.veterinarian && (
-                            <p className="text-sm text-slate-400">Veterinarian: {appointment.veterinarian}</p>
-                          )}
-                          {appointment.notes && (
-                            <p className="text-sm text-slate-400 mt-1">Notes: {appointment.notes}</p>
-                          )}
+                {historyAppointments.map(appointment => (
+                    <div key={appointment.id} className={nestedCardClass}>
+                      {editingAppointmentId === appointment.id ? (
+                        <div className="space-y-4">
+                          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                            <div>
+                              <label className={labelClass}>Date</label>
+                              <input
+                                type="date"
+                                value={editingAppointment.date}
+                                onChange={(e) => setEditingAppointment({ ...editingAppointment, date: e.target.value })}
+                                className={selectClass}
+                              />
+                            </div>
+                            <div>
+                              <label className={labelClass}>Time</label>
+                              <input
+                                type="time"
+                                value={editingAppointment.time}
+                                onChange={(e) => setEditingAppointment({ ...editingAppointment, time: e.target.value })}
+                                className={selectClass}
+                              />
+                            </div>
+                            <div>
+                              <label className={labelClass}>Appointment Type</label>
+                              <input
+                                type="text"
+                                value={editingAppointment.type}
+                                onChange={(e) => setEditingAppointment({ ...editingAppointment, type: e.target.value })}
+                                className={inputClass}
+                              />
+                            </div>
+                            <div>
+                              <label className={labelClass}>Veterinarian</label>
+                              <input
+                                type="text"
+                                value={editingAppointment.veterinarian}
+                                onChange={(e) => setEditingAppointment({ ...editingAppointment, veterinarian: e.target.value })}
+                                className={inputClass}
+                              />
+                            </div>
+                            <div className="md:col-span-2">
+                              <label className={labelClass}>Notes</label>
+                              <textarea
+                                rows={3}
+                                value={editingAppointment.notes}
+                                onChange={(e) => setEditingAppointment({ ...editingAppointment, notes: e.target.value })}
+                                className={`${inputClass} resize-none`}
+                              />
+                            </div>
+                          </div>
+                          <div className="flex gap-2">
+                            <button
+                              onClick={saveAppointmentEdit}
+                              disabled={!editingAppointment.date || !editingAppointment.type.trim() || isSaving}
+                              className="px-4 py-2 rounded-lg bg-emerald-500 text-slate-950 font-medium hover:bg-emerald-400 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                            >
+                              {isSaving ? 'Saving...' : 'Save'}
+                            </button>
+                            <button
+                              onClick={cancelEditingAppointment}
+                              className="px-4 py-2 rounded-lg bg-slate-700 text-slate-200 hover:bg-slate-600 transition-colors"
+                            >
+                              Cancel
+                            </button>
+                          </div>
                         </div>
-                        <button
-                          onClick={() => deleteItem(appointments, setAppointments, appointment.id)}
-                          className="px-3 py-1 rounded-lg bg-red-500/20 text-red-400 hover:bg-red-500/30 transition-colors text-sm"
-                        >
-                          Delete
-                        </button>
-                      </div>
+                      ) : (
+                        <div className="flex items-start justify-between">
+                          <div className="flex-1">
+                            <h4 className="text-slate-100 font-medium">{appointment.type}</h4>
+                            <p className="text-sm text-slate-400">
+                              {new Date(appointment.date).toLocaleDateString()} {appointment.time && `at ${appointment.time}`}
+                            </p>
+                            {appointment.veterinarian && (
+                              <p className="text-sm text-slate-400">Veterinarian: {appointment.veterinarian}</p>
+                            )}
+                            {appointment.notes && (
+                              <p className="text-sm text-slate-400 mt-1">Notes: {appointment.notes}</p>
+                            )}
+                          </div>
+                          <div className="flex gap-1.5 ml-4">
+                            <button
+                              onClick={() => startEditingAppointment(appointment)}
+                              className={rowIconEmeraldClass}
+                              title="Edit appointment"
+                              aria-label="Edit appointment"
+                            >
+                              <svg className="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" /></svg>
+                            </button>
+                            <button
+                              onClick={() => requestDeleteEntry('appointment history record', () => deleteItem(appointments, setAppointments, appointment.id))}
+                              className={rowIconDangerClass}
+                              title="Delete appointment"
+                              aria-label="Delete appointment"
+                            >
+                              <svg className="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" /></svg>
+                            </button>
+                          </div>
+                        </div>
+                      )}
                     </div>
                   ))}
               </div>
             </div>
           )}
+              </>
+            );
+          })()}
         </div>
       )}
 
       {/* Documents Section */}
       {activeSection === 'documents' && (
         <div className="space-y-6">
-          <div className="rounded-2xl border border-slate-800 bg-slate-900/70 p-6">
-            <h3 className="text-lg font-semibold text-slate-50 mb-4">Upload Document</h3>
+          <div className={cardClass}>
+            <h3 className={sectionTitleClass}>Upload Document</h3>
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <div>
                 <label className="block text-xs font-medium text-slate-300 mb-1.5">Document Name</label>
@@ -3577,20 +3970,20 @@ export function PetCareScheduleTool({ toolId }: PetCareScheduleToolProps) {
             </div>
             <button
               onClick={addDocument}
-              className="mt-4 px-4 py-2 rounded-lg bg-emerald-500 text-slate-950 font-medium hover:bg-emerald-400 transition-colors"
+              className={`mt-4 ${primaryButtonClass}`}
             >
               Add Document
             </button>
           </div>
 
           {documents.length > 0 && (
-            <div className="rounded-2xl border border-slate-800 bg-slate-900/70 p-6">
-              <h3 className="text-lg font-semibold text-slate-50 mb-4">Documents</h3>
+            <div className={cardClass}>
+              <h3 className={sectionTitleClass}>Documents</h3>
               <div className="space-y-3">
                 {documents
                   .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime())
                   .map(document => (
-                    <div key={document.id} className="p-4 rounded-lg border border-slate-700 bg-slate-800/50">
+                    <div key={document.id} className={nestedCardClass}>
                       {editingDocumentId === document.id ? (
                         <div className="space-y-4">
                           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -3657,30 +4050,29 @@ export function PetCareScheduleTool({ toolId }: PetCareScheduleToolProps) {
                               </p>
                             )}
                           </div>
-                          <div className="flex gap-2 ml-4">
+                          <div className="flex gap-1.5 ml-4">
                             {(document.file_url || document.file) && (
                               <button
                                 onClick={() => handleDocumentClick(document)}
-                                className="px-3 py-1 rounded-lg bg-blue-500/20 text-blue-300 hover:bg-blue-500/30 transition-colors text-sm flex items-center gap-1"
+                                className={rowIconSecondaryClass}
                                 title="Download file"
                               >
-                                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <svg className="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
                                 </svg>
-                                Download
                               </button>
                             )}
                             <button
                               onClick={() => startEditingDocument(document)}
-                              className="px-3 py-1 rounded-lg bg-emerald-500/20 text-emerald-300 hover:bg-emerald-500/30 transition-colors text-sm"
+                              className={rowIconEmeraldClass}
                             >
-                              Edit
+                              <svg className="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" /></svg>
                             </button>
                             <button
-                              onClick={() => deleteItem(documents, setDocuments, document.id)}
-                              className="px-3 py-1 rounded-lg bg-red-500/20 text-red-400 hover:bg-red-500/30 transition-colors text-sm"
+                              onClick={() => requestDeleteEntry('document', () => deleteItem(documents, setDocuments, document.id))}
+                              className={rowIconDangerClass}
                             >
-                              Delete
+                              <svg className="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" /></svg>
                             </button>
                           </div>
                         </div>
@@ -3696,8 +4088,8 @@ export function PetCareScheduleTool({ toolId }: PetCareScheduleToolProps) {
       {/* Notes Section */}
       {activeSection === 'notes' && (
         <div className="space-y-6">
-          <div className="rounded-2xl border border-slate-800 bg-slate-900/70 p-6">
-            <h3 className="text-lg font-semibold text-slate-50 mb-4">Add Note</h3>
+          <div className={cardClass}>
+            <h3 className={sectionTitleClass}>Add Note</h3>
             <textarea
               value={currentNote}
               onChange={(e) => setCurrentNote(e.target.value)}
@@ -3707,21 +4099,21 @@ export function PetCareScheduleTool({ toolId }: PetCareScheduleToolProps) {
             />
             <button
               onClick={addNote}
-              className="mt-4 px-4 py-2 rounded-lg bg-emerald-500 text-slate-950 font-medium hover:bg-emerald-400 transition-colors"
+              className={`mt-4 ${primaryButtonClass}`}
             >
               Add Note
             </button>
           </div>
 
           {notes.filter(n => n.isCurrent).length > 0 && (
-            <div className="rounded-2xl border border-slate-800 bg-slate-900/70 p-6">
-              <h3 className="text-lg font-semibold text-slate-50 mb-4">Current Notes</h3>
+            <div className={cardClass}>
+              <h3 className={sectionTitleClass}>Current Notes</h3>
               <div className="space-y-3">
                 {notes
                   .filter(n => n.isCurrent)
                   .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime())
                   .map(note => (
-                    <div key={note.id} className="p-4 rounded-lg border border-slate-700 bg-slate-800/50">
+                    <div key={note.id} className={nestedCardClass}>
                       {editingNoteId === note.id ? (
                         <div className="space-y-4">
                           <textarea
@@ -3753,24 +4145,24 @@ export function PetCareScheduleTool({ toolId }: PetCareScheduleToolProps) {
                             <p className="text-slate-100 whitespace-pre-wrap">{note.content}</p>
                             <p className="text-sm text-slate-400 mt-2">Date: {new Date(note.date).toLocaleDateString()}</p>
                           </div>
-                          <div className="flex gap-2 ml-4">
+                          <div className="flex gap-1.5 ml-4">
                             <button
                               onClick={() => startEditingNote(note)}
-                              className="px-3 py-1 rounded-lg bg-emerald-500/20 text-emerald-300 hover:bg-emerald-500/30 transition-colors text-sm"
+                              className={rowIconEmeraldClass}
                             >
-                              Edit
+                              <svg className="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" /></svg>
                             </button>
                             <button
                               onClick={() => archiveNote(note.id)}
-                              className="px-3 py-1 rounded-lg bg-slate-700 text-slate-200 hover:bg-slate-600 transition-colors text-sm"
+                              className={rowIconSecondaryClass}
                             >
-                              Archive
+                              <svg className="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M20.25 7.5l-.625 10.632a2.25 2.25 0 01-2.247 2.118H6.622a2.25 2.25 0 01-2.247-2.118L3.75 7.5M10 11.25h4M3.375 7.5h17.25c.621 0 1.125-.504 1.125-1.125v-1.5c0-.621-.504-1.125-1.125-1.125H3.375c-.621 0-1.125.504-1.125 1.125v1.5c0 .621.504 1.125 1.125 1.125z" /></svg>
                             </button>
                             <button
-                              onClick={() => deleteItem(notes, setNotes, note.id)}
-                              className="px-3 py-1 rounded-lg bg-red-500/20 text-red-400 hover:bg-red-500/30 transition-colors text-sm"
+                              onClick={() => requestDeleteEntry('current note', () => deleteItem(notes, setNotes, note.id))}
+                              className={rowIconDangerClass}
                             >
-                              Delete
+                              <svg className="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" /></svg>
                             </button>
                           </div>
                         </div>
@@ -3782,14 +4174,14 @@ export function PetCareScheduleTool({ toolId }: PetCareScheduleToolProps) {
           )}
 
           {notes.filter(n => !n.isCurrent).length > 0 && (
-            <div className="rounded-2xl border border-slate-800 bg-slate-900/70 p-6">
-              <h3 className="text-lg font-semibold text-slate-50 mb-4">Note History</h3>
+            <div className={cardClass}>
+              <h3 className={sectionTitleClass}>Note History</h3>
               <div className="space-y-3">
                 {notes
                   .filter(n => !n.isCurrent)
                   .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime())
                   .map(note => (
-                    <div key={note.id} className="p-4 rounded-lg border border-slate-700 bg-slate-800/50">
+                    <div key={note.id} className={nestedCardClass}>
                       {editingNoteId === note.id ? (
                         <div className="space-y-4">
                           <textarea
@@ -3821,18 +4213,32 @@ export function PetCareScheduleTool({ toolId }: PetCareScheduleToolProps) {
                             <p className="text-slate-100 whitespace-pre-wrap">{note.content}</p>
                             <p className="text-sm text-slate-400 mt-2">Date: {new Date(note.date).toLocaleDateString()}</p>
                           </div>
-                          <div className="flex gap-2 ml-4">
+                          <div className="flex gap-1.5 ml-4">
                             <button
                               onClick={() => startEditingNote(note)}
-                              className="px-3 py-1 rounded-lg bg-emerald-500/20 text-emerald-300 hover:bg-emerald-500/30 transition-colors text-sm"
+                              className={rowIconEmeraldClass}
+                              title="Edit note"
+                              aria-label="Edit note"
                             >
-                              Edit
+                              <svg className="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" /></svg>
                             </button>
                             <button
-                              onClick={() => deleteItem(notes, setNotes, note.id)}
-                              className="px-3 py-1 rounded-lg bg-red-500/20 text-red-400 hover:bg-red-500/30 transition-colors text-sm"
+                              onClick={() => reactivateNote(note.id)}
+                              className={rowIconSecondaryClass}
+                              title="Return to active"
+                              aria-label="Return note to active"
                             >
-                              Delete
+                              <svg className="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 15L3 9m0 0l6-6M3 9h12a6 6 0 010 12h-3" />
+                              </svg>
+                            </button>
+                            <button
+                              onClick={() => requestDeleteEntry('note history record', () => deleteItem(notes, setNotes, note.id))}
+                              className={rowIconDangerClass}
+                              title="Delete note"
+                              aria-label="Delete note"
+                            >
+                              <svg className="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" /></svg>
                             </button>
                           </div>
                         </div>
@@ -3848,14 +4254,14 @@ export function PetCareScheduleTool({ toolId }: PetCareScheduleToolProps) {
       {/* Export Section */}
       {activeSection === 'export' && (
         <div className="space-y-6">
-          <div className="rounded-2xl border border-slate-800 bg-slate-900/70 p-6">
-            <h3 className="text-lg font-semibold text-slate-50 mb-4">Export Pet Report</h3>
+          <div className={cardClass}>
+            <h3 className={sectionTitleClass}>Export Pet Report</h3>
             <p className="text-slate-300 mb-4">
               Generate a comprehensive PDF report of all your pet's information. The report will include all sections: Pet Info, Food, Veterinary Contacts, Care Plan, Vaccinations, Appointments, Documents, and Notes.
             </p>
             <button
               onClick={() => setShowExportPopup(true)}
-              className="px-6 py-3 rounded-lg bg-emerald-500 text-slate-950 font-medium hover:bg-emerald-400 transition-colors"
+              className={isLight ? 'px-6 py-3 rounded-lg bg-emerald-600 text-white font-medium hover:bg-emerald-500 transition-colors' : 'px-6 py-3 rounded-lg bg-emerald-500 text-slate-950 font-medium hover:bg-emerald-400 transition-colors'}
             >
               Generate PDF Report
             </button>
@@ -3866,9 +4272,9 @@ export function PetCareScheduleTool({ toolId }: PetCareScheduleToolProps) {
       {/* Export Popup */}
       {showExportPopup && (
         <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
-          <div className="bg-slate-800 rounded-2xl border border-slate-700 p-6 max-w-md w-full mx-4">
+          <div className={modalCardClass}>
             <div className="flex items-center justify-between mb-4">
-              <h3 className="text-lg font-semibold text-slate-50">Export Options</h3>
+              <h3 className={isLight ? 'text-lg font-semibold text-slate-900' : 'text-lg font-semibold text-slate-50'}>Export Options</h3>
               <button
                 onClick={() => setShowExportPopup(false)}
                 className="text-slate-400 hover:text-slate-200 transition-colors"
@@ -3888,7 +4294,7 @@ export function PetCareScheduleTool({ toolId }: PetCareScheduleToolProps) {
                   onChange={(e) => setIncludeHistory(e.target.checked)}
                   className="w-5 h-5 rounded border-slate-600 bg-slate-700 text-emerald-500 focus:ring-emerald-500 focus:ring-offset-slate-800"
                 />
-                <label htmlFor="includeHistory" className="text-slate-300 cursor-pointer">
+                <label htmlFor="includeHistory" className={isLight ? 'text-slate-700 cursor-pointer' : 'text-slate-300 cursor-pointer'}>
                   Include history items (archived food, veterinary contacts, care plan items, and notes)
                 </label>
               </div>
@@ -3896,13 +4302,13 @@ export function PetCareScheduleTool({ toolId }: PetCareScheduleToolProps) {
               <div className="flex gap-3 pt-4">
                 <button
                   onClick={exportToPDF}
-                  className="flex-1 px-4 py-2 rounded-lg bg-emerald-500 text-slate-950 font-medium hover:bg-emerald-400 transition-colors"
+                  className={isLight ? 'flex-1 px-4 py-2 rounded-lg bg-emerald-600 text-white font-medium hover:bg-emerald-500 transition-colors' : 'flex-1 px-4 py-2 rounded-lg bg-emerald-500 text-slate-950 font-medium hover:bg-emerald-400 transition-colors'}
                 >
                   Export to PDF
                 </button>
                 <button
                   onClick={() => setShowExportPopup(false)}
-                  className="px-4 py-2 rounded-lg bg-slate-700 text-slate-200 hover:bg-slate-600 transition-colors"
+                  className={secondaryButtonClass}
                 >
                   Cancel
                 </button>

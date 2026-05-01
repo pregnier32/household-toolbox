@@ -1,11 +1,11 @@
 'use client';
 
-import Image from 'next/image'
 import { useState, useRef, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
 import Link from 'next/link'
 import { signUp, signIn } from './actions/auth'
 import { HelpMenu } from './components/HelpMenu'
+import { SideLogo } from './components/SideLogo'
 
 export default function Home() {
   const [isSignUp, setIsSignUp] = useState(false);
@@ -59,14 +59,7 @@ export default function Home() {
         {/* Nav */}
         <header className="mb-10 flex items-center justify-between">
           <div className="flex items-center">
-            <Image
-              src="/images/logo/Logo_Side_White.png"
-              alt="Household Toolbox"
-              width={200}
-              height={40}
-              className="h-auto"
-              priority
-            />
+            <SideLogo priority />
           </div>
 
           <nav className="hidden gap-6 text-sm text-slate-300 sm:flex items-center">

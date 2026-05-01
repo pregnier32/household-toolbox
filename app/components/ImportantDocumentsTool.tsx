@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useEffect } from 'react';
+import { useTheme } from './AppThemeProvider';
 
 type DocumentTag = {
   id: string;
@@ -76,6 +77,66 @@ type ImportantDocumentsToolProps = {
 };
 
 export function ImportantDocumentsTool({ toolId }: ImportantDocumentsToolProps) {
+  const { resolvedTheme } = useTheme();
+  const isLight = resolvedTheme === 'light';
+  const titleClass = isLight ? 'text-2xl font-semibold text-slate-900 mb-2' : 'text-2xl font-semibold text-slate-50 mb-2';
+  const descClass = isLight ? 'text-slate-600 text-sm' : 'text-slate-400 text-sm';
+  const loadingClass = isLight ? 'text-sm text-slate-600' : 'text-sm text-slate-400';
+  const cardClass = isLight
+    ? 'rounded-2xl border border-slate-200 bg-white p-6 shadow-sm'
+    : 'rounded-2xl border border-slate-800 bg-slate-900/70 p-6';
+  const nestedCardClass = isLight
+    ? 'p-3 rounded-lg border border-slate-200 bg-slate-50'
+    : 'p-3 rounded-lg border border-slate-700 bg-slate-800/50';
+  const sectionTitleClass = isLight ? 'text-lg font-semibold text-slate-900' : 'text-lg font-semibold text-slate-50';
+  const counterTextClass = isLight ? 'text-sm text-slate-600' : 'text-sm text-slate-400';
+  const labelClass = isLight ? 'block text-sm font-medium text-slate-700 mb-2' : 'block text-sm font-medium text-slate-300 mb-2';
+  const inputClass = isLight
+    ? 'w-full px-3 py-2 rounded-lg border border-slate-300 bg-white text-slate-900 placeholder-slate-500 focus:border-emerald-500/50 focus:outline-none focus:ring-1 focus:ring-emerald-500/50'
+    : 'w-full px-3 py-2 rounded-lg border border-slate-700 bg-slate-900/70 text-slate-100 placeholder-slate-500 focus:border-emerald-500/50 focus:outline-none focus:ring-1 focus:ring-emerald-500/50';
+  const selectClass = isLight
+    ? 'w-full px-4 py-2 rounded-lg border border-slate-300 bg-white text-slate-900 focus:border-emerald-500/50 focus:outline-none focus:ring-1 focus:ring-emerald-500/50'
+    : 'w-full px-4 py-2 rounded-lg border border-slate-700 bg-slate-900/70 text-slate-100 focus:border-emerald-500/50 focus:outline-none focus:ring-1 focus:ring-emerald-500/50';
+  const primaryButtonClass = isLight
+    ? 'px-4 py-2.5 rounded-lg bg-emerald-600 text-white font-semibold hover:bg-emerald-500 transition-colors focus:outline-none focus:ring-2 focus:ring-emerald-500/50 focus:ring-offset-2 focus:ring-offset-white disabled:cursor-not-allowed disabled:opacity-50'
+    : 'px-4 py-2.5 rounded-lg bg-emerald-500 text-slate-950 font-semibold hover:bg-emerald-400 transition-colors focus:outline-none focus:ring-2 focus:ring-emerald-500/50 focus:ring-offset-2 focus:ring-offset-slate-900 disabled:cursor-not-allowed disabled:opacity-50';
+  const secondaryButtonClass = isLight
+    ? 'px-4 py-2 rounded-lg border-2 border-slate-400 bg-slate-100 text-slate-800 hover:bg-slate-200 transition-colors'
+    : 'px-4 py-2 rounded-lg border border-slate-700 bg-slate-800 text-slate-200 hover:bg-slate-700 transition-colors';
+  const tabStripClass = isLight ? 'border-b border-slate-200' : 'border-b border-slate-800';
+  const tabActiveClass = isLight
+    ? 'border-b-2 border-emerald-600 text-emerald-900 font-semibold'
+    : 'border-b-2 border-emerald-500 text-emerald-300';
+  const tabInactiveClass = isLight
+    ? 'text-slate-600 hover:text-slate-900'
+    : 'text-slate-400 hover:text-slate-300';
+  const modalCardClass = isLight
+    ? 'rounded-2xl border border-slate-200 bg-white p-6 max-w-md w-full mx-4 shadow-xl'
+    : 'rounded-2xl border border-slate-800 bg-slate-900 p-6 max-w-md w-full mx-4';
+  const deleteModalCardClass = isLight
+    ? 'rounded-2xl border border-slate-200 bg-white p-6 max-w-md w-full mx-4 shadow-2xl'
+    : 'rounded-2xl border border-slate-800 bg-slate-900 p-6 max-w-md w-full mx-4';
+  const deleteModalTitleClass = isLight ? 'text-xl font-semibold text-slate-900 mb-2' : 'text-xl font-semibold text-slate-50 mb-2';
+  const deleteWarningBoxClass = isLight
+    ? 'rounded-lg border border-red-300 bg-red-50 px-4 py-3 mb-4'
+    : 'rounded-lg border border-red-500/50 bg-red-500/10 px-4 py-3 mb-4';
+  const deleteWarningTextClass = isLight ? 'text-red-700 font-semibold mb-2' : 'text-red-300 font-semibold mb-2';
+  const deleteWarningDetailClass = isLight ? 'text-red-600 text-sm' : 'text-red-200 text-sm';
+  const deleteInstructionClass = isLight ? 'text-slate-700 mb-4' : 'text-slate-300 mb-4';
+  const deleteKeywordClass = isLight ? 'text-slate-900' : 'text-slate-200';
+  const deleteInputClass = isLight
+    ? 'w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900 placeholder-slate-500 focus:border-red-500/50 focus:outline-none focus:ring-1 focus:ring-red-500/50 mb-4'
+    : 'w-full rounded-lg border border-slate-700 bg-slate-900/70 px-3 py-2 text-sm text-slate-100 placeholder-slate-500 focus:border-red-500/50 focus:outline-none focus:ring-1 focus:ring-red-500/50 mb-4';
+  const rowIconEmeraldClass = isLight
+    ? 'inline-flex items-center justify-center rounded-lg border-2 border-emerald-700 bg-white p-2 text-emerald-700 transition-colors hover:bg-emerald-50 hover:text-emerald-900 focus:outline-none focus:ring-2 focus:ring-emerald-500/50 focus:ring-offset-2 focus:ring-offset-white'
+    : 'inline-flex items-center justify-center rounded-lg border-2 border-emerald-500/50 bg-slate-800/50 p-2 text-emerald-300 transition-colors hover:border-emerald-400 hover:bg-emerald-500/20 focus:outline-none focus:ring-2 focus:ring-emerald-500/50 focus:ring-offset-2 focus:ring-offset-slate-900';
+  const rowIconSecondaryClass = isLight
+    ? 'inline-flex items-center justify-center rounded-lg border-2 border-slate-400 bg-slate-100 p-2 text-slate-700 transition-colors hover:bg-slate-200 hover:text-slate-900 focus:outline-none focus:ring-2 focus:ring-slate-400/40 focus:ring-offset-2 focus:ring-offset-white'
+    : 'inline-flex items-center justify-center rounded-lg border-2 border-slate-600 bg-slate-800 p-2 text-slate-200 transition-colors hover:bg-slate-700 focus:outline-none focus:ring-2 focus:ring-slate-500/50 focus:ring-offset-2 focus:ring-offset-slate-900';
+  const rowIconDangerClass = isLight
+    ? 'inline-flex items-center justify-center rounded-lg border-2 border-red-300 bg-white p-2 text-red-700 transition-colors hover:bg-red-50 hover:border-red-400 focus:outline-none focus:ring-2 focus:ring-red-500/40 focus:ring-offset-2 focus:ring-offset-white'
+    : 'inline-flex items-center justify-center rounded-lg border-2 border-red-500/50 bg-slate-800/50 p-2 text-red-400 transition-colors hover:border-red-400 hover:bg-red-500/20 focus:outline-none focus:ring-2 focus:ring-red-500/50 focus:ring-offset-2 focus:ring-offset-slate-900';
+
   const [documents, setDocuments] = useState<Document[]>([]);
   const [tags, setTags] = useState<DocumentTag[]>([]);
   const [activeTab, setActiveTab] = useState<'documents' | 'tags'>('documents');
@@ -1236,20 +1297,20 @@ export function ImportantDocumentsTool({ toolId }: ImportantDocumentsToolProps) 
       {/* Header */}
       <div className="flex items-center justify-between">
         <div>
-          <h2 className="text-2xl font-semibold text-slate-50 mb-2">Important Documents</h2>
-          <p className="text-slate-400 text-sm">
+          <h2 className={titleClass}>Important Documents</h2>
+          <p className={descClass}>
             Upload, tag, and manage your important documents
           </p>
         </div>
         {isLoading && (
-          <div className="text-sm text-slate-400">
+          <div className={loadingClass}>
             Loading...
           </div>
         )}
       </div>
 
       {/* Tabs */}
-      <div className="border-b border-slate-800">
+      <div className={tabStripClass}>
         <div className="flex gap-2">
           {[
             { id: 'documents', label: 'Documents' },
@@ -1259,9 +1320,7 @@ export function ImportantDocumentsTool({ toolId }: ImportantDocumentsToolProps) 
               key={tab.id}
               onClick={() => setActiveTab(tab.id as 'documents' | 'tags')}
               className={`px-4 py-2 text-sm font-medium transition-colors ${
-                activeTab === tab.id
-                  ? 'border-b-2 border-emerald-500 text-emerald-300'
-                  : 'text-slate-400 hover:text-slate-300'
+                activeTab === tab.id ? tabActiveClass : tabInactiveClass
               }`}
             >
               {tab.label}
@@ -1274,10 +1333,10 @@ export function ImportantDocumentsTool({ toolId }: ImportantDocumentsToolProps) 
       {activeTab === 'documents' && (
         <div className="space-y-6">
           {/* Search and Filter */}
-          <div className="rounded-2xl border border-slate-800 bg-slate-900/70 p-6">
+          <div className={cardClass}>
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <div>
-                <label className="block text-sm font-medium text-slate-300 mb-2">
+                <label className={labelClass}>
                   Search Documents
                 </label>
                 <input
@@ -1285,17 +1344,17 @@ export function ImportantDocumentsTool({ toolId }: ImportantDocumentsToolProps) 
                   value={searchQuery}
                   onChange={(e) => setSearchQuery(e.target.value)}
                   placeholder="Search by document name or note..."
-                  className="w-full px-3 py-2 rounded-lg border border-slate-700 bg-slate-900/70 text-slate-100 placeholder-slate-500 focus:border-emerald-500/50 focus:outline-none focus:ring-1 focus:ring-emerald-500/50"
+                  className={inputClass}
                 />
               </div>
               <div>
-                <label className="block text-sm font-medium text-slate-300 mb-2">
+                <label className={labelClass}>
                   Filter by Tag
                 </label>
                 <select
                   value={selectedTagFilter}
                   onChange={(e) => setSelectedTagFilter(e.target.value)}
-                  className="w-full px-4 py-2 rounded-lg border border-slate-700 bg-slate-900/70 text-slate-100 focus:border-emerald-500/50 focus:outline-none focus:ring-1 focus:ring-emerald-500/50"
+                  className={selectClass}
                 >
                   <option value="all">All Tags</option>
                   {activeTags.map(tag => (
@@ -1311,13 +1370,13 @@ export function ImportantDocumentsTool({ toolId }: ImportantDocumentsToolProps) 
             <div className="flex justify-start">
               <button
                 onClick={() => setIsAdding(true)}
-                className="px-4 py-2.5 rounded-lg bg-emerald-500 text-slate-950 font-semibold hover:bg-emerald-400 transition-colors focus:outline-none focus:ring-2 focus:ring-emerald-500/50 focus:ring-offset-2 focus:ring-offset-slate-900"
+                className={primaryButtonClass}
               >
                 + Add New Document
               </button>
             </div>
           ) : (
-            <div className="rounded-2xl border border-slate-800 bg-slate-900/70 p-6">
+            <div className={cardClass}>
               <h3 className="text-lg font-semibold text-slate-50 mb-4">Add New Document</h3>
               <div className="space-y-4">
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -1569,7 +1628,7 @@ export function ImportantDocumentsTool({ toolId }: ImportantDocumentsToolProps) 
                       (newDocument.requiresPasswordForDownload && (!newDocument.downloadPassword.trim() || newDocument.downloadPassword !== newDocument.confirmPassword)) ||
                       (newDocument.requiresPasswordForDownload && newDocument.securityQuestions.filter(q => q.questionId && q.answer.trim()).length !== 3)
                     }
-                    className="px-4 py-2.5 rounded-lg bg-emerald-500 text-slate-950 font-semibold hover:bg-emerald-400 transition-colors focus:outline-none focus:ring-2 focus:ring-emerald-500/50 focus:ring-offset-2 focus:ring-offset-slate-900 disabled:cursor-not-allowed disabled:opacity-50"
+                    className={primaryButtonClass}
                   >
                     Add Document
                   </button>
@@ -1594,7 +1653,7 @@ export function ImportantDocumentsTool({ toolId }: ImportantDocumentsToolProps) 
                       });
                       setShowPassword({ ...showPassword, new: false, newConfirm: false });
                     }}
-                    className="px-4 py-2 rounded-lg border border-slate-700 bg-slate-800 text-slate-200 hover:bg-slate-700 transition-colors"
+                    className={secondaryButtonClass}
                   >
                     Cancel
                   </button>
@@ -1604,17 +1663,17 @@ export function ImportantDocumentsTool({ toolId }: ImportantDocumentsToolProps) 
           )}
 
           {/* Active Documents */}
-          <div className="rounded-2xl border border-slate-800 bg-slate-900/70 p-6">
+          <div className={cardClass}>
             <div className="flex items-center justify-between mb-4">
-              <h3 className="text-lg font-semibold text-slate-50">Active Documents</h3>
-              <span className="text-sm text-slate-400">
+              <h3 className={sectionTitleClass}>Active Documents</h3>
+              <span className={counterTextClass}>
                 {activeDocuments.length} {activeDocuments.length === 1 ? 'document' : 'documents'}
               </span>
             </div>
             {activeDocuments.length > 0 ? (
               <div className="space-y-4">
                 {activeDocuments.map(document => (
-                    <div key={document.id} className="p-3 rounded-lg border border-slate-700 bg-slate-800/50">
+                    <div key={document.id} className={nestedCardClass}>
                     {editingId === document.id ? (
                       <div className="space-y-4">
                         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -1825,7 +1884,14 @@ export function ImportantDocumentsTool({ toolId }: ImportantDocumentsToolProps) 
                               {document.tags.map(tagId => {
                                 const tag = tags.find(t => t.id === tagId);
                                 return tag ? (
-                                  <span key={tagId} className="px-1.5 py-0.5 rounded text-xs font-medium bg-emerald-500/20 text-emerald-300">
+                                  <span
+                                    key={tagId}
+                                    className={`px-1.5 py-0.5 rounded text-xs font-medium ${
+                                      isLight
+                                        ? 'border border-emerald-300 bg-emerald-50 text-emerald-800'
+                                        : 'bg-emerald-500/20 text-emerald-300'
+                                    }`}
+                                  >
                                     {tag.name}
                                   </span>
                                 ) : null;
@@ -1864,25 +1930,39 @@ export function ImportantDocumentsTool({ toolId }: ImportantDocumentsToolProps) 
                             </div>
                           )}
                         </div>
-                        <div className="flex gap-2 flex-shrink-0">
+                        <div className="flex gap-1.5 flex-shrink-0">
                           <button
+                            type="button"
                             onClick={() => handleDownload(document)}
-                            className="px-2.5 py-1 rounded-lg bg-blue-500/20 text-blue-300 hover:bg-blue-500/30 transition-colors text-xs whitespace-nowrap"
+                            className={rowIconSecondaryClass}
                             title="Download document"
+                            aria-label="Download document"
                           >
-                            Download
+                            <svg className="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 3v12m0 0l4-4m-4 4l-4-4m-5 8h18" />
+                            </svg>
                           </button>
                           <button
+                            type="button"
                             onClick={() => startEditing(document)}
-                            className="px-2.5 py-1 rounded-lg bg-emerald-500/20 text-emerald-300 hover:bg-emerald-500/30 transition-colors text-xs whitespace-nowrap"
+                            className={rowIconEmeraldClass}
+                            title="Edit document"
+                            aria-label="Edit document"
                           >
-                            Edit
+                            <svg className="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
+                            </svg>
                           </button>
                           <button
+                            type="button"
                             onClick={() => inactivateDocument(document.id)}
-                            className="px-2.5 py-1 rounded-lg bg-slate-700 text-slate-200 hover:bg-slate-600 transition-colors text-xs whitespace-nowrap"
+                            className={rowIconSecondaryClass}
+                            title="Move to history"
+                            aria-label="Move to history"
                           >
-                            Inactivate
+                            <svg className="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M20.25 7.5l-.625 10.632a2.25 2.25 0 01-2.247 2.118H6.622a2.25 2.25 0 01-2.247-2.118L3.75 7.5M10 11.25h4M3.375 7.5h17.25c.621 0 1.125-.504 1.125-1.125v-1.5c0-.621-.504-1.125-1.125-1.125H3.375c-.621 0-1.125.504-1.125 1.125v1.5c0 .621.504 1.125 1.125 1.125z" />
+                            </svg>
                           </button>
                         </div>
                       </div>
@@ -1896,7 +1976,7 @@ export function ImportantDocumentsTool({ toolId }: ImportantDocumentsToolProps) 
           </div>
 
           {/* History Section */}
-          <div className="rounded-2xl border border-slate-800 bg-slate-900/70 p-6">
+          <div className={cardClass}>
             <div className="flex items-center justify-between mb-4">
               <h3 className="text-lg font-semibold text-slate-50">History</h3>
               <button
@@ -1919,7 +1999,14 @@ export function ImportantDocumentsTool({ toolId }: ImportantDocumentsToolProps) 
                               {document.tags.map(tagId => {
                                 const tag = tags.find(t => t.id === tagId);
                                 return tag ? (
-                                  <span key={tagId} className="px-1.5 py-0.5 rounded text-xs font-medium bg-slate-600/50 text-slate-400">
+                                  <span
+                                    key={tagId}
+                                    className={`px-1.5 py-0.5 rounded text-xs font-medium ${
+                                      isLight
+                                        ? 'border border-slate-300 bg-slate-100 text-slate-700'
+                                        : 'bg-slate-600/50 text-slate-400'
+                                    }`}
+                                  >
                                     {tag.name}
                                   </span>
                                 ) : null;
@@ -1946,25 +2033,39 @@ export function ImportantDocumentsTool({ toolId }: ImportantDocumentsToolProps) 
                             </div>
                           )}
                         </div>
-                        <div className="flex gap-2 flex-shrink-0">
+                        <div className="flex gap-1.5 flex-shrink-0">
                           <button
+                            type="button"
                             onClick={() => handleDownload(document)}
-                            className="px-2.5 py-1 rounded-lg bg-blue-500/20 text-blue-300 hover:bg-blue-500/30 transition-colors text-xs whitespace-nowrap"
+                            className={rowIconSecondaryClass}
                             title="Download document"
+                            aria-label="Download document"
                           >
-                            Download
+                            <svg className="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 3v12m0 0l4-4m-4 4l-4-4m-5 8h18" />
+                            </svg>
                           </button>
                           <button
+                            type="button"
                             onClick={() => activateDocument(document.id)}
-                            className="px-2.5 py-1 rounded-lg bg-emerald-500/20 text-emerald-400 hover:bg-emerald-500/30 transition-colors text-xs whitespace-nowrap"
+                            className={rowIconEmeraldClass}
+                            title="Activate document"
+                            aria-label="Activate document"
                           >
-                            Activate
+                            <svg className="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 15L3 9m0 0l6-6M3 9h12a6 6 0 010 12h-3" />
+                            </svg>
                           </button>
                           <button
+                            type="button"
                             onClick={() => setDeleteConfirmId(document.id)}
-                            className="px-2.5 py-1 rounded-lg bg-red-500/20 text-red-400 hover:bg-red-500/30 transition-colors text-xs whitespace-nowrap"
+                            className={rowIconDangerClass}
+                            title="Delete document"
+                            aria-label="Delete document"
                           >
-                            Delete
+                            <svg className="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                            </svg>
                           </button>
                         </div>
                       </div>
@@ -1987,13 +2088,13 @@ export function ImportantDocumentsTool({ toolId }: ImportantDocumentsToolProps) 
             <div className="flex justify-start">
               <button
                 onClick={() => setIsAddingTag(true)}
-                className="px-4 py-2.5 rounded-lg bg-emerald-500 text-slate-950 font-semibold hover:bg-emerald-400 transition-colors focus:outline-none focus:ring-2 focus:ring-emerald-500/50 focus:ring-offset-2 focus:ring-offset-slate-900"
+                className={primaryButtonClass}
               >
                 + Add New Tag
               </button>
             </div>
           ) : (
-            <div className="rounded-2xl border border-slate-800 bg-slate-900/70 p-6">
+            <div className={cardClass}>
               <h3 className="text-lg font-semibold text-slate-50 mb-4">Add New Tag</h3>
               <div className="flex gap-4">
                 <input
@@ -2011,7 +2112,7 @@ export function ImportantDocumentsTool({ toolId }: ImportantDocumentsToolProps) 
                 <button
                   onClick={addTag}
                   disabled={!newTagName.trim()}
-                  className="px-4 py-2 rounded-lg bg-emerald-500 text-slate-950 font-medium hover:bg-emerald-400 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                  className={primaryButtonClass}
                 >
                   Add Tag
                 </button>
@@ -2020,7 +2121,7 @@ export function ImportantDocumentsTool({ toolId }: ImportantDocumentsToolProps) 
                     setIsAddingTag(false);
                     setNewTagName('');
                   }}
-                  className="px-4 py-2 rounded-lg border border-slate-700 bg-slate-800 text-slate-200 hover:bg-slate-700 transition-colors"
+                  className={secondaryButtonClass}
                 >
                   Cancel
                 </button>
@@ -2029,7 +2130,7 @@ export function ImportantDocumentsTool({ toolId }: ImportantDocumentsToolProps) 
           )}
 
           {/* Active Tags */}
-          <div className="rounded-2xl border border-slate-800 bg-slate-900/70 p-6">
+          <div className={cardClass}>
             <div className="flex items-center justify-between mb-4">
               <h3 className="text-lg font-semibold text-slate-50">Active Tags</h3>
               <span className="text-sm text-slate-400">
@@ -2080,16 +2181,26 @@ export function ImportantDocumentsTool({ toolId }: ImportantDocumentsToolProps) 
                         </div>
                         <div className="flex gap-2">
                           <button
+                            type="button"
                             onClick={() => startEditingTag(tag)}
-                            className="px-3 py-1 rounded-lg bg-emerald-500/20 text-emerald-300 hover:bg-emerald-500/30 transition-colors text-sm"
+                            className={rowIconEmeraldClass}
+                            title="Edit tag"
+                            aria-label="Edit tag"
                           >
-                            Edit
+                            <svg className="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
+                            </svg>
                           </button>
                           <button
+                            type="button"
                             onClick={() => inactivateTag(tag.id)}
-                            className="px-3 py-1 rounded-lg bg-slate-700 text-slate-200 hover:bg-slate-600 transition-colors text-sm"
+                            className={rowIconSecondaryClass}
+                            title="Inactivate tag"
+                            aria-label="Inactivate tag"
                           >
-                            Inactivate
+                            <svg className="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M20.25 7.5l-.625 10.632a2.25 2.25 0 01-2.247 2.118H6.622a2.25 2.25 0 01-2.247-2.118L3.75 7.5M10 11.25h4M3.375 7.5h17.25c.621 0 1.125-.504 1.125-1.125v-1.5c0-.621-.504-1.125-1.125-1.125H3.375c-.621 0-1.125.504-1.125 1.125v1.5c0 .621.504 1.125 1.125 1.125z" />
+                            </svg>
                           </button>
                         </div>
                       </div>
@@ -2103,7 +2214,7 @@ export function ImportantDocumentsTool({ toolId }: ImportantDocumentsToolProps) 
           </div>
 
           {/* Inactive Tags */}
-          <div className="rounded-2xl border border-slate-800 bg-slate-900/70 p-6">
+          <div className={cardClass}>
             <div className="flex items-center justify-between mb-4">
               <h3 className="text-lg font-semibold text-slate-50">Inactive Tags</h3>
               <span className="text-sm text-slate-400">
@@ -2125,19 +2236,27 @@ export function ImportantDocumentsTool({ toolId }: ImportantDocumentsToolProps) 
                         </div>
                         <div className="flex gap-2">
                           <button
+                            type="button"
                             onClick={() => activateTag(tag.id)}
-                            className="px-3 py-1 rounded-lg bg-emerald-500/20 text-emerald-400 hover:bg-emerald-500/30 transition-colors text-sm"
+                            className={rowIconEmeraldClass}
+                            title="Activate tag"
+                            aria-label="Activate tag"
                           >
-                            Activate
+                            <svg className="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 15L3 9m0 0l6-6M3 9h12a6 6 0 010 12h-3" />
+                            </svg>
                           </button>
-                          {usageCount === 0 && (
-                            <button
-                              onClick={() => setDeleteTagConfirmId(tag.id)}
-                              className="px-3 py-1 rounded-lg bg-red-500/20 text-red-400 hover:bg-red-500/30 transition-colors text-sm"
-                            >
-                              Delete
-                            </button>
-                          )}
+                          <button
+                            type="button"
+                            onClick={() => setDeleteTagConfirmId(tag.id)}
+                            className={rowIconDangerClass}
+                            title="Delete tag"
+                            aria-label="Delete tag"
+                          >
+                            <svg className="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                            </svg>
+                          </button>
                         </div>
                       </div>
                     </div>
@@ -2154,20 +2273,21 @@ export function ImportantDocumentsTool({ toolId }: ImportantDocumentsToolProps) 
       {/* Delete Confirmation Modal */}
       {deleteConfirmId && (
         <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
-          <div className="rounded-2xl border border-slate-800 bg-slate-900 p-6 max-w-md w-full mx-4">
-            <h3 className="text-xl font-semibold text-slate-50 mb-2">Delete Document</h3>
-            <p className="text-slate-300 mb-4">
-              <strong className="text-red-400">Warning:</strong> This action cannot be undone. This document will be permanently deleted.
-            </p>
-            <p className="text-slate-400 text-sm mb-4">
-              To confirm, please type <strong className="text-slate-200">delete</strong> in the box below:
+          <div className={deleteModalCardClass}>
+            <h3 className={deleteModalTitleClass}>Delete Document</h3>
+            <div className={deleteWarningBoxClass}>
+              <p className={deleteWarningTextClass}>Warning: This action cannot be undone.</p>
+              <p className={deleteWarningDetailClass}>This document will be permanently deleted.</p>
+            </div>
+            <p className={deleteInstructionClass}>
+              To confirm, please type <strong className={deleteKeywordClass}>delete</strong> in the box below:
             </p>
             <input
               type="text"
               value={deleteConfirmText}
               onChange={(e) => setDeleteConfirmText(e.target.value)}
               placeholder="Type 'delete' to confirm"
-              className="w-full px-4 py-2 rounded-lg border border-slate-700 bg-slate-800 text-slate-100 placeholder-slate-500 focus:border-red-500/50 focus:outline-none focus:ring-1 focus:ring-red-500/50 mb-4"
+              className={deleteInputClass}
               autoFocus
               onKeyDown={(e) => {
                 if (e.key === 'Escape') {
@@ -2189,7 +2309,7 @@ export function ImportantDocumentsTool({ toolId }: ImportantDocumentsToolProps) 
                   setDeleteConfirmId(null);
                   setDeleteConfirmText('');
                 }}
-                className="px-4 py-2 rounded-lg border border-slate-700 bg-slate-800 text-slate-200 hover:bg-slate-700 transition-colors"
+                className={secondaryButtonClass}
               >
                 Cancel
               </button>
@@ -2201,7 +2321,7 @@ export function ImportantDocumentsTool({ toolId }: ImportantDocumentsToolProps) 
       {/* Download Password Modal */}
       {downloadPasswordModalId && (
         <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
-          <div className="bg-slate-800 rounded-2xl border border-slate-700 p-6 max-w-md w-full mx-4">
+          <div className={modalCardClass}>
             <div className="flex items-center justify-between mb-4">
               <h3 className="text-lg font-semibold text-slate-50">Enter Download Password</h3>
               <button
@@ -2210,7 +2330,8 @@ export function ImportantDocumentsTool({ toolId }: ImportantDocumentsToolProps) 
                   setDownloadPasswordInput('');
                   setShowDownloadPassword(false);
                 }}
-                className="text-slate-400 hover:text-slate-200 transition-colors"
+                className={isLight ? 'rounded-lg p-1 text-slate-600 hover:bg-slate-100 hover:text-slate-900 transition-colors' : 'rounded-lg p-1 text-slate-400 hover:bg-slate-800 hover:text-slate-200 transition-colors'}
+                title="Close"
               >
                 ✕
               </button>
@@ -2287,7 +2408,7 @@ export function ImportantDocumentsTool({ toolId }: ImportantDocumentsToolProps) 
                     setDownloadPasswordInput('');
                     setShowDownloadPassword(false);
                   }}
-                  className="px-4 py-2 rounded-lg border border-slate-700 bg-slate-800 text-slate-200 hover:bg-slate-700 transition-colors"
+                  className={secondaryButtonClass}
                 >
                   Cancel
                 </button>
@@ -2300,7 +2421,7 @@ export function ImportantDocumentsTool({ toolId }: ImportantDocumentsToolProps) 
       {/* Forgot Password Modal */}
       {showForgotPasswordModal && (
         <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
-          <div className="bg-slate-800 rounded-2xl border border-slate-700 p-6 max-w-md w-full mx-4 max-h-[90vh] overflow-y-auto">
+          <div className={`${modalCardClass} max-h-[90vh] overflow-y-auto`}>
             <div className="flex items-center justify-between mb-4">
               <h3 className="text-lg font-semibold text-slate-50">
                 {passwordResetStep === 'questions' ? 'Answer Security Questions' : 'Reset Password'}
@@ -2314,7 +2435,8 @@ export function ImportantDocumentsTool({ toolId }: ImportantDocumentsToolProps) 
                   setNewPassword('');
                   setConfirmNewPassword('');
                 }}
-                className="text-slate-400 hover:text-slate-200 transition-colors"
+                className={isLight ? 'rounded-lg p-1 text-slate-600 hover:bg-slate-100 hover:text-slate-900 transition-colors' : 'rounded-lg p-1 text-slate-400 hover:bg-slate-800 hover:text-slate-200 transition-colors'}
+                title="Close"
               >
                 ✕
               </button>
@@ -2478,20 +2600,21 @@ export function ImportantDocumentsTool({ toolId }: ImportantDocumentsToolProps) 
       {/* Delete Tag Confirmation Modal */}
       {deleteTagConfirmId && (
         <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
-          <div className="rounded-2xl border border-slate-800 bg-slate-900 p-6 max-w-md w-full mx-4">
-            <h3 className="text-xl font-semibold text-slate-50 mb-2">Delete Tag</h3>
-            <p className="text-slate-300 mb-4">
-              <strong className="text-red-400">Warning:</strong> This action cannot be undone. This tag will be permanently deleted.
-            </p>
-            <p className="text-slate-400 text-sm mb-4">
-              To confirm, please type <strong className="text-slate-200">delete</strong> in the box below:
+          <div className={deleteModalCardClass}>
+            <h3 className={deleteModalTitleClass}>Delete Tag</h3>
+            <div className={deleteWarningBoxClass}>
+              <p className={deleteWarningTextClass}>Warning: This action cannot be undone.</p>
+              <p className={deleteWarningDetailClass}>This tag will be permanently deleted.</p>
+            </div>
+            <p className={deleteInstructionClass}>
+              To confirm, please type <strong className={deleteKeywordClass}>delete</strong> in the box below:
             </p>
             <input
               type="text"
               value={deleteTagConfirmText}
               onChange={(e) => setDeleteTagConfirmText(e.target.value)}
               placeholder="Type 'delete' to confirm"
-              className="w-full px-4 py-2 rounded-lg border border-slate-700 bg-slate-800 text-slate-100 placeholder-slate-500 focus:border-red-500/50 focus:outline-none focus:ring-1 focus:ring-red-500/50 mb-4"
+              className={deleteInputClass}
               autoFocus
               onKeyDown={(e) => {
                 if (e.key === 'Escape') {
@@ -2513,7 +2636,7 @@ export function ImportantDocumentsTool({ toolId }: ImportantDocumentsToolProps) 
                   setDeleteTagConfirmId(null);
                   setDeleteTagConfirmText('');
                 }}
-                className="px-4 py-2 rounded-lg border border-slate-700 bg-slate-800 text-slate-200 hover:bg-slate-700 transition-colors"
+                className={secondaryButtonClass}
               >
                 Cancel
               </button>

@@ -2,8 +2,8 @@
 
 import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
-import Image from 'next/image';
 import CodeMirror from '@uiw/react-codemirror';
+import { SideLogo } from '../../../components/SideLogo';
 import { html } from '@codemirror/lang-html';
 import { oneDark } from '@codemirror/theme-one-dark';
 
@@ -131,14 +131,7 @@ export default function WelcomeEmailEditor() {
                 />
               </svg>
             </button>
-            <Image
-              src="/images/logo/Logo_Side_White.png"
-              alt="Household Toolbox"
-              width={200}
-              height={40}
-              className="h-auto"
-              priority
-            />
+            <SideLogo priority />
           </div>
         </div>
       </header>

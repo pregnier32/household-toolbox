@@ -1,6 +1,25 @@
 # Household Toolbox Design System
 
-This document defines the design standards for Household Toolbox to ensure consistency across all features and tools.
+This document defines design standards, UX patterns, database conventions, and project setup for Household Toolbox so features stay consistent and onboarding stays straightforward.
+
+## Contents
+
+- [Product principles](#product-principles)
+- [Visual style — colors](#visual-style---colors)
+- [Visual style — typography](#visual-style---typography)
+- [Layout rules](#layout-rules)
+- [Components — buttons](#components---buttons)
+- [Record row actions (Active / History icons)](#record-row-actions-active-and-history)
+- [Components — forms](#components---forms)
+- [UX rules](#ux-rules)
+- [Accessibility](#accessibility)
+- [Database standards](#database-standards)
+- [Implementation notes](#implementation-notes)
+- [Future considerations](#future-considerations)
+- [Calendar events frequency design](#calendar-events-frequency-design)
+- [Users table recommendations](#users-table-recommendations)
+- [Product and project overview](#product-and-project-overview)
+- [Setup essentials](#setup-essentials)
 
 ## Product Principles
 
@@ -18,10 +37,10 @@ This document defines the design standards for Household Toolbox to ensure consi
 
 ### Color Palette
 
-The application uses a dark theme with a slate-based color system and emerald as the primary accent color.
+The UI is built around a **slate + emerald** palette. Tailwind class names below describe the **dark-mode appearance**. When the document is in **light mode**, many of those same utilities are **remapped** in `globals.css` so existing screens pick up light backgrounds and dark text without rewriting every class (see **Theme: light and dark mode**). New surfaces that must not follow those remaps (e.g. floating menus) should branch on `resolvedTheme` and use explicit light utilities—documented under **Dropdown menus — Light mode**.
 
 #### Primary Colors
-- **Background**: `slate-950` (#0a0a0a) - Main page background
+- **Background**: `slate-950` (#020617) — main page background (matches `--background` in `app/globals.css` dark theme)
 - **Surface**: `slate-900` (#0f172a) - Card backgrounds, elevated surfaces
 - **Surface Secondary**: `slate-900/70` or `slate-900/50` - Semi-transparent surfaces
 - **Border**: `slate-800` (#1e293b) - Primary border color for cards and containers
@@ -48,13 +67,52 @@ The application uses a dark theme with a slate-based color system and emerald as
 - **Info/Secondary Action**: `blue-500/20` background, `blue-300` text
 
 #### Button Text on Accent
-- **Text on Emerald**: `slate-950` (#0f172a) - Text color for buttons with emerald background
+- **Text on Emerald**: `slate-950` (#020617) — text on primary emerald buttons (dark enough for contrast on `emerald-500`)
 
 ### Color Usage Guidelines
 - Use emerald for primary actions, active states, and positive indicators
 - Use slate grays for all neutral elements
 - Use semantic colors (red, amber) sparingly and only for their intended purposes
 - Maintain sufficient contrast ratios for accessibility (WCAG AA minimum)
+
+### Theme: light and dark mode
+
+#### Behavior
+
+- **Signed-out users** (marketing, auth help pages, etc.): The app **always uses dark appearance** for those routes so public pages stay visually consistent. Theme preference in storage does not apply until sign-in (see `AppThemeProvider`).
+- **Signed-in users**: Theme follows **`theme_preference`** from the session / DB (`PUT /api/user/theme`), cached in `localStorage` under `household-toolbox-theme`.
+- **`<html>`**: Has classes **`light`** or **`dark`** and `data-theme="light"` | `data-theme="dark"` so CSS and scripts can target the active mode.
+
+#### CSS variables (`globals.css`)
+
+- **Dark**: `--background` **`#020617`** (aligned with Tailwind `slate-950`); `--foreground` light text.
+- **Light**: `--background` **`#e9edf1`**; `--foreground` **`#0f172a`**. `body` uses these for base page chrome—a slightly cool gray canvas (between Tailwind slate-100 and slate-200), not pure white.
+
+#### Slate utility remaps in light mode
+
+For elements matching substring selectors, light mode overrides backgrounds, text colors, and borders (see `app/globals.css`). Examples:
+
+| Utility pattern | Approximate light-mode result |
+|-----------------|-------------------------------|
+| `bg-slate-950` | **`#e9edf1`** (page canvas; matches `--background`) |
+| `bg-slate-900` | `#ffffff` (surfaces / cards) |
+| `bg-slate-800` | `#e2e8f0` |
+| `bg-slate-700` (hover, etc.) | `#cbd5e1` |
+| `text-slate-50` … `text-slate-500` | Mapped to darker slate text for contrast on light surfaces |
+| `border-slate-600` … `border-slate-900` | Cool gray borders |
+
+Use these remaps for bulk legacy UI. For **popover-style UI** where remap grays look muddy on white, use **explicit** light styles and `useTheme().resolvedTheme` (see **Dropdown menus — Light mode**).
+
+#### Assets
+
+- Header **side logo**: `SideLogo` uses **`Logo_Side_White.png`** / **`Logo_Side_Black.png`** at URL path **`/images/logo/`** (files live under **`public/images/logo/`** in the repo) based on **`resolvedTheme`** (black asset in light mode).
+
+#### Defaults for new work
+
+- Prefer **`resolvedTheme`** when choosing between mutually exclusive light vs dark class strings.
+- Primary emerald CTAs generally **need no separate light variant**; focus rings may still use `focus:ring-offset-*` tuned per surface if you add light-specific panels.
+- **Icons on light surfaces**: Parent text colors such as `text-slate-600` with `hover:text-slate-900` read better than `text-slate-400` / `hover:text-slate-200` (which target dark chrome).
+- **Dashboard top navigation**: Use **`bg-slate-950`** on tab strips so light mode matches the **`#e9edf1`** canvas; active tab labels must not use `text-emerald-300` in light mode—see **Dashboard primary tabs**.
 
 ## Visual Style - Typography
 
@@ -124,8 +182,8 @@ The application uses a dark theme with a slate-based color system and emerald as
 - **Dropdown Shadow**: `shadow-lg` - Menu and dropdown shadows
 
 ### Backgrounds
-- **Page Background**: `bg-slate-950`
-- **Card Background**: `bg-slate-900/70` or `bg-slate-900/50` with `border border-slate-800`
+- **Page Background**: `bg-slate-950` (in **light mode**, remapped in `globals.css` to **`#e9edf1`**—see **Theme: light and dark mode**)
+- **Card Background**: `bg-slate-900/70` or `bg-slate-900/50` with `border border-slate-800` (light: surfaces trend toward white / soft gray via the same remaps)
 - **Input Background**: `bg-slate-900/70`
 - **Hover Background**: `hover:bg-slate-800` or `hover:bg-slate-700`
 
@@ -146,12 +204,93 @@ className="rounded-lg bg-emerald-500 px-4 py-2.5 text-sm font-semibold text-slat
   - Small: `px-2.5 py-1 text-xs`
   - Full Width: Add `w-full`
 
+### Primary button — Light mode (white / soft gray cards)
+
+On **light** tool surfaces (`bg-white`, `bg-slate-50`, or the remapped page canvas), the default pattern `bg-emerald-500` + `text-slate-950` can look fine, but **disabled** primary buttons (`disabled:opacity-50`) are easy to read as a weak mint/grey. For **affordance and contrast (WCAG)**, prefer a **slightly deeper fill** and **white label** on primary CTAs, **`focus:ring-offset-white`**, and **avoid** pairing **`text-emerald-300`** with **`bg-emerald-500/20`** for compact actions—that mimics dark UI and reads as low-contrast green-on-green on pale cards.
+
+Branch on `useTheme().resolvedTheme === 'light'` (or your tool’s `isLight` flag) when the control sits on explicit light surfaces.
+
+**Reference implementation:** `app/components/CalendarEventsTool.tsx` — `primaryButtonClass`, `compactEmeraldActionClass`, `primaryButtonCompactClass`.
+
+#### Full-width / form primary (Add, Save, Create)
+
+```tsx
+className={
+  resolvedTheme === 'light'
+    ? 'rounded-lg bg-emerald-600 px-4 py-2.5 text-sm font-semibold text-white shadow-sm transition-colors hover:bg-emerald-500 focus:outline-none focus:ring-2 focus:ring-emerald-500/50 focus:ring-offset-2 focus:ring-offset-white disabled:cursor-not-allowed disabled:opacity-50'
+    : 'rounded-lg bg-emerald-500 px-4 py-2.5 text-sm font-semibold text-slate-950 transition-colors hover:bg-emerald-400 focus:outline-none focus:ring-2 focus:ring-emerald-500/50 focus:ring-offset-2 focus:ring-offset-slate-900 disabled:cursor-not-allowed disabled:opacity-50'
+}
+```
+
+- **Light:** `emerald-600` fill, `text-white`, ring offset **white** (tune to the card if it is not pure white).
+- **Dark:** unchanged global primary (`emerald-500` + `slate-950`, offset `slate-900`).
+
+#### Compact emerald actions (Edit, Reactivate, similar)
+
+Use a **white fill + dark emerald border + dark emerald text** instead of tinted `emerald-500/20` + `emerald-300` in light mode.
+
+```tsx
+className={
+  resolvedTheme === 'light'
+    ? 'rounded-lg border-2 border-emerald-700 bg-white px-3 py-1 text-sm font-semibold text-emerald-900 shadow-sm transition-colors hover:border-emerald-800 hover:bg-emerald-50'
+    : 'rounded-lg bg-emerald-500/20 px-3 py-1 text-sm font-medium text-emerald-300 transition-colors hover:bg-emerald-500/30'
+}
+```
+
+#### Tight inline primary (e.g. Save on small category / chip rows)
+
+```tsx
+className={
+  resolvedTheme === 'light'
+    ? 'flex-1 rounded px-2 py-1 text-xs font-semibold text-white bg-emerald-600 hover:bg-emerald-500 disabled:cursor-not-allowed disabled:opacity-50'
+    : 'flex-1 rounded bg-emerald-500 px-2 py-1 text-xs font-medium text-slate-950 hover:bg-emerald-400 disabled:cursor-not-allowed disabled:opacity-50'
+}
+```
+
+#### Icon-only accent (e.g. export / secondary toolbar icon)
+
+On light surfaces, prefer darker emerald for the stroke color:
+
+```tsx
+className={
+  resolvedTheme === 'light'
+    ? 'p-2 rounded-lg text-emerald-700 transition-colors hover:bg-emerald-100 hover:text-emerald-900'
+    : 'p-2 rounded-lg text-emerald-400 transition-colors hover:bg-emerald-500/10 hover:text-emerald-300'
+}
+```
+
 ### Secondary Button
 ```tsx
 className="px-4 py-2 rounded-lg border border-slate-700 bg-slate-800 text-slate-200 hover:bg-slate-700 transition-colors"
 ```
 - **Use For**: Cancel, secondary actions, alternative options
 - **States**: Similar hover and focus patterns as primary
+
+### Secondary button — Light mode (soft fill + strong border)
+
+For **secondary actions on white or light card surfaces** in **light mode**, avoid relying on `bg-slate-800` / `border-slate-700` alone: `globals.css` remaps those to a **darker flat gray** that can look heavy or muddy. Use an **explicit** light pattern with a **soft fill**, **2px border**, and **darker text** so the control reads as clickable and sits cleanly on the card.
+
+**Rationale:** `bg-slate-100` is not remapped by the current global background rules, so the fill stays a predictable, light gray. **Thicker, mid-tone borders** (`border-2 border-slate-400`) read as tappable without matching the old remapped slate-200 slab.
+
+**Reference implementation:** `app/dashboard/profile/page.tsx` — `secondaryOutlineButtonClass` and `editProfileButtonClass` (with `useTheme().resolvedTheme === 'light'`).
+
+**Full width / form row (e.g. Cancel, Change Password):**
+```tsx
+className="rounded-lg border-2 border-slate-400 bg-slate-100 px-4 py-2.5 text-sm font-medium text-slate-800 transition-colors hover:bg-slate-200/90 hover:border-slate-500 focus:outline-none focus:ring-2 focus:ring-slate-400/40 focus:ring-offset-2 focus:ring-offset-white disabled:cursor-not-allowed disabled:opacity-50"
+```
+
+**With leading icon (e.g. Edit Profile):** prefix with `flex items-center gap-2` and use `py-2` if the control is a bit shorter:
+```tsx
+className="flex items-center gap-2 rounded-lg border-2 border-slate-400 bg-slate-100 px-4 py-2 text-sm font-medium text-slate-800 transition-colors hover:bg-slate-200/90 hover:border-slate-500 focus:outline-none focus:ring-2 focus:ring-slate-400/40 focus:ring-offset-2 focus:ring-offset-white"
+```
+
+**Checklist**
+- **Default:** `border-2 border-slate-400`, `bg-slate-100`, `text-slate-800`
+- **Hover:** `hover:bg-slate-200/90`, `hover:border-slate-500`
+- **Focus:** `focus:ring-2 focus:ring-slate-400/40` with `focus:ring-offset-2 focus:ring-offset-white` (tune offset to match the card background if needed)
+- **Disabled:** `disabled:cursor-not-allowed disabled:opacity-50` when applicable
+
+**Dark mode (same components):** keep the existing dark secondary treatment (e.g. `border-2 border-slate-500` on `bg-slate-800/70`, `text-slate-300`, `hover:border-slate-400`) as implemented on the profile page for parity with the rest of the dark UI.
 
 ### Text Button / Tab Button
 ```tsx
@@ -175,6 +314,87 @@ className="px-3 py-2 text-sm font-medium transition-colors text-slate-400 hover:
   - `aria-label` for accessibility (e.g., `aria-label="Close modal"`)
   - `title` for tooltip on hover — all icon-only buttons must show a tooltip when the user hovers. Use the same text as `aria-label` (e.g., `title="Close modal"`).
 - **Icon**: Use the standard **Icon Style** format below so all app icons match (outline style, light grey).
+- **Record lists in tools** (active items + history/inactive): use the standard **Record row actions (Active and History)** pattern below so every tool’s list rows look and behave the same.
+
+### Record row actions (Active and History)
+
+For **tool apps** that list **active** records and an optional **History** (or inactive/archived) section, use **icon-only** actions on the right side of each row—**not** full text labels—forming a compact **icon toolbar**. This keeps dense lists scannable and matches **Calendar Events** and other tools that follow this standard.
+
+#### Layout and placement
+
+- **Row container**: `flex items-start justify-between` so the main content (title, metadata) sits on the **left** and actions on the **right**.
+- **Action group** (right): `flex shrink-0 items-center gap-1.5 ml-4` — a tight horizontal group of square icon buttons, aligned to the top of the row when titles wrap.
+- **Order** (left → right): **primary emerald** (e.g. Edit) → **secondary** (e.g. Move to history / Archive) on active rows; on history rows, **emerald** (e.g. Reactivate / Restore) → **danger** (e.g. Delete) when delete is supported.
+- **Button element**: `type="button"`, with **Icon Style** SVGs (`h-5 w-5`, `strokeWidth={2}`). Set **`aria-label`** and **`title`** to the same human-readable phrase for screen readers and hover tooltips.
+
+#### Visual tiers — all actions use `border-2`
+
+Every row icon is **bordered** (`border-2`) so controls read consistently on white or `slate-50` nested cards. Branch on **`resolvedTheme`** (`light` vs `dark`) for fills and borders.
+
+| Role | Meaning | Example actions |
+|------|---------|-----------------|
+| **Emerald (bordered)** | Primary constructive action on the row | Edit, Reactivate, Restore |
+| **Secondary (slate, bordered)** | Move off active list without deleting | Move to history, Archive, Deactivate |
+| **Danger (red, bordered)** | Irreversible or destructive | Delete permanently (often only in History) |
+
+#### Class recipes (copy into tool helpers)
+
+**Emerald row icon** — Edit / Reactivate / Restore-style actions:
+
+```tsx
+const rowIconEmeraldClass =
+  resolvedTheme === 'light'
+    ? 'inline-flex items-center justify-center rounded-lg border-2 border-emerald-700 bg-white p-2 text-emerald-700 transition-colors hover:bg-emerald-50 hover:text-emerald-900 focus:outline-none focus:ring-2 focus:ring-emerald-500/50 focus:ring-offset-2 focus:ring-offset-white'
+    : 'inline-flex items-center justify-center rounded-lg border-2 border-emerald-500/50 bg-slate-800/50 p-2 text-emerald-300 transition-colors hover:border-emerald-400 hover:bg-emerald-500/20 focus:outline-none focus:ring-2 focus:ring-emerald-500/50 focus:ring-offset-2 focus:ring-offset-slate-900';
+```
+
+**Secondary row icon** — Archive / Move to history / neutral secondary:
+
+```tsx
+const rowIconSecondaryClass =
+  resolvedTheme === 'light'
+    ? 'inline-flex items-center justify-center rounded-lg border-2 border-slate-400 bg-slate-100 p-2 text-slate-700 transition-colors hover:bg-slate-200 hover:text-slate-900 focus:outline-none focus:ring-2 focus:ring-slate-400/40 focus:ring-offset-2 focus:ring-offset-white'
+    : 'inline-flex items-center justify-center rounded-lg border-2 border-slate-600 bg-slate-800 p-2 text-slate-200 transition-colors hover:bg-slate-700 focus:outline-none focus:ring-2 focus:ring-slate-500/50 focus:ring-offset-2 focus:ring-offset-slate-900';
+```
+
+**Danger row icon** — Delete from history (or rare destructive actions on active rows):
+
+```tsx
+const rowIconDangerClass =
+  resolvedTheme === 'light'
+    ? 'inline-flex items-center justify-center rounded-lg border-2 border-red-300 bg-white p-2 text-red-700 transition-colors hover:bg-red-50 hover:border-red-400 focus:outline-none focus:ring-2 focus:ring-red-500/40 focus:ring-offset-2 focus:ring-offset-white'
+    : 'inline-flex items-center justify-center rounded-lg border-2 border-red-500/50 bg-slate-800/50 p-2 text-red-400 transition-colors hover:border-red-400 hover:bg-red-500/20 focus:outline-none focus:ring-2 focus:ring-red-500/50 focus:ring-offset-2 focus:ring-offset-slate-900';
+```
+
+#### Suggested icons (24×24 outline)
+
+Pick icons that match your domain; keep **stroke** weight and **viewBox** consistent with **Icon Style**.
+
+| Action | Typical icon |
+|--------|----------------|
+| Edit | Pencil / square-edit |
+| Move to history / Archive | Archive box |
+| Reactivate / Restore | Arrow U-turn / back |
+| Delete | Trash |
+
+#### Canonical record action SVG paths (use these exact glyphs)
+
+To keep row actions visually identical across tools, use these exact path values (copied from `CalendarEventsTool`):
+
+- **Edit (emerald)**:
+  - `d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"`
+- **Move to history / Archive (secondary)**:
+  - `d="M20.25 7.5l-.625 10.632a2.25 2.25 0 01-2.247 2.118H6.622a2.25 2.25 0 01-2.247-2.118L3.75 7.5M10 11.25h4M3.375 7.5h17.25c.621 0 1.125-.504 1.125-1.125v-1.5c0-.621-.504-1.125-1.125-1.125H3.375c-.621 0-1.125.504-1.125 1.125v1.5c0 .621.504 1.125 1.125 1.125z"`
+- **Reactivate / Restore (emerald, history rows)**:
+  - `d="M9 15L3 9m0 0l6-6M3 9h12a6 6 0 010 12h-3"`
+- **Delete (danger)**:
+  - `d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"`
+
+Notes:
+- Keep `fill="none"`, `stroke="currentColor"`, `strokeWidth={2}`, `strokeLinecap="round"`, `strokeLinejoin="round"`, `viewBox="0 0 24 24"`.
+- Keep tooltip/accessibility labels aligned with action names (for example, `title="Move to history"` + `aria-label="Move to history"`).
+
+**Reference implementation:** `app/components/CalendarEventsTool.tsx` — `eventActionIconEditClass`, `eventActionIconSecondaryClass`, `eventActionIconDangerClass` on **Active Events** and **History** rows.
 
 ### Icon Style (standard for all tools)
 Use this format for every icon in icon-only buttons and inline icons so icons look consistent across the app (outline/stroke style, light grey that lightens on hover).
@@ -182,7 +402,7 @@ Use this format for every icon in icon-only buttons and inline icons so icons lo
 - **Style**: Outline (stroke) icons only — no filled icons. Use `fill="none"` and `stroke="currentColor"` so the icon inherits the parent's text color.
 - **Stroke**: `strokeWidth={2}`, `strokeLinecap="round"`, `strokeLinejoin="round"` for a clean, consistent line.
 - **Size**: `className="h-5 w-5"` (20px) for standard icon buttons; use `h-6 w-6` where a larger icon is needed.
-- **Color**: Set on the parent (e.g. the button). Use `text-slate-400` for default and `hover:text-slate-200` on hover so the icon is a light grey that lightens on hover.
+- **Color**: Set on the parent (e.g. the button). On **dark** surfaces use `text-slate-400` and `hover:text-slate-200`. On **light** surfaces (pale cards, white toolbars) prefer `text-slate-500` or `text-slate-600` with `hover:text-slate-900` so icons stay visible.
 - **ViewBox**: Use `viewBox="0 0 24 24"` for 24pt icon sets so scaling is consistent.
 
 **Example — print icon in a button:**
@@ -205,6 +425,24 @@ Use this format for every icon in icon-only buttons and inline icons so icons lo
 <svg className="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
 </svg>
+```
+
+### Tag chips — Light mode
+
+For tag chips shown on document/record rows, use explicit light-mode classes so tags stay readable on white or pale cards.
+
+- **Active/positive tag chips (light):** `border border-emerald-300 bg-emerald-50 text-emerald-800`
+- **Neutral/history tag chips (light):** `border border-slate-300 bg-slate-100 text-slate-700`
+- **Sizing:** keep compact chip sizing (`px-1.5 py-0.5 rounded text-xs font-medium`) unless a specific screen needs larger chips.
+
+Recommended theme split:
+
+```tsx
+className={
+  resolvedTheme === 'light'
+    ? 'px-1.5 py-0.5 rounded text-xs font-medium border border-emerald-300 bg-emerald-50 text-emerald-800'
+    : 'px-1.5 py-0.5 rounded text-xs font-medium bg-emerald-500/20 text-emerald-300'
+}
 ```
 
 ### Dashboard Toggle (Switch)
@@ -445,9 +683,31 @@ For dropdowns that need to display items organized by categories or areas (e.g.,
 ### Tab Navigation
 - **Container**: `border-b border-slate-800` with `flex gap-2`
 - **Tab**: `px-4 py-2 text-sm font-medium transition-colors`
-- **Active Tab**: `border-b-2 border-emerald-500 text-emerald-300`
-- **Inactive Tab**: `text-slate-400 hover:text-slate-300`
+- **Active Tab (dark UI / tools)**: `border-b-2 border-emerald-500 text-emerald-300`
+- **Inactive Tab (dark UI / tools)**: `text-slate-400 hover:text-slate-300`
+- **Dashboard shell tabs** (primary nav + Tool Box sub-tabs): Use **`resolvedTheme`** and the patterns in **Dashboard primary tabs** below—`text-emerald-300` is **not** used for active tabs in light mode (poor contrast on white).
 - **Export Tab Naming**: When tools have a tab for viewing/exporting all records across categories, it should be named **"Export"** (not "Reports" or other variations). This ensures consistency across all tools (e.g., Pet Care Schedule, Repair History).
+
+### Dashboard primary tabs
+
+Reference: `app/dashboard/page.tsx` (main tab row: Dashboard / Calendar / Tool Box / Store; optional sub-tab row for open tools).
+
+#### Tab strip background (match gray canvas)
+
+- Use **`bg-slate-950`** on the tab row container(s) so **light mode** picks up the same remap as the page: **`#e9edf1`**.
+- **Avoid** `bg-slate-900/30`, `bg-slate-900/50`, etc. on these rows for light alignment: the `[class*='bg-slate-900']` rule in `globals.css` forces **`#ffffff`**, which makes the menu band brighter than the main canvas.
+- The top **header** (logo + Admin / user menus) may stay on **`bg-slate-900/50`** → white in light mode for separation; the tab **strip** intentionally matches the body gray.
+
+#### Active vs inactive labels
+
+Branch on `useTheme().resolvedTheme` (see `tabActiveClass` / `tabInactiveClass` in code).
+
+| Mode | Active tab | Inactive tab |
+|------|------------|--------------|
+| **Light** | `border-b-2 border-emerald-600 text-emerald-900 font-semibold` | `text-slate-600 hover:text-slate-900` |
+| **Dark** | `border-b-2 border-emerald-500 text-emerald-300` | `text-slate-400 hover:text-slate-300` |
+
+**Why:** `text-emerald-300` stays readable on dark chrome but is too faint on the light gray canvas; darker emerald text keeps the brand accent while meeting contrast expectations.
 
 ### Export Tab UI Pattern
 
@@ -707,6 +967,13 @@ return (
 - **Nested Card**: `rounded-lg border border-slate-700 bg-slate-800/50 p-4`
 - **Card Header**: Use `mb-4` for spacing below header
 
+### Tool app cards (Dashboard Tool Box + Store)
+- Use the same baseline sizing in both `Tool Box` and `Store` so card heights stay visually consistent across tabs.
+- **Card wrapper**: include `relative flex flex-col min-h-[180px]` in addition to the standard card styles.
+- **Icon container**: include `flex-1 min-h-[60px]` so icon area reserves vertical space and aligns title/price rows.
+- Keep card content flow as: icon area -> tool name -> price/status row, with the wrapper set to column layout.
+- Reference implementation: `app/dashboard/page.tsx` (Tool Box and Store card blocks).
+
 ### Header/Category Management Patterns
 
 For tools that use header/category records (e.g., Pet Care Schedule, Repair History, Healthcare Appts & History), use the following layout and patterns so that all such tools look and behave consistently.
@@ -784,13 +1051,29 @@ Use this structure at the top of the tool so the header selector matches across 
   - `text-red-400 hover:bg-slate-700`
 - **Confirmation Modal**: Required for all delete operations
   - **Overlay**: `fixed inset-0 bg-black/50 flex items-center justify-center z-50`
-  - **Container**: `rounded-2xl border border-slate-800 bg-slate-900 p-6 max-w-md w-full mx-4`
+  - **Container**:
+    - **Dark**: `rounded-2xl border border-slate-800 bg-slate-900 p-6 max-w-md w-full mx-4`
+    - **Light**: `rounded-2xl border border-slate-200 bg-white p-6 max-w-md w-full mx-4 shadow-2xl`
+  - **Title**:
+    - **Dark**: `text-xl font-semibold text-slate-50 mb-2`
+    - **Light**: `text-xl font-semibold text-slate-900 mb-2`
+  - **Body copy (instruction text)**:
+    - **Dark**: `text-slate-300` (or `text-slate-400 text-sm` for helper copy)
+    - **Light**: `text-slate-700` (or `text-slate-600 text-sm` for helper copy)
+  - **Confirmation input**:
+    - **Dark**: `w-full px-4 py-2 rounded-lg border border-slate-700 bg-slate-800 text-slate-100 placeholder-slate-500 focus:border-red-500/50 focus:outline-none focus:ring-1 focus:ring-red-500/50`
+    - **Light**: `w-full px-4 py-2 rounded-lg border border-slate-300 bg-white text-slate-900 placeholder-slate-500 focus:border-red-500/50 focus:outline-none focus:ring-1 focus:ring-red-500/50`
   - **Warning Box**: Prominent red warning box at top
     ```tsx
     className="rounded-lg border border-red-500/50 bg-red-500/10 px-4 py-3 mb-4"
     ```
-    - Warning text: `text-red-300 font-semibold` with ⚠️ emoji
-    - Details: `text-red-200 text-sm` explaining what will be deleted
+    - **Light mode warning box**: `rounded-lg border border-red-300 bg-red-50 px-4 py-3 mb-4`
+    - Warning text:
+      - **Dark**: `text-red-300 font-semibold` with ⚠️ emoji
+      - **Light**: `text-red-700 font-semibold` with ⚠️ emoji
+    - Details:
+      - **Dark**: `text-red-200 text-sm` explaining what will be deleted
+      - **Light**: `text-red-600 text-sm` explaining what will be deleted
   - **Confirmation Input**: 
     - Placeholder: "Type 'delete' to confirm"
     - Styling: Standard input with red focus border
@@ -835,13 +1118,74 @@ Use this structure at the top of the tool so the header selector matches across 
 
 ### Data Display
 - **Lists**: Use consistent spacing (`space-y-4`) between items
+- **Active + History record rows** in tool apps: use **icon-only** right-aligned actions with **bordered** hit targets; see **Record row actions (Active and History)** under **Components - Buttons**
 - **Tables**: Use card-based layouts rather than traditional tables for better mobile experience
 - **Status Indicators**: Use color-coded badges or borders
 - **Date Display**: Whenever a date is displayed to the user (e.g. in lists, cards, summaries), show it in **MM/DD/YYYY** format. Use a small helper to convert from stored values (e.g. `YYYY-MM-DD` from `<input type="date">`) to display format, e.g. `2/26/2026` not `2026-02-26`. Form inputs may continue to use the native date picker and ISO date strings internally; only the visible text shown to the user should be MM/DD/YYYY.
 
 ### Navigation
 - **Breadcrumbs**: Not currently used, but if needed, use `text-sm text-slate-400` with `hover:text-emerald-300` links
-- **Menu Items**: `text-slate-300 hover:bg-slate-700` with `px-4 py-2`
+- **Menu Items (dark / general)**: `text-slate-300 hover:bg-slate-700` with `px-4 py-2`—in **light mode**, header account/admin/help menus use the dedicated classes in **Dropdown menus — Light mode**
+
+### Dropdown menus — Light mode
+
+Header dropdowns (account, admin, help) use **explicit light-mode utility sets** driven by `useTheme().resolvedTheme === 'light'` in the component (see `UserMenu`, `AdminMenu`, `HelpMenu` under `app/components/`).
+
+**Rationale:** `globals.css` remaps dark-theme slate classes on light pages (for example `bg-slate-800` → a flat gray-blue). Dropdown panels built only from those classes look muddy against the light gray canvas (`#e9edf1`) or white surfaces. Branching on `resolvedTheme` avoids that and matches standard light UI patterns (white panel, subtle ring/shadow, readable gray text).
+
+#### Trigger button
+
+| Mode | Classes |
+|------|---------|
+| **Light** | `flex items-center gap-2 rounded-lg px-3 py-2 text-sm font-medium text-slate-700 transition-colors hover:bg-slate-100 hover:text-slate-900` |
+| **Dark** | `… text-slate-300 … hover:bg-slate-800 hover:text-slate-100` |
+
+**Help menu** keeps an emerald hover accent in light mode: add `hover:text-emerald-700` (dark keeps `hover:text-emerald-300` with `hover:bg-slate-800/50`).
+
+#### Dropdown panel
+
+| Mode | Classes |
+|------|---------|
+| **Light** | `absolute right-0 z-50 mt-2 rounded-lg border border-slate-200 bg-white shadow-lg ring-1 ring-slate-900/5` plus width (`w-48` or `w-56`) |
+| **Dark** | `absolute right-0 z-50 mt-2 rounded-lg border border-slate-700 bg-slate-800 shadow-lg` plus width |
+
+#### Menu rows (links / actions)
+
+| Mode | Classes |
+|------|---------|
+| **Light** | `flex w-full items-center gap-3 px-4 py-2 text-sm text-slate-700 transition-colors hover:bg-slate-100` |
+| **Dark** | `… text-slate-300 … hover:bg-slate-700` |
+
+Use `shrink-0` on row icons (SVG) where layout needs it. Use `type="button"` on interactive controls inside the menu.
+
+#### Dividers
+
+| Mode | Classes |
+|------|---------|
+| **Light** | `my-1 border-t border-slate-200` |
+| **Dark** | `my-1 border-t border-slate-700` |
+
+#### Theme segment control (UserMenu only)
+
+| Part | Light mode | Dark mode |
+|------|------------|-----------|
+| **“Theme” label** | `mb-2 text-xs font-semibold uppercase tracking-wide text-slate-500` | `… text-slate-400` |
+| **Track** | `grid grid-cols-2 gap-1 rounded-lg bg-slate-100 p-1` | `grid grid-cols-2 gap-1 rounded-lg bg-slate-900/70 p-1` |
+| **Selected** | `rounded-md px-2 py-1 text-xs font-medium bg-white text-slate-900 shadow-sm ring-1 ring-slate-200` | `… bg-emerald-500 text-slate-950` |
+| **Unselected** | `… text-slate-600 hover:bg-slate-200/80` | `… text-slate-300 hover:bg-slate-700` |
+
+#### Sign out row (UserMenu only)
+
+| Mode | Classes |
+|------|---------|
+| **Light** | `flex w-full items-center gap-3 px-4 py-2 text-sm text-red-600 transition-colors hover:bg-red-50` |
+| **Dark** | `… text-red-400 … hover:bg-slate-700` |
+
+#### Implementation checklist
+
+- Prefer **`resolvedTheme`** (not `theme` preference alone) so the visible UI matches the applied document theme.
+- **Do not** rely only on global slate remaps for popover surfaces in light mode; use the explicit white panel + border + ring pattern above.
+- New header-style dropdowns should follow the same light/dark split for consistency.
 
 ### Feedback Patterns
 - **Success Messages**: Green border/background with emerald text
@@ -876,6 +1220,7 @@ Use this structure at the top of the tool so the header selector matches across 
   - `text-slate-50` on `bg-slate-950`: ✅ Passes
   - `text-slate-300` on `bg-slate-900`: ✅ Passes
   - `text-slate-950` on `bg-emerald-500`: ✅ Passes
+- **Light mode**: After remaps, primary text on page/cards is generally dark slate on light gray/white—verify new components especially where you **bypass** globals (explicit white cards, colored banners). Test focus rings and placeholder text on real backgrounds.
 - **Interactive Elements**: Ensure sufficient contrast for focus states
 
 ### Screen Reader Support
@@ -1198,12 +1543,12 @@ $$;
 - All color values reference Tailwind's color palette
 - Spacing uses Tailwind's spacing scale (multiples of 0.25rem)
 - The application is built with **Next.js** and **React**
-- Dark theme is enforced via `className="dark"` on the root `<html>` element
+- Theme is applied on the root `<html>` element as `light` or `dark` (see `AppThemeProvider`); authenticated users can persist preference via `/api/user/theme`
 - Custom CSS variables are defined in `globals.css` for theme consistency
 
 ## Future Considerations
 
-- Consider adding a light theme option (currently only dark theme is implemented)
+- Light theme is implemented for authenticated users (see `AppThemeProvider`, `globals.css`, and **Dropdown menus — Light mode** above); extend the same explicit light-mode patterns to other popovers (e.g. in-tool menus) as needed
 - Document animation and transition patterns as they're added
 - Create component library/storybook for reusable components
 - Expand the icon set as needed; use the documented Icon Style (outline, stroke, currentColor) for consistency
@@ -1213,7 +1558,7 @@ $$;
 
 ## Calendar Events Frequency Design
 
-# Calendar Events Frequency Design
+This appendix explains how event **definitions** in `tools_ce_events` relate to the **Dashboard Calendar**, documents the current gap for recurring events, and compares implementation options.
 
 ## Current Design Overview
 
@@ -1271,7 +1616,7 @@ When a user creates a recurring event:
 
 ## Recommended Approach
 
-### Option 1: **On-Demand Expansion (Recommended)**
+### Option 1: **On-Demand Expansion**
 Generate dashboard_items dynamically when querying the Dashboard Calendar:
 
 **Pros:**
@@ -1326,7 +1671,7 @@ Store event definitions + generate dashboard_items for near-term only:
 
 ## Recommendation
 
-**I recommend Option 1 (On-Demand Expansion)** because:
+**Preferred approach:** Option 1 (On-Demand Expansion), for these reasons:
 
 1. **Scalability**: No database bloat from thousands of recurring event occurrences
 2. **Flexibility**: Easy to modify recurring events without cascading updates
@@ -1367,11 +1712,11 @@ No schema changes needed - the design already supports on-demand expansion!
 
 ## Users Table Recommendations
 
-# Users Table Analysis & Recommendations
+This section records a **schema review** and optional migration work. **Verify the live Supabase schema** (indexes, constraints, column types) before running SQL; the project may have already applied some or all of these changes.
 
-## Current Table Structure
+## Current table structure
 
-Based on the TypeScript types and codebase analysis, your `users` table has the following fields:
+Based on the TypeScript types and codebase analysis, the `users` table has the following fields:
 
 - `id` (UUID, Primary Key)
 - `user_id` (UUID) - **⚠️ Potentially redundant**
@@ -1478,7 +1823,7 @@ Based on codebase analysis, here are the most common query patterns:
 
 ## How to Apply
 
-Run the SQL script: `supabase/users-table-improvements.sql`
+Run the SQL script: `supabase/archive/users-table-improvements.sql` (same script content is also merged into `supabase/DB_Build_ASOF_4_26_26.sql`). If the path moves, search the repo for `users-table-improvements`.
 
 This script is idempotent (safe to run multiple times) and includes:
 - All necessary indexes

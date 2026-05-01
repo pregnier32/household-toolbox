@@ -2,15 +2,24 @@
 
 import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
-import Image from 'next/image';
+import { SideLogo } from '../../../components/SideLogo';
+import { AdminMenu } from '../../../components/AdminMenu';
+import { UserMenu } from '../../../components/UserMenu';
+import { useTheme } from '../../../components/AppThemeProvider';
 
 export default function SiteMaintenancePage() {
+  const { resolvedTheme } = useTheme();
+  const isLight = resolvedTheme === 'light';
+  const headerChromeButtonClass = isLight
+    ? 'flex items-center gap-2 rounded-lg px-3 py-2 text-sm font-medium text-slate-700 transition-colors hover:bg-slate-100 hover:text-slate-900'
+    : 'flex items-center gap-2 rounded-lg px-3 py-2 text-sm font-medium text-slate-300 transition-colors hover:bg-slate-800 hover:text-slate-100';
+
   const [signUpsDisabled, setSignUpsDisabled] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
   const [isSaving, setIsSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
-  const [user, setUser] = useState<{ userStatus?: string } | null>(null);
+  const [user, setUser] = useState<{ firstName?: string; lastName?: string; userStatus?: string } | null>(null);
   const [openModal, setOpenModal] = useState<'user-registration' | 'terms' | 'privacy' | null>(null);
   const [termsContent, setTermsContent] = useState('');
   const [privacyContent, setPrivacyContent] = useState('');
@@ -43,6 +52,11 @@ export default function SiteMaintenancePage() {
         router.push('/');
       });
   }, [router]);
+
+  const handleSignOut = async () => {
+    await fetch('/api/auth/signout', { method: 'POST' });
+    router.push('/');
+  };
 
   const loadSettings = async () => {
     try {
@@ -437,13 +451,23 @@ export default function SiteMaintenancePage() {
       <header className="border-b border-slate-800 bg-slate-900/50">
         <div className="mx-auto flex max-w-7xl items-center justify-between px-4 py-4 sm:px-6 lg:px-8">
           <div className="flex items-center">
-            <Image
-              src="/images/logo/Logo_Side_White.png"
-              alt="Household Toolbox"
-              width={200}
-              height={40}
-              className="h-auto"
-              priority
+            <SideLogo priority />
+          </div>
+          <div className="flex items-center gap-3">
+            <button
+              type="button"
+              onClick={() => router.push('/dashboard')}
+              className={headerChromeButtonClass}
+            >
+              <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 19l-7-7m0 0l7-7m-7 7h18" />
+              </svg>
+              <span>Back to Dashboard</span>
+            </button>
+            <AdminMenu />
+            <UserMenu
+              userName={`${user?.firstName || ''} ${user?.lastName || ''}`.trim() || 'Account'}
+              onSignOut={handleSignOut}
             />
           </div>
         </div>
@@ -452,25 +476,6 @@ export default function SiteMaintenancePage() {
       {/* Content */}
       <div className="mx-auto max-w-7xl px-4 py-8 sm:px-6 lg:px-8">
         <div className="mb-6">
-          <button
-            onClick={() => router.push('/dashboard')}
-            className="mb-4 flex items-center gap-2 text-sm text-slate-400 transition-colors hover:text-slate-300"
-          >
-            <svg
-              className="h-4 w-4"
-              fill="none"
-              stroke="currentColor"
-              viewBox="0 0 24 24"
-            >
-              <path
-                strokeLinecap="round"
-                strokeLinejoin="round"
-                strokeWidth={2}
-                d="M15 19l-7-7 7-7"
-              />
-            </svg>
-            <span>Back to Dashboard</span>
-          </button>
           <h1 className="text-2xl font-semibold text-slate-50">Site Maintenance</h1>
           <p className="mt-1 text-sm text-slate-400">
             Manage site-wide settings and maintenance options
