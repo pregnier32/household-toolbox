@@ -9,7 +9,6 @@ function isMissingRelationError(error: SupabaseLikeError): boolean {
 function extractStoragePath(fileUrl: string, bucket: string): string | null {
   if (!fileUrl) return null;
 
-  // Already a relative storage path (e.g. userId/file.ext)
   if (!fileUrl.startsWith('http://') && !fileUrl.startsWith('https://')) {
     return fileUrl;
   }
@@ -35,16 +34,41 @@ async function removeStoragePaths(bucket: string, paths: string[]): Promise<void
     const chunk = uniquePaths.slice(i, i + chunkSize);
     const { error } = await supabaseServer.storage.from(bucket).remove(chunk);
     if (error && !isMissingRelationError(error)) {
-      // Keep deleting user data even if storage cleanup partially fails.
       console.error(`Storage cleanup warning for bucket ${bucket}:`, error);
     }
   }
 }
 
+/**
+ * Shared account erasure used by:
+ * - `app/api/admin/users/route.ts` (DELETE)
+ * - `app/api/account/delete/route.ts` (DELETE)
+ *
+ * Flow: remove storage objects referenced by the user, then delete `users` (FK CASCADE).
+ *
+ * Storage cleanup (this file) — SQL / bucket references:
+ * | Tool                    | Tables                              | Bucket                 | Schema / storage script |
+ * |-------------------------|-------------------------------------|------------------------|-------------------------|
+ * | Important Documents     | tools_id_documents                  | important-documents    | supabase/archive/create-important-documents-tables.sql, create-important-documents-storage-bucket.sql |
+ * | Repair History          | tools_rh_records, tools_rh_repair_pictures | repair-history    | supabase/archive/create-repair-history-tables.sql, create-repair-history-storage-bucket.sql |
+ * | Healthcare Appts        | tools_hcah_documents                | heathcare-appt-history | supabase/archive/create-healthcare-appts-history-tables.sql, create-healthcare-appts-history-storage-bucket.sql |
+ * | Pet Care Schedule       | tools_pcs_documents                 | pet-care-schedule      | supabase/archive/create-pet-care-schedule-tables.sql, create-pet-care-schedule-storage-bucket.sql |
+ * | HSA Tracker (receipts)  | tools_hsa_expense_receipts*         | hsa-tracker*           | supabase/create-tools-hsa-tables.sql (*when receipts table + bucket are enabled) |
+ *
+ * DB-only cascade (no storage block required here; user_id → users ON DELETE CASCADE):
+ * | Tool           | Tables                                                                 | Schema script |
+ * |----------------|------------------------------------------------------------------------|---------------|
+ * | Address Book   | tools_ab_addresses, tools_ab_tags, tools_ab_address_tags               | supabase/create-tools-ab-tables.sql |
+ * | HSA Tracker    | tools_hsa_accounts, tools_hsa_deposits, tools_hsa_expenses            | supabase/create-tools-hsa-tables.sql |
+ * | Notes          | tools_note_notes, tools_note_tags, tools_note_note_tags, tools_note_security_questions | supabase/DB_Build_ASOF_4_26_26.sql |
+ * | Other tools    | Goals, subscriptions, shopping lists, meal planner, calendar, TDL, etc. | supabase/DB_Build_ASOF_4_26_26.sql |
+ *
+ * Global seed data (not per-user, not deleted): tools_hsa_default_accounts
+ */
 export async function deleteUserAndAssociatedData(userId: string): Promise<void> {
   const storageDeletes: Array<{ bucket: string; path: string }> = [];
 
-  // Important Documents files
+  // Important Documents — supabase/archive/create-important-documents-*.sql
   const { data: idDocs, error: idDocsError } = await supabaseServer
     .from('tools_id_documents')
     .select('file_url')
@@ -56,7 +80,7 @@ export async function deleteUserAndAssociatedData(userId: string): Promise<void>
     if (path) storageDeletes.push({ bucket: 'important-documents', path });
   });
 
-  // Repair History files
+  // Repair History — supabase/archive/create-repair-history-*.sql
   const { data: rhRecords, error: rhError } = await supabaseServer
     .from('tools_rh_records')
     .select('id, receipt_file_url, warranty_file_url')
@@ -73,7 +97,7 @@ export async function deleteUserAndAssociatedData(userId: string): Promise<void>
 
   if (rhRecordIds.length > 0) {
     const { data: rhPictures, error: rhPicturesError } = await supabaseServer
-      .from('tools_rh_record_pictures')
+      .from('tools_rh_repair_pictures')
       .select('file_url')
       .in('record_id', rhRecordIds);
     if (rhPicturesError && !isMissingRelationError(rhPicturesError)) throw rhPicturesError;
@@ -83,7 +107,7 @@ export async function deleteUserAndAssociatedData(userId: string): Promise<void>
     });
   }
 
-  // Healthcare Appts & History files
+  // Healthcare Appts & History — supabase/archive/create-healthcare-appts-history-*.sql
   const { data: hcahHeaders, error: hcahHeadersError } = await supabaseServer
     .from('tools_hcah_headers')
     .select('id')
@@ -112,7 +136,7 @@ export async function deleteUserAndAssociatedData(userId: string): Promise<void>
     }
   }
 
-  // Pet Care Schedule document files (if stored in bucket and URL is bucket-backed)
+  // Pet Care Schedule — supabase/archive/create-pet-care-schedule-*.sql
   const { data: pets, error: petsError } = await supabaseServer
     .from('tools_pcs_pets')
     .select('id')
@@ -132,7 +156,30 @@ export async function deleteUserAndAssociatedData(userId: string): Promise<void>
     });
   }
 
-  // Remove files first, then database row (which cascades to user-linked records)
+  // HSA Tracker receipts — supabase/create-tools-hsa-tables.sql (phase 2; table may not exist yet)
+  const { data: hsaExpenses, error: hsaExpensesError } = await supabaseServer
+    .from('tools_hsa_expenses')
+    .select('id')
+    .eq('user_id', userId);
+  if (hsaExpensesError && !isMissingRelationError(hsaExpensesError)) throw hsaExpensesError;
+
+  const hsaExpenseIds = (hsaExpenses || []).map((e: { id: string }) => e.id);
+  if (hsaExpenseIds.length > 0) {
+    const { data: hsaReceipts, error: hsaReceiptsError } = await supabaseServer
+      .from('tools_hsa_expense_receipts')
+      .select('file_url')
+      .in('expense_id', hsaExpenseIds);
+    if (hsaReceiptsError && !isMissingRelationError(hsaReceiptsError)) throw hsaReceiptsError;
+    (hsaReceipts || []).forEach((row: { file_url: string | null }) => {
+      const path = row.file_url ? extractStoragePath(row.file_url, 'hsa-tracker') : null;
+      if (path) storageDeletes.push({ bucket: 'hsa-tracker', path });
+    });
+  }
+  // tools_hsa_accounts / deposits / expenses: removed via users ON DELETE CASCADE
+
+  // Address Book — supabase/create-tools-ab-tables.sql (DB-only; no storage)
+  // tools_ab_addresses, tools_ab_tags, tools_ab_address_tags: removed via users ON DELETE CASCADE
+
   const grouped = storageDeletes.reduce<Record<string, string[]>>((acc, item) => {
     if (!acc[item.bucket]) acc[item.bucket] = [];
     acc[item.bucket].push(item.path);

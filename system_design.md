@@ -1425,9 +1425,11 @@ USING (
 4. Run the SQL script in Supabase SQL Editor to apply policies
 
 **Current Storage Buckets**:
-- `repair-history` - Stores receipts, warranties, and repair pictures
-- `pet-care-schedule` - Stores pet documents
-- `important-documents` - Stores important documents (warranties, policies, records)
+- `repair-history` - Stores receipts, warranties, and repair pictures (`supabase/archive/create-repair-history-storage-bucket.sql`)
+- `pet-care-schedule` - Stores pet documents (`supabase/archive/create-pet-care-schedule-storage-bucket.sql`)
+- `important-documents` - Stores important documents (warranties, policies, records) (`supabase/archive/create-important-documents-storage-bucket.sql`)
+- `heathcare-appt-history` - Healthcare appointment documents (`supabase/archive/create-healthcare-appts-history-storage-bucket.sql`)
+- `hsa-tracker` - Planned for HSA expense receipts (`supabase/create-tools-hsa-tables.sql`, phase 2)
 
 **Why These Policies Matter**:
 - **Security**: Ensures users can only access files in their own folder (`{userId}/...`)
@@ -1458,8 +1460,8 @@ The application uses a shared server-side deletion service to remove a user acco
 4. Database rows tied to the user are removed by foreign keys with `ON DELETE CASCADE`.
 
 **Important Design Rule (Future Tools)**:
-- DB records: If new tool tables are correctly related to `users` with cascade chains, no extra DB deletion code is required.
-- Storage files: If a new tool uploads files, update `deleteUserAndAssociatedData()` so those bucket objects are removed during account erasure.
+- DB records: If new tool tables are correctly related to `users` with cascade chains, no extra DB deletion code is required (e.g. HSA `tools_hsa_accounts`, `tools_hsa_deposits`, `tools_hsa_expenses` in `supabase/create-tools-hsa-tables.sql`).
+- Storage files: If a new tool uploads files, update `deleteUserAndAssociatedData()` so those bucket objects are removed during account erasure (e.g. future `tools_hsa_expense_receipts` → bucket `hsa-tracker`).
 
 **Implementation Guidance for New File-Based Tools**:
 - Prefer storing a storage-relative path (or a consistently parseable URL) in the DB.
