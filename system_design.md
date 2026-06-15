@@ -1460,7 +1460,7 @@ The application uses a shared server-side deletion service to remove a user acco
 4. Database rows tied to the user are removed by foreign keys with `ON DELETE CASCADE`.
 
 **Important Design Rule (Future Tools)**:
-- DB records: If new tool tables are correctly related to `users` with cascade chains, no extra DB deletion code is required (e.g. HSA `tools_hsa_accounts`, `tools_hsa_deposits`, `tools_hsa_expenses` in `supabase/create-tools-hsa-tables.sql`).
+- DB records: If new tool tables are correctly related to `users` with cascade chains, no extra DB deletion code is required (e.g. Address Book in `supabase/create-tools-ab-tables.sql`, Travel Log in `supabase/create-tools-tl-tables.sql`, HSA `tools_hsa_accounts` / `tools_hsa_deposits` / `tools_hsa_expenses` in `supabase/create-tools-hsa-tables.sql`).
 - Storage files: If a new tool uploads files, update `deleteUserAndAssociatedData()` so those bucket objects are removed during account erasure (e.g. future `tools_hsa_expense_receipts` → bucket `hsa-tracker`).
 
 **Implementation Guidance for New File-Based Tools**:

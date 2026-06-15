@@ -46,24 +46,36 @@ async function removeStoragePaths(bucket: string, paths: string[]): Promise<void
  *
  * Flow: remove storage objects referenced by the user, then delete `users` (FK CASCADE).
  *
- * Storage cleanup (this file) — SQL / bucket references:
- * | Tool                    | Tables                              | Bucket                 | Schema / storage script |
- * |-------------------------|-------------------------------------|------------------------|-------------------------|
- * | Important Documents     | tools_id_documents                  | important-documents    | supabase/archive/create-important-documents-tables.sql, create-important-documents-storage-bucket.sql |
- * | Repair History          | tools_rh_records, tools_rh_repair_pictures | repair-history    | supabase/archive/create-repair-history-tables.sql, create-repair-history-storage-bucket.sql |
- * | Healthcare Appts        | tools_hcah_documents                | heathcare-appt-history | supabase/archive/create-healthcare-appts-history-tables.sql, create-healthcare-appts-history-storage-bucket.sql |
- * | Pet Care Schedule       | tools_pcs_documents                 | pet-care-schedule      | supabase/archive/create-pet-care-schedule-tables.sql, create-pet-care-schedule-storage-bucket.sql |
- * | HSA Tracker (receipts)  | tools_hsa_expense_receipts*         | hsa-tracker*           | supabase/create-tools-hsa-tables.sql (*when receipts table + bucket are enabled) |
+ * Storage cleanup (this file) — query tables for file URLs, then remove from bucket:
+ * | Tool                    | Tables (file columns)                                              | Bucket                 | Schema / storage script |
+ * |-------------------------|--------------------------------------------------------------------|------------------------|-------------------------|
+ * | Important Documents     | tools_id_documents (file_url)                                      | important-documents    | supabase/archive/create-important-documents-tables.sql, create-important-documents-storage-bucket.sql |
+ * | Repair History          | tools_rh_records (receipt_file_url, warranty_file_url), tools_rh_repair_pictures (file_url) | repair-history | supabase/archive/create-repair-history-tables.sql, create-repair-history-storage-bucket.sql |
+ * | Healthcare Appts        | tools_hcah_documents (file_url) via headers → records              | heathcare-appt-history | supabase/archive/create-healthcare-appts-history-tables.sql, create-healthcare-appts-history-storage-bucket.sql |
+ * | Pet Care Schedule       | tools_pcs_documents (file_url) via pets                            | pet-care-schedule      | supabase/archive/create-pet-care-schedule-tables.sql, create-pet-care-schedule-storage-bucket.sql |
+ * | HSA Tracker (receipts)  | tools_hsa_expense_receipts (file_url)* via expenses                | hsa-tracker*           | supabase/create-tools-hsa-tables.sql (*when receipts table + bucket are enabled) |
  *
- * DB-only cascade (no storage block required here; user_id → users ON DELETE CASCADE):
- * | Tool           | Tables                                                                 | Schema script |
- * |----------------|------------------------------------------------------------------------|---------------|
- * | Address Book   | tools_ab_addresses, tools_ab_tags, tools_ab_address_tags               | supabase/create-tools-ab-tables.sql |
- * | HSA Tracker    | tools_hsa_accounts, tools_hsa_deposits, tools_hsa_expenses            | supabase/create-tools-hsa-tables.sql |
- * | Notes          | tools_note_notes, tools_note_tags, tools_note_note_tags, tools_note_security_questions | supabase/DB_Build_ASOF_4_26_26.sql |
- * | Other tools    | Goals, subscriptions, shopping lists, meal planner, calendar, TDL, etc. | supabase/DB_Build_ASOF_4_26_26.sql |
+ * DB-only cascade (user_id → users ON DELETE CASCADE; no storage block required here):
+ * | Tool                 | Tables                                                                 | Schema script |
+ * |----------------------|------------------------------------------------------------------------|---------------|
+ * | Address Book         | tools_ab_addresses, tools_ab_tags, tools_ab_address_tags               | supabase/create-tools-ab-tables.sql |
+ * | Travel Log           | tools_tl_trips → tools_tl_lodging, tools_tl_journal_notes (trip CASCADE) | supabase/create-tools-tl-tables.sql |
+ * | HSA Tracker          | tools_hsa_accounts, tools_hsa_deposits, tools_hsa_expenses             | supabase/create-tools-hsa-tables.sql |
+ * | Notes                | tools_note_notes, tools_note_tags, tools_note_note_tags, tools_note_security_questions | supabase/archive/create-notes-tables.sql |
+ * | Goals Tracking       | tools_gt_categories, tools_gt_goals, tools_gt_phases, tools_gt_tasks, tools_gt_update_notes | supabase/archive/create-tools-gt-tables.sql |
+ * | Meal Planner         | tools_mp_items, tools_mp_meal_types, tools_mp_meals, tools_mp_meal_ingredients, tools_mp_plans, tools_mp_plan_assignments | supabase/archive/create-tools-mp-tables.sql |
+ * | Shopping List        | tools_sl_lists, tools_sl_items, tools_sl_list_items                    | supabase/archive/create-tools-sl-tables.sql |
+ * | To-Do List           | tools_tdl_categories, tools_tdl_tasks                                  | supabase/archive/create-tools-tdl-tables.sql |
+ * | Subscription Tracker | tools_st_subscriptions                                                 | supabase/archive/create-subscription-tracker-tables.sql |
+ * | Calendar Events      | tools_ce_categories, tools_ce_events                                   | supabase/archive/create-calendar-events-tables.sql |
+ * | Dashboard Items      | dashboard_items                                                        | supabase/archive/create-dashboard-items-table.sql |
+ * | Repair History (DB)  | tools_rh_headers, tools_rh_records, tools_rh_items (+ child rows)    | supabase/archive/create-repair-history-tables.sql |
+ * | Healthcare (DB)      | tools_hcah_headers, tools_hcah_records (+ document rows cascade)     | supabase/archive/create-healthcare-appts-history-tables.sql |
+ * | Pet Care (DB)        | tools_pcs_pets and related child tables                                | supabase/archive/create-pet-care-schedule-tables.sql |
+ * | Important Docs (DB)  | tools_id_documents, tools_id_tags, tools_id_document_tags, tools_id_security_questions | supabase/archive/create-important-documents-tables.sql |
  *
- * Global seed data (not per-user, not deleted): tools_hsa_default_accounts
+ * Monolithic reference (may duplicate archive scripts): supabase/DB_Build_ASOF_4_26_26.sql
+ * Global seed data (not per-user, not deleted): tools_hsa_default_accounts, tools_gt_default_categories, etc.
  */
 export async function deleteUserAndAssociatedData(userId: string): Promise<void> {
   const storageDeletes: Array<{ bucket: string; path: string }> = [];
@@ -175,10 +187,14 @@ export async function deleteUserAndAssociatedData(userId: string): Promise<void>
       if (path) storageDeletes.push({ bucket: 'hsa-tracker', path });
     });
   }
-  // tools_hsa_accounts / deposits / expenses: removed via users ON DELETE CASCADE
+  // HSA Tracker DB rows — supabase/create-tools-hsa-tables.sql (receipt files handled above)
+  // tools_hsa_accounts, tools_hsa_deposits, tools_hsa_expenses: removed via users ON DELETE CASCADE
 
   // Address Book — supabase/create-tools-ab-tables.sql (DB-only; no storage)
   // tools_ab_addresses, tools_ab_tags, tools_ab_address_tags: removed via users ON DELETE CASCADE
+
+  // Travel Log — supabase/create-tools-tl-tables.sql (DB-only; no storage)
+  // tools_tl_trips (user_id) → tools_tl_lodging, tools_tl_journal_notes: removed via users + trip CASCADE
 
   const grouped = storageDeletes.reduce<Record<string, string[]>>((acc, item) => {
     if (!acc[item.bucket]) acc[item.bucket] = [];

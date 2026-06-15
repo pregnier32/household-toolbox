@@ -22,6 +22,7 @@ import { ShoppingListTool } from '../components/ShoppingListTool';
 import { MealPlannerTool } from '../components/MealPlannerTool';
 import { HSATrackerTool } from '../components/HSATrackerTool';
 import { AddressBookTool } from '../components/AddressBookTool';
+import { TravelLogTool } from '../components/TravelLogTool';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, PieChart, Pie, Cell, Legend } from 'recharts';
 
 // Calendar Component
@@ -1102,6 +1103,8 @@ export default function Dashboard() {
                         <HSATrackerTool toolId={tool.id} />
                       ) : tool.name === 'Address Book' ? (
                         <AddressBookTool toolId={tool.id} />
+                      ) : tool.name === 'Travel Log' ? (
+                        <TravelLogTool toolId={tool.id} />
                       ) : (
                         <div className="rounded-2xl border border-slate-800 bg-slate-900/70 p-6">
                           <h2 className="text-xl font-semibold text-slate-50 mb-4">{tool.name}</h2>
@@ -1289,6 +1292,8 @@ export default function Dashboard() {
                         <HSATrackerTool toolId={tool.id} />
                       ) : tool.name === 'Address Book' ? (
                         <AddressBookTool toolId={tool.id} />
+                      ) : tool.name === 'Travel Log' ? (
+                        <TravelLogTool toolId={tool.id} />
                       ) : (
                         <div className="rounded-2xl border border-slate-800 bg-slate-900/70 p-6">
                           <h2 className="text-xl font-semibold text-slate-50 mb-4">{tool.name}</h2>
