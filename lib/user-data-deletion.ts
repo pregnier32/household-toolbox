@@ -61,6 +61,7 @@ async function removeStoragePaths(bucket: string, paths: string[]): Promise<void
  * | Address Book         | tools_ab_addresses, tools_ab_tags, tools_ab_address_tags               | supabase/create-tools-ab-tables.sql |
  * | Travel Log           | tools_tl_trips → tools_tl_lodging, tools_tl_journal_notes (trip CASCADE) | supabase/create-tools-tl-tables.sql |
  * | HSA Tracker          | tools_hsa_accounts, tools_hsa_deposits, tools_hsa_expenses             | supabase/create-tools-hsa-tables.sql |
+ * | Event Budget Planner | tools_ebp_categories, tools_ebp_types, tools_ebp_vendors, tools_ebp_events → tools_ebp_event_category_budgets, tools_ebp_expenses | supabase/create-tools-ebp-tables.sql |
  * | Notes                | tools_note_notes, tools_note_tags, tools_note_note_tags, tools_note_security_questions | supabase/archive/create-notes-tables.sql |
  * | Goals Tracking       | tools_gt_categories, tools_gt_goals, tools_gt_phases, tools_gt_tasks, tools_gt_update_notes | supabase/archive/create-tools-gt-tables.sql |
  * | Meal Planner         | tools_mp_items, tools_mp_meal_types, tools_mp_meals, tools_mp_meal_ingredients, tools_mp_plans, tools_mp_plan_assignments | supabase/archive/create-tools-mp-tables.sql |
@@ -75,7 +76,10 @@ async function removeStoragePaths(bucket: string, paths: string[]): Promise<void
  * | Important Docs (DB)  | tools_id_documents, tools_id_tags, tools_id_document_tags, tools_id_security_questions | supabase/archive/create-important-documents-tables.sql |
  *
  * Monolithic reference (may duplicate archive scripts): supabase/DB_Build_ASOF_4_26_26.sql
- * Global seed data (not per-user, not deleted): tools_hsa_default_accounts, tools_gt_default_categories, etc.
+ * Global seed data (not per-user, not deleted): tools_hsa_default_accounts, tools_gt_default_categories,
+ *   tools_ebp_default_categories, tools_ebp_default_types, etc.
+ *
+ * Event Budget Planner API: app/api/tools/event-budget-planner/ (route.ts + categories/types/vendors sub-routes)
  */
 export async function deleteUserAndAssociatedData(userId: string): Promise<void> {
   const storageDeletes: Array<{ bucket: string; path: string }> = [];
@@ -195,6 +199,15 @@ export async function deleteUserAndAssociatedData(userId: string): Promise<void>
 
   // Travel Log — supabase/create-tools-tl-tables.sql (DB-only; no storage)
   // tools_tl_trips (user_id) → tools_tl_lodging, tools_tl_journal_notes: removed via users + trip CASCADE
+
+  // Event Budget Planner — supabase/create-tools-ebp-tables.sql (DB-only; no storage)
+  // Delete events first (CASCADE → budgets/expenses); categories/types/vendors then cascade from users.
+  const { error: ebpEventsDeleteError } = await supabaseServer
+    .from('tools_ebp_events')
+    .delete()
+    .eq('user_id', userId);
+  if (ebpEventsDeleteError && !isMissingRelationError(ebpEventsDeleteError)) throw ebpEventsDeleteError;
+  // tools_ebp_categories, tools_ebp_types, tools_ebp_vendors: removed via users ON DELETE CASCADE
 
   const grouped = storageDeletes.reduce<Record<string, string[]>>((acc, item) => {
     if (!acc[item.bucket]) acc[item.bucket] = [];
