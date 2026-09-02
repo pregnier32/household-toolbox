@@ -13,6 +13,9 @@
 # testing
 /coverage
 
+# Local reference docs (test plans, briefs, prompts — keep off GitHub)
+/docs/
+
 # next.js
 /.next/
 /out/
