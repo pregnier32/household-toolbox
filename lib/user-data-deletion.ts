@@ -62,6 +62,7 @@ async function removeStoragePaths(bucket: string, paths: string[]): Promise<void
  * | Travel Log           | tools_tl_trips → tools_tl_lodging, tools_tl_journal_notes (trip CASCADE) | supabase/create-tools-tl-tables.sql |
  * | HSA Tracker          | tools_hsa_accounts, tools_hsa_deposits, tools_hsa_expenses             | supabase/create-tools-hsa-tables.sql |
  * | Event Budget Planner | tools_ebp_categories, tools_ebp_types, tools_ebp_vendors, tools_ebp_events → tools_ebp_event_category_budgets, tools_ebp_expenses | supabase/create-tools-ebp-tables.sql |
+ * | Cleaning Schedule    | tools_cs_categories, tools_cs_items → tools_cs_tasks → tools_cs_completions | supabase/create-tools-cs-tables.sql |
  * | Notes                | tools_note_notes, tools_note_tags, tools_note_note_tags, tools_note_security_questions | supabase/archive/create-notes-tables.sql |
  * | Goals Tracking       | tools_gt_categories, tools_gt_goals, tools_gt_phases, tools_gt_tasks, tools_gt_update_notes | supabase/archive/create-tools-gt-tables.sql |
  * | Meal Planner         | tools_mp_items, tools_mp_meal_types, tools_mp_meals, tools_mp_meal_ingredients, tools_mp_plans, tools_mp_plan_assignments | supabase/archive/create-tools-mp-tables.sql |
@@ -77,9 +78,13 @@ async function removeStoragePaths(bucket: string, paths: string[]): Promise<void
  *
  * Monolithic reference (may duplicate archive scripts): supabase/DB_Build_ASOF_4_26_26.sql
  * Global seed data (not per-user, not deleted): tools_hsa_default_accounts, tools_gt_default_categories,
- *   tools_ebp_default_categories, tools_ebp_default_types, etc.
+ *   tools_ebp_default_categories, tools_ebp_default_types, tools_cs_default_categories,
+ *   tools_cs_default_items, etc.
  *
  * Event Budget Planner API: app/api/tools/event-budget-planner/ (route.ts + categories/types/vendors sub-routes)
+ * Cleaning Schedule API: app/api/tools/cleaning-schedule/route.ts
+ * Cleaning Schedule UI: app/components/CleaningScheduleTool.tsx
+ * Cleaning Schedule helpers: lib/cleaning-schedule.ts
  */
 export async function deleteUserAndAssociatedData(userId: string): Promise<void> {
   const storageDeletes: Array<{ bucket: string; path: string }> = [];
@@ -208,6 +213,34 @@ export async function deleteUserAndAssociatedData(userId: string): Promise<void>
     .eq('user_id', userId);
   if (ebpEventsDeleteError && !isMissingRelationError(ebpEventsDeleteError)) throw ebpEventsDeleteError;
   // tools_ebp_categories, tools_ebp_types, tools_ebp_vendors: removed via users ON DELETE CASCADE
+
+  // Cleaning Schedule — supabase/create-tools-cs-tables.sql (DB-only; no storage)
+  // Items restrict category deletes; a trigger also blocks DELETE of is_default rows.
+  // Clear the default flag, then delete items (CASCADE → tasks → completions) before categories.
+  const { error: csItemsUnflagError } = await supabaseServer
+    .from('tools_cs_items')
+    .update({ is_default: false })
+    .eq('user_id', userId);
+  if (csItemsUnflagError && !isMissingRelationError(csItemsUnflagError)) throw csItemsUnflagError;
+
+  const { error: csCategoriesUnflagError } = await supabaseServer
+    .from('tools_cs_categories')
+    .update({ is_default: false })
+    .eq('user_id', userId);
+  if (csCategoriesUnflagError && !isMissingRelationError(csCategoriesUnflagError)) throw csCategoriesUnflagError;
+
+  const { error: csItemsDeleteError } = await supabaseServer
+    .from('tools_cs_items')
+    .delete()
+    .eq('user_id', userId);
+  if (csItemsDeleteError && !isMissingRelationError(csItemsDeleteError)) throw csItemsDeleteError;
+
+  const { error: csCategoriesDeleteError } = await supabaseServer
+    .from('tools_cs_categories')
+    .delete()
+    .eq('user_id', userId);
+  if (csCategoriesDeleteError && !isMissingRelationError(csCategoriesDeleteError)) throw csCategoriesDeleteError;
+  // tools_cs_default_categories / tools_cs_default_items are global seed rows and are left in place.
 
   const grouped = storageDeletes.reduce<Record<string, string[]>>((acc, item) => {
     if (!acc[item.bucket]) acc[item.bucket] = [];

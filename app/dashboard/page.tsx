@@ -24,6 +24,7 @@ import { HSATrackerTool } from '../components/HSATrackerTool';
 import { AddressBookTool } from '../components/AddressBookTool';
 import { TravelLogTool } from '../components/TravelLogTool';
 import { EventBudgetPlannerTool } from '../components/EventBudgetPlannerTool';
+import { CleaningScheduleTool } from '../components/CleaningScheduleTool';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, PieChart, Pie, Cell, Legend } from 'recharts';
 
 // Calendar Component
@@ -1108,6 +1109,8 @@ export default function Dashboard() {
                         <TravelLogTool toolId={tool.id} />
                       ) : tool.name === 'Event Budget Planner' ? (
                         <EventBudgetPlannerTool toolId={tool.id} />
+                      ) : tool.name === 'Cleaning Schedule' ? (
+                        <CleaningScheduleTool toolId={tool.id} />
                       ) : (
                         <div className="rounded-2xl border border-slate-800 bg-slate-900/70 p-6">
                           <h2 className="text-xl font-semibold text-slate-50 mb-4">{tool.name}</h2>
@@ -1299,6 +1302,8 @@ export default function Dashboard() {
                         <TravelLogTool toolId={tool.id} />
                       ) : tool.name === 'Event Budget Planner' ? (
                         <EventBudgetPlannerTool toolId={tool.id} />
+                      ) : tool.name === 'Cleaning Schedule' ? (
+                        <CleaningScheduleTool toolId={tool.id} />
                       ) : (
                         <div className="rounded-2xl border border-slate-800 bg-slate-900/70 p-6">
                           <h2 className="text-xl font-semibold text-slate-50 mb-4">{tool.name}</h2>
