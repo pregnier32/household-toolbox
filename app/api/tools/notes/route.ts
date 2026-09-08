@@ -202,7 +202,7 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'Note name, created date, and note content are required' }, { status: 400 });
     }
 
-    if (!selectedTags || selectedTags.length === 0) {
+    if (action !== 'create' && noteId && (!selectedTags || selectedTags.length === 0)) {
       return NextResponse.json({ error: 'At least one tag is required' }, { status: 400 });
     }
 
@@ -214,9 +214,9 @@ export async function POST(request: NextRequest) {
 
     // Validate security questions if password protection is enabled
     if (requiresPasswordForView && action === 'create') {
-      if (!securityQuestions || securityQuestions.length !== 3) {
+      if (!securityQuestions || securityQuestions.length !== 2) {
         return NextResponse.json(
-          { error: 'Exactly 3 security questions are required when password protection is enabled' },
+          { error: 'Exactly 2 security questions are required when password protection is enabled' },
           { status: 400 }
         );
       }
@@ -262,7 +262,7 @@ export async function POST(request: NextRequest) {
       }
 
       // Create note-tag relationships
-      if (selectedTags.length > 0) {
+      if (selectedTags && selectedTags.length > 0) {
         const noteTagInserts = selectedTags.map((tagId: string) => ({
           note_id: newNote.id,
           tag_id: tagId
@@ -279,7 +279,7 @@ export async function POST(request: NextRequest) {
       }
 
       // Create security questions if password protection is enabled
-      if (requiresPasswordForView && securityQuestions && securityQuestions.length === 3) {
+      if (requiresPasswordForView && securityQuestions && securityQuestions.length === 2) {
         const securityQuestionInserts = await Promise.all(
           securityQuestions.map(async (sq: { questionId: string; answer: string }) => ({
             note_id: newNote.id,
@@ -347,7 +347,7 @@ export async function POST(request: NextRequest) {
       }
 
       // Update security questions if password is being changed
-      if (requiresPasswordForView && viewPassword && securityQuestions && securityQuestions.length === 3) {
+      if (requiresPasswordForView && viewPassword && securityQuestions && securityQuestions.length === 2) {
         // Delete old security questions
         await supabaseServer
           .from('tools_note_security_questions')

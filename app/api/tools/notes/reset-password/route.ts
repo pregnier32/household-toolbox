@@ -67,7 +67,7 @@ export async function GET(request: NextRequest) {
       .select('question_id')
       .eq('note_id', noteId);
 
-    if (sqError || !securityQuestions || securityQuestions.length !== 3) {
+    if (sqError || !securityQuestions || securityQuestions.length === 0) {
       return NextResponse.json({ error: 'Security questions not found' }, { status: 404 });
     }
 
@@ -102,8 +102,8 @@ export async function POST(request: NextRequest) {
     const body = await request.json();
     const { noteId, answers, newPassword } = body;
 
-    if (!noteId || !answers || !Array.isArray(answers) || answers.length !== 3) {
-      return NextResponse.json({ error: 'Note ID and 3 answers are required' }, { status: 400 });
+    if (!noteId || !answers || !Array.isArray(answers) || answers.length === 0) {
+      return NextResponse.json({ error: 'Note ID and security-question answers are required' }, { status: 400 });
     }
 
     // If newPassword is not provided, just verify answers
@@ -131,8 +131,12 @@ export async function POST(request: NextRequest) {
       .select('question_id, answer_hash')
       .eq('note_id', noteId);
 
-    if (sqError || !securityQuestions || securityQuestions.length !== 3) {
+    if (sqError || !securityQuestions || securityQuestions.length === 0) {
       return NextResponse.json({ error: 'Security questions not found' }, { status: 404 });
+    }
+
+    if (answers.length !== securityQuestions.length) {
+      return NextResponse.json({ error: 'Answers for all stored security questions are required' }, { status: 400 });
     }
 
     // Verify all answers - match by question_id, not by index

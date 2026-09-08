@@ -31,25 +31,11 @@ type Note = {
 };
 
 const DEFAULT_TAGS = [
-  'General',
-  'Important',
-  'To Review',
-  'Temporary',
   'Home',
-  'Projects',
-  'Contractors',
-  'Appliances',
-  'Finance',
-  'Bills',
-  'Insurance',
-  'Family',
+  'Auto',
   'Medical',
-  'Pets',
-  'Work',
-  'Ideas',
-  'Goals',
-  'Travel',
-  'Reservations'
+  'Kids',
+  'Receipts'
 ];
 
 // Security questions
@@ -75,6 +61,24 @@ const SECURITY_QUESTIONS = [
   { id: 'q19', question: 'What was the model of your first phone?' },
   { id: 'q20', question: 'What was the name of your favorite childhood toy?' }
 ];
+
+const NEW_LOCK_QUESTION_COUNT = 2;
+
+const emptySecurityQuestions = (): SecurityQuestion[] =>
+  Array.from({ length: NEW_LOCK_QUESTION_COUNT }, () => ({ questionId: '', answer: '' }));
+
+const localCalendarDate = (date = new Date()) => {
+  const y = date.getFullYear();
+  const m = String(date.getMonth() + 1).padStart(2, '0');
+  const day = String(date.getDate()).padStart(2, '0');
+  return `${y}-${m}-${day}`;
+};
+
+const formatLocalCalendarDate = (dateStr: string) => {
+  const match = /^(\d{4})-(\d{2})-(\d{2})/.exec(dateStr);
+  if (!match) return dateStr;
+  return new Date(Number(match[1]), Number(match[2]) - 1, Number(match[3])).toLocaleDateString();
+};
 
 type NotesToolProps = {
   toolId?: string;
@@ -150,17 +154,13 @@ export function NotesTool({ toolId }: NotesToolProps) {
   const [isAdding, setIsAdding] = useState(false);
   const [newNote, setNewNote] = useState({
     noteName: '',
-    createdDate: new Date().toISOString().split('T')[0],
+    createdDate: localCalendarDate(),
     note: '',
     selectedTags: [] as string[],
     requiresPasswordForView: false,
     viewPassword: '',
     confirmPassword: '',
-    securityQuestions: [
-      { questionId: '', answer: '' },
-      { questionId: '', answer: '' },
-      { questionId: '', answer: '' }
-    ] as SecurityQuestion[]
+    securityQuestions: emptySecurityQuestions()
   });
   
   // Password visibility state
@@ -180,7 +180,8 @@ export function NotesTool({ toolId }: NotesToolProps) {
     selectedTags: [] as string[],
     requiresPasswordForView: false,
     viewPassword: '',
-    confirmPassword: ''
+    confirmPassword: '',
+    securityQuestions: emptySecurityQuestions()
   });
   
   // Tag management state
@@ -197,6 +198,7 @@ export function NotesTool({ toolId }: NotesToolProps) {
   const [deleteTagConfirmText, setDeleteTagConfirmText] = useState('');
   const [viewPasswordModalId, setViewPasswordModalId] = useState<string | null>(null);
   const [viewPasswordInput, setViewPasswordInput] = useState('');
+  const [viewPasswordError, setViewPasswordError] = useState('');
   const [showViewPassword, setShowViewPassword] = useState(false);
   const [showForgotPasswordModal, setShowForgotPasswordModal] = useState(false);
   const [viewNoteModal, setViewNoteModal] = useState<Note | null>(null);
@@ -356,11 +358,6 @@ export function NotesTool({ toolId }: NotesToolProps) {
       return;
     }
 
-    if (newNote.selectedTags.length === 0) {
-      alert('Please select at least one tag.');
-      return;
-    }
-
     if (newNote.requiresPasswordForView) {
       if (!newNote.viewPassword.trim()) {
         alert('Please enter a password for view protection.');
@@ -372,14 +369,14 @@ export function NotesTool({ toolId }: NotesToolProps) {
       }
       // Validate security questions
       const validQuestions = newNote.securityQuestions.filter(q => q.questionId && q.answer.trim());
-      if (validQuestions.length !== 3) {
-        alert('Please select and answer 3 security questions for password recovery.');
+      if (validQuestions.length !== NEW_LOCK_QUESTION_COUNT) {
+        alert(`Please select and answer ${NEW_LOCK_QUESTION_COUNT} security questions for password recovery.`);
         return;
       }
       // Check for duplicate questions
       const questionIds = validQuestions.map(q => q.questionId);
       if (new Set(questionIds).size !== questionIds.length) {
-        alert('Please select 3 different security questions.');
+        alert(`Please select ${NEW_LOCK_QUESTION_COUNT} different security questions.`);
         return;
       }
     }
@@ -435,17 +432,13 @@ export function NotesTool({ toolId }: NotesToolProps) {
         // Reset form
         setNewNote({
           noteName: '',
-          createdDate: new Date().toISOString().split('T')[0],
+          createdDate: localCalendarDate(),
           note: '',
           selectedTags: [],
           requiresPasswordForView: false,
           viewPassword: '',
           confirmPassword: '',
-          securityQuestions: [
-            { questionId: '', answer: '' },
-            { questionId: '', answer: '' },
-            { questionId: '', answer: '' }
-          ]
+          securityQuestions: emptySecurityQuestions()
         });
         setShowPassword({ ...showPassword, new: false, newConfirm: false });
         setIsAdding(false);
@@ -466,6 +459,7 @@ export function NotesTool({ toolId }: NotesToolProps) {
     if (note.requiresPasswordForView) {
       setViewPasswordModalId(note.id);
       setViewPasswordInput('');
+      setViewPasswordError('');
       setPasswordAction('edit');
       return;
     }
@@ -479,7 +473,8 @@ export function NotesTool({ toolId }: NotesToolProps) {
       selectedTags: note.tags,
       requiresPasswordForView: note.requiresPasswordForView || false,
       viewPassword: note.requiresPasswordForView ? '••••••••' : '', // Placeholder to indicate password exists
-      confirmPassword: note.requiresPasswordForView ? '••••••••' : '' // Placeholder to indicate password exists
+      confirmPassword: note.requiresPasswordForView ? '••••••••' : '', // Placeholder to indicate password exists
+      securityQuestions: emptySecurityQuestions()
     });
     setShowPassword({ ...showPassword, edit: false, editConfirm: false });
   };
@@ -493,7 +488,8 @@ export function NotesTool({ toolId }: NotesToolProps) {
       selectedTags: [],
       requiresPasswordForView: false,
       viewPassword: '',
-      confirmPassword: ''
+      confirmPassword: '',
+      securityQuestions: emptySecurityQuestions()
     });
     setShowPassword({ ...showPassword, edit: false, editConfirm: false });
   };
@@ -521,6 +517,20 @@ export function NotesTool({ toolId }: NotesToolProps) {
         alert('Please enter a password for view protection.');
         return;
       }
+
+      // Edit-enable lock: collect the same unique questions create already uses
+      if (!existingNote?.requiresPasswordForView) {
+        const validQuestions = editingNote.securityQuestions.filter(q => q.questionId && q.answer.trim());
+        if (validQuestions.length !== NEW_LOCK_QUESTION_COUNT) {
+          alert(`Please select and answer ${NEW_LOCK_QUESTION_COUNT} security questions for password recovery.`);
+          return;
+        }
+        const questionIds = validQuestions.map(q => q.questionId);
+        if (new Set(questionIds).size !== questionIds.length) {
+          alert(`Please select ${NEW_LOCK_QUESTION_COUNT} different security questions.`);
+          return;
+        }
+      }
     }
 
     if (!toolId) {
@@ -546,7 +556,10 @@ export function NotesTool({ toolId }: NotesToolProps) {
           viewPassword: editingNote.requiresPasswordForView && editingNote.viewPassword.trim() && editingNote.viewPassword !== '••••••••'
             ? editingNote.viewPassword.trim()
             : undefined,
-          selectedTags: editingNote.selectedTags
+          selectedTags: editingNote.selectedTags,
+          securityQuestions: editingNote.requiresPasswordForView && !existingNote?.requiresPasswordForView
+            ? editingNote.securityQuestions.filter(q => q.questionId && q.answer.trim())
+            : undefined
         }),
       });
 
@@ -594,6 +607,7 @@ export function NotesTool({ toolId }: NotesToolProps) {
     if (note && note.requiresPasswordForView) {
       setViewPasswordModalId(id);
       setViewPasswordInput('');
+      setViewPasswordError('');
       setPasswordAction('inactivate');
       return;
     }
@@ -1057,20 +1071,33 @@ export function NotesTool({ toolId }: NotesToolProps) {
     return notes.filter(note => note.tags.includes(tagId)).length;
   };
 
-  const handleSecurityQuestionChange = (index: number, questionId: string) => {
+  const handleSecurityQuestionChange = (index: number, questionId: string, isEdit: boolean = false) => {
+    if (isEdit) {
+      const updatedQuestions = [...editingNote.securityQuestions];
+      updatedQuestions[index] = { ...updatedQuestions[index], questionId, answer: '' };
+      setEditingNote({ ...editingNote, securityQuestions: updatedQuestions });
+      return;
+    }
     const updatedQuestions = [...newNote.securityQuestions];
     updatedQuestions[index] = { ...updatedQuestions[index], questionId, answer: '' };
     setNewNote({ ...newNote, securityQuestions: updatedQuestions });
   };
 
-  const handleSecurityAnswerChange = (index: number, answer: string) => {
+  const handleSecurityAnswerChange = (index: number, answer: string, isEdit: boolean = false) => {
+    if (isEdit) {
+      const updatedQuestions = [...editingNote.securityQuestions];
+      updatedQuestions[index] = { ...updatedQuestions[index], answer };
+      setEditingNote({ ...editingNote, securityQuestions: updatedQuestions });
+      return;
+    }
     const updatedQuestions = [...newNote.securityQuestions];
     updatedQuestions[index] = { ...updatedQuestions[index], answer };
     setNewNote({ ...newNote, securityQuestions: updatedQuestions });
   };
 
-  const getAvailableQuestions = (currentIndex: number) => {
-    const selectedQuestionIds = newNote.securityQuestions
+  const getAvailableQuestions = (currentIndex: number, isEdit: boolean = false) => {
+    const questions = isEdit ? editingNote.securityQuestions : newNote.securityQuestions;
+    const selectedQuestionIds = questions
       .map((q, idx) => idx !== currentIndex ? q.questionId : '')
       .filter(id => id);
     return SECURITY_QUESTIONS.filter(q => !selectedQuestionIds.includes(q.id));
@@ -1081,6 +1108,7 @@ export function NotesTool({ toolId }: NotesToolProps) {
       // Show password modal
       setViewPasswordModalId(note.id);
       setViewPasswordInput('');
+      setViewPasswordError('');
       setPasswordAction('view');
       return;
     }
@@ -1195,6 +1223,7 @@ export function NotesTool({ toolId }: NotesToolProps) {
         setShowForgotPasswordModal(false);
       setViewPasswordModalId(null);
       setViewPasswordInput('');
+      setViewPasswordError('');
       setShowViewPassword(false);
       setPasswordAction(null);
       setSecurityQuestions([]);
@@ -1224,6 +1253,7 @@ export function NotesTool({ toolId }: NotesToolProps) {
       alert('Note not found.');
       setViewPasswordModalId(null);
       setViewPasswordInput('');
+      setViewPasswordError('');
       return;
     }
 
@@ -1260,7 +1290,8 @@ export function NotesTool({ toolId }: NotesToolProps) {
               selectedTags: note.tags,
               requiresPasswordForView: note.requiresPasswordForView || false,
               viewPassword: note.requiresPasswordForView ? '••••••••' : '', // Placeholder to indicate password exists
-              confirmPassword: note.requiresPasswordForView ? '••••••••' : '' // Placeholder to indicate password exists
+              confirmPassword: note.requiresPasswordForView ? '••••••••' : '', // Placeholder to indicate password exists
+              securityQuestions: emptySecurityQuestions()
             });
             setShowPassword({ ...showPassword, edit: false, editConfirm: false });
           } else if (action === 'inactivate') {
@@ -1270,10 +1301,11 @@ export function NotesTool({ toolId }: NotesToolProps) {
           
           setViewPasswordModalId(null);
           setViewPasswordInput('');
+          setViewPasswordError('');
           setShowViewPassword(false);
           setPasswordAction(null);
         } else {
-          alert('Incorrect password. Please try again.');
+          setViewPasswordError('Incorrect password. Please try again.');
           setViewPasswordInput('');
         }
       } else {
@@ -1364,7 +1396,10 @@ export function NotesTool({ toolId }: NotesToolProps) {
           {!isAdding ? (
             <div className="flex justify-start">
               <button
-                onClick={() => setIsAdding(true)}
+                onClick={() => {
+                  setNewNote((prev) => ({ ...prev, createdDate: localCalendarDate() }));
+                  setIsAdding(true);
+                }}
                 className={primaryButtonClass}
               >
                 + Add New Note
@@ -1383,7 +1418,7 @@ export function NotesTool({ toolId }: NotesToolProps) {
                       type="text"
                       value={newNote.noteName}
                       onChange={(e) => setNewNote({ ...newNote, noteName: e.target.value })}
-                      placeholder="e.g., Meeting Notes - Jan 15"
+                      placeholder="Furnace filter"
                       className="w-full px-3 py-2 rounded-lg border border-slate-700 bg-slate-900/70 text-slate-100 placeholder-slate-500 focus:border-emerald-500/50 focus:outline-none focus:ring-1 focus:ring-emerald-500/50"
                     />
                   </div>
@@ -1454,16 +1489,12 @@ export function NotesTool({ toolId }: NotesToolProps) {
                         confirmPassword: e.target.checked ? newNote.confirmPassword : '',
                         securityQuestions: e.target.checked 
                           ? newNote.securityQuestions 
-                          : [
-                              { questionId: '', answer: '' },
-                              { questionId: '', answer: '' },
-                              { questionId: '', answer: '' }
-                            ]
+                          : emptySecurityQuestions()
                       })}
                       className="w-5 h-5 rounded border-slate-600 bg-slate-700 text-emerald-500 focus:ring-emerald-500 focus:ring-offset-slate-800"
                     />
                     <label htmlFor="requiresPasswordForView" className="text-sm text-slate-300 cursor-pointer">
-                      Require password for viewing (prevents other account users from viewing)
+                      Require password for viewing (Keeps this note private on a shared computer.)
                     </label>
                   </div>
                   {newNote.requiresPasswordForView && (
@@ -1537,7 +1568,7 @@ export function NotesTool({ toolId }: NotesToolProps) {
                     <div className="mt-4 pt-4 border-t border-slate-700">
                       <h4 className="text-sm font-semibold text-slate-300 mb-3">Password Recovery Security Questions</h4>
                       <p className="text-xs text-slate-400 mb-4">
-                        Please select and answer 3 security questions. These will be used to recover your password if you forget it.
+                        Please select and answer 2 security questions. These will be used to recover your password if you forget it.
                       </p>
                       <div className="space-y-4">
                         {newNote.securityQuestions.map((sq, index) => (
@@ -1585,15 +1616,8 @@ export function NotesTool({ toolId }: NotesToolProps) {
                 </div>
                 <div className="flex gap-2">
                   <button
+                    type="button"
                     onClick={addNote}
-                    disabled={
-                      !newNote.noteName.trim() || 
-                      !newNote.createdDate ||
-                      !newNote.note.trim() ||
-                      newNote.selectedTags.length === 0 ||
-                      (newNote.requiresPasswordForView && (!newNote.viewPassword.trim() || newNote.viewPassword !== newNote.confirmPassword)) ||
-                      (newNote.requiresPasswordForView && newNote.securityQuestions.filter(q => q.questionId && q.answer.trim()).length !== 3)
-                    }
                     className={primaryButtonClass}
                   >
                     Add Note
@@ -1603,17 +1627,13 @@ export function NotesTool({ toolId }: NotesToolProps) {
                       setIsAdding(false);
                       setNewNote({
                         noteName: '',
-                        createdDate: new Date().toISOString().split('T')[0],
+                        createdDate: localCalendarDate(),
                         note: '',
                         selectedTags: [],
                         requiresPasswordForView: false,
                         viewPassword: '',
                         confirmPassword: '',
-                        securityQuestions: [
-                          { questionId: '', answer: '' },
-                          { questionId: '', answer: '' },
-                          { questionId: '', answer: '' }
-                        ]
+                        securityQuestions: emptySecurityQuestions()
                       });
                       setShowPassword({ ...showPassword, new: false, newConfirm: false });
                     }}
@@ -1702,11 +1722,19 @@ export function NotesTool({ toolId }: NotesToolProps) {
                               type="checkbox"
                               id="editRequiresPasswordForView"
                               checked={editingNote.requiresPasswordForView}
-                              onChange={(e) => setEditingNote({ ...editingNote, requiresPasswordForView: e.target.checked, viewPassword: e.target.checked ? editingNote.viewPassword : '', confirmPassword: e.target.checked ? editingNote.confirmPassword : '' })}
+                              onChange={(e) => setEditingNote({
+                                ...editingNote,
+                                requiresPasswordForView: e.target.checked,
+                                viewPassword: e.target.checked ? editingNote.viewPassword : '',
+                                confirmPassword: e.target.checked ? editingNote.confirmPassword : '',
+                                securityQuestions: e.target.checked
+                                  ? editingNote.securityQuestions
+                                  : emptySecurityQuestions()
+                              })}
                               className="w-5 h-5 rounded border-slate-600 bg-slate-700 text-emerald-500 focus:ring-emerald-500 focus:ring-offset-slate-800"
                             />
                             <label htmlFor="editRequiresPasswordForView" className="text-sm text-slate-300 cursor-pointer">
-                              Require password for viewing (prevents other account users from viewing)
+                              Require password for viewing (Keeps this note private on a shared computer.)
                             </label>
                           </div>
                           {editingNote.requiresPasswordForView && (
@@ -1792,6 +1820,55 @@ export function NotesTool({ toolId }: NotesToolProps) {
                               </div>
                             </div>
                           )}
+                          {editingNote.requiresPasswordForView && !note.requiresPasswordForView && (
+                            <div className="mt-4 pt-4 border-t border-slate-700">
+                              <h4 className="text-sm font-semibold text-slate-300 mb-3">Password Recovery Security Questions</h4>
+                              <p className="text-xs text-slate-400 mb-4">
+                                Please select and answer 2 security questions. These will be used to recover your password if you forget it.
+                              </p>
+                              <div className="space-y-4">
+                                {editingNote.securityQuestions.map((sq, index) => (
+                                  <div key={index} className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                    <div>
+                                      <label className="block text-sm font-medium text-slate-300 mb-2">
+                                        Security Question {index + 1} <span className="text-red-400">*</span>
+                                      </label>
+                                      <select
+                                        value={sq.questionId}
+                                        onChange={(e) => handleSecurityQuestionChange(index, e.target.value, true)}
+                                        className="w-full px-4 py-2 rounded-lg border border-slate-700 bg-slate-900/70 text-slate-100 focus:border-emerald-500/50 focus:outline-none focus:ring-1 focus:ring-emerald-500/50"
+                                      >
+                                        <option value="">Select a question</option>
+                                        {getAvailableQuestions(index, true).map(question => (
+                                          <option key={question.id} value={question.id}>
+                                            {question.question}
+                                          </option>
+                                        ))}
+                                        {sq.questionId && SECURITY_QUESTIONS.find(q => q.id === sq.questionId) && (
+                                          <option value={sq.questionId}>
+                                            {SECURITY_QUESTIONS.find(q => q.id === sq.questionId)?.question}
+                                          </option>
+                                        )}
+                                      </select>
+                                    </div>
+                                    <div>
+                                      <label className="block text-sm font-medium text-slate-300 mb-2">
+                                        Answer <span className="text-red-400">*</span>
+                                      </label>
+                                      <input
+                                        type="text"
+                                        value={sq.answer}
+                                        onChange={(e) => handleSecurityAnswerChange(index, e.target.value, true)}
+                                        placeholder="Enter your answer"
+                                        disabled={!sq.questionId}
+                                        className="w-full px-4 py-2 rounded-lg border border-slate-700 bg-slate-900/70 text-slate-100 placeholder-slate-500 focus:border-emerald-500/50 focus:outline-none focus:ring-1 focus:ring-emerald-500/50 disabled:opacity-50 disabled:cursor-not-allowed"
+                                      />
+                                    </div>
+                                  </div>
+                                ))}
+                              </div>
+                            </div>
+                          )}
                         </div>
                         <div className="flex gap-2">
                           <button
@@ -1820,7 +1897,7 @@ export function NotesTool({ toolId }: NotesToolProps) {
                       <div className="flex items-start justify-between gap-3">
                         <div className="flex-1 min-w-0">
                           <div className="flex items-center gap-2 mb-1.5 flex-wrap">
-                            <h4 className="text-base font-semibold text-slate-100">{note.noteName}</h4>
+                            <h4 className="text-base font-semibold text-slate-100">{note.requiresPasswordForView ? '*** Secured ***' : note.noteName}</h4>
                             <div className="flex flex-wrap gap-1.5">
                               {note.tags.map(tagId => {
                                 const tag = tags.find(t => t.id === tagId);
@@ -1839,7 +1916,7 @@ export function NotesTool({ toolId }: NotesToolProps) {
                           </div>
                           <div className="flex flex-wrap gap-x-4 gap-y-1 text-xs text-slate-300">
                             <span>
-                              <span className="text-slate-400">Created:</span> {new Date(note.createdDate).toLocaleDateString()}
+                              <span className="text-slate-400">Created:</span> {formatLocalCalendarDate(note.createdDate)}
                             </span>
                           </div>
                           <div className="mt-2">
@@ -2252,6 +2329,7 @@ export function NotesTool({ toolId }: NotesToolProps) {
                 onClick={() => {
                   setViewPasswordModalId(null);
                   setViewPasswordInput('');
+                  setViewPasswordError('');
                   setShowViewPassword(false);
                   setPasswordAction(null);
                 }}
@@ -2274,13 +2352,17 @@ export function NotesTool({ toolId }: NotesToolProps) {
                   <input
                     type={showViewPassword ? "text" : "password"}
                     value={viewPasswordInput}
-                    onChange={(e) => setViewPasswordInput(e.target.value)}
+                    onChange={(e) => {
+                      setViewPasswordInput(e.target.value);
+                      if (viewPasswordError) setViewPasswordError('');
+                    }}
                     onKeyDown={(e) => {
                       if (e.key === 'Enter') {
                         confirmViewWithPassword();
                       } else if (e.key === 'Escape') {
                         setViewPasswordModalId(null);
                         setViewPasswordInput('');
+                        setViewPasswordError('');
                         setShowViewPassword(false);
                         setPasswordAction(null);
                       }
@@ -2308,6 +2390,9 @@ export function NotesTool({ toolId }: NotesToolProps) {
                     )}
                   </button>
                 </div>
+                {viewPasswordError && (
+                  <p className="text-xs text-red-400 mt-1">{viewPasswordError}</p>
+                )}
                 <div className="mt-2 text-right">
                   <button
                     type="button"
@@ -2335,6 +2420,7 @@ export function NotesTool({ toolId }: NotesToolProps) {
                   onClick={() => {
                     setViewPasswordModalId(null);
                     setViewPasswordInput('');
+                    setViewPasswordError('');
                     setShowViewPassword(false);
                     setPasswordAction(null);
                   }}
@@ -2374,7 +2460,7 @@ export function NotesTool({ toolId }: NotesToolProps) {
             {passwordResetStep === 'questions' ? (
               <>
                 <p className="text-sm text-slate-400 mb-4">
-                  Please answer all 3 security questions to reset your password.
+                  Please answer all {securityQuestions.length} security questions to reset your password.
                 </p>
                 <div className="space-y-4">
                   {securityQuestions.map((sq, index) => (
@@ -2641,8 +2727,20 @@ export function NotesTool({ toolId }: NotesToolProps) {
                 </div>
               )}
             </div>
-            <div className="mt-6 flex justify-end">
+            <div className="mt-6 flex justify-end gap-2">
               <button
+                type="button"
+                onClick={() => {
+                  const note = viewNoteModal;
+                  setViewNoteModal(null);
+                  startEditing(note);
+                }}
+                className={primaryButtonClass}
+              >
+                Edit
+              </button>
+              <button
+                type="button"
                 onClick={() => setViewNoteModal(null)}
                 className={secondaryButtonClass}
               >
