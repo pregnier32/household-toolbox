@@ -223,7 +223,6 @@ export async function GET(request: NextRequest) {
         )
       `)
       .eq('user_id', user.id)
-      .eq('add_to_dashboard', true)
       .eq('is_active', true);
 
     // Filter by tool if provided

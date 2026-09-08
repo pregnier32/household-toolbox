@@ -456,13 +456,11 @@ function CalendarView({
             <div
               key={day}
               onClick={() => {
-                if (dayEvents.length > 0) {
-                  setSelectedDay({ day, events: dayEvents });
-                }
+                setSelectedDay({ day, events: dayEvents });
               }}
-              className={`aspect-square rounded-lg border transition-colors ${
+              className={`aspect-square rounded-lg border transition-colors cursor-pointer ${
                 dayEvents.length > 0
-                  ? 'border-slate-600 text-slate-300 hover:border-emerald-500/50 hover:bg-slate-800/50 cursor-pointer'
+                  ? 'border-slate-600 text-slate-300 hover:border-emerald-500/50 hover:bg-slate-800/50'
                   : 'border-slate-700 text-slate-300 hover:border-slate-600 hover:bg-slate-800/50'
               } flex flex-col items-start justify-start p-2 relative`}
             >
@@ -491,7 +489,7 @@ function CalendarView({
       </div>
 
       {/* Event Details Popup */}
-      {selectedDay && selectedDay.events.length > 0 && (
+      {selectedDay && (
         <>
           {/* Backdrop */}
           <div

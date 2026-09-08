@@ -345,6 +345,8 @@ export function CalendarEventsTool({ toolId }: CalendarEventsToolProps) {
           card_color: cat.card_color
         }));
         setCategories(mappedCategories);
+        const ids = mappedCategories.map((c) => c.id);
+        setSelectedCategoryId((prev) => (prev && ids.includes(prev) ? prev : mappedCategories[0].id));
       } else {
         // No categories exist - create default categories
         const defaultCats: CalendarCategory[] = [];
@@ -377,6 +379,10 @@ export function CalendarEventsTool({ toolId }: CalendarEventsToolProps) {
           }
         }
         setCategories(defaultCats);
+        if (defaultCats.length > 0) {
+          const ids = defaultCats.map((c) => c.id);
+          setSelectedCategoryId((prev) => (prev && ids.includes(prev) ? prev : defaultCats[0].id));
+        }
       }
       
       setSaveMessage(null);
@@ -435,6 +441,19 @@ export function CalendarEventsTool({ toolId }: CalendarEventsToolProps) {
     // Ensure the category exists before selecting
     const category = categories.find(c => c.id === categoryId);
     if (category) {
+      if (selectedCategoryId !== categoryId) {
+        setNewEvent({
+          title: '',
+          date: '',
+          time: null,
+          frequency: 'One Time',
+          notes: '',
+          addToDashboard: false,
+          endDate: null,
+          daysOfWeek: [],
+          dayOfMonth: undefined
+        });
+      }
       setSelectedCategoryId(categoryId);
       await loadCategoryEvents(categoryId);
     }
@@ -657,9 +676,30 @@ export function CalendarEventsTool({ toolId }: CalendarEventsToolProps) {
     }
   };
 
+  const commonHolidayAlreadyAdded = (title: string) => {
+    const key = title.trim().toLowerCase();
+    if (!COMMON_US_HOLIDAYS.some((holiday) => holiday.name.toLowerCase() === key)) {
+      return false;
+    }
+    return calendarEvents.some((event) =>
+      event.categoryId === selectedCategoryId &&
+      event.isActive &&
+      event.title.trim().toLowerCase() === key
+    );
+  };
+
   const addCalendarEvent = async () => {
     if (!selectedCategoryId || !newEvent.title.trim() || !newEvent.date || !toolId) return;
+    if (isSavingRef.current) return;
+    if (newEvent.frequency === 'Weekly' && (!newEvent.daysOfWeek || newEvent.daysOfWeek.length === 0)) {
+      setSaveMessage({ type: 'error', text: 'Select at least one day' });
+      return;
+    }
+    if (commonHolidayAlreadyAdded(newEvent.title)) {
+      return;
+    }
 
+    isSavingRef.current = true;
     setIsSaving(true);
     try {
       const response = await fetch('/api/tools/calendar-events', {
@@ -676,7 +716,7 @@ export function CalendarEventsTool({ toolId }: CalendarEventsToolProps) {
             frequency: newEvent.frequency,
             notes: newEvent.notes || '',
             isActive: true,
-            addToDashboard: false,
+            addToDashboard: true,
             endDate: newEvent.endDate || null,
             daysOfWeek: newEvent.frequency === 'Weekly' && newEvent.daysOfWeek && newEvent.daysOfWeek.length > 0
               ? newEvent.daysOfWeek
@@ -729,6 +769,7 @@ export function CalendarEventsTool({ toolId }: CalendarEventsToolProps) {
       console.error('Error creating calendar event:', error);
       setSaveMessage({ type: 'error', text: error instanceof Error ? error.message : 'Failed to create calendar event' });
     } finally {
+      isSavingRef.current = false;
       setIsSaving(false);
     }
   };
@@ -785,7 +826,7 @@ export function CalendarEventsTool({ toolId }: CalendarEventsToolProps) {
             frequency: editingEvent.frequency,
             notes: editingEvent.notes || '',
             isActive: eventToUpdate.isActive,
-            addToDashboard: false,
+            addToDashboard: true,
             endDate: editingEvent.endDate || null,
             daysOfWeek: editingEvent.frequency === 'Weekly' && editingEvent.daysOfWeek && editingEvent.daysOfWeek.length > 0
               ? editingEvent.daysOfWeek
@@ -1162,6 +1203,12 @@ export function CalendarEventsTool({ toolId }: CalendarEventsToolProps) {
   };
 
   const handleHolidaySelect = (holiday: CommonHoliday) => {
+    if (isSavingRef.current) return;
+    if (commonHolidayAlreadyAdded(holiday.name)) {
+      setShowHolidayModal(false);
+      return;
+    }
+
     const currentYear = new Date().getFullYear();
     const holidayDate = holiday.getDate(currentYear);
     
@@ -1208,7 +1255,7 @@ export function CalendarEventsTool({ toolId }: CalendarEventsToolProps) {
       {/* Categories List */}
       <div className={cardClass}>
         <div className="flex items-center justify-between mb-4">
-          <h2 className={titleClass}>Calendar Categories</h2>
+          <h2 className={titleClass}>Calendar Events</h2>
           <button
             onClick={() => setShowExportPopup(true)}
             className={
@@ -1217,6 +1264,7 @@ export function CalendarEventsTool({ toolId }: CalendarEventsToolProps) {
                 : 'p-2 rounded-lg text-emerald-400 transition-colors hover:bg-emerald-500/10 hover:text-emerald-300'
             }
             title="Export all calendar events to PDF"
+            aria-label="Export all calendar events to PDF"
           >
             <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
@@ -1324,6 +1372,7 @@ export function CalendarEventsTool({ toolId }: CalendarEventsToolProps) {
                     }}
                     className={isLight ? 'absolute top-1 right-1 p-1 rounded hover:bg-slate-200 transition-colors' : 'absolute top-1 right-1 p-1 rounded hover:bg-slate-700/50 transition-colors'}
                     title="Category options"
+                    aria-label="Category options"
                   >
                     <svg className={isLight ? 'h-4 w-4 text-slate-600 hover:text-slate-900' : 'h-4 w-4 text-slate-400 hover:text-slate-200'} fill="currentColor" viewBox="0 0 24 24">
                       <path d="M12 8c1.1 0 2-.9 2-2s-.9-2-2-2-2 .9-2 2 .9 2 2 2zm0 2c-1.1 0-2 .9-2 2s.9 2 2 2 2-.9 2-2-.9-2-2-2zm0 6c-1.1 0-2 .9-2 2s.9 2 2 2 2-.9 2-2-.9-2-2-2z" />
@@ -1343,6 +1392,18 @@ export function CalendarEventsTool({ toolId }: CalendarEventsToolProps) {
                           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
                         </svg>
                         Edit
+                      </button>
+                      <button
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          handleChangeColor(category);
+                        }}
+                        className={popupItemClass}
+                      >
+                        <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 21a4 4 0 01-4-4V5a2 2 0 012-2h4a2 2 0 012 2v12a4 4 0 01-4 4zm0 0h12a2 2 0 002-2v-4a2 2 0 00-2-2h-2.343M11 7.343l1.657-1.657a2 2 0 012.828 0l2.829 2.829a2 2 0 010 2.828l-8.486 8.485M7 17h.01" />
+                        </svg>
+                        Change color
                       </button>
                       <button
                         onClick={(e) => {
@@ -1602,7 +1663,7 @@ export function CalendarEventsTool({ toolId }: CalendarEventsToolProps) {
                     onChange={(e) => setNewEvent({ ...newEvent, time: e.target.value || null })}
                     className={inputClass}
                   />
-                  <p className={`text-xs ${mutedTextClass} mt-1`}>Leave empty for all-day event (defaults to 9:00 AM)</p>
+                  <p className={`text-xs ${mutedTextClass} mt-1`}>Leave empty for all-day event</p>
                 </div>
               </div>
 
@@ -1762,7 +1823,7 @@ export function CalendarEventsTool({ toolId }: CalendarEventsToolProps) {
                                 onChange={(e) => setEditingEvent({ ...editingEvent, time: e.target.value || null })}
                                 className="w-full px-4 py-2 rounded-lg border border-slate-700 bg-slate-900/70 text-slate-100 focus:border-emerald-500/50 focus:outline-none focus:ring-1 focus:ring-emerald-500/50"
                               />
-                              <p className="text-xs text-slate-400 mt-1">Leave empty for all-day event (defaults to 9:00 AM)</p>
+                              <p className="text-xs text-slate-400 mt-1">Leave empty for all-day event</p>
                             </div>
                           </div>
 
@@ -2125,8 +2186,10 @@ export function CalendarEventsTool({ toolId }: CalendarEventsToolProps) {
                 return (
                   <button
                     key={index}
+                    type="button"
+                    disabled={isSaving}
                     onClick={() => handleHolidaySelect(holiday)}
-                    className={isLight ? 'p-4 rounded-lg border border-slate-200 bg-white text-left hover:border-emerald-500/50 hover:bg-emerald-50 transition-colors' : 'p-4 rounded-lg border border-slate-700 bg-slate-800/50 text-left hover:border-emerald-500/50 hover:bg-slate-800 transition-colors'}
+                    className={isLight ? 'p-4 rounded-lg border border-slate-200 bg-white text-left hover:border-emerald-500/50 hover:bg-emerald-50 transition-colors disabled:cursor-not-allowed disabled:opacity-50' : 'p-4 rounded-lg border border-slate-700 bg-slate-800/50 text-left hover:border-emerald-500/50 hover:bg-slate-800 transition-colors disabled:cursor-not-allowed disabled:opacity-50'}
                   >
                     <div className={isLight ? 'font-medium text-slate-900 mb-1' : 'font-medium text-slate-100 mb-1'}>{holiday.name}</div>
                     <div className={`text-sm ${mutedTextClass}`}>{displayDate}</div>
@@ -2155,6 +2218,8 @@ export function CalendarEventsTool({ toolId }: CalendarEventsToolProps) {
               <button
                 onClick={() => setShowExportPopup(false)}
                 className={isLight ? 'text-slate-600 hover:text-slate-900 transition-colors' : 'text-slate-400 hover:text-slate-200 transition-colors'}
+                title="Close"
+                aria-label="Close"
               >
                 <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
