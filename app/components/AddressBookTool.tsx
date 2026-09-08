@@ -3,7 +3,7 @@
 import { useState, useEffect, useCallback } from 'react';
 import { useTheme } from './AppThemeProvider';
 
-const DEFAULT_TAGS = ['Birthday', 'Graduation', 'Christmas'];
+const DEFAULT_TAGS = ['Family', 'Friends', 'Services', 'School'];
 
 type AddressTag = {
   id: string;
@@ -152,9 +152,6 @@ export function AddressBookTool({ toolId }: AddressBookToolProps) {
   const inputClass = isLight
     ? 'w-full px-3 py-2 rounded-lg border border-slate-300 bg-white text-slate-900 placeholder-slate-500 focus:border-emerald-500/50 focus:outline-none focus:ring-1 focus:ring-emerald-500/50'
     : 'w-full px-3 py-2 rounded-lg border border-slate-700 bg-slate-900/70 text-slate-100 placeholder-slate-500 focus:border-emerald-500/50 focus:outline-none focus:ring-1 focus:ring-emerald-500/50';
-  const selectClass = isLight
-    ? 'w-full px-4 py-2 rounded-lg border border-slate-300 bg-white text-slate-900 focus:border-emerald-500/50 focus:outline-none focus:ring-1 focus:ring-emerald-500/50'
-    : 'w-full px-4 py-2 rounded-lg border border-slate-700 bg-slate-900/70 text-slate-100 focus:border-emerald-500/50 focus:outline-none focus:ring-1 focus:ring-emerald-500/50';
   const primaryButtonClass = isLight
     ? 'px-4 py-2.5 rounded-lg bg-emerald-600 text-white font-semibold hover:bg-emerald-500 transition-colors focus:outline-none focus:ring-2 focus:ring-emerald-500/50 focus:ring-offset-2 focus:ring-offset-white disabled:cursor-not-allowed disabled:opacity-50'
     : 'px-4 py-2.5 rounded-lg bg-emerald-500 text-slate-950 font-semibold hover:bg-emerald-400 transition-colors focus:outline-none focus:ring-2 focus:ring-emerald-500/50 focus:ring-offset-2 focus:ring-offset-slate-900 disabled:cursor-not-allowed disabled:opacity-50';
@@ -206,7 +203,7 @@ export function AddressBookTool({ toolId }: AddressBookToolProps) {
   const [activeTab, setActiveTab] = useState<'addresses' | 'tags'>('addresses');
 
   const [searchQuery, setSearchQuery] = useState('');
-  const [selectedTagFilter, setSelectedTagFilter] = useState<string>('all');
+  const [selectedTagFilter, setSelectedTagFilter] = useState<string[]>([]);
 
   const [isAdding, setIsAdding] = useState(false);
   const [newAddress, setNewAddress] = useState<AddressFormState>(emptyAddressForm);
@@ -220,6 +217,7 @@ export function AddressBookTool({ toolId }: AddressBookToolProps) {
   const [editingTagName, setEditingTagName] = useState('');
 
   const [showHistory, setShowHistory] = useState(false);
+  const [showInactiveTags, setShowInactiveTags] = useState(false);
   const [deleteConfirmId, setDeleteConfirmId] = useState<string | null>(null);
   const [deleteConfirmText, setDeleteConfirmText] = useState('');
   const [deleteTagConfirmId, setDeleteTagConfirmId] = useState<string | null>(null);
@@ -249,13 +247,15 @@ export function AddressBookTool({ toolId }: AddressBookToolProps) {
       address.state,
       address.zip,
       address.country,
+      ...address.tags.map((tagId) => getTagName(tagId)),
     ]
       .join(' ')
       .toLowerCase();
 
     const matchesSearch = q === '' || searchable.indexOf(q) !== -1;
     const matchesTag =
-      selectedTagFilter === 'all' || address.tags.includes(selectedTagFilter);
+      selectedTagFilter.length === 0 ||
+      selectedTagFilter.some((tagId) => address.tags.includes(tagId));
 
     return matchesSearch && matchesTag;
   });
@@ -266,6 +266,12 @@ export function AddressBookTool({ toolId }: AddressBookToolProps) {
   const inactiveAddresses = filteredAddresses.filter((a) => !a.isActive);
   const activeTags = tags.filter((t) => t.isActive).sort((a, b) => a.name.localeCompare(b.name));
   const inactiveTags = tags.filter((t) => !t.isActive).sort((a, b) => a.name.localeCompare(b.name));
+
+  const toggleTagFilter = (tagId: string) => {
+    setSelectedTagFilter((prev) =>
+      prev.includes(tagId) ? prev.filter((id) => id !== tagId) : [...prev, tagId]
+    );
+  };
 
   const toggleTagSelection = (tagId: string, isEdit: boolean) => {
     if (isEdit) {
@@ -305,12 +311,12 @@ export function AddressBookTool({ toolId }: AddressBookToolProps) {
     selectedTags: [...record.tags],
   });
 
-  const validateForm = (form: AddressFormState): boolean => {
+  const validateForm = (form: AddressFormState, requireTag = true): boolean => {
     if (!form.mailingName.trim()) {
       alert('Please enter a mailing name.');
       return false;
     }
-    if (form.selectedTags.length === 0) {
+    if (requireTag && form.selectedTags.length === 0) {
       alert('Please select at least one tag.');
       return false;
     }
@@ -383,7 +389,7 @@ export function AddressBookTool({ toolId }: AddressBookToolProps) {
   }, [toolId, seedDefaultTagsIfNeeded]);
 
   const addAddress = async () => {
-    if (!validateForm(newAddress) || !toolId) return;
+    if (!validateForm(newAddress, false) || !toolId) return;
 
     setIsLoading(true);
     try {
@@ -706,33 +712,34 @@ export function AddressBookTool({ toolId }: AddressBookToolProps) {
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
         <div>
           <label className={labelClass}>
-            Mailing Name <span className="text-red-400">*</span>
+            Label <span className="text-red-400">*</span>
           </label>
           <input
             type="text"
             value={form.mailingName}
             onChange={(e) => setForm({ ...form, mailingName: e.target.value })}
-            placeholder="e.g., Smith Family"
+            placeholder="e.g., Grandma-Miller"
             className={inputClass}
           />
         </div>
         <div>
-          <label className={labelClass}>First Name</label>
-          <input
-            type="text"
-            value={form.firstName}
-            onChange={(e) => setForm({ ...form, firstName: e.target.value })}
-            className={inputClass}
-          />
-        </div>
-        <div>
-          <label className={labelClass}>Last Name</label>
-          <input
-            type="text"
-            value={form.lastName}
-            onChange={(e) => setForm({ ...form, lastName: e.target.value })}
-            className={inputClass}
-          />
+          <label className={labelClass}>Addressee</label>
+          <div className="grid grid-cols-2 gap-2">
+            <input
+              type="text"
+              value={form.firstName}
+              onChange={(e) => setForm({ ...form, firstName: e.target.value })}
+              placeholder="First"
+              className={inputClass}
+            />
+            <input
+              type="text"
+              value={form.lastName}
+              onChange={(e) => setForm({ ...form, lastName: e.target.value })}
+              placeholder="Last"
+              className={inputClass}
+            />
+          </div>
         </div>
         <div>
           <label className={labelClass}>Email</label>
@@ -801,7 +808,12 @@ export function AddressBookTool({ toolId }: AddressBookToolProps) {
       </div>
       <div>
         <label className={labelClass}>
-          Tags <span className="text-red-400">*</span> (Select one or more)
+          Tags{isEdit ? (
+            <>
+              {' '}
+              <span className="text-red-400">*</span> (Select one or more)
+            </>
+          ) : null}
         </label>
         <div className={tagPickerClass}>
           {activeTags.length > 0 ? (
@@ -857,10 +869,6 @@ export function AddressBookTool({ toolId }: AddressBookToolProps) {
             <div className="flex gap-2">
               <button
                 onClick={saveEdit}
-                disabled={
-                  !editingAddress.mailingName.trim() ||
-                  editingAddress.selectedTags.length === 0
-                }
                 className={primaryButtonClass}
               >
                 Save
@@ -1033,18 +1041,33 @@ export function AddressBookTool({ toolId }: AddressBookToolProps) {
               </div>
               <div>
                 <label className={labelClass}>Filter by Tag</label>
-                <select
-                  value={selectedTagFilter}
-                  onChange={(e) => setSelectedTagFilter(e.target.value)}
-                  className={selectClass}
-                >
-                  <option value="all">All Tags</option>
+                <div className={tagPickerClass}>
+                  <button
+                    type="button"
+                    onClick={() => setSelectedTagFilter([])}
+                    className={`px-3 py-1 rounded-lg text-sm font-medium transition-colors ${
+                      selectedTagFilter.length === 0
+                        ? tagPickerButtonSelected
+                        : tagPickerButtonUnselected
+                    }`}
+                  >
+                    All Tags
+                  </button>
                   {activeTags.map((tag) => (
-                    <option key={tag.id} value={tag.id}>
+                    <button
+                      key={tag.id}
+                      type="button"
+                      onClick={() => toggleTagFilter(tag.id)}
+                      className={`px-3 py-1 rounded-lg text-sm font-medium transition-colors ${
+                        selectedTagFilter.includes(tag.id)
+                          ? tagPickerButtonSelected
+                          : tagPickerButtonUnselected
+                      }`}
+                    >
                       {tag.name}
-                    </option>
+                    </button>
                   ))}
-                </select>
+                </div>
               </div>
             </div>
           </div>
@@ -1063,9 +1086,6 @@ export function AddressBookTool({ toolId }: AddressBookToolProps) {
                 <button
                   type="button"
                   onClick={addAddress}
-                  disabled={
-                    !newAddress.mailingName.trim() || newAddress.selectedTags.length === 0
-                  }
                   className={primaryButtonClass}
                 >
                   Add Address
@@ -1248,8 +1268,8 @@ export function AddressBookTool({ toolId }: AddressBookToolProps) {
                             type="button"
                             onClick={() => inactivateTag(tag.id)}
                             className={rowIconSecondaryClass}
-                            title="Move tag to history"
-                            aria-label="Move tag to history"
+                            title="Move to history"
+                            aria-label="Move to history"
                           >
                             <svg className="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M20.25 7.5l-.625 10.632a2.25 2.25 0 01-2.247 2.118H6.622a2.25 2.25 0 01-2.247-2.118L3.75 7.5M10 11.25h4M3.375 7.5h17.25c.621 0 1.125-.504 1.125-1.125v-1.5c0-.621-.504-1.125-1.125-1.125H3.375c-.621 0-1.125.504-1.125 1.125v1.5c0 .621.504 1.125 1.125 1.125z" />
@@ -1269,11 +1289,20 @@ export function AddressBookTool({ toolId }: AddressBookToolProps) {
           <div className={cardClass}>
             <div className="flex items-center justify-between mb-4">
               <h3 className={sectionTitleClass}>Inactive Tags</h3>
-              <span className={counterTextClass}>
-                {inactiveTags.length} {inactiveTags.length === 1 ? 'tag' : 'tags'}
-              </span>
+              <button
+                type="button"
+                onClick={() => setShowInactiveTags(!showInactiveTags)}
+                className={
+                  isLight
+                    ? 'text-sm text-slate-600 hover:text-slate-900 transition-colors'
+                    : 'text-sm text-slate-400 hover:text-slate-300 transition-colors'
+                }
+              >
+                {showInactiveTags ? 'Hide' : 'Show'} ({inactiveTags.length})
+              </button>
             </div>
-            {inactiveTags.length > 0 ? (
+            {showInactiveTags &&
+              (inactiveTags.length > 0 ? (
               <div className="space-y-3">
                 {inactiveTags.map((tag) => {
                   const usageCount = getTagUsageCount(tag.id);
@@ -1332,7 +1361,7 @@ export function AddressBookTool({ toolId }: AddressBookToolProps) {
               </div>
             ) : (
               <p className={`${descClass} text-center py-8`}>No inactive tags.</p>
-            )}
+              ))}
           </div>
         </div>
       )}
@@ -1472,9 +1501,8 @@ export function AddressBookTool({ toolId }: AddressBookToolProps) {
             </div>
             <div className="space-y-3">
               {[
-                ['Mailing Name', viewAddressModal.mailingName],
-                ['First Name', viewAddressModal.firstName],
-                ['Last Name', viewAddressModal.lastName],
+                ['Label', viewAddressModal.mailingName],
+                ['Addressee', [viewAddressModal.firstName, viewAddressModal.lastName].filter(Boolean).join(' ')],
                 ['Email', viewAddressModal.email],
                 ['Phone', viewAddressModal.phone],
                 ['Street Address', viewAddressModal.streetAddress],

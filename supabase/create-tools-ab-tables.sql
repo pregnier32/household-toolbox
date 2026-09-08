@@ -1,7 +1,7 @@
 -- Address Book Tool Database Schema
 -- All tables prefixed with 'tools_ab_'
 -- Matches UI: AddressBookTool (addresses tab, tags tab, history, tag filter).
--- Starter tags (Birthday, Graduation, Christmas) are seeded by the API on first use.
+-- Starter tags (Family, Friends, Services, School) are seeded on first use.
 --
 -- Run in Supabase SQL Editor (idempotent: safe to re-run).
 -- After deploy, add tool_id FK indexes to add-performance-indexes.sql if you maintain that file.

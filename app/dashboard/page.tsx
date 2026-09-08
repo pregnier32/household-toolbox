@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import { useRouter } from 'next/navigation';
 import { UserMenu } from '../components/UserMenu';
 import { SideLogo } from '../components/SideLogo';
@@ -728,6 +728,35 @@ export default function Dashboard() {
     }
   }, [activeTab, loadTools]);
 
+  const deepLinkAppliedRef = useRef(false);
+  const toolsLoadStartedRef = useRef(false);
+
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    if (params.get('tab') === 'tools' || params.get('open') === 'address-book') {
+      setActiveTab('tools');
+    }
+  }, []);
+
+  useEffect(() => {
+    if (isLoadingTools) {
+      toolsLoadStartedRef.current = true;
+    }
+  }, [isLoadingTools]);
+
+  useEffect(() => {
+    if (deepLinkAppliedRef.current) return;
+    if (new URLSearchParams(window.location.search).get('open') !== 'address-book') return;
+    if (activeTab !== 'tools' || isLoadingTools || !toolsLoadStartedRef.current) return;
+
+    const addressBook = tools.find((t) => t.name === 'Address Book');
+    if (addressBook?.isOwned) {
+      setActiveToolId(addressBook.id);
+      setOpenedToolIds((prev) => new Set(prev).add(addressBook.id));
+    }
+    deepLinkAppliedRef.current = true;
+  }, [activeTab, tools, isLoadingTools]);
+
   // Fetch calendar events when Calendar tab is active
   const loadCalendarEvents = useCallback(async (month?: string) => {
     setIsLoadingCalendarEvents(true);
@@ -972,6 +1001,7 @@ export default function Dashboard() {
                     }}
                     className="absolute right-1 top-1/2 -translate-y-1/2 opacity-0 group-hover:opacity-100 transition-opacity p-1 rounded hover:bg-slate-700 text-slate-400 hover:text-slate-200"
                     aria-label={`Close ${tool.name}`}
+                    title={`Close ${tool.name}`}
                   >
                     <svg
                       className="h-4 w-4"

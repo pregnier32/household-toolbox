@@ -6,7 +6,7 @@ import { useTheme, type ThemeMode } from './AppThemeProvider';
 
 type UserMenuProps = {
   userName: string;
-  onSignOut: () => void;
+  onSignOut: () => void | Promise<void>;
 };
 
 export function UserMenu({ userName, onSignOut }: UserMenuProps) {
@@ -66,7 +66,7 @@ export function UserMenu({ userName, onSignOut }: UserMenuProps) {
 
   return (
     <div className="relative" ref={menuRef}>
-      <button onClick={() => setIsOpen(!isOpen)} className={triggerClass}>
+      <button type="button" onClick={() => setIsOpen(!isOpen)} className={triggerClass}>
         <span>{userName}</span>
         <svg
           className={`h-4 w-4 transition-transform ${isOpen ? 'rotate-180' : ''}`}
@@ -207,8 +207,13 @@ export function UserMenu({ userName, onSignOut }: UserMenuProps) {
             <div className={dividerClass} />
             <button
               type="button"
-              onClick={() => {
-                onSignOut();
+              onMouseDown={(e) => {
+                e.stopPropagation();
+              }}
+              onClick={async (e) => {
+                e.preventDefault();
+                e.stopPropagation();
+                await onSignOut();
                 setIsOpen(false);
               }}
               className={signOutClass}

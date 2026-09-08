@@ -72,13 +72,14 @@ export function ToolModal({ tool, isOpen, onClose, onBuy, isBuying = false, buyM
 
   return (
     <div
-      className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm"
+      className="fixed inset-0 z-50 flex items-center justify-center overflow-y-auto bg-black/60 p-4 backdrop-blur-sm"
       onClick={onClose}
     >
       <div
-        className="relative w-full max-w-lg rounded-2xl border border-slate-800 bg-slate-900 p-6 shadow-2xl"
+        className="relative my-auto flex w-full max-w-lg max-h-[90vh] flex-col overflow-hidden rounded-2xl border border-slate-800 bg-slate-900 shadow-2xl"
         onClick={(e) => e.stopPropagation()}
       >
+        <div className="min-h-0 flex-1 overflow-y-auto p-6">
         {/* Close button */}
         <button
           onClick={onClose}
@@ -156,10 +157,11 @@ export function ToolModal({ tool, isOpen, onClose, onBuy, isBuying = false, buyM
             {buyMessage.text}
           </div>
         )}
+        </div>
 
         {/* Buy Button - Only show for tools that are not "coming_soon" */}
         {tool.status !== 'coming_soon' && (
-          <div className="border-t border-slate-800 pt-4">
+          <div className="shrink-0 border-t border-slate-800 bg-slate-900 px-6 py-4">
             <button
               onClick={handleBuy}
               disabled={isBuying}

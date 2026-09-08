@@ -217,9 +217,7 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'Mailing name is required' }, { status: 400 });
     }
 
-    if (!selectedTags || selectedTags.length === 0) {
-      return NextResponse.json({ error: 'At least one tag is required' }, { status: 400 });
-    }
+    const tagIds = Array.isArray(selectedTags) ? selectedTags : [];
 
     const addressRow = buildAddressRow({
       mailingName,
@@ -251,9 +249,13 @@ export async function POST(request: NextRequest) {
         return NextResponse.json({ error: 'Failed to create address' }, { status: 500 });
       }
 
-      await replaceAddressTags(newAddress.id, selectedTags);
+      await replaceAddressTags(newAddress.id, tagIds);
 
       return NextResponse.json({ address: newAddress });
+    }
+
+    if (tagIds.length === 0) {
+      return NextResponse.json({ error: 'At least one tag is required' }, { status: 400 });
     }
 
     const { data: updatedAddress, error: updateError } = await supabaseServer
@@ -270,7 +272,7 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'Failed to update address' }, { status: 500 });
     }
 
-    await replaceAddressTags(addressId, selectedTags);
+    await replaceAddressTags(addressId, tagIds);
 
     return NextResponse.json({ address: updatedAddress });
   } catch (error: unknown) {
