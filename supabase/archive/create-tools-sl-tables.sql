@@ -68,6 +68,9 @@ CREATE TABLE IF NOT EXISTS tools_sl_list_items (
   list_id UUID NOT NULL REFERENCES tools_sl_lists(id) ON DELETE CASCADE,
   item_id UUID NOT NULL REFERENCES tools_sl_items(id) ON DELETE CASCADE,
   display_order INTEGER NOT NULL DEFAULT 0,
+  is_checked BOOLEAN NOT NULL DEFAULT false,
+  quantity NUMERIC,
+  unit TEXT,
   created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
 );
 

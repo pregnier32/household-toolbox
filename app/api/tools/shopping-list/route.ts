@@ -2,6 +2,26 @@ import { NextRequest, NextResponse } from 'next/server';
 import { getSession } from '@/lib/session';
 import { supabaseServer } from '@/lib/supabaseServer';
 
+type LineItemWrite = { itemId: string; quantity?: unknown; unit?: unknown };
+
+function normalizeQuantity(value: unknown): number | null {
+  if (value === null || value === undefined || value === '') return null;
+  const n = typeof value === 'number' ? value : Number(String(value).trim());
+  if (!Number.isFinite(n)) return null;
+  return n;
+}
+
+function normalizeUnit(value: unknown): string | null {
+  if (typeof value !== 'string') return null;
+  const trimmed = value.trim();
+  return trimmed ? trimmed.slice(0, 32) : null;
+}
+
+function lineItemsFromBody(itemIds?: string[], items?: LineItemWrite[]): LineItemWrite[] {
+  if (items?.length) return items;
+  return (itemIds ?? []).map((itemId) => ({ itemId }));
+}
+
 async function copyDefaultsToUser(userId: string, toolId: string) {
   const { data: existing } = await supabaseServer
     .from('tools_sl_items')
@@ -133,7 +153,7 @@ export async function GET(request: NextRequest) {
         date: string;
         isActive: boolean;
         showOnDashboard: boolean;
-        items: { itemId: string; name: string }[];
+        items: { itemId: string; name: string; isChecked: boolean; quantity: number | null; unit: string | null }[];
       }[] = [];
 
       for (const list of lists || []) {
@@ -141,15 +161,24 @@ export async function GET(request: NextRequest) {
           .from('tools_sl_list_items')
           .select(`
             item_id,
+            is_checked,
+            quantity,
+            unit,
             tools_sl_items ( name )
           `)
           .eq('list_id', list.id)
           .order('display_order', { ascending: true });
 
-        const items = (listItemRows || []).map((row: { item_id: string; tools_sl_items: { name: string } | { name: string }[] | null }) => {
+        const items = (listItemRows || []).map((row: { item_id: string; is_checked?: boolean; quantity?: number | null; unit?: string | null; tools_sl_items: { name: string } | { name: string }[] | null }) => {
           const related = row.tools_sl_items;
           const name = related == null ? '' : Array.isArray(related) ? related[0]?.name ?? '' : related.name ?? '';
-          return { itemId: row.item_id, name };
+          return {
+            itemId: row.item_id,
+            name,
+            isChecked: !!row.is_checked,
+            quantity: row.quantity == null ? null : Number(row.quantity),
+            unit: row.unit ?? null,
+          };
         });
 
         result.push({
@@ -192,7 +221,12 @@ export async function POST(request: NextRequest) {
     }
 
     if (action === 'createList') {
-      const { name, listDate, itemIds } = body as { name: string; listDate: string; itemIds: string[] };
+      const { name, listDate, itemIds, items: itemWrites } = body as {
+        name: string;
+        listDate: string;
+        itemIds?: string[];
+        items?: LineItemWrite[];
+      };
       if (!name?.trim()) {
         return NextResponse.json({ error: 'List name is required' }, { status: 400 });
       }
@@ -214,11 +248,14 @@ export async function POST(request: NextRequest) {
         return NextResponse.json({ error: listError.message }, { status: 500 });
       }
 
-      if (itemIds?.length) {
-        const listItems = itemIds.map((itemId: string, i: number) => ({
+      const createItems = lineItemsFromBody(itemIds, itemWrites);
+      if (createItems.length) {
+        const listItems = createItems.map((item, i: number) => ({
           list_id: list.id,
-          item_id: itemId,
+          item_id: item.itemId,
           display_order: i,
+          quantity: normalizeQuantity(item.quantity),
+          unit: normalizeUnit(item.unit),
         }));
         await supabaseServer.from('tools_sl_list_items').insert(listItems);
       }
@@ -230,17 +267,23 @@ export async function POST(request: NextRequest) {
           date: list.list_date,
           isActive: true,
           showOnDashboard: false,
-          items: itemIds?.map((id: string) => ({ itemId: id, name: '' })) ?? [],
+          items: createItems.map((item) => ({
+            itemId: item.itemId,
+            name: '',
+            quantity: normalizeQuantity(item.quantity),
+            unit: normalizeUnit(item.unit),
+          })),
         },
       });
     }
 
     if (action === 'updateList') {
-      const { listId, name, listDate, itemIds } = body as {
+      const { listId, name, listDate, itemIds, items: itemWrites } = body as {
         listId: string;
         name?: string;
         listDate?: string;
         itemIds?: string[];
+        items?: LineItemWrite[];
       };
       if (!listId) {
         return NextResponse.json({ error: 'List ID is required' }, { status: 400 });
@@ -262,14 +305,25 @@ export async function POST(request: NextRequest) {
         }
       }
 
-      if (itemIds !== undefined) {
+      if (itemIds !== undefined || itemWrites !== undefined) {
+        const updateItems = lineItemsFromBody(itemIds, itemWrites);
+        const { data: existingRows } = await supabaseServer
+          .from('tools_sl_list_items')
+          .select('item_id, is_checked')
+          .eq('list_id', listId);
+        const checkedByItem = new Map(
+          (existingRows || []).map((row: { item_id: string; is_checked?: boolean }) => [row.item_id, !!row.is_checked])
+        );
         await supabaseServer.from('tools_sl_list_items').delete().eq('list_id', listId);
-        if (itemIds.length > 0) {
+        if (updateItems.length > 0) {
           await supabaseServer.from('tools_sl_list_items').insert(
-            itemIds.map((itemId: string, i: number) => ({
+            updateItems.map((item, i: number) => ({
               list_id: listId,
-              item_id: itemId,
+              item_id: item.itemId,
               display_order: i,
+              is_checked: checkedByItem.get(item.itemId) ?? false,
+              quantity: normalizeQuantity(item.quantity),
+              unit: normalizeUnit(item.unit),
             }))
           );
         }
@@ -306,6 +360,49 @@ export async function POST(request: NextRequest) {
         .eq('id', listId)
         .eq('user_id', user.id)
         .eq('tool_id', toolId);
+      if (error) {
+        return NextResponse.json({ error: error.message }, { status: 500 });
+      }
+      return NextResponse.json({ success: true });
+    }
+
+    if (action === 'reactivateList') {
+      const { listId } = body as { listId: string };
+      if (!listId) {
+        return NextResponse.json({ error: 'List ID is required' }, { status: 400 });
+      }
+      const { error } = await supabaseServer
+        .from('tools_sl_lists')
+        .update({ is_active: true })
+        .eq('id', listId)
+        .eq('user_id', user.id)
+        .eq('tool_id', toolId);
+      if (error) {
+        return NextResponse.json({ error: error.message }, { status: 500 });
+      }
+      return NextResponse.json({ success: true });
+    }
+
+    if (action === 'setListItemChecked') {
+      const { listId, itemId, isChecked } = body as { listId: string; itemId: string; isChecked: boolean };
+      if (!listId || !itemId) {
+        return NextResponse.json({ error: 'List ID and item ID are required' }, { status: 400 });
+      }
+      const { data: list, error: listErr } = await supabaseServer
+        .from('tools_sl_lists')
+        .select('id')
+        .eq('id', listId)
+        .eq('user_id', user.id)
+        .eq('tool_id', toolId)
+        .maybeSingle();
+      if (listErr || !list) {
+        return NextResponse.json({ error: 'List not found' }, { status: 404 });
+      }
+      const { error } = await supabaseServer
+        .from('tools_sl_list_items')
+        .update({ is_checked: !!isChecked })
+        .eq('list_id', listId)
+        .eq('item_id', itemId);
       if (error) {
         return NextResponse.json({ error: error.message }, { status: 500 });
       }

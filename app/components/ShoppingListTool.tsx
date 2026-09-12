@@ -6,6 +6,9 @@ import { useTheme } from './AppThemeProvider';
 type ShoppingListItemRef = {
   itemId: string;
   name: string; // denormalized for display
+  isChecked?: boolean;
+  quantity?: number | null;
+  unit?: string | null;
 };
 
 type ShoppingListRecord = {
@@ -34,6 +37,14 @@ function formatDateDisplay(isoDate: string): string {
   const day = d.getDate();
   const y = d.getFullYear();
   return `${m}/${day}/${y}`;
+}
+
+function formatLineItemLabel(ref: ShoppingListItemRef, fallbackName = ''): string {
+  const name = ref.name || fallbackName;
+  const qty = ref.quantity != null && Number.isFinite(ref.quantity) ? String(ref.quantity) : '';
+  const unit = (ref.unit || '').trim();
+  const prefix = [qty, unit].filter(Boolean).join(' ');
+  return prefix ? `${prefix} ${name}` : name;
 }
 
 export type ShoppingListDashboardSummary = { listId: string; name: string; date: string; itemCount: number };
@@ -98,6 +109,12 @@ export function ShoppingListTool({ toolId }: ShoppingListToolProps) {
   const chipClass = isLight
     ? 'inline-flex items-center gap-1 px-2 py-1 rounded-md border border-slate-300 bg-white text-slate-800 text-sm'
     : 'inline-flex items-center gap-1 px-2 py-1 rounded-md bg-slate-700 text-slate-200 text-sm';
+  const qtyInputClass = isLight
+    ? 'w-14 rounded border border-slate-300 bg-white px-1.5 py-0.5 text-xs text-slate-900'
+    : 'w-14 rounded border border-slate-700 bg-slate-900/70 px-1.5 py-0.5 text-xs text-slate-100';
+  const unitInputClass = isLight
+    ? 'w-16 rounded border border-slate-300 bg-white px-1.5 py-0.5 text-xs text-slate-900'
+    : 'w-16 rounded border border-slate-700 bg-slate-900/70 px-1.5 py-0.5 text-xs text-slate-100';
   const nestedPanelClass = isLight
     ? 'rounded-xl border border-slate-300 bg-slate-50 p-4 space-y-3'
     : 'rounded-xl border border-slate-700 bg-slate-800/50 p-4 space-y-3';
@@ -105,11 +122,14 @@ export function ShoppingListTool({ toolId }: ShoppingListToolProps) {
     ? 'flex items-center justify-between p-2 rounded-lg border border-slate-300 bg-white hover:bg-slate-100 transition-colors'
     : 'flex items-center justify-between p-2 rounded-lg border border-slate-700 bg-slate-800/50 hover:bg-slate-800 transition-colors';
   const groupedCategoryHeadingClass = isLight
-    ? 'text-xs font-semibold uppercase tracking-[0.18em] text-emerald-800 border-b border-slate-300 pb-1 truncate'
-    : 'text-xs font-semibold uppercase tracking-[0.18em] text-emerald-300 border-b border-slate-700 pb-1 truncate';
+    ? 'text-xs font-semibold uppercase tracking-[0.18em] text-emerald-800 border-b border-slate-300 pb-1 whitespace-normal break-words'
+    : 'text-xs font-semibold uppercase tracking-[0.18em] text-emerald-300 border-b border-slate-700 pb-1 whitespace-normal break-words';
   const groupedCategoryListClass = isLight
     ? 'text-sm text-slate-700 list-disc list-inside ml-0 mt-1 space-y-0.5'
     : 'text-sm text-slate-200 list-disc list-inside ml-0 mt-1 space-y-0.5';
+  const checkboxClass = isLight
+    ? 'rounded border-slate-400 bg-white text-emerald-600 focus:ring-emerald-500 focus:ring-offset-white w-4 h-4'
+    : 'rounded border-slate-600 bg-slate-700 text-emerald-500 focus:ring-emerald-500 focus:ring-offset-slate-800 w-4 h-4';
   const [activeTab, setActiveTab] = useState<'lists' | 'items'>('lists');
 
   // Master items (loaded from API; defaults copied on first load if empty)
@@ -140,6 +160,9 @@ export function ShoppingListTool({ toolId }: ShoppingListToolProps) {
   // View full list modal
   const [viewListId, setViewListId] = useState<string | null>(null);
 
+  // After Move to History: offer to start a new list from the moved list
+  const [startFromHistoryOfferId, setStartFromHistoryOfferId] = useState<string | null>(null);
+
   const fetchItems = async () => {
     if (!toolId) return;
     setItemsLoading(true);
@@ -163,11 +186,23 @@ export function ShoppingListTool({ toolId }: ShoppingListToolProps) {
       if (!res.ok) throw new Error('Failed to fetch lists');
       const data = await res.json();
       const lists = (data.lists ?? []).map(
-        (l: { id: string; name: string; date: string; isActive: boolean; showOnDashboard?: boolean; items: { itemId: string; name: string }[] }) => ({
+        (l: {
+          id: string;
+          name: string;
+          date: string;
+          isActive: boolean;
+          showOnDashboard?: boolean;
+          items: { itemId: string; name: string; isChecked?: boolean; quantity?: number | null; unit?: string | null }[];
+        }) => ({
           id: l.id,
           name: l.name,
           date: l.date,
-          items: l.items ?? [],
+          items: (l.items ?? []).map((item) => ({
+            ...item,
+            isChecked: !!item.isChecked,
+            quantity: item.quantity == null || !Number.isFinite(Number(item.quantity)) ? null : Number(item.quantity),
+            unit: item.unit ?? '',
+          })),
           isActive: l.isActive,
           showOnDashboard: l.showOnDashboard,
         })
@@ -216,6 +251,7 @@ export function ShoppingListTool({ toolId }: ShoppingListToolProps) {
   const [expandedCategories, setExpandedCategories] = useState<Set<string>>(new Set());
   const [selectedItemsCategory, setSelectedItemsCategory] = useState<string | null>(null);
   const [selectedPickerCategory, setSelectedPickerCategory] = useState<string | null>(null);
+  const [itemSearchQuery, setItemSearchQuery] = useState('');
 
   const getUniqueCategories = () => {
     const cats = new Set(masterItems.map((i) => i.category));
@@ -260,6 +296,56 @@ export function ShoppingListTool({ toolId }: ShoppingListToolProps) {
   const isCategoryExpanded = (category: string) => expandedCategories.has(category);
 
   // Add item to current new list (single click from master list)
+  const lineItemsPayload = (items: ShoppingListItemRef[]) =>
+    items.map((r) => ({
+      itemId: r.itemId,
+      quantity: r.quantity == null || !Number.isFinite(r.quantity) ? null : r.quantity,
+      unit: (r.unit || '').trim() || null,
+    }));
+
+  const updateNewListItemMeta = (itemId: string, patch: Partial<Pick<ShoppingListItemRef, 'quantity' | 'unit'>>) => {
+    setNewListItems((prev) => prev.map((ref) => (ref.itemId === itemId ? { ...ref, ...patch } : ref)));
+  };
+
+  const updateEditingListItemMeta = (itemId: string, patch: Partial<Pick<ShoppingListItemRef, 'quantity' | 'unit'>>) => {
+    setEditingListItems((prev) => prev.map((ref) => (ref.itemId === itemId ? { ...ref, ...patch } : ref)));
+  };
+
+  const renderQtyUnitInputs = (
+    ref: ShoppingListItemRef,
+    onChange: (itemId: string, patch: Partial<Pick<ShoppingListItemRef, 'quantity' | 'unit'>>) => void
+  ) => (
+    <>
+      <input
+        type="number"
+        min="0"
+        step="any"
+        value={ref.quantity ?? ''}
+        onChange={(e) => {
+          const v = e.target.value;
+          if (v === '') {
+            onChange(ref.itemId, { quantity: null });
+            return;
+          }
+          const n = Number(v);
+          if (Number.isFinite(n)) onChange(ref.itemId, { quantity: n });
+        }}
+        aria-label={`Quantity for ${ref.name}`}
+        placeholder="qty"
+        className={qtyInputClass}
+      />
+      <input
+        type="text"
+        value={ref.unit ?? ''}
+        onChange={(e) => onChange(ref.itemId, { unit: e.target.value })}
+        aria-label={`Unit for ${ref.name}`}
+        placeholder="unit"
+        maxLength={32}
+        className={unitInputClass}
+      />
+    </>
+  );
+
   const addItemToNewList = (item: MasterItem) => {
     if (newListItems.some((ref) => ref.itemId === item.id)) return;
     setNewListItems((prev) => [...prev, { itemId: item.id, name: item.name }]);
@@ -281,6 +367,7 @@ export function ShoppingListTool({ toolId }: ShoppingListToolProps) {
           name: newListName.trim(),
           listDate: newListDate,
           itemIds: newListItems.map((r) => r.itemId),
+          items: lineItemsPayload(newListItems),
         }),
       });
       if (!res.ok) throw new Error('Failed to create list');
@@ -312,8 +399,63 @@ export function ShoppingListTool({ toolId }: ShoppingListToolProps) {
       });
       if (!res.ok) throw new Error('Failed to move list');
       await fetchLists();
+      setStartFromHistoryOfferId(id);
     } catch (e) {
       console.error('Move to history error:', e);
+    }
+  };
+
+  const acceptStartFromHistoryOffer = () => {
+    if (!startFromHistoryOfferId) return;
+    const sourceId = startFromHistoryOfferId;
+    setStartFromHistoryOfferId(null);
+    setIsCreatingList(true);
+    setNewListName('');
+    setNewListDate(new Date().toISOString().split('T')[0]);
+    startBuildFromHistory(sourceId);
+  };
+
+  const dismissStartFromHistoryOffer = () => {
+    setStartFromHistoryOfferId(null);
+  };
+
+  const reactivateList = async (id: string) => {
+    if (!toolId) return;
+    try {
+      const res = await fetch('/api/tools/shopping-list', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action: 'reactivateList', toolId, listId: id }),
+      });
+      if (!res.ok) throw new Error('Failed to reactivate list');
+      await fetchLists();
+    } catch (e) {
+      console.error('Reactivate list error:', e);
+    }
+  };
+
+  const toggleListItemChecked = async (listId: string, itemId: string, isChecked: boolean) => {
+    if (!toolId) return;
+    setShoppingLists((prev) =>
+      prev.map((list) =>
+        list.id !== listId
+          ? list
+          : {
+              ...list,
+              items: list.items.map((item) => (item.itemId === itemId ? { ...item, isChecked } : item)),
+            }
+      )
+    );
+    try {
+      const res = await fetch('/api/tools/shopping-list', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action: 'setListItemChecked', toolId, listId, itemId, isChecked }),
+      });
+      if (!res.ok) throw new Error('Failed to update item');
+    } catch (e) {
+      console.error('Set list item checked error:', e);
+      await fetchLists();
     }
   };
 
@@ -340,6 +482,7 @@ export function ShoppingListTool({ toolId }: ShoppingListToolProps) {
           name,
           listDate: date,
           itemIds: editingListItems.map((r) => r.itemId),
+          items: lineItemsPayload(editingListItems),
         }),
       });
       if (!res.ok) throw new Error('Failed to update list');
@@ -655,6 +798,7 @@ export function ShoppingListTool({ toolId }: ShoppingListToolProps) {
                     {newListItems.map((ref) => (
                       <span key={ref.itemId} className={chipClass}>
                         {ref.name}
+                        {renderQtyUnitInputs(ref, updateNewListItemMeta)}
                         <button
                           type="button"
                           onClick={() => removeItemFromNewList(ref.itemId)}
@@ -804,6 +948,7 @@ export function ShoppingListTool({ toolId }: ShoppingListToolProps) {
                               className="inline-flex items-center gap-1 px-2 py-0.5 rounded bg-slate-700 text-slate-200 text-xs"
                             >
                               {ref.name}
+                              {renderQtyUnitInputs(ref, updateEditingListItemMeta)}
                               <button
                                 type="button"
                                 onClick={() => removeItemFromEditingList(ref.itemId)}
@@ -851,11 +996,11 @@ export function ShoppingListTool({ toolId }: ShoppingListToolProps) {
                                 {groups.map(({ category, items: categoryItems }) => (
                                   <div key={category}>
                                     <p className={groupedCategoryHeadingClass} title={category} style={{ maxWidth: '100%' }}>
-                                      {category.length > 15 ? `${category.slice(0, 15)}…` : category}
+                                      {category}
                                     </p>
                                     <ul className={groupedCategoryListClass}>
                                       {categoryItems.map((ref) => (
-                                        <li key={ref.itemId}>{ref.name}</li>
+                                        <li key={ref.itemId}>{formatLineItemLabel(ref)}</li>
                                       ))}
                                     </ul>
                                   </div>
@@ -1037,6 +1182,7 @@ export function ShoppingListTool({ toolId }: ShoppingListToolProps) {
                               className="inline-flex items-center gap-1 px-2 py-0.5 rounded bg-slate-700 text-slate-200 text-xs"
                             >
                               {ref.name}
+                              {renderQtyUnitInputs(ref, updateEditingListItemMeta)}
                               <button
                                 type="button"
                                 onClick={() => removeItemFromEditingList(ref.itemId)}
@@ -1084,11 +1230,11 @@ export function ShoppingListTool({ toolId }: ShoppingListToolProps) {
                                 {groups.map(({ category, items: categoryItems }) => (
                                   <div key={category}>
                                     <p className={groupedCategoryHeadingClass} title={category} style={{ maxWidth: '100%' }}>
-                                      {category.length > 15 ? `${category.slice(0, 15)}…` : category}
+                                      {category}
                                     </p>
                                     <ul className={groupedCategoryListClass}>
                                       {categoryItems.map((ref) => (
-                                        <li key={ref.itemId}>{ref.name}</li>
+                                        <li key={ref.itemId}>{formatLineItemLabel(ref)}</li>
                                       ))}
                                     </ul>
                                   </div>
@@ -1121,6 +1267,17 @@ export function ShoppingListTool({ toolId }: ShoppingListToolProps) {
                           >
                             <svg className="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
+                            </svg>
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => reactivateList(list.id)}
+                            aria-label="Reactivate list"
+                            title="Reactivate list"
+                            className={rowIconEmeraldClass}
+                          >
+                            <svg className="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 15L3 9m0 0l6-6M3 9h12a6 6 0 010 12h-3" />
                             </svg>
                           </button>
                           <button
@@ -1161,14 +1318,54 @@ export function ShoppingListTool({ toolId }: ShoppingListToolProps) {
                   @media print {
                     body * { visibility: hidden; }
                     .shopping-list-view-print, .shopping-list-view-print * { visibility: visible; }
-                    .shopping-list-view-print { position: absolute; left: 0; top: 0; width: 100%; background: white; color: black; padding: 1rem; }
-                    .shopping-list-view-print .print-only-hidden { display: none !important; }
-                    .shopping-list-view-print .print-title { display: block !important; }
+                    .shopping-list-print-overlay {
+                      position: static !important;
+                      inset: auto !important;
+                      background: transparent !important;
+                      backdrop-filter: none !important;
+                      display: block !important;
+                    }
+                    .shopping-list-print-overlay > * {
+                      background: transparent !important;
+                      border: none !important;
+                      box-shadow: none !important;
+                      max-height: none !important;
+                      max-width: none !important;
+                      width: 100% !important;
+                      margin: 0 !important;
+                      padding: 0 !important;
+                    }
+                    .shopping-list-view-print {
+                      position: fixed !important;
+                      left: 0 !important;
+                      top: 0 !important;
+                      width: 100% !important;
+                      max-height: none !important;
+                      overflow: visible !important;
+                      background: white !important;
+                      color: black !important;
+                      padding: 1rem !important;
+                      box-shadow: none !important;
+                      border: none !important;
+                    }
+                    .shopping-list-view-print .print-only-hidden { display: none !important; visibility: hidden !important; }
+                    .shopping-list-view-print .print-title {
+                      display: block !important;
+                      visibility: visible !important;
+                      color: black !important;
+                    }
+                    .shopping-list-view-print p,
+                    .shopping-list-view-print li,
+                    .shopping-list-view-print span,
+                    .shopping-list-view-print ul {
+                      color: black !important;
+                      background: transparent !important;
+                    }
                   }
                 `,
               }}
             />
-            <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm">
+            <div className="shopping-list-print-overlay fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm">
               <div className={modalCardClass}>
                 <div className="flex items-center justify-between gap-4 mb-4 print-only-hidden">
                   <h3 className={isLight ? 'text-lg font-semibold text-slate-900' : 'text-lg font-semibold text-slate-50'}>
@@ -1180,6 +1377,7 @@ export function ShoppingListTool({ toolId }: ShoppingListToolProps) {
                       type="button"
                       onClick={() => window.print()}
                       aria-label="Print list"
+                      title="Print list"
                       className="rounded-lg p-2 text-slate-400 hover:bg-slate-800 hover:text-slate-200 transition-colors"
                     >
                       <svg className="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -1211,12 +1409,23 @@ export function ShoppingListTool({ toolId }: ShoppingListToolProps) {
                           <p className="text-xs font-semibold uppercase tracking-[0.18em] text-emerald-300 mb-1">
                             {category}
                           </p>
-                          <ul className="text-sm text-slate-200 list-disc list-inside ml-0 space-y-0.5">
-                            {categoryItems.map((ref) => (
-                              <li key={ref.itemId}>
-                                {ref.name || (masterItems.find((i) => i.id === ref.itemId)?.name ?? 'Unknown item')}
-                              </li>
-                            ))}
+                          <ul className="text-sm text-slate-200 list-none ml-0 space-y-0.5">
+                            {categoryItems.map((ref) => {
+                              const name = ref.name || (masterItems.find((i) => i.id === ref.itemId)?.name ?? 'Unknown item');
+                              const label = formatLineItemLabel(ref, name);
+                              return (
+                                <li key={ref.itemId} className="flex items-center gap-2">
+                                  <input
+                                    type="checkbox"
+                                    checked={!!ref.isChecked}
+                                    onChange={(e) => toggleListItemChecked(list.id, ref.itemId, e.target.checked)}
+                                    aria-label={label}
+                                    className={checkboxClass}
+                                  />
+                                  <span>{label}</span>
+                                </li>
+                              );
+                            })}
                           </ul>
                         </div>
                       ))}
@@ -1234,9 +1443,25 @@ export function ShoppingListTool({ toolId }: ShoppingListToolProps) {
         const categories = getUniqueCategories();
         const displayCategory = selectedItemsCategory ?? categories[0] ?? null;
         const currentItems = displayCategory ? getItemsByCategory(displayCategory) : [];
+        const itemSearch = itemSearchQuery.trim().toLowerCase();
+        const visibleItems = itemSearch
+          ? currentItems.filter((item) => item.name.toLowerCase().includes(itemSearch))
+          : currentItems;
 
         return (
           <div className="space-y-6">
+            {!isAddingItem && (
+              <div className={cardClass}>
+                <label className={labelClass}>Search Items</label>
+                <input
+                  type="text"
+                  value={itemSearchQuery}
+                  onChange={(e) => setItemSearchQuery(e.target.value)}
+                  placeholder="Search by item name..."
+                  className={inputClass}
+                />
+              </div>
+            )}
             {!isAddingItem && (
               <div className="flex justify-start">
                 <button onClick={() => setIsAddingItem(true)} className={primaryButtonClass}>
@@ -1364,9 +1589,11 @@ export function ShoppingListTool({ toolId }: ShoppingListToolProps) {
                       <h3 className={isLight ? 'text-lg font-semibold text-emerald-800 mb-4' : 'text-lg font-semibold text-emerald-300 mb-4'}>{displayCategory}</h3>
                       {currentItems.length === 0 ? (
                         <p className="text-slate-500 text-sm">No items in this category. Use “Add New Item” above.</p>
+                      ) : visibleItems.length === 0 ? (
+                        <p className="text-slate-500 text-sm">No items match this search.</p>
                       ) : (
                         <ul className="space-y-2" role="list">
-                          {currentItems.map((item) =>
+                          {visibleItems.map((item) =>
                             editingItemId === item.id ? (
                               <li key={item.id} className={isLight ? 'space-y-2 p-3 rounded-lg border border-slate-300 bg-white' : 'space-y-2 p-3 rounded-lg border border-slate-700 bg-slate-800/50'}>
                                 <div>
@@ -1426,7 +1653,7 @@ export function ShoppingListTool({ toolId }: ShoppingListToolProps) {
                                       type="button"
                                       onClick={() => startEditingItem(item)}
                                       aria-label={`Edit ${item.name}`}
-                                      title="Edit"
+                                      title={`Edit ${item.name}`}
                                       className={rowIconEmeraldClass}
                                     >
                                       <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -1440,7 +1667,7 @@ export function ShoppingListTool({ toolId }: ShoppingListToolProps) {
                                         setDeleteConfirmItemText('');
                                       }}
                                       aria-label={`Delete ${item.name}`}
-                                      title="Delete"
+                                      title={`Delete ${item.name}`}
                                       className={rowIconDangerClass}
                                     >
                                       <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -1462,6 +1689,35 @@ export function ShoppingListTool({ toolId }: ShoppingListToolProps) {
           </div>
         );
       })()}
+
+      {startFromHistoryOfferId && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
+          <div className={isLight ? 'rounded-2xl border border-slate-200 bg-white p-6 max-w-md w-full mx-4 shadow-2xl' : 'rounded-2xl border border-slate-800 bg-slate-900 p-6 max-w-md w-full mx-4'}>
+            <h3 className={isLight ? 'text-xl font-semibold text-slate-900 mb-2' : 'text-xl font-semibold text-slate-50 mb-2'}>
+              Start a new list from this one
+            </h3>
+            <p className={isLight ? 'text-slate-700 mb-4' : 'text-slate-300 mb-4'}>
+              Use the items from the list you just moved to History?
+            </p>
+            <div className="flex gap-3">
+              <button
+                type="button"
+                onClick={acceptStartFromHistoryOffer}
+                className={primaryButtonClass}
+              >
+                Start a new list from this one
+              </button>
+              <button
+                type="button"
+                onClick={dismissStartFromHistoryOffer}
+                className={secondaryButtonClass}
+              >
+                Dismiss
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Delete list confirmation modal */}
       {deleteConfirmListId && (
