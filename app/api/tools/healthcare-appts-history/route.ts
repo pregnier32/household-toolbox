@@ -56,29 +56,31 @@ async function syncHealthcareRecordToDashboard(
   });
 }
 
-async function copyDefaultsToUser(userId: string, toolId: string) {
-  const { data: existing } = await supabaseServer
+const STOCK_MEMBER_NAMES = ['Family1', 'Family2'];
+
+async function removeEmptyStockHeaders(userId: string, toolId: string): Promise<void> {
+  const { data: stockHeaders } = await supabaseServer
     .from('tools_hcah_headers')
-    .select('id')
+    .select('id, name')
     .eq('user_id', userId)
     .eq('tool_id', toolId)
-    .limit(1);
-  if (existing?.length) return;
+    .in('name', STOCK_MEMBER_NAMES);
+  if (!stockHeaders?.length) return;
 
-  const { data: defaultHeaders } = await supabaseServer
-    .from('tools_hcah_default_headers')
-    .select('*')
-    .order('display_order', { ascending: true });
-  if (!defaultHeaders?.length) return;
-
-  await supabaseServer.from('tools_hcah_headers').insert(
-    defaultHeaders.map((h) => ({
-      user_id: userId,
-      tool_id: toolId,
-      name: h.name,
-      card_color: h.card_color,
-    }))
-  );
+  for (const header of stockHeaders) {
+    const { count } = await supabaseServer
+      .from('tools_hcah_records')
+      .select('id', { count: 'exact', head: true })
+      .eq('header_id', header.id)
+      .eq('user_id', userId);
+    if ((count ?? 0) > 0) continue;
+    await supabaseServer
+      .from('tools_hcah_headers')
+      .delete()
+      .eq('id', header.id)
+      .eq('user_id', userId)
+      .eq('tool_id', toolId);
+  }
 }
 
 async function uploadFile(
@@ -127,8 +129,8 @@ export async function GET(request: NextRequest) {
         if (error) throw new Error('Failed to fetch headers');
         return data || [];
       })();
-      if (headers.length === 0) {
-        await copyDefaultsToUser(user.id, toolId);
+      if (headers.some((h) => STOCK_MEMBER_NAMES.includes(h.name))) {
+        await removeEmptyStockHeaders(user.id, toolId);
         const { data: reloaded, error: reloadErr } = await supabaseServer
           .from('tools_hcah_headers')
           .select('*')

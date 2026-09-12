@@ -42,6 +42,26 @@ type HealthcareApptsHistoryToolProps = {
 
 const API_BASE = '/api/tools/healthcare-appts-history';
 
+function lastMemberStorageKey(toolId: string) {
+  return `hcah-last-member:${toolId}`;
+}
+
+function readLastMemberId(toolId: string): string | null {
+  try {
+    return localStorage.getItem(lastMemberStorageKey(toolId));
+  } catch {
+    return null;
+  }
+}
+
+function writeLastMemberId(toolId: string, headerId: string) {
+  try {
+    localStorage.setItem(lastMemberStorageKey(toolId), headerId);
+  } catch {
+    /* ignore quota / private mode */
+  }
+}
+
 function generateId() {
   return typeof crypto !== 'undefined' && crypto.randomUUID
     ? crypto.randomUUID()
@@ -131,6 +151,27 @@ function getPatientResponsibilityDisplay(totalBilled: string, insurancePaid: str
   return formatCurrencyDisplay(String(responsibility));
 }
 
+function formatHistoryBalanceLine(record: Pick<AppointmentRecord, 'totalBilled' | 'insurancePaid' | 'currentAmountDue'>): string {
+  const billed = formatCurrencyDisplay(record.totalBilled);
+  const insurance = formatCurrencyDisplay(record.insurancePaid);
+  const due = formatCurrencyDisplay(record.currentAmountDue);
+  return [
+    billed && `Billed ${billed}`,
+    insurance && `Insurance ${insurance}`,
+    due && `Due ${due}`,
+  ]
+    .filter(Boolean)
+    .join(' · ');
+}
+
+function formatMemberRollupLine(memberRecords: AppointmentRecord[]): string {
+  const upcoming = memberRecords.filter((r) => r.isUpcoming).length;
+  const history = memberRecords.filter((r) => !r.isUpcoming).length;
+  const due = memberRecords.reduce((sum, r) => sum + parseCurrency(r.currentAmountDue), 0);
+  const dueText = due > 0 ? ` · Due ${formatCurrencyDisplay(String(due))}` : '';
+  return `Upcoming ${upcoming} · History ${history}${dueText}`;
+}
+
 const defaultRecord = (headerId: string): Omit<AppointmentRecord, 'id'> => ({
   headerId,
   isUpcoming: true,
@@ -212,6 +253,9 @@ export function HealthcareApptsHistoryTool({ toolId }: HealthcareApptsHistoryToo
   const rowIconDangerClass = isLight
     ? 'inline-flex items-center justify-center rounded-lg border-2 border-red-300 bg-white p-2 text-red-700 transition-colors hover:bg-red-50 hover:border-red-400 focus:outline-none focus:ring-2 focus:ring-red-500/40 focus:ring-offset-2 focus:ring-offset-white'
     : 'inline-flex items-center justify-center rounded-lg border-2 border-red-500/50 bg-slate-800/50 p-2 text-red-400 transition-colors hover:border-red-400 hover:bg-red-500/20 focus:outline-none focus:ring-2 focus:ring-red-500/50 focus:ring-offset-2 focus:ring-offset-slate-900';
+  const successAlertClass = isLight
+    ? 'rounded-lg px-4 py-2 text-sm bg-emerald-50 text-emerald-900 border border-emerald-200'
+    : 'rounded-lg px-4 py-2 text-sm bg-emerald-500/20 text-emerald-300';
 
   const [headers, setHeaders] = useState<HeaderRecord[]>([]);
   const [selectedHeaderId, setSelectedHeaderId] = useState<string | null>(null);
@@ -253,8 +297,16 @@ export function HealthcareApptsHistoryTool({ toolId }: HealthcareApptsHistoryToo
   const [isSaving, setIsSaving] = useState(false);
   const [saveMessage, setSaveMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
 
+  const showMessage = (type: 'success' | 'error', text: string) => {
+    setSaveMessage({ type, text });
+    setTimeout(() => setSaveMessage(null), 3000);
+  };
+
   const docFileInputRef = useRef<HTMLInputElement>(null);
   const editDocFileInputRef = useRef<HTMLInputElement>(null);
+  const fetchedHeaderIdsRef = useRef<Set<string>>(new Set());
+  const selectedHeaderIdRef = useRef<string | null>(selectedHeaderId);
+  selectedHeaderIdRef.current = selectedHeaderId;
 
   const selectedHeader = headers.find((h) => h.id === selectedHeaderId);
   const recordsForHeader = selectedHeaderId
@@ -295,7 +347,20 @@ export function HealthcareApptsHistoryTool({ toolId }: HealthcareApptsHistoryToo
         card_color: h.card_color ?? '#10b981',
       }));
       setHeaders(list);
-      if (list.length > 0 && !selectedHeaderId) setSelectedHeaderId(list[0].id);
+      if (list.length === 0) {
+        setSelectedHeaderId(null);
+        setRecords([]);
+        fetchedHeaderIdsRef.current = new Set();
+      } else {
+        await loadAllRecords(list.map((h: HeaderRecord) => h.id));
+        const ids = new Set(list.map((h: HeaderRecord) => h.id));
+        const lastUsed = toolId ? readLastMemberId(toolId) : null;
+        setSelectedHeaderId((prev) => {
+          if (prev && ids.has(prev)) return prev;
+          if (lastUsed && ids.has(lastUsed)) return lastUsed;
+          return list[0].id;
+        });
+      }
     } catch (e) {
       console.error('Load headers:', e);
       setSaveMessage({ type: 'error', text: e instanceof Error ? e.message : 'Failed to load headers' });
@@ -304,25 +369,46 @@ export function HealthcareApptsHistoryTool({ toolId }: HealthcareApptsHistoryToo
     }
   };
 
+  const loadAllRecords = async (headerIds: string[]) => {
+    if (!toolId) return;
+    try {
+      const response = await fetch(`${API_BASE}?toolId=${encodeURIComponent(toolId)}&resource=records`);
+      if (!response.ok) return;
+      const data = await response.json();
+      const list = (data.records || []).map((r: unknown) => mapApiRecordToRecord(r as Parameters<typeof mapApiRecordToRecord>[0]));
+      setRecords(list);
+      headerIds.forEach((id) => fetchedHeaderIdsRef.current.add(id));
+    } catch (e) {
+      console.error('Load all records:', e);
+    }
+  };
+
   const loadRecords = async (headerId: string) => {
     if (!toolId) return;
-    setIsLoadingRecords(true);
+    const hasCache = fetchedHeaderIdsRef.current.has(headerId);
+    if (hasCache) setIsLoadingRecords(false);
+    else setIsLoadingRecords(true);
     try {
       const response = await fetch(
         `${API_BASE}?toolId=${encodeURIComponent(toolId)}&resource=records&headerId=${encodeURIComponent(headerId)}`
       );
       if (!response.ok) {
-        setRecords([]);
+        if (!hasCache) {
+          setRecords((prev) => prev.filter((r) => r.headerId !== headerId));
+        }
         return;
       }
       const data = await response.json();
       const list = (data.records || []).map((r: unknown) => mapApiRecordToRecord(r as Parameters<typeof mapApiRecordToRecord>[0]));
-      setRecords(list);
+      setRecords((prev) => [...prev.filter((r) => r.headerId !== headerId), ...list]);
+      fetchedHeaderIdsRef.current.add(headerId);
     } catch (e) {
       console.error('Load records:', e);
-      setRecords([]);
+      if (!hasCache) {
+        setRecords((prev) => prev.filter((r) => r.headerId !== headerId));
+      }
     } finally {
-      setIsLoadingRecords(false);
+      if (selectedHeaderIdRef.current === headerId) setIsLoadingRecords(false);
     }
   };
 
@@ -332,7 +418,10 @@ export function HealthcareApptsHistoryTool({ toolId }: HealthcareApptsHistoryToo
 
   useEffect(() => {
     if (toolId && selectedHeaderId) loadRecords(selectedHeaderId);
-    else setRecords([]);
+    else {
+      setRecords([]);
+      fetchedHeaderIdsRef.current = new Set();
+    }
   }, [toolId, selectedHeaderId]);
 
   useEffect(() => {
@@ -341,6 +430,10 @@ export function HealthcareApptsHistoryTool({ toolId }: HealthcareApptsHistoryToo
       setRecordTypeStep('choose');
     }
   }, [selectedHeaderId]);
+
+  useEffect(() => {
+    if (toolId && selectedHeaderId) writeLastMemberId(toolId, selectedHeaderId);
+  }, [toolId, selectedHeaderId]);
 
   const selectHeader = (headerId: string) => {
     setSelectedHeaderId(headerId);
@@ -375,8 +468,7 @@ export function HealthcareApptsHistoryTool({ toolId }: HealthcareApptsHistoryToo
       setIsCreatingNewHeader(false);
       setNewHeaderName('');
       setNewHeaderColor('#10b981');
-      setSaveMessage({ type: 'success', text: 'Family member created.' });
-      setTimeout(() => setSaveMessage(null), 3000);
+      showMessage('success', 'Family member created.');
     } catch (e) {
       setSaveMessage({ type: 'error', text: e instanceof Error ? e.message : 'Failed to create header' });
     } finally {
@@ -421,8 +513,7 @@ export function HealthcareApptsHistoryTool({ toolId }: HealthcareApptsHistoryToo
         )
       );
       cancelEditingHeader();
-      setSaveMessage({ type: 'success', text: 'Saved.' });
-      setTimeout(() => setSaveMessage(null), 3000);
+      showMessage('success', 'Saved.');
     } catch (e) {
       setSaveMessage({ type: 'error', text: e instanceof Error ? e.message : 'Failed to update header' });
     } finally {
@@ -477,6 +568,15 @@ export function HealthcareApptsHistoryTool({ toolId }: HealthcareApptsHistoryToo
     setIsAddingRecord(false);
     setRecordTypeStep('choose');
   };
+
+  useEffect(() => {
+    if (!isAddingRecord || recordTypeStep !== 'choose') return;
+    const onKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') cancelAddingRecord();
+    };
+    window.addEventListener('keydown', onKeyDown);
+    return () => window.removeEventListener('keydown', onKeyDown);
+  }, [isAddingRecord, recordTypeStep]);
 
   const addRecord = async () => {
     if (!selectedHeaderId || !toolId) return;
@@ -841,14 +941,19 @@ export function HealthcareApptsHistoryTool({ toolId }: HealthcareApptsHistoryToo
         <p className={descClass}>
           Track upcoming appointments and healthcare history for each family member.
         </p>
-        {saveMessage && (
-          <p
-            className={`mt-2 text-sm ${saveMessage.type === 'success' ? 'text-emerald-400' : 'text-red-400'}`}
-          >
-            {saveMessage.text}
-          </p>
-        )}
       </div>
+
+      {saveMessage && (
+        <div
+          className={
+            saveMessage.type === 'success'
+              ? successAlertClass
+              : 'mt-2 text-sm text-red-400'
+          }
+        >
+          {saveMessage.text}
+        </div>
+      )}
 
       <div className={cardClass}>
         <label className={labelClass}>
@@ -857,6 +962,7 @@ export function HealthcareApptsHistoryTool({ toolId }: HealthcareApptsHistoryToo
         {isLoadingHeaders ? (
           <p className="text-slate-400 text-sm">Loading family members…</p>
         ) : !isCreatingNewHeader ? (
+          <div>
           <div className="flex items-center gap-3 flex-wrap">
             {/* Family member cards */}
             {headers.map((header) =>
@@ -984,12 +1090,43 @@ export function HealthcareApptsHistoryTool({ toolId }: HealthcareApptsHistoryToo
               className={isLight
                 ? 'px-4 py-3 rounded-lg border border-slate-300 bg-white text-slate-700 hover:border-emerald-500/50 hover:bg-emerald-50 hover:text-emerald-800 transition-all duration-200 flex items-center justify-center min-w-[60px]'
                 : 'px-4 py-3 rounded-lg border border-slate-700 bg-slate-800/50 text-slate-300 hover:border-emerald-500/50 hover:bg-emerald-500/10 hover:text-emerald-300 transition-all duration-200 flex items-center justify-center min-w-[60px]'}
+              aria-label="Add new family member"
               title="Add new family member"
             >
               <svg className="h-6 w-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
               </svg>
             </button>
+          </div>
+          {headers.length >= 2 && (
+            <div className="mt-4 space-y-1">
+              <p className={labelClassSm}>Household</p>
+              {headers.map((header) => {
+                const summary = formatMemberRollupLine(records.filter((r) => r.headerId === header.id));
+                return (
+                  <button
+                    key={header.id}
+                    type="button"
+                    onClick={() => selectHeader(header.id)}
+                    className={`w-full flex items-center justify-between gap-3 rounded-lg border px-3 py-2 text-left text-sm transition-all duration-200 ${
+                      selectedHeaderId === header.id ? 'shadow-lg' : isLight ? 'hover:bg-slate-50' : 'hover:bg-slate-800/50'
+                    }`}
+                    style={{
+                      borderColor: header.card_color || '#10b981',
+                      backgroundColor:
+                        selectedHeaderId === header.id
+                          ? `${header.card_color || '#10b981'}15`
+                          : `${header.card_color || '#10b981'}08`,
+                      color: header.card_color || '#10b981',
+                    }}
+                  >
+                    <span className="font-medium">{header.name}</span>
+                    <span className={isLight ? 'text-xs text-slate-600' : 'text-xs text-slate-400'}>{summary}</span>
+                  </button>
+                );
+              })}
+            </div>
+          )}
           </div>
         ) : (
           <div className="flex items-end gap-2 flex-wrap">
@@ -1627,6 +1764,9 @@ export function HealthcareApptsHistoryTool({ toolId }: HealthcareApptsHistoryToo
                             {record.providerInfo && (
                               <p className="text-xs text-slate-400 mt-0.5">{record.providerInfo}</p>
                             )}
+                            {!record.isUpcoming && formatHistoryBalanceLine(record) ? (
+                              <p className="text-xs text-slate-400 mt-0.5">{formatHistoryBalanceLine(record)}</p>
+                            ) : null}
                             {record.documents.length > 0 && (
                               <div className="mt-2 flex flex-wrap gap-2">
                                 {record.documents.map((d) => (
