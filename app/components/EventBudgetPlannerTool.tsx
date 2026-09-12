@@ -21,6 +21,11 @@ type Vendor = NamedRecord & {
   notes: string;
 };
 
+type VendorSplit = {
+  vendorId: string;
+  amount: number;
+};
+
 type Expense = {
   id: string;
   categoryId: string;
@@ -28,6 +33,7 @@ type Expense = {
   vendorId: string;
   amount: number;
   note: string;
+  vendorSplits: VendorSplit[];
 };
 
 type CategoryBudget = {
@@ -78,6 +84,30 @@ function formatCurrency(amount: number): string {
 function parseAmount(value: string): number {
   const parsed = parseFloat(value.replace(/[^0-9.-]/g, ''));
   return Number.isFinite(parsed) ? parsed : 0;
+}
+
+type ExpenseHelperKind = 'tip' | 'tax' | 'fee';
+
+function emptyExpenseHelper() {
+  return { baseAmount: 0, kind: 'tip' as ExpenseHelperKind, percent: '' };
+}
+
+function emptyExpenseForm(vendorId = '') {
+  return {
+    date: todayIso(),
+    amount: 0,
+    note: '',
+    vendorSplits: [{ vendorId, amount: 0 }] as VendorSplit[],
+  };
+}
+
+function expenseVendorSplits(expense: Expense): VendorSplit[] {
+  if (expense.vendorSplits?.length) return expense.vendorSplits;
+  return [{ vendorId: expense.vendorId, amount: expense.amount }];
+}
+
+function moneyCents(value: number) {
+  return Math.round(value * 100);
 }
 
 function sanitizeCurrencyInput(value: string): string {
@@ -168,6 +198,43 @@ function getEventTotals(event: EventRecord) {
   const totalBudgeted = event.categoryBudgets.reduce((sum, cb) => sum + cb.budgetAmount, 0);
   const totalActual = event.expenses.reduce((sum, e) => sum + e.amount, 0);
   return { totalBudgeted, totalActual, remaining: totalBudgeted - totalActual };
+}
+
+const BIRTHDAY_TYPE_NAME = 'Birthday';
+
+const BIRTHDAY_STARTER_BUDGETS: { name: string; amount: number }[] = [
+  { name: 'Venue', amount: 200 },
+  { name: 'Food and Drink', amount: 150 },
+  { name: 'Decorations', amount: 75 },
+  { name: 'Entertainment', amount: 100 },
+  { name: 'Invitations', amount: 25 },
+  { name: 'Gifts', amount: 50 },
+  { name: 'Supplies', amount: 40 },
+];
+
+function birthdayStarterRows(available: NamedRecord[], event?: Pick<EventRecord, 'categoryBudgets'> | null) {
+  const existing = new Set(event?.categoryBudgets.map((cb) => cb.categoryId) ?? []);
+  return BIRTHDAY_STARTER_BUDGETS.flatMap((row) => {
+    const category = available.find((c) => c.name === row.name);
+    if (!category || existing.has(category.id)) return [];
+    return [{ categoryId: category.id, budgetAmount: row.amount }];
+  });
+}
+
+function calendarDateKey(value: string): string {
+  return (value || '').split('T')[0];
+}
+
+function isSameCalendarEvent(
+  event: { title?: string; date?: string; is_active?: boolean },
+  title: string,
+  date: string
+) {
+  if (event.is_active === false) return false;
+  return (
+    (event.title || '').trim().toLowerCase() === title.trim().toLowerCase() &&
+    calendarDateKey(event.date || '') === calendarDateKey(date)
+  );
 }
 
 function EditIcon() {
@@ -404,7 +471,13 @@ export function EventBudgetPlannerTool({ toolId }: EventBudgetPlannerToolProps) 
   );
 
   const getVendorUsageCount = useCallback(
-    (vendorId: string) => events.reduce((count, event) => count + event.expenses.filter((e) => e.vendorId === vendorId).length, 0),
+    (vendorId: string) =>
+      events.reduce(
+        (count, event) =>
+          count +
+          event.expenses.filter((e) => expenseVendorSplits(e).some((part) => part.vendorId === vendorId)).length,
+        0
+      ),
     [events]
   );
 
@@ -412,10 +485,13 @@ export function EventBudgetPlannerTool({ toolId }: EventBudgetPlannerToolProps) 
   const [showHistory, setShowHistory] = useState(false);
   const [isAddingEvent, setIsAddingEvent] = useState(false);
   const [editingEventId, setEditingEventId] = useState<string | null>(null);
+  const [applyBirthdayTemplateOnCreate, setApplyBirthdayTemplateOnCreate] = useState(false);
   const [eventForm, setEventForm] = useState({ name: '', date: todayIso(), typeId: '', notes: '' });
+  const [isAddingEventCategory, setIsAddingEventCategory] = useState(false);
   const [newCategoryBudget, setNewCategoryBudget] = useState({ categoryId: '', budgetAmount: 0 });
   const [expenseModal, setExpenseModal] = useState<{ categoryId: string; expenseId?: string } | null>(null);
-  const [expenseForm, setExpenseForm] = useState({ date: todayIso(), vendorId: '', amount: 0, note: '' });
+  const [expenseForm, setExpenseForm] = useState(emptyExpenseForm);
+  const [expenseHelper, setExpenseHelper] = useState(emptyExpenseHelper);
   const [categoryBudgetModalId, setCategoryBudgetModalId] = useState<string | null>(null);
   const [categoryBudgetForm, setCategoryBudgetForm] = useState({ categoryId: '', budgetAmount: 0 });
   const [deleteEventConfirmId, setDeleteEventConfirmId] = useState<string | null>(null);
@@ -455,8 +531,8 @@ export function EventBudgetPlannerTool({ toolId }: EventBudgetPlannerToolProps) 
   const [deleteVendorConfirmText, setDeleteVendorConfirmText] = useState('');
 
   const resetEventForm = () => {
-    const defaultTypeId = activeTypes[0]?.id ?? '';
-    setEventForm({ name: '', date: todayIso(), typeId: defaultTypeId, notes: '' });
+    setEventForm({ name: '', date: todayIso(), typeId: '', notes: '' });
+    setApplyBirthdayTemplateOnCreate(false);
   };
 
   const startAddingEvent = () => {
@@ -468,6 +544,8 @@ export function EventBudgetPlannerTool({ toolId }: EventBudgetPlannerToolProps) 
   const cancelEventForm = () => {
     setIsAddingEvent(false);
     setEditingEventId(null);
+    setIsAddingEventCategory(false);
+    setNewCategoryBudget({ categoryId: '', budgetAmount: 0 });
     closeExpenseModal();
     closeCategoryBudgetModal();
     resetEventForm();
@@ -487,6 +565,13 @@ export function EventBudgetPlannerTool({ toolId }: EventBudgetPlannerToolProps) 
       setIsAddingEvent(false);
       if (data.event?.id) {
         setEditingEventId(data.event.id);
+        if (applyBirthdayTemplateOnCreate) {
+          try {
+            await applyBirthdayStarterBudgets(data.event.id, data.event);
+          } catch (templateError: unknown) {
+            alert(templateError instanceof Error ? templateError.message : 'Failed to apply Birthday starter template.');
+          }
+        }
       }
       resetEventForm();
     } catch (error: unknown) {
@@ -499,6 +584,9 @@ export function EventBudgetPlannerTool({ toolId }: EventBudgetPlannerToolProps) 
   const startEditingEvent = (event: EventRecord) => {
     setEditingEventId(event.id);
     setIsAddingEvent(false);
+    setApplyBirthdayTemplateOnCreate(false);
+    setIsAddingEventCategory(false);
+    setNewCategoryBudget({ categoryId: '', budgetAmount: 0 });
     closeExpenseModal();
     closeCategoryBudgetModal();
     setEventForm({
@@ -507,6 +595,89 @@ export function EventBudgetPlannerTool({ toolId }: EventBudgetPlannerToolProps) 
       typeId: event.typeId,
       notes: event.notes,
     });
+  };
+
+  const addEventToCalendar = async () => {
+    const title = eventForm.name.trim();
+    const date = eventForm.date;
+    if (!title || !date) return;
+
+    setIsLoading(true);
+    try {
+      const toolsRes = await fetch('/api/tools');
+      const toolsData = await toolsRes.json().catch(() => ({ error: 'Unknown error' }));
+      if (!toolsRes.ok) {
+        throw new Error(toolsData.error || 'Failed to load tools');
+      }
+
+      const calendarTool = (toolsData.tools ?? []).find((tool: { name?: string }) => tool.name === 'Calendar Events');
+      if (!calendarTool?.id) {
+        throw new Error('Calendar Events tool was not found.');
+      }
+
+      const ceRes = await fetch(`/api/tools/calendar-events?toolId=${calendarTool.id}`);
+      const ceData = await ceRes.json().catch(() => ({ error: 'Unknown error' }));
+      if (!ceRes.ok) {
+        throw new Error(ceData.error || 'Failed to load Calendar Events');
+      }
+
+      const typeName = getTypeName(eventForm.typeId);
+      let category =
+        (ceData.categories ?? []).find((row: { name?: string }) => row.name === typeName) ||
+        (ceData.categories ?? [])[0];
+
+      if (!category) {
+        const createCatRes = await fetch('/api/tools/calendar-events', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            toolId: calendarTool.id,
+            action: 'create_category',
+            category: {
+              name: typeName !== 'Unknown' ? typeName : 'Holiday',
+              isDefault: true,
+              card_color: '#10b981',
+            },
+          }),
+        });
+        const createCatData = await createCatRes.json().catch(() => ({ error: 'Unknown error' }));
+        if (!createCatRes.ok || !createCatData.category) {
+          throw new Error(createCatData.error || 'Failed to create Calendar Events category');
+        }
+        category = createCatData.category;
+      }
+
+      const alreadyLinked = (ceData.events ?? []).some((row: { title?: string; date?: string; is_active?: boolean }) =>
+        isSameCalendarEvent(row, title, date)
+      );
+      if (alreadyLinked) return;
+
+      const createRes = await fetch('/api/tools/calendar-events', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          toolId: calendarTool.id,
+          action: 'create_event',
+          event: {
+            categoryId: category.id,
+            title,
+            date,
+            frequency: 'One Time',
+            notes: eventForm.notes.trim(),
+            isActive: true,
+            addToDashboard: true,
+          },
+        }),
+      });
+      const createData = await createRes.json().catch(() => ({ error: 'Unknown error' }));
+      if (!createRes.ok) {
+        throw new Error(createData.error || 'Failed to add event to Calendar Events');
+      }
+    } catch (error: unknown) {
+      alert(error instanceof Error ? error.message : 'Failed to add event to Calendar Events.');
+    } finally {
+      setIsLoading(false);
+    }
   };
 
   const saveEventEdit = async () => {
@@ -570,6 +741,54 @@ export function EventBudgetPlannerTool({ toolId }: EventBudgetPlannerToolProps) 
 
   const editingEvent = editingEventId ? events.find((e) => e.id === editingEventId) : null;
 
+  const applyBirthdayStarterBudgets = async (eventId: string, event?: EventRecord | null) => {
+    const birthdayType = activeTypes.find((t) => t.name === BIRTHDAY_TYPE_NAME);
+    if (birthdayType && event && event.typeId !== birthdayType.id) {
+      await postMain({
+        action: 'updateEvent',
+        eventId,
+        name: event.name,
+        date: event.date,
+        typeId: birthdayType.id,
+        notes: event.notes,
+      });
+      setEventForm((f) => ({ ...f, typeId: birthdayType.id }));
+    }
+
+    const rows = birthdayStarterRows(activeCategories, event);
+    for (const row of rows) {
+      await postMain({
+        action: 'addCategoryBudget',
+        eventId,
+        categoryId: row.categoryId,
+        budgetAmount: row.budgetAmount,
+      });
+    }
+  };
+
+  const applyBirthdayStarterTemplate = async (event: EventRecord) => {
+    setIsLoading(true);
+    try {
+      await applyBirthdayStarterBudgets(event.id, event);
+    } catch (error: unknown) {
+      alert(error instanceof Error ? error.message : 'Failed to apply Birthday starter template.');
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const toggleBirthdayStarterOnCreate = () => {
+    setApplyBirthdayTemplateOnCreate((on) => {
+      if (!on) {
+        const birthdayType = activeTypes.find((t) => t.name === BIRTHDAY_TYPE_NAME);
+        if (birthdayType) {
+          setEventForm((f) => ({ ...f, typeId: birthdayType.id }));
+        }
+      }
+      return !on;
+    });
+  };
+
   const addCategoryBudget = async () => {
     if (!editingEventId || !newCategoryBudget.categoryId || !toolId) return;
     const amount = newCategoryBudget.budgetAmount;
@@ -583,6 +802,7 @@ export function EventBudgetPlannerTool({ toolId }: EventBudgetPlannerToolProps) 
         budgetAmount: amount,
       });
       setNewCategoryBudget({ categoryId: '', budgetAmount: 0 });
+      setIsAddingEventCategory(false);
     } catch (error: unknown) {
       alert(error instanceof Error ? error.message : 'Failed to add category budget.');
     } finally {
@@ -608,10 +828,27 @@ export function EventBudgetPlannerTool({ toolId }: EventBudgetPlannerToolProps) 
     }
   };
 
+  const setExpenseAmount = (amount: number) => {
+    setExpenseForm((f) => ({
+      ...f,
+      amount,
+      vendorSplits: f.vendorSplits.length === 1 ? [{ ...f.vendorSplits[0], amount }] : f.vendorSplits,
+    }));
+  };
+
   const saveExpense = async () => {
     if (!editingEventId || !expenseModal || !toolId) return;
     const amount = expenseForm.amount;
-    if (amount <= 0 || !expenseForm.vendorId) return;
+    const vendorSplits = expenseForm.vendorSplits;
+    if (amount <= 0 || !vendorSplits[0]?.vendorId) return;
+    if (vendorSplits.some((part) => !part.vendorId || part.amount <= 0)) {
+      alert('Each vendor split needs a vendor and an amount greater than zero.');
+      return;
+    }
+    if (vendorSplits.reduce((sum, part) => sum + moneyCents(part.amount), 0) !== moneyCents(amount)) {
+      alert('Vendor amounts must sum to the expense amount.');
+      return;
+    }
 
     setIsLoading(true);
     try {
@@ -620,7 +857,8 @@ export function EventBudgetPlannerTool({ toolId }: EventBudgetPlannerToolProps) 
         eventId: editingEventId,
         expenseId: expenseModal.expenseId,
         categoryId: expenseModal.categoryId,
-        vendorId: expenseForm.vendorId,
+        vendorId: vendorSplits[0].vendorId,
+        vendorSplits,
         amount,
         expenseDate: expenseForm.date,
         note: expenseForm.note,
@@ -633,24 +871,38 @@ export function EventBudgetPlannerTool({ toolId }: EventBudgetPlannerToolProps) 
     }
   };
 
+  const applyExpenseHelper = () => {
+    const rawPercent = expenseHelper.percent.trim();
+    const percent = parseFloat(rawPercent.replace(/[^0-9.-]/g, ''));
+    if (rawPercent === '' || !Number.isFinite(percent) || percent < 0) {
+      alert('Enter a valid percentage.');
+      return;
+    }
+    const amount = Math.round(expenseHelper.baseAmount * (percent / 100) * 100) / 100;
+    setExpenseAmount(amount);
+  };
+
   const closeExpenseModal = () => {
     setExpenseModal(null);
-    setExpenseForm({ date: todayIso(), vendorId: '', amount: 0, note: '' });
+    setExpenseForm(emptyExpenseForm());
+    setExpenseHelper(emptyExpenseHelper());
   };
 
   const openExpenseModal = (categoryId: string) => {
     setExpenseModal({ categoryId });
-    setExpenseForm({ date: todayIso(), vendorId: activeVendors[0]?.id ?? '', amount: 0, note: '' });
+    setExpenseForm(emptyExpenseForm(activeVendors[0]?.id ?? ''));
+    setExpenseHelper(emptyExpenseHelper());
   };
 
   const openEditExpenseModal = (expense: Expense) => {
     setExpenseModal({ categoryId: expense.categoryId, expenseId: expense.id });
     setExpenseForm({
       date: expense.date,
-      vendorId: expense.vendorId,
       amount: expense.amount,
       note: expense.note,
+      vendorSplits: expenseVendorSplits(expense),
     });
+    setExpenseHelper(emptyExpenseHelper());
   };
 
   const openCategoryBudgetModal = (categoryId: string) => {
@@ -1114,6 +1366,13 @@ export function EventBudgetPlannerTool({ toolId }: EventBudgetPlannerToolProps) 
 
   const permanentlyDeleteVendor = async () => {
     if (!deleteVendorConfirmId || deleteVendorConfirmText.toLowerCase() !== 'delete' || !toolId) return;
+    const used = getVendorUsageCount(deleteVendorConfirmId);
+    if (used > 0) {
+      alert(`Used in ${used} ${used === 1 ? 'expense' : 'expenses'}`);
+      setDeleteVendorConfirmId(null);
+      setDeleteVendorConfirmText('');
+      return;
+    }
     setIsLoading(true);
     try {
       const response = await fetch(
@@ -1330,7 +1589,20 @@ export function EventBudgetPlannerTool({ toolId }: EventBudgetPlannerToolProps) 
 
         <div>
           <h4 className={`${sectionTitleClass} mb-4`}>Category Budgets & Expenses</h4>
+          {birthdayStarterRows(activeCategories, editingEvent).length > 0 && (
+            <div className="flex justify-start mb-4">
+              <button
+                type="button"
+                onClick={() => applyBirthdayStarterTemplate(editingEvent)}
+                disabled={isLoading}
+                className={secondaryButtonClass}
+              >
+                Use Birthday starter template
+              </button>
+            </div>
+          )}
           {availableCategories.length > 0 && (
+            isAddingEventCategory ? (
             <div className={`${nestedCardClass} mb-4`}>
               <p className={`${labelClass} mb-3`}>Add category to this event</p>
               <div className="flex flex-wrap gap-3 items-end">
@@ -1368,8 +1640,29 @@ export function EventBudgetPlannerTool({ toolId }: EventBudgetPlannerToolProps) 
                 >
                   Add Category
                 </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setIsAddingEventCategory(false);
+                    setNewCategoryBudget({ categoryId: '', budgetAmount: 0 });
+                  }}
+                  className={secondaryButtonClass}
+                >
+                  Cancel
+                </button>
               </div>
             </div>
+            ) : (
+              <div className="flex justify-start mb-4">
+                <button
+                  type="button"
+                  onClick={() => setIsAddingEventCategory(true)}
+                  className={primaryButtonClass}
+                >
+                  + Add category
+                </button>
+              </div>
+            )
           )}
 
           {editingEvent.categoryBudgets.length === 0 ? (
@@ -1431,7 +1724,13 @@ export function EventBudgetPlannerTool({ toolId }: EventBudgetPlannerToolProps) 
                               <div className={`flex flex-wrap gap-x-4 gap-y-1 text-sm ${bodyTextClass}`}>
                                 <span className="font-medium">{formatCurrency(expense.amount)}</span>
                                 <span>{formatDisplayDate(expense.date)}</span>
-                                <span>{getVendorName(expense.vendorId)}</span>
+                                <span>
+                                  {expenseVendorSplits(expense).length > 1
+                                    ? expenseVendorSplits(expense)
+                                        .map((part) => `${getVendorName(part.vendorId)} ${formatCurrency(part.amount)}`)
+                                        .join(' · ')
+                                    : getVendorName(expense.vendorId)}
+                                </span>
                               </div>
                               {expense.note && (
                                 <p className={`text-xs mt-1 italic ${mutedTextClass}`}>{expense.note}</p>
@@ -1599,6 +1898,11 @@ export function EventBudgetPlannerTool({ toolId }: EventBudgetPlannerToolProps) 
             <div className={cardClass}>
               <h3 className={`${sectionTitleClass} mb-4`}>Add New Event</h3>
               {renderEventFormFields()}
+              <div className="flex justify-start mt-4">
+                <button type="button" onClick={toggleBirthdayStarterOnCreate} className={secondaryButtonClass}>
+                  {applyBirthdayTemplateOnCreate ? 'Birthday starter selected' : 'Use Birthday starter template'}
+                </button>
+              </div>
               <div className="flex gap-3 mt-6">
                 <button
                   type="button"
@@ -1624,7 +1928,7 @@ export function EventBudgetPlannerTool({ toolId }: EventBudgetPlannerToolProps) 
                 </button>
               </div>
               {renderEventFormFields()}
-              <div className="flex gap-3 mt-4">
+              <div className="flex gap-3 mt-4 flex-wrap">
                 <button
                   type="button"
                   onClick={saveEventEdit}
@@ -1632,6 +1936,14 @@ export function EventBudgetPlannerTool({ toolId }: EventBudgetPlannerToolProps) 
                   className={primaryButtonClass}
                 >
                   Save Event Details
+                </button>
+                <button
+                  type="button"
+                  onClick={addEventToCalendar}
+                  disabled={!eventForm.name.trim() || !eventForm.date || isLoading}
+                  className={secondaryButtonClass}
+                >
+                  Add to Calendar
                 </button>
               </div>
               {renderEventBudgetSection()}
@@ -1660,6 +1972,11 @@ export function EventBudgetPlannerTool({ toolId }: EventBudgetPlannerToolProps) 
                               <span>{getTypeName(event.typeId)}</span>
                               <span>Budgeted: {formatCurrency(totals.totalBudgeted)}</span>
                               <span>Actual: {formatCurrency(totals.totalActual)}</span>
+                              {totals.remaining < 0 && (
+                                <span className={overBudgetClass}>
+                                  Remaining: {formatCurrency(totals.remaining)}
+                                </span>
+                              )}
                             </div>
                             {event.notes && (
                               <p className={`text-xs mt-1.5 italic ${mutedTextClass}`}>{event.notes}</p>
@@ -1957,7 +2274,14 @@ export function EventBudgetPlannerTool({ toolId }: EventBudgetPlannerToolProps) 
                               </button>
                               <button
                                 type="button"
-                                onClick={() => setDeleteVendorConfirmId(vendor.id)}
+                                onClick={() => {
+                                  const used = getVendorUsageCount(vendor.id);
+                                  if (used > 0) {
+                                    alert(`Used in ${used} ${used === 1 ? 'expense' : 'expenses'}`);
+                                    return;
+                                  }
+                                  setDeleteVendorConfirmId(vendor.id);
+                                }}
                                 className={rowIconDangerClass}
                                 title="Delete permanently"
                                 aria-label="Delete permanently"
@@ -2077,33 +2401,144 @@ export function EventBudgetPlannerTool({ toolId }: EventBudgetPlannerToolProps) 
               </div>
               <div>
                 <label className={labelClass}>
-                  Vendor <span className="text-red-400">*</span>
-                </label>
-                <select
-                  value={expenseForm.vendorId}
-                  onChange={(e) => setExpenseForm((f) => ({ ...f, vendorId: e.target.value }))}
-                  className={selectClass}
-                >
-                  <option value="">Select vendor</option>
-                  {activeVendors.map((v) => (
-                    <option key={v.id} value={v.id}>
-                      {v.name}
-                    </option>
-                  ))}
-                </select>
-              </div>
-              <div>
-                <label className={labelClass}>
                   Amount <span className="text-red-400">*</span>
                 </label>
                 <CurrencyInput
                   value={expenseForm.amount}
-                  onChange={(amount) => setExpenseForm((f) => ({ ...f, amount }))}
+                  onChange={setExpenseAmount}
                   wrapClass={currencyFieldWrapClass}
                   prefixClass={currencyFieldPrefixClass}
                   inputClass={currencyFieldInputClass}
                   ariaLabel="Expense amount in USD"
                 />
+              </div>
+              <div>
+                <label className={labelClass}>
+                  Vendors <span className="text-red-400">*</span>
+                </label>
+                <div className="space-y-3">
+                  {expenseForm.vendorSplits.map((part, index) => (
+                    <div key={`${part.vendorId}-${index}`} className="flex flex-wrap gap-3 items-end">
+                      <div className="flex-1 min-w-[160px]">
+                        <select
+                          value={part.vendorId}
+                          onChange={(e) =>
+                            setExpenseForm((f) => ({
+                              ...f,
+                              vendorSplits: f.vendorSplits.map((row, rowIndex) =>
+                                rowIndex === index ? { ...row, vendorId: e.target.value } : row
+                              ),
+                            }))
+                          }
+                          className={selectClass}
+                          aria-label={`Vendor ${index + 1}`}
+                        >
+                          <option value="">Select vendor</option>
+                          {activeVendors.map((v) => (
+                            <option key={v.id} value={v.id}>
+                              {v.name}
+                            </option>
+                          ))}
+                        </select>
+                      </div>
+                      <div className="w-40">
+                        <CurrencyInput
+                          value={part.amount}
+                          onChange={(amount) =>
+                            setExpenseForm((f) => ({
+                              ...f,
+                              amount: f.vendorSplits.length === 1 ? amount : f.amount,
+                              vendorSplits: f.vendorSplits.map((row, rowIndex) =>
+                                rowIndex === index ? { ...row, amount } : row
+                              ),
+                            }))
+                          }
+                          wrapClass={currencyFieldWrapClass}
+                          prefixClass={currencyFieldPrefixClass}
+                          inputClass={currencyFieldInputClass}
+                          ariaLabel={`Vendor ${index + 1} amount in USD`}
+                        />
+                      </div>
+                      {expenseForm.vendorSplits.length > 1 && (
+                        <button
+                          type="button"
+                          onClick={() =>
+                            setExpenseForm((f) => {
+                              const vendorSplits = f.vendorSplits.filter((_, rowIndex) => rowIndex !== index);
+                              return {
+                                ...f,
+                                vendorSplits:
+                                  vendorSplits.length === 1
+                                    ? [{ ...vendorSplits[0], amount: f.amount }]
+                                    : vendorSplits,
+                              };
+                            })
+                          }
+                          className={secondaryButtonClass}
+                        >
+                          Remove
+                        </button>
+                      )}
+                    </div>
+                  ))}
+                  <button
+                    type="button"
+                    onClick={() =>
+                      setExpenseForm((f) => ({
+                        ...f,
+                        vendorSplits: [...f.vendorSplits, { vendorId: '', amount: 0 }],
+                      }))
+                    }
+                    className={secondaryButtonClass}
+                  >
+                    + Add vendor
+                  </button>
+                </div>
+              </div>
+              <div>
+                <p className={labelClass}>Tip / tax / fee helper</p>
+                <div className="flex flex-wrap gap-3 items-end">
+                  <div className="w-40">
+                    <label className={labelClass}>Base</label>
+                    <CurrencyInput
+                      value={expenseHelper.baseAmount}
+                      onChange={(baseAmount) => setExpenseHelper((h) => ({ ...h, baseAmount }))}
+                      wrapClass={currencyFieldWrapClass}
+                      prefixClass={currencyFieldPrefixClass}
+                      inputClass={currencyFieldInputClass}
+                      ariaLabel="Helper base amount in USD"
+                    />
+                  </div>
+                  <div className="min-w-[120px]">
+                    <label className={labelClass}>Type</label>
+                    <select
+                      value={expenseHelper.kind}
+                      onChange={(e) =>
+                        setExpenseHelper((h) => ({ ...h, kind: e.target.value as ExpenseHelperKind }))
+                      }
+                      className={selectClass}
+                    >
+                      <option value="tip">Tip %</option>
+                      <option value="tax">Tax %</option>
+                      <option value="fee">Fee %</option>
+                    </select>
+                  </div>
+                  <div className="w-28">
+                    <label className={labelClass}>Percent</label>
+                    <input
+                      type="text"
+                      inputMode="decimal"
+                      value={expenseHelper.percent}
+                      onChange={(e) => setExpenseHelper((h) => ({ ...h, percent: e.target.value }))}
+                      className={inputClass}
+                      placeholder="20"
+                      aria-label="Helper percent"
+                    />
+                  </div>
+                  <button type="button" onClick={applyExpenseHelper} className={secondaryButtonClass}>
+                    Apply
+                  </button>
+                </div>
               </div>
               <div>
                 <label className={labelClass}>Note</label>
@@ -2120,7 +2555,7 @@ export function EventBudgetPlannerTool({ toolId }: EventBudgetPlannerToolProps) 
               <button
                 type="button"
                 onClick={saveExpense}
-                disabled={!expenseForm.vendorId || expenseForm.amount <= 0}
+                disabled={!expenseForm.vendorSplits[0]?.vendorId || expenseForm.amount <= 0}
                 className={`flex-1 ${primaryButtonClass}`}
               >
                 {expenseModal.expenseId ? 'Save Changes' : 'Save Expense'}

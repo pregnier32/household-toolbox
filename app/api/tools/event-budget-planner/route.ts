@@ -47,6 +47,19 @@ type DbExpense = {
   note: string;
 };
 
+type DbSplit = {
+  id: string;
+  expense_id: string;
+  vendor_id: string;
+  amount: number | string;
+  display_order: number;
+};
+
+type VendorSplitPart = {
+  vendorId: string;
+  amount: number;
+};
+
 function todayIso(): string {
   return new Date().toISOString().split('T')[0];
 }
@@ -76,6 +89,107 @@ function parseAmount(value: unknown): number {
   if (typeof value === 'number') return Number.isFinite(value) ? value : 0;
   const parsed = parseFloat(String(value ?? '').replace(/[^0-9.-]/g, ''));
   return Number.isFinite(parsed) ? parsed : 0;
+}
+
+function isMissingRelationError(error: { code?: string; message?: string } | null) {
+  return (
+    error?.code === '42P01' ||
+    error?.code === 'PGRST116' ||
+    !!error?.message?.includes('does not exist') ||
+    !!error?.message?.includes('schema cache')
+  );
+}
+
+function moneyCents(value: number) {
+  return Math.round(value * 100);
+}
+
+function normalizeVendorSplits(
+  vendorId: unknown,
+  amount: unknown,
+  vendorSplits: unknown
+): { error: string } | { total: number; parts: VendorSplitPart[] } {
+  const total = parseAmount(amount);
+  if (total <= 0) return { error: 'Amount must be greater than zero' };
+
+  const raw = Array.isArray(vendorSplits) && vendorSplits.length > 0 ? vendorSplits : [{ vendorId, amount: total }];
+  const parts = raw.map((row) => {
+    const part = row as { vendorId?: unknown; amount?: unknown };
+    return {
+      vendorId: String(part?.vendorId ?? '').trim(),
+      amount: parseAmount(part?.amount),
+    };
+  });
+
+  if (parts.some((part) => !part.vendorId || part.amount <= 0)) {
+    return { error: 'Each vendor split needs a vendor and an amount greater than zero.' };
+  }
+
+  if (parts.reduce((sum, part) => sum + moneyCents(part.amount), 0) !== moneyCents(total)) {
+    return { error: 'Vendor amounts must sum to the expense amount.' };
+  }
+
+  return { total, parts };
+}
+
+async function fetchExpenseSplits(expenseIds: string[]): Promise<DbSplit[]> {
+  if (expenseIds.length === 0) return [];
+  const { data, error } = await supabaseServer
+    .from('tools_ebp_expense_splits')
+    .select('*')
+    .in('expense_id', expenseIds)
+    .order('display_order', { ascending: true });
+
+  if (error) {
+    if (isMissingRelationError(error)) return [];
+    throw error;
+  }
+
+  return (data ?? []) as DbSplit[];
+}
+
+function mapExpense(row: DbExpense, splits: DbSplit[]) {
+  const amount = parseAmount(row.amount);
+  const vendorSplits = splits.length
+    ? splits.map((split) => ({ vendorId: split.vendor_id, amount: parseAmount(split.amount) }))
+    : [{ vendorId: row.vendor_id, amount }];
+
+  return {
+    id: row.id,
+    categoryId: row.category_id,
+    date: row.expense_date,
+    vendorId: vendorSplits[0]?.vendorId ?? row.vendor_id,
+    amount,
+    note: row.note,
+    vendorSplits,
+  };
+}
+
+async function replaceExpenseSplits(expenseId: string, parts: VendorSplitPart[]) {
+  const { error: deleteError } = await supabaseServer
+    .from('tools_ebp_expense_splits')
+    .delete()
+    .eq('expense_id', expenseId);
+
+  if (deleteError && !isMissingRelationError(deleteError)) throw deleteError;
+
+  if (parts.length <= 1) return;
+
+  const { error: insertError } = await supabaseServer.from('tools_ebp_expense_splits').insert(
+    parts.map((part, index) => ({
+      expense_id: expenseId,
+      vendor_id: part.vendorId,
+      amount: part.amount,
+      display_order: index,
+    }))
+  );
+
+  if (insertError) {
+    if (isMissingRelationError(insertError)) {
+      throw new Error('Expense splits table is missing. Run supabase/UPDATE_ebp_expense_splits.sql.');
+    }
+    throw insertError;
+  }
 }
 
 async function ensureDefaultCategories(userId: string, toolId: string) {
@@ -186,6 +300,8 @@ async function fetchAllData(userId: string, toolId: string) {
     expenses = (expensesRes.data ?? []) as DbExpense[];
   }
 
+  const splits = await fetchExpenseSplits(expenses.map((expense) => expense.id));
+
   const mappedEvents = events.map((event) => ({
     id: event.id,
     name: event.name,
@@ -203,14 +319,7 @@ async function fetchAllData(userId: string, toolId: string) {
       })),
     expenses: expenses
       .filter((e) => e.event_id === event.id)
-      .map((e) => ({
-        id: e.id,
-        categoryId: e.category_id,
-        date: e.expense_date,
-        vendorId: e.vendor_id,
-        amount: parseAmount(e.amount),
-        note: e.note,
-      })),
+      .map((e) => mapExpense(e, splits.filter((split) => split.expense_id === e.id))),
   }));
 
   return {
@@ -280,6 +389,7 @@ export async function POST(request: NextRequest) {
       amount,
       note,
       expenseDate,
+      vendorSplits,
     } = body as {
       toolId?: string;
       action?: string;
@@ -296,6 +406,7 @@ export async function POST(request: NextRequest) {
       amount?: number;
       note?: string;
       expenseDate?: string;
+      vendorSplits?: VendorSplitPart[];
     };
 
     if (!toolId) {
@@ -523,32 +634,48 @@ export async function POST(request: NextRequest) {
     }
 
     if (action === 'addExpense' || action === 'updateExpense') {
-      if (!eventId || !categoryId || !vendorId) {
-        return NextResponse.json({ error: 'Event, category, and vendor are required' }, { status: 400 });
+      if (!eventId || !categoryId) {
+        return NextResponse.json({ error: 'Event and category are required' }, { status: 400 });
       }
 
-      const expenseAmount = parseAmount(amount);
-      if (expenseAmount <= 0) {
-        return NextResponse.json({ error: 'Amount must be greater than zero' }, { status: 400 });
+      const normalized = normalizeVendorSplits(vendorId, amount, vendorSplits);
+      if ('error' in normalized) {
+        return NextResponse.json({ error: normalized.error }, { status: 400 });
       }
 
       if (!(await verifyEventOwnership(eventId, user.id, toolId))) {
         return NextResponse.json({ error: 'Event not found' }, { status: 404 });
       }
 
-      if (action === 'addExpense') {
-        const { error } = await supabaseServer.from('tools_ebp_expenses').insert({
-          event_id: eventId,
-          category_id: categoryId,
-          vendor_id: vendorId,
-          expense_date: expenseDate || todayIso(),
-          amount: expenseAmount,
-          note: (note ?? '').trim(),
-        });
+      const primaryVendorId = normalized.parts[0].vendorId;
 
-        if (error) {
+      if (action === 'addExpense') {
+        const { data: created, error } = await supabaseServer
+          .from('tools_ebp_expenses')
+          .insert({
+            event_id: eventId,
+            category_id: categoryId,
+            vendor_id: primaryVendorId,
+            expense_date: expenseDate || todayIso(),
+            amount: normalized.total,
+            note: (note ?? '').trim(),
+          })
+          .select('id')
+          .single();
+
+        if (error || !created) {
           console.error('Error adding expense:', error);
           return NextResponse.json({ error: 'Failed to add expense' }, { status: 500 });
+        }
+
+        try {
+          await replaceExpenseSplits(created.id, normalized.parts);
+        } catch (splitError: unknown) {
+          console.error('Error adding expense splits:', splitError);
+          return NextResponse.json(
+            { error: splitError instanceof Error ? splitError.message : 'Failed to save expense splits' },
+            { status: 500 }
+          );
         }
       } else {
         if (!expenseId) {
@@ -559,9 +686,9 @@ export async function POST(request: NextRequest) {
           .from('tools_ebp_expenses')
           .update({
             category_id: categoryId,
-            vendor_id: vendorId,
+            vendor_id: primaryVendorId,
             expense_date: expenseDate || todayIso(),
-            amount: expenseAmount,
+            amount: normalized.total,
             note: (note ?? '').trim(),
           })
           .eq('id', expenseId)
@@ -570,6 +697,16 @@ export async function POST(request: NextRequest) {
         if (error) {
           console.error('Error updating expense:', error);
           return NextResponse.json({ error: 'Failed to update expense' }, { status: 500 });
+        }
+
+        try {
+          await replaceExpenseSplits(expenseId, normalized.parts);
+        } catch (splitError: unknown) {
+          console.error('Error updating expense splits:', splitError);
+          return NextResponse.json(
+            { error: splitError instanceof Error ? splitError.message : 'Failed to save expense splits' },
+            { status: 500 }
+          );
         }
       }
 

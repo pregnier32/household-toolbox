@@ -9,6 +9,7 @@
 --   Events: one row per planned event (history = is_active false)
 --   Event category budgets: junction — category + budget amount per event
 --   Expenses: line items under an event, tied to category + vendor
+--   Expense splits: optional extra vendor+amount parts (single-vendor = no split rows)
 --
 -- Default category/type names are seeded from tools_ebp_default_* on first API load.
 --
@@ -202,6 +203,24 @@ CREATE INDEX IF NOT EXISTS idx_ebp_expenses_event_category ON tools_ebp_expenses
 CREATE INDEX IF NOT EXISTS idx_ebp_expenses_expense_date ON tools_ebp_expenses(expense_date DESC);
 
 -- ============================================================================
+-- EXPENSE SPLITS (optional multi-vendor tender; omit for single-vendor)
+-- ============================================================================
+CREATE TABLE IF NOT EXISTS tools_ebp_expense_splits (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  expense_id UUID NOT NULL REFERENCES tools_ebp_expenses(id) ON DELETE CASCADE,
+  vendor_id UUID NOT NULL REFERENCES tools_ebp_vendors(id) ON DELETE RESTRICT,
+
+  amount NUMERIC(12, 2) NOT NULL CHECK (amount > 0),
+  display_order INTEGER NOT NULL DEFAULT 0,
+
+  created_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT NOW(),
+  updated_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT NOW()
+);
+
+CREATE INDEX IF NOT EXISTS idx_ebp_expense_splits_expense_id ON tools_ebp_expense_splits(expense_id);
+CREATE INDEX IF NOT EXISTS idx_ebp_expense_splits_vendor_id ON tools_ebp_expense_splits(vendor_id);
+
+-- ============================================================================
 -- UPDATED_AT TRIGGERS (secure search_path per system_design.md)
 -- ============================================================================
 CREATE OR REPLACE FUNCTION update_ebp_default_categories_updated_at()
@@ -292,6 +311,17 @@ BEGIN
 END;
 $$;
 
+CREATE OR REPLACE FUNCTION update_ebp_expense_splits_updated_at()
+RETURNS TRIGGER
+LANGUAGE plpgsql
+SET search_path = public, pg_catalog
+AS $$
+BEGIN
+  NEW.updated_at = NOW();
+  RETURN NEW;
+END;
+$$;
+
 DROP TRIGGER IF EXISTS trigger_update_ebp_default_categories_updated_at ON tools_ebp_default_categories;
 CREATE TRIGGER trigger_update_ebp_default_categories_updated_at
   BEFORE UPDATE ON tools_ebp_default_categories
@@ -340,6 +370,12 @@ CREATE TRIGGER trigger_update_ebp_expenses_updated_at
   FOR EACH ROW
   EXECUTE FUNCTION update_ebp_expenses_updated_at();
 
+DROP TRIGGER IF EXISTS trigger_update_ebp_expense_splits_updated_at ON tools_ebp_expense_splits;
+CREATE TRIGGER trigger_update_ebp_expense_splits_updated_at
+  BEFORE UPDATE ON tools_ebp_expense_splits
+  FOR EACH ROW
+  EXECUTE FUNCTION update_ebp_expense_splits_updated_at();
+
 -- ============================================================================
 -- ROW LEVEL SECURITY (optimized: (select auth.uid()))
 -- ============================================================================
@@ -351,6 +387,7 @@ ALTER TABLE tools_ebp_vendors ENABLE ROW LEVEL SECURITY;
 ALTER TABLE tools_ebp_events ENABLE ROW LEVEL SECURITY;
 ALTER TABLE tools_ebp_event_category_budgets ENABLE ROW LEVEL SECURITY;
 ALTER TABLE tools_ebp_expenses ENABLE ROW LEVEL SECURITY;
+ALTER TABLE tools_ebp_expense_splits ENABLE ROW LEVEL SECURITY;
 
 -- Categories
 DROP POLICY IF EXISTS "ebp: Users can view their own categories" ON tools_ebp_categories;
@@ -538,6 +575,63 @@ CREATE POLICY "ebp: Users can delete their own expenses" ON tools_ebp_expenses
     EXISTS (
       SELECT 1 FROM tools_ebp_events e
       WHERE e.id = tools_ebp_expenses.event_id
+        AND e.user_id = (select auth.uid())
+    )
+  );
+
+-- Expense splits (via parent expense → event ownership)
+DROP POLICY IF EXISTS "ebp: Users can view their own expense splits" ON tools_ebp_expense_splits;
+CREATE POLICY "ebp: Users can view their own expense splits" ON tools_ebp_expense_splits
+  FOR SELECT TO authenticated
+  USING (
+    EXISTS (
+      SELECT 1 FROM tools_ebp_expenses x
+      JOIN tools_ebp_events e ON e.id = x.event_id
+      WHERE x.id = tools_ebp_expense_splits.expense_id
+        AND e.user_id = (select auth.uid())
+    )
+  );
+
+DROP POLICY IF EXISTS "ebp: Users can insert their own expense splits" ON tools_ebp_expense_splits;
+CREATE POLICY "ebp: Users can insert their own expense splits" ON tools_ebp_expense_splits
+  FOR INSERT TO authenticated
+  WITH CHECK (
+    EXISTS (
+      SELECT 1 FROM tools_ebp_expenses x
+      JOIN tools_ebp_events e ON e.id = x.event_id
+      WHERE x.id = tools_ebp_expense_splits.expense_id
+        AND e.user_id = (select auth.uid())
+    )
+  );
+
+DROP POLICY IF EXISTS "ebp: Users can update their own expense splits" ON tools_ebp_expense_splits;
+CREATE POLICY "ebp: Users can update their own expense splits" ON tools_ebp_expense_splits
+  FOR UPDATE TO authenticated
+  USING (
+    EXISTS (
+      SELECT 1 FROM tools_ebp_expenses x
+      JOIN tools_ebp_events e ON e.id = x.event_id
+      WHERE x.id = tools_ebp_expense_splits.expense_id
+        AND e.user_id = (select auth.uid())
+    )
+  )
+  WITH CHECK (
+    EXISTS (
+      SELECT 1 FROM tools_ebp_expenses x
+      JOIN tools_ebp_events e ON e.id = x.event_id
+      WHERE x.id = tools_ebp_expense_splits.expense_id
+        AND e.user_id = (select auth.uid())
+    )
+  );
+
+DROP POLICY IF EXISTS "ebp: Users can delete their own expense splits" ON tools_ebp_expense_splits;
+CREATE POLICY "ebp: Users can delete their own expense splits" ON tools_ebp_expense_splits
+  FOR DELETE TO authenticated
+  USING (
+    EXISTS (
+      SELECT 1 FROM tools_ebp_expenses x
+      JOIN tools_ebp_events e ON e.id = x.event_id
+      WHERE x.id = tools_ebp_expense_splits.expense_id
         AND e.user_id = (select auth.uid())
     )
   );

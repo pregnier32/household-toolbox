@@ -172,6 +172,19 @@ export async function DELETE(request: NextRequest) {
       );
     }
 
+    const { data: splits } = await supabaseServer
+      .from('tools_ebp_expense_splits')
+      .select('id')
+      .eq('vendor_id', vendorId)
+      .limit(1);
+
+    if (splits && splits.length > 0) {
+      return NextResponse.json(
+        { error: 'Cannot delete vendor that is used on expenses' },
+        { status: 400 }
+      );
+    }
+
     const { error } = await supabaseServer
       .from('tools_ebp_vendors')
       .delete()

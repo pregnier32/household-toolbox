@@ -61,7 +61,7 @@ async function removeStoragePaths(bucket: string, paths: string[]): Promise<void
  * | Address Book         | tools_ab_addresses, tools_ab_tags, tools_ab_address_tags               | supabase/create-tools-ab-tables.sql |
  * | Travel Log           | tools_tl_trips → tools_tl_lodging, tools_tl_journal_notes (trip CASCADE) | supabase/create-tools-tl-tables.sql |
  * | HSA Tracker          | tools_hsa_accounts, tools_hsa_deposits, tools_hsa_expenses             | supabase/create-tools-hsa-tables.sql |
- * | Event Budget Planner | tools_ebp_categories, tools_ebp_types, tools_ebp_vendors, tools_ebp_events → tools_ebp_event_category_budgets, tools_ebp_expenses | supabase/create-tools-ebp-tables.sql |
+ * | Event Budget Planner | tools_ebp_categories, tools_ebp_types, tools_ebp_vendors, tools_ebp_events → tools_ebp_event_category_budgets, tools_ebp_expenses → tools_ebp_expense_splits | supabase/create-tools-ebp-tables.sql |
  * | Cleaning Schedule    | tools_cs_categories, tools_cs_items → tools_cs_tasks → tools_cs_completions | supabase/create-tools-cs-tables.sql |
  * | Home Maintenance     | tools_hms_categories, tools_hms_items → tools_hms_tasks → tools_hms_completions | supabase/create-tools-hms-tables.sql |
  * | Notes                | tools_note_notes, tools_note_tags, tools_note_note_tags, tools_note_security_questions | supabase/archive/create-notes-tables.sql |
@@ -210,7 +210,7 @@ export async function deleteUserAndAssociatedData(userId: string): Promise<void>
   // tools_tl_trips (user_id) → tools_tl_lodging, tools_tl_journal_notes: removed via users + trip CASCADE
 
   // Event Budget Planner — supabase/create-tools-ebp-tables.sql (DB-only; no storage)
-  // Delete events first (CASCADE → budgets/expenses); categories/types/vendors then cascade from users.
+  // Delete events first (CASCADE → budgets/expenses → splits); categories/types/vendors then cascade from users.
   const { error: ebpEventsDeleteError } = await supabaseServer
     .from('tools_ebp_events')
     .delete()
