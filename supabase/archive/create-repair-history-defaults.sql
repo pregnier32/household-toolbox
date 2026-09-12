@@ -90,8 +90,7 @@ CREATE POLICY "Anyone can view default items" ON tools_rh_default_items
 -- Populate default headers
 INSERT INTO tools_rh_default_headers (name, card_color, category_type, display_order) VALUES
   ('Home', '#10b981', 'Home', 1),
-  ('Auto1', '#3b82f6', 'Auto', 2),
-  ('Auto2', '#8b5cf6', 'Auto', 3)
+  ('Auto', '#3b82f6', 'Auto', 2)
 ON CONFLICT (category_type, name) DO NOTHING;
 
 -- Populate default Home items

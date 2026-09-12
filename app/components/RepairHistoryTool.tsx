@@ -52,7 +52,85 @@ type RepairHistoryToolProps = {
   toolId?: string;
 };
 
-const DEFAULT_HEADERS = ['Home', 'Auto1', 'Auto2'];
+/** Parse YYYY-MM-DD as a local calendar day (avoids UTC midnight shifting the displayed day). */
+function formatLocalCalendarDate(dateStr: string): string {
+  const match = /^(\d{4})-(\d{2})-(\d{2})/.exec(dateStr);
+  if (!match) return dateStr;
+  return new Date(Number(match[1]), Number(match[2]) - 1, Number(match[3])).toLocaleDateString();
+}
+
+function mapApiRecord(r: any): HistoryRecord {
+  return {
+    id: r.id,
+    headerId: r.header_id,
+    date: r.date,
+    itemName: r.item_name,
+    type: r.type as 'repair' | 'replace',
+    description: r.description || '',
+    cost: r.cost || '',
+    serviceProvider: r.service_provider || '',
+    receiptFile: null,
+    receiptFileUrl: r.receipt_file_url,
+    receiptFileName: r.receipt_file_name,
+    warrantyFile: null,
+    warrantyFileUrl: r.warranty_file_url,
+    warrantyFileName: r.warranty_file_name,
+    warrantyEndDate: r.warranty_end_date || '',
+    addWarrantyToDashboard: !!r.warranty_dashboard_item_id,
+    submittedToInsurance: r.submitted_to_insurance || false,
+    insuranceCarrier: r.insurance_carrier || '',
+    claimNumber: r.claim_number || '',
+    amountInsurancePaid: r.amount_insurance_paid || '',
+    agentContactInfo: r.agent_contact_info || '',
+    claimNotes: r.claim_notes || '',
+    repairPictures: [],
+    repairPictureUrls: r.repairPictures?.map((p: any) => p.fileUrl) || [],
+    odometerReading: r.odometer_reading || '',
+    manualLink: r.manual_link || '',
+    notes: r.notes || '',
+  };
+}
+
+function recordMatchesSearch(record: HistoryRecord, query: string): boolean {
+  const q = query.toLowerCase();
+  return (
+    record.itemName.toLowerCase().includes(q) ||
+    record.description.toLowerCase().includes(q) ||
+    record.serviceProvider.toLowerCase().includes(q) ||
+    record.notes.toLowerCase().includes(q)
+  );
+}
+
+const DEFAULT_HEADERS = ['Home', 'Auto'];
+
+function lastCategoryStorageKey(toolId: string) {
+  return `rh-last-category:${toolId}`;
+}
+
+function readLastCategoryId(toolId: string): string | null {
+  try {
+    return localStorage.getItem(lastCategoryStorageKey(toolId));
+  } catch {
+    return null;
+  }
+}
+
+function writeLastCategoryId(toolId: string, headerId: string) {
+  try {
+    localStorage.setItem(lastCategoryStorageKey(toolId), headerId);
+  } catch {
+    /* ignore quota / private mode */
+  }
+}
+
+function pickOpenHeaderId(list: HeaderRecord[], prev: string | null, toolId?: string): string | null {
+  if (!list.length) return null;
+  const ids = new Set(list.map((h) => h.id));
+  if (prev && ids.has(prev)) return prev;
+  const lastUsed = toolId ? readLastCategoryId(toolId) : null;
+  if (lastUsed && ids.has(lastUsed)) return lastUsed;
+  return list[0].id;
+}
 
 const DEFAULT_ITEMS: Omit<Item, 'id'>[] = [
   // Interior – Major Systems
@@ -353,10 +431,13 @@ export function RepairHistoryTool({ toolId }: RepairHistoryToolProps) {
   
   // Delete record confirmation
   const [deleteConfirmRecordId, setDeleteConfirmRecordId] = useState<string | null>(null);
+  const [deleteConfirmRecordText, setDeleteConfirmRecordText] = useState('');
   
   // Search and filter
   const [searchQuery, setSearchQuery] = useState('');
   const [filterItem, setFilterItem] = useState<string>('all');
+  const [allRecords, setAllRecords] = useState<HistoryRecord[]>([]);
+  const [highlightRecordId, setHighlightRecordId] = useState<string | null>(null);
   
   // Active tab
   const [activeTab, setActiveTab] = useState<'history' | 'items' | 'export'>('history');
@@ -426,9 +507,7 @@ export function RepairHistoryTool({ toolId }: RepairHistoryToolProps) {
         // Headers are now copied from defaults table automatically by the API
         // No need to create defaults here
         setHeaders(uniqueHeaders);
-        if (uniqueHeaders.length > 0 && !selectedHeaderId) {
-          setSelectedHeaderId(uniqueHeaders[0].id);
-        }
+        setSelectedHeaderId((prev) => pickOpenHeaderId(uniqueHeaders, prev, toolId));
       } else {
         console.error('Failed to load headers');
         setSaveMessage({ type: 'error', text: 'Failed to load headers' });
@@ -449,35 +528,7 @@ export function RepairHistoryTool({ toolId }: RepairHistoryToolProps) {
       const response = await fetch(`/api/tools/repair-history?toolId=${toolId}&resource=records&headerId=${headerId}`);
       if (response.ok) {
         const data = await response.json();
-        const transformedRecords: HistoryRecord[] = (data.records || []).map((r: any) => ({
-          id: r.id,
-          headerId: r.header_id,
-          date: r.date,
-          itemName: r.item_name,
-          type: r.type as 'repair' | 'replace',
-          description: r.description || '',
-          cost: r.cost || '',
-          serviceProvider: r.service_provider || '',
-          receiptFile: null,
-          receiptFileUrl: r.receipt_file_url,
-          receiptFileName: r.receipt_file_name,
-          warrantyFile: null,
-          warrantyFileUrl: r.warranty_file_url,
-          warrantyFileName: r.warranty_file_name,
-          warrantyEndDate: r.warranty_end_date || '',
-          addWarrantyToDashboard: !!r.warranty_dashboard_item_id,
-          submittedToInsurance: r.submitted_to_insurance || false,
-          insuranceCarrier: r.insurance_carrier || '',
-          claimNumber: r.claim_number || '',
-          amountInsurancePaid: r.amount_insurance_paid || '',
-          agentContactInfo: r.agent_contact_info || '',
-          claimNotes: r.claim_notes || '',
-          repairPictures: [],
-          repairPictureUrls: r.repairPictures?.map((p: any) => p.fileUrl) || [],
-          odometerReading: r.odometer_reading || '',
-          manualLink: r.manual_link || '',
-          notes: r.notes || '',
-        }));
+        const transformedRecords: HistoryRecord[] = (data.records || []).map(mapApiRecord);
         setHistoryRecords(transformedRecords);
       } else {
         console.error('Failed to load history records');
@@ -486,6 +537,23 @@ export function RepairHistoryTool({ toolId }: RepairHistoryToolProps) {
     } catch (error) {
       console.error('Error loading history records:', error);
       setHistoryRecords([]);
+    }
+  };
+
+  const loadAllHistoryRecords = async () => {
+    if (!toolId) return;
+    try {
+      const response = await fetch(`/api/tools/repair-history?toolId=${toolId}&resource=records`);
+      if (response.ok) {
+        const data = await response.json();
+        setAllRecords((data.records || []).map(mapApiRecord));
+      } else {
+        console.error('Failed to load all history records');
+        setAllRecords([]);
+      }
+    } catch (error) {
+      console.error('Error loading all history records:', error);
+      setAllRecords([]);
     }
   };
 
@@ -526,6 +594,37 @@ export function RepairHistoryTool({ toolId }: RepairHistoryToolProps) {
       loadHistoryRecords(selectedHeaderId);
     }
   }, [selectedHeaderId, toolId]);
+
+  useEffect(() => {
+    if (toolId && selectedHeaderId) writeLastCategoryId(toolId, selectedHeaderId);
+  }, [toolId, selectedHeaderId]);
+
+  useEffect(() => {
+    if (!toolId || !searchQuery.trim()) return;
+    loadAllHistoryRecords();
+  }, [toolId, searchQuery.trim().length > 0]);
+
+  useEffect(() => {
+    if (!highlightRecordId) return;
+    const el = document.getElementById(`rh-record-${highlightRecordId}`);
+    if (el) {
+      el.scrollIntoView({ block: 'nearest' });
+    }
+  }, [highlightRecordId, historyRecords, searchQuery]);
+
+  useEffect(() => {
+    if (activeTab !== 'items') return;
+    const usedItemNames = new Set(
+      historyRecords.filter((r) => r.headerId === selectedHeaderId).map((r) => r.itemName)
+    );
+    const next = new Set<string>();
+    for (const item of items) {
+      if (!item.isDefault || usedItemNames.has(item.name)) {
+        next.add(item.area);
+      }
+    }
+    setExpandedAreas(next);
+  }, [activeTab, selectedHeaderId, items, historyRecords]);
 
   // Header management functions
   const createNewHeader = async () => {
@@ -670,7 +769,7 @@ export function RepairHistoryTool({ toolId }: RepairHistoryToolProps) {
         // If the deleted header was selected, clear selection
         if (selectedHeaderId === deleteConfirmHeaderId) {
           const remainingHeaders = headers.filter(h => h.id !== deleteConfirmHeaderId);
-          setSelectedHeaderId(remainingHeaders.length > 0 ? remainingHeaders[0].id : null);
+          setSelectedHeaderId(pickOpenHeaderId(remainingHeaders, null, toolId));
         }
 
         setHeaders(headers.filter(h => h.id !== deleteConfirmHeaderId));
@@ -750,6 +849,17 @@ export function RepairHistoryTool({ toolId }: RepairHistoryToolProps) {
     if (repairPicturesInputRef.current) repairPicturesInputRef.current.value = '';
   };
 
+  useEffect(() => {
+    if (!isAddingRecord) return;
+    const onKeyDown = (e: KeyboardEvent) => {
+      if (e.key !== 'Escape') return;
+      if (isCreatingNewHeader || deleteConfirmHeaderId || deleteConfirmRecordId || deleteConfirmItemId) return;
+      cancelAddingRecord();
+    };
+    window.addEventListener('keydown', onKeyDown);
+    return () => window.removeEventListener('keydown', onKeyDown);
+  }, [isAddingRecord, isCreatingNewHeader, deleteConfirmHeaderId, deleteConfirmRecordId, deleteConfirmItemId]);
+
   const saveNewRecord = async () => {
     if (!selectedHeaderId || !toolId) return;
 
@@ -772,7 +882,7 @@ export function RepairHistoryTool({ toolId }: RepairHistoryToolProps) {
       formData.append('cost', newRecord.cost || '');
       formData.append('serviceProvider', newRecord.serviceProvider || '');
       formData.append('warrantyEndDate', newRecord.warrantyEndDate || '');
-      formData.append('addWarrantyToDashboard', 'false');
+      formData.append('addWarrantyToDashboard', newRecord.warrantyEndDate && newRecord.addWarrantyToDashboard ? 'true' : 'false');
       formData.append('submittedToInsurance', newRecord.submittedToInsurance ? 'true' : 'false');
       formData.append('insuranceCarrier', newRecord.insuranceCarrier || '');
       formData.append('claimNumber', newRecord.claimNumber || '');
@@ -882,7 +992,7 @@ export function RepairHistoryTool({ toolId }: RepairHistoryToolProps) {
       formData.append('cost', editingRecord.cost || '');
       formData.append('serviceProvider', editingRecord.serviceProvider || '');
       formData.append('warrantyEndDate', editingRecord.warrantyEndDate || '');
-      formData.append('addWarrantyToDashboard', 'false');
+      formData.append('addWarrantyToDashboard', editingRecord.warrantyEndDate && editingRecord.addWarrantyToDashboard ? 'true' : 'false');
       formData.append('submittedToInsurance', editingRecord.submittedToInsurance ? 'true' : 'false');
       formData.append('insuranceCarrier', editingRecord.insuranceCarrier || '');
       formData.append('claimNumber', editingRecord.claimNumber || '');
@@ -936,6 +1046,11 @@ export function RepairHistoryTool({ toolId }: RepairHistoryToolProps) {
   const deleteRecord = async () => {
     if (!deleteConfirmRecordId || !toolId) return;
 
+    if (deleteConfirmRecordText.toLowerCase() !== 'delete') {
+      setSaveMessage({ type: 'error', text: 'Please type "delete" to confirm' });
+      return;
+    }
+
     setIsSaving(true);
     try {
       const response = await fetch(`/api/tools/repair-history?toolId=${toolId}&resource=record&id=${deleteConfirmRecordId}`, {
@@ -948,6 +1063,7 @@ export function RepairHistoryTool({ toolId }: RepairHistoryToolProps) {
           await loadHistoryRecords(selectedHeaderId);
         }
         setDeleteConfirmRecordId(null);
+        setDeleteConfirmRecordText('');
         setSaveMessage({ type: 'success', text: 'Record deleted successfully' });
         setTimeout(() => setSaveMessage(null), 3000);
       } else {
@@ -962,19 +1078,23 @@ export function RepairHistoryTool({ toolId }: RepairHistoryToolProps) {
     }
   };
 
+  const searchQueryTrimmed = searchQuery.trim();
+  const isCrossHeaderSearch = searchQueryTrimmed.length > 0;
+
+  const goToSearchHit = (record: HistoryRecord) => {
+    setSearchQuery('');
+    setFilterItem('all');
+    setHighlightRecordId(record.id);
+    selectHeader(record.headerId);
+  };
+
   // Filter history records
-  const filteredRecords = historyRecords.filter(record => {
+  const filteredRecords = (isCrossHeaderSearch ? allRecords : historyRecords).filter(record => {
+    if (isCrossHeaderSearch) {
+      return recordMatchesSearch(record, searchQueryTrimmed);
+    }
     if (record.headerId !== selectedHeaderId) return false;
-    
-    const matchesSearch = searchQuery === '' || 
-      record.itemName.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      record.description.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      record.serviceProvider.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      record.notes.toLowerCase().includes(searchQuery.toLowerCase());
-    
-    const matchesFilter = filterItem === 'all' || record.itemName === filterItem;
-    
-    return matchesSearch && matchesFilter;
+    return filterItem === 'all' || record.itemName === filterItem;
   });
 
 
@@ -1324,6 +1444,7 @@ export function RepairHistoryTool({ toolId }: RepairHistoryToolProps) {
                     }}
                     className={isLight ? 'absolute top-1 right-1 p-1 rounded hover:bg-slate-100 transition-colors' : 'absolute top-1 right-1 p-1 rounded hover:bg-slate-700/50 transition-colors'}
                     title="Header options"
+                    aria-label="Header options"
                   >
                     <svg className={isLight ? 'h-4 w-4 text-slate-600 hover:text-slate-900' : 'h-4 w-4 text-slate-400 hover:text-slate-200'} fill="currentColor" viewBox="0 0 24 24">
                       <path d="M12 8c1.1 0 2-.9 2-2s-.9-2-2-2-2 .9-2 2 .9 2 2 2zm0 2c-1.1 0-2 .9-2 2s.9 2 2 2 2-.9 2-2-.9-2-2-2zm0 6c-1.1 0-2 .9-2 2s.9 2 2 2 2-.9 2-2-.9-2-2-2z" />
@@ -1374,6 +1495,7 @@ export function RepairHistoryTool({ toolId }: RepairHistoryToolProps) {
               }}
               className={isLight ? 'px-4 py-3 rounded-lg border-2 border-slate-400 bg-slate-100 text-slate-700 hover:bg-slate-200 hover:text-slate-900 transition-all duration-200 flex items-center justify-center min-w-[60px]' : 'px-4 py-3 rounded-lg border border-slate-700 bg-slate-800/50 text-slate-300 hover:border-emerald-500/50 hover:bg-emerald-500/10 hover:text-emerald-300 transition-all duration-200 flex items-center justify-center min-w-[60px]'}
               title="Add New Category"
+              aria-label="Add New Category"
             >
               <svg className="h-6 w-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
@@ -1398,6 +1520,7 @@ export function RepairHistoryTool({ toolId }: RepairHistoryToolProps) {
                   } else if (e.key === 'Escape') {
                     setIsCreatingNewHeader(false);
                     setNewHeaderName('');
+                    setSelectedHeaderId((prev) => pickOpenHeaderId(headers, prev, toolId));
                   }
                 }}
                 autoFocus
@@ -1444,6 +1567,7 @@ export function RepairHistoryTool({ toolId }: RepairHistoryToolProps) {
                 setIsCreatingNewHeader(false);
                 setNewHeaderName('');
                 setNewHeaderCategoryType('Home');
+                setSelectedHeaderId((prev) => pickOpenHeaderId(headers, prev, toolId));
               }}
               className={secondaryButtonClass}
             >
@@ -1529,7 +1653,7 @@ export function RepairHistoryTool({ toolId }: RepairHistoryToolProps) {
                 </div>
               )}
               {[
-                { id: 'history', label: 'History' },
+                { id: 'history', label: 'Repairs' },
                 { id: 'items', label: 'Items' },
                 { id: 'export', label: 'Export' }
               ].map((tab) => (
@@ -1573,7 +1697,7 @@ export function RepairHistoryTool({ toolId }: RepairHistoryToolProps) {
                       type="text"
                       value={searchQuery}
                       onChange={(e) => setSearchQuery(e.target.value)}
-                      placeholder="Search by item, description, service provider..."
+                      placeholder="Search all categories by item, description, service provider..."
                       className="w-full rounded-lg border border-slate-700 bg-slate-900/70 px-3 py-2 text-sm text-slate-100 placeholder-slate-500 focus:border-emerald-500/50 focus:outline-none focus:ring-1 focus:ring-emerald-500/50"
                     />
                   </div>
@@ -1900,10 +2024,28 @@ export function RepairHistoryTool({ toolId }: RepairHistoryToolProps) {
                       <input
                         type="date"
                         value={newRecord.warrantyEndDate}
-                        onChange={(e) => setNewRecord({ ...newRecord, warrantyEndDate: e.target.value })}
+                        onChange={(e) => setNewRecord({
+                          ...newRecord,
+                          warrantyEndDate: e.target.value,
+                          addWarrantyToDashboard: e.target.value ? newRecord.addWarrantyToDashboard : false,
+                        })}
                         className="w-full rounded-lg border border-slate-700 bg-slate-900/70 px-3 py-2 text-sm text-slate-100 focus:border-emerald-500/50 focus:outline-none focus:ring-1 focus:ring-emerald-500/50"
                       />
                     </div>
+                    {newRecord.warrantyEndDate && (
+                      <div className="flex items-center gap-3">
+                        <input
+                          type="checkbox"
+                          id="addWarrantyToDashboard"
+                          checked={newRecord.addWarrantyToDashboard || false}
+                          onChange={(e) => setNewRecord({ ...newRecord, addWarrantyToDashboard: e.target.checked })}
+                          className={checkboxClass}
+                        />
+                        <label htmlFor="addWarrantyToDashboard" className={isLight ? 'text-sm text-slate-700 cursor-pointer' : 'text-sm text-slate-300 cursor-pointer'}>
+                          Add warranty expiry to calendar
+                        </label>
+                      </div>
+                    )}
                     <div>
                       <label className="block text-xs font-medium text-slate-300 mb-1.5">
                         Repair Pictures
@@ -2003,7 +2145,11 @@ export function RepairHistoryTool({ toolId }: RepairHistoryToolProps) {
                 <div className="space-y-4">
                   {filteredRecords.length === 0 ? (
                     <div className={isLight ? 'rounded-2xl border border-slate-200 bg-white p-8 text-center shadow-sm' : 'rounded-2xl border border-slate-800 bg-slate-900/70 p-8 text-center'}>
-                      <p className={isLight ? 'text-slate-600 mb-4' : 'text-slate-400 mb-4'}>No records found. Add your first repair or replacement record!</p>
+                      <p className={isLight ? 'text-slate-600 mb-4' : 'text-slate-400 mb-4'}>
+                        {isCrossHeaderSearch
+                          ? 'No matching records across categories.'
+                          : 'No records found. Add your first repair or replacement record!'}
+                      </p>
                     </div>
                   ) : (
                     filteredRecords.map((record) => (
@@ -2272,10 +2418,28 @@ export function RepairHistoryTool({ toolId }: RepairHistoryToolProps) {
                               <input
                                 type="date"
                                 value={editingRecord.warrantyEndDate || ''}
-                                onChange={(e) => setEditingRecord({ ...editingRecord, warrantyEndDate: e.target.value })}
+                                onChange={(e) => setEditingRecord({
+                                  ...editingRecord,
+                                  warrantyEndDate: e.target.value,
+                                  addWarrantyToDashboard: e.target.value ? editingRecord.addWarrantyToDashboard : false,
+                                })}
                                 className="w-full rounded-lg border border-slate-700 bg-slate-900/70 px-3 py-2 text-sm text-slate-100 focus:border-emerald-500/50 focus:outline-none focus:ring-1 focus:ring-emerald-500/50"
                               />
                             </div>
+                            {editingRecord.warrantyEndDate && (
+                              <div className="flex items-center gap-3">
+                                <input
+                                  type="checkbox"
+                                  id="editAddWarrantyToDashboard"
+                                  checked={editingRecord.addWarrantyToDashboard || false}
+                                  onChange={(e) => setEditingRecord({ ...editingRecord, addWarrantyToDashboard: e.target.checked })}
+                                  className={checkboxClass}
+                                />
+                                <label htmlFor="editAddWarrantyToDashboard" className={isLight ? 'text-sm text-slate-700 cursor-pointer' : 'text-sm text-slate-300 cursor-pointer'}>
+                                  Add warranty expiry to calendar
+                                </label>
+                              </div>
+                            )}
                             <div>
                               <label className="block text-xs font-medium text-slate-300 mb-1.5">
                                 Repair Pictures
@@ -2389,7 +2553,12 @@ export function RepairHistoryTool({ toolId }: RepairHistoryToolProps) {
                         </div>
                       ) : (
                         // Display mode
-                        <div key={record.id} className={nestedCardClass}>
+                        <div
+                          key={record.id}
+                          id={`rh-record-${record.id}`}
+                          className={`${nestedCardClass}${highlightRecordId === record.id ? ' ring-2 ring-emerald-500/60' : ''}${isCrossHeaderSearch ? ' cursor-pointer' : ''}`}
+                          onClick={isCrossHeaderSearch ? () => goToSearchHit(record) : undefined}
+                        >
                           <div className="flex items-start justify-between mb-4">
                             <div className="flex-1">
                               <div className="flex items-center gap-3 mb-2">
@@ -2406,8 +2575,13 @@ export function RepairHistoryTool({ toolId }: RepairHistoryToolProps) {
                                   {record.type === 'repair' ? 'Repair' : 'Replace'}
                                 </span>
                               </div>
+                              {isCrossHeaderSearch && (
+                                <p className="text-sm text-slate-400 mb-1">
+                                  Category: <span className="text-slate-200">{headers.find((h) => h.id === record.headerId)?.name || 'Unknown'}</span>
+                                </p>
+                              )}
                               <p className="text-sm text-slate-400 mb-1">
-                                Date: <span className="text-slate-200">{new Date(record.date).toLocaleDateString()}</span>
+                                Date: <span className="text-slate-200">{formatLocalCalendarDate(record.date)}</span>
                               </p>
                               {record.cost && (
                                 <p className="text-sm text-slate-400 mb-1">
@@ -2419,11 +2593,33 @@ export function RepairHistoryTool({ toolId }: RepairHistoryToolProps) {
                                   Service Provider: <span className="text-slate-200">{record.serviceProvider}</span>
                                 </p>
                               )}
+                              {record.submittedToInsurance && (
+                                <>
+                                  {record.insuranceCarrier && (
+                                    <p className="text-sm text-slate-400 mb-1">
+                                      Insurance Carrier: <span className="text-slate-200">{record.insuranceCarrier}</span>
+                                    </p>
+                                  )}
+                                  {record.claimNumber && (
+                                    <p className="text-sm text-slate-400 mb-1">
+                                      Claim Number: <span className="text-slate-200">{record.claimNumber}</span>
+                                    </p>
+                                  )}
+                                  {record.amountInsurancePaid && (
+                                    <p className="text-sm text-slate-400 mb-1">
+                                      Amount Insurance Paid: <span className="text-slate-200">{record.amountInsurancePaid}</span>
+                                    </p>
+                                  )}
+                                </>
+                              )}
                             </div>
                             <div className="flex items-center gap-1.5">
                               <button
                                 type="button"
-                                onClick={() => startEditingRecord(record)}
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  startEditingRecord(record);
+                                }}
                                 className={rowIconEmeraldClass}
                                 title="Edit record"
                                 aria-label="Edit record"
@@ -2434,7 +2630,10 @@ export function RepairHistoryTool({ toolId }: RepairHistoryToolProps) {
                               </button>
                               <button
                                 type="button"
-                                onClick={() => setDeleteConfirmRecordId(record.id)}
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  setDeleteConfirmRecordId(record.id);
+                                }}
                                 className={rowIconDangerClass}
                                 title="Delete record"
                                 aria-label="Delete record"
@@ -2737,16 +2936,36 @@ export function RepairHistoryTool({ toolId }: RepairHistoryToolProps) {
                 This record will be <strong>permanently deleted</strong> and cannot be recovered.
               </p>
             </div>
+            <p className={isLight ? 'text-slate-700 mb-4' : 'text-slate-300 mb-4'}>
+              To confirm deletion, please type <strong className={isLight ? 'text-slate-900' : 'text-slate-200'}>delete</strong> in the box below:
+            </p>
+            <input
+              type="text"
+              value={deleteConfirmRecordText}
+              onChange={(e) => setDeleteConfirmRecordText(e.target.value)}
+              placeholder="Type 'delete' to confirm"
+              className={isLight ? 'w-full px-4 py-2 rounded-lg border border-slate-300 bg-white text-slate-900 placeholder-slate-500 focus:border-red-500/50 focus:outline-none focus:ring-1 focus:ring-red-500/50 mb-4' : 'w-full px-4 py-2 rounded-lg border border-slate-700 bg-slate-800 text-slate-100 placeholder-slate-500 focus:border-red-500/50 focus:outline-none focus:ring-1 focus:ring-red-500/50 mb-4'}
+              autoFocus
+              onKeyDown={(e) => {
+                if (e.key === 'Escape') {
+                  setDeleteConfirmRecordId(null);
+                  setDeleteConfirmRecordText('');
+                }
+              }}
+            />
             <div className="flex gap-3">
               <button
                 onClick={deleteRecord}
-                disabled={isSaving}
+                disabled={deleteConfirmRecordText.toLowerCase() !== 'delete' || isSaving}
                 className="flex-1 px-4 py-2 rounded-lg bg-red-600 text-white font-medium hover:bg-red-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
               >
                 {isSaving ? 'Deleting...' : 'Delete'}
               </button>
               <button
-                onClick={() => setDeleteConfirmRecordId(null)}
+                onClick={() => {
+                  setDeleteConfirmRecordId(null);
+                  setDeleteConfirmRecordText('');
+                }}
                 disabled={isSaving}
                 className={secondaryButtonClass}
               >

@@ -5,6 +5,95 @@ import { supabaseServer } from '@/lib/supabaseServer';
 // Constants
 const MAX_FILE_SIZE = 10 * 1024 * 1024; // 10MB in bytes
 
+function toStockHeaderName(name: string): string | null {
+  if (name === 'Auto2') return null;
+  if (name === 'Auto1') return 'Auto';
+  return name;
+}
+
+function mapDefaultHeadersToStock(
+  defaultHeaders: Array<{ name: string; card_color: string | null; category_type: string }>
+) {
+  const seen = new Set<string>();
+  const mapped: Array<{ name: string; card_color: string | null; category_type: string }> = [];
+  for (const header of defaultHeaders) {
+    const name = toStockHeaderName(header.name);
+    if (!name) continue;
+    const key = `${header.category_type}:${name}`;
+    if (seen.has(key)) continue;
+    seen.add(key);
+    mapped.push({ name, card_color: header.card_color, category_type: header.category_type });
+  }
+  return mapped;
+}
+
+async function countHeaderRecords(headerId: string, userId: string) {
+  const { count, error } = await supabaseServer
+    .from('tools_rh_records')
+    .select('id', { count: 'exact', head: true })
+    .eq('header_id', headerId)
+    .eq('user_id', userId);
+  if (error) {
+    console.error('Error counting header records:', error);
+    return null;
+  }
+  return count ?? 0;
+}
+
+/** Rename Auto1→Auto when safe; delete empty Auto1/Auto2. Never deletes a header that has records. */
+async function normalizeExistingStockHeaders(userId: string, toolId: string) {
+  const { data: headers, error } = await supabaseServer
+    .from('tools_rh_headers')
+    .select('id, name')
+    .eq('user_id', userId)
+    .eq('tool_id', toolId);
+
+  if (error || !headers?.length) return;
+
+  const namedAuto = headers.find((h) => h.name === 'Auto');
+  const auto1 = headers.find((h) => h.name === 'Auto1');
+  const auto2 = headers.find((h) => h.name === 'Auto2');
+
+  if (auto1) {
+    if (!namedAuto) {
+      const { error: renameError } = await supabaseServer
+        .from('tools_rh_headers')
+        .update({ name: 'Auto' })
+        .eq('id', auto1.id)
+        .eq('user_id', userId);
+      if (renameError) {
+        console.error('Error renaming Auto1 header:', renameError);
+      }
+    } else {
+      const recordCount = await countHeaderRecords(auto1.id, userId);
+      if (recordCount === 0) {
+        const { error: deleteError } = await supabaseServer
+          .from('tools_rh_headers')
+          .delete()
+          .eq('id', auto1.id)
+          .eq('user_id', userId);
+        if (deleteError) {
+          console.error('Error removing empty Auto1 header:', deleteError);
+        }
+      }
+    }
+  }
+
+  if (auto2) {
+    const recordCount = await countHeaderRecords(auto2.id, userId);
+    if (recordCount === 0) {
+      const { error: deleteError } = await supabaseServer
+        .from('tools_rh_headers')
+        .delete()
+        .eq('id', auto2.id)
+        .eq('user_id', userId);
+      if (deleteError) {
+        console.error('Error removing empty Auto2 header:', deleteError);
+      }
+    }
+  }
+}
+
 // Helper function to copy defaults from defaults table to user tables
 async function copyDefaultsToUser(userId: string, toolId: string) {
   try {
@@ -33,7 +122,7 @@ async function copyDefaultsToUser(userId: string, toolId: string) {
     }
 
     if (defaultHeaders && defaultHeaders.length > 0) {
-      const headersToInsert = defaultHeaders.map(header => ({
+      const headersToInsert = mapDefaultHeadersToStock(defaultHeaders).map((header) => ({
         user_id: userId,
         tool_id: toolId,
         name: header.name,
@@ -218,12 +307,14 @@ export async function GET(request: NextRequest) {
         return NextResponse.json({ error: 'Failed to fetch headers' }, { status: 500 });
       }
 
-      // If no headers exist, copy defaults from defaults table
       if ((!headers || headers.length === 0) && resource === 'headers') {
         await copyDefaultsToUser(user.id, toolId);
-        
-        // Reload headers after copying defaults
-        const { data: reloadedHeaders, error: reloadError } = await supabaseServer
+      } else if (headers && headers.length > 0) {
+        await normalizeExistingStockHeaders(user.id, toolId);
+      }
+
+      if (resource === 'headers') {
+        const { data: stockHeaders, error: reloadError } = await supabaseServer
           .from('tools_rh_headers')
           .select('*')
           .eq('user_id', user.id)
@@ -231,15 +322,11 @@ export async function GET(request: NextRequest) {
           .order('created_at', { ascending: true });
 
         if (reloadError) {
-          console.error('Error reloading headers after copying defaults:', reloadError);
+          console.error('Error reloading headers:', reloadError);
           return NextResponse.json({ error: 'Failed to fetch headers' }, { status: 500 });
         }
 
-        return NextResponse.json({ headers: reloadedHeaders || [] });
-      }
-
-      if (resource === 'headers') {
-        return NextResponse.json({ headers: headers || [] });
+        return NextResponse.json({ headers: stockHeaders || [] });
       }
     }
 
