@@ -10,16 +10,16 @@ async function copyDefaultsToUser(userId: string, toolId: string) {
     .eq('tool_id', toolId)
     .limit(1);
 
-  if (existing && existing.length > 0) return;
+  if (existing && existing.length > 0) return [];
 
   const { data: defaults } = await supabaseServer
     .from('tools_tdl_default_categories')
     .select('*')
     .order('display_order', { ascending: true });
 
-  if (!defaults?.length) return;
+  if (!defaults?.length) return [];
 
-  await supabaseServer
+  const { data: inserted, error } = await supabaseServer
     .from('tools_tdl_categories')
     .insert(
       defaults.map((d) => ({
@@ -29,7 +29,14 @@ async function copyDefaultsToUser(userId: string, toolId: string) {
         card_color: d.card_color,
         show_on_dashboard: false,
       }))
-    );
+    )
+    .select();
+
+  if (error) {
+    console.error('Error seeding default To Do List categories:', error);
+    return [];
+  }
+  return inserted || [];
 }
 
 export async function GET(request: NextRequest) {
@@ -76,6 +83,7 @@ export async function GET(request: NextRequest) {
     }
 
     if (resource === 'categories' || !resource) {
+      const seeded = await copyDefaultsToUser(user.id, toolId);
       const { data: categories, error } = await supabaseServer
         .from('tools_tdl_categories')
         .select('*')
@@ -88,27 +96,9 @@ export async function GET(request: NextRequest) {
         return NextResponse.json({ error: 'Failed to fetch categories' }, { status: 500 });
       }
 
-      if (!categories?.length) {
-        await copyDefaultsToUser(user.id, toolId);
-        const { data: reloaded } = await supabaseServer
-          .from('tools_tdl_categories')
-          .select('*')
-          .eq('user_id', user.id)
-          .eq('tool_id', toolId)
-          .order('created_at', { ascending: true });
-        const list = reloaded || [];
-        return NextResponse.json({
-          categories: list.map((c: { id: string; name: string; card_color: string | null; show_on_dashboard: boolean }) => ({
-            id: c.id,
-            name: c.name,
-            card_color: c.card_color || '#10b981',
-            showOnDashboard: !!c.show_on_dashboard,
-          })),
-        });
-      }
-
+      const list = categories?.length ? categories : seeded;
       return NextResponse.json({
-        categories: categories.map((c) => ({
+        categories: list.map((c: { id: string; name: string; card_color: string | null; show_on_dashboard: boolean }) => ({
           id: c.id,
           name: c.name,
           card_color: c.card_color || '#10b981',
@@ -309,6 +299,9 @@ export async function POST(request: NextRequest) {
         };
         if (!taskId) {
           return NextResponse.json({ error: 'Task ID is required' }, { status: 400 });
+        }
+        if (task_name !== undefined && !task_name.trim()) {
+          return NextResponse.json({ error: 'Task name is required.' }, { status: 400 });
         }
         const updates: Record<string, unknown> = {};
         if (task_name !== undefined) updates.task_name = task_name.trim();

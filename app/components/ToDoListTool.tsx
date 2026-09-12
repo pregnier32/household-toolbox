@@ -47,6 +47,37 @@ function formatDateForDisplay(isoDate: string): string {
   return `${month}/${day}/${year}`;
 }
 
+function lastCategoryStorageKey(toolId: string) {
+  return `tdl-last-category:${toolId}`;
+}
+
+function readLastCategoryId(toolId: string): string | null {
+  try {
+    return localStorage.getItem(lastCategoryStorageKey(toolId));
+  } catch {
+    return null;
+  }
+}
+
+function writeLastCategoryId(toolId: string, categoryId: string) {
+  try {
+    localStorage.setItem(lastCategoryStorageKey(toolId), categoryId);
+  } catch {
+    /* ignore quota / private mode */
+  }
+}
+
+function pickOpenCategoryId(list: Category[], prev: string | null, toolId?: string): string | null {
+  if (!list.length) return null;
+  const ids = new Set(list.map((c) => c.id));
+  if (prev && ids.has(prev)) return prev;
+  const lastUsed = toolId ? readLastCategoryId(toolId) : null;
+  if (lastUsed && ids.has(lastUsed)) return lastUsed;
+  const home = list.find((c) => c.name === 'Home');
+  if (home) return home.id;
+  return list[0].id;
+}
+
 export function ToDoListTool({ toolId }: ToDoListToolProps) {
   const { resolvedTheme } = useTheme();
   const isLight = resolvedTheme === 'light';
@@ -145,14 +176,13 @@ export function ToDoListTool({ toolId }: ToDoListToolProps) {
       const res = await fetch(`/api/tools/to-do-list?toolId=${encodeURIComponent(toolId)}&resource=categories`);
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || 'Failed to load categories');
-      const list = data.categories || [];
+      const list: Category[] = data.categories || [];
       setCategories(list);
-      if (list.length) {
-        const ids = list.map((c: Category) => c.id);
-        setSelectedCategoryId((prev) => (prev && ids.includes(prev) ? prev : list[0].id));
-      } else {
-        setSelectedCategoryId(null);
-      }
+      setSelectedCategoryId((prev) => {
+        const next = pickOpenCategoryId(list, prev, toolId);
+        if (next && toolId) writeLastCategoryId(toolId, next);
+        return next;
+      });
     } catch (e) {
       showMessage('error', e instanceof Error ? e.message : 'Failed to load categories');
       setCategories([]);
@@ -188,6 +218,12 @@ export function ToDoListTool({ toolId }: ToDoListToolProps) {
     else setTasks([]);
   }, [toolId, selectedCategoryId]);
 
+  useEffect(() => {
+    setSortBy('dueDate');
+    setStatusFilter(new Set(STATUSES));
+    setFilterPopoverOpen(false);
+  }, [selectedCategoryId]);
+
   const toggleStatusFilter = (status: TaskStatus) => {
     setStatusFilter((prev) => {
       const next = new Set(prev);
@@ -195,6 +231,23 @@ export function ToDoListTool({ toolId }: ToDoListToolProps) {
         next.delete(status);
       } else {
         next.add(status);
+      }
+      return next;
+    });
+  };
+
+  const hideCompleted = statusFilter.size > 0 && !statusFilter.has('Completed');
+
+  const toggleHideCompleted = () => {
+    setStatusFilter((prev) => {
+      if (prev.size === 0) {
+        return new Set(STATUSES.filter((s) => s !== 'Completed'));
+      }
+      const next = new Set(prev);
+      if (next.has('Completed')) {
+        next.delete('Completed');
+      } else {
+        next.add('Completed');
       }
       return next;
     });
@@ -239,6 +292,7 @@ export function ToDoListTool({ toolId }: ToDoListToolProps) {
       const newCat = data.category as Category;
       setCategories((prev) => [...prev, newCat]);
       setSelectedCategoryId(newCat.id);
+      if (toolId) writeLastCategoryId(toolId, newCat.id);
       setIsCreatingCategory(false);
       setNewCategoryName('');
       setNewCategoryColor('#10b981');
@@ -252,6 +306,7 @@ export function ToDoListTool({ toolId }: ToDoListToolProps) {
 
   const selectCategory = (id: string) => {
     setSelectedCategoryId(id);
+    if (toolId) writeLastCategoryId(toolId, id);
     setEditingCategoryId(null);
     setMenuOpenCategoryId(null);
   };
@@ -407,6 +462,10 @@ export function ToDoListTool({ toolId }: ToDoListToolProps) {
 
   const saveTaskEdit = async () => {
     if (!editingTask || !toolId) return;
+    if (!editingTask.taskName.trim()) {
+      showMessage('error', 'Task name is required.');
+      return;
+    }
     setIsSaving(true);
     try {
       const res = await fetch('/api/tools/to-do-list', {
@@ -418,7 +477,7 @@ export function ToDoListTool({ toolId }: ToDoListToolProps) {
           toolId,
           taskId: editingTask.id,
           task_name: editingTask.taskName,
-          due_date: editingTask.dueDate || undefined,
+          due_date: editingTask.dueDate || null,
           priority: editingTask.priority,
           notes: editingTask.notes || undefined,
           status: editingTask.status,
@@ -459,6 +518,7 @@ export function ToDoListTool({ toolId }: ToDoListToolProps) {
       if (!res.ok) throw new Error(data.error || 'Failed to delete task');
       setTasks((prev) => prev.filter((t) => t.id !== taskId));
       setDeleteConfirmTaskId(null);
+      setDeleteConfirmText('');
       if (editingTaskId === taskId) {
         setEditingTaskId(null);
         setEditingTask(null);
@@ -496,6 +556,33 @@ export function ToDoListTool({ toolId }: ToDoListToolProps) {
     }
   };
 
+  const updateTaskPriority = async (taskId: string, priority: Priority) => {
+    if (!toolId) return;
+    try {
+      const res = await fetch('/api/tools/to-do-list', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          resource: 'task',
+          action: 'update',
+          toolId,
+          taskId,
+          priority,
+        }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || 'Failed to update priority');
+      setTasks((prev) =>
+        prev.map((t) => (t.id === taskId ? { ...t, priority } : t))
+      );
+      if (editingTaskId === taskId && editingTask) {
+        setEditingTask((p) => (p ? { ...p, priority } : null));
+      }
+    } catch (e) {
+      showMessage('error', e instanceof Error ? e.message : 'Failed to update priority');
+    }
+  };
+
   return (
     <div className="space-y-6">
       <div>
@@ -525,52 +612,7 @@ export function ToDoListTool({ toolId }: ToDoListToolProps) {
 
         {!isCreatingCategory ? (
           <div className="flex items-center gap-3 flex-wrap">
-            {categories.map((cat) =>
-              editingCategoryId === cat.id ? (
-                <div
-                  key={cat.id}
-                  className={isLight ? 'px-4 py-3 rounded-lg border-2 min-w-[200px] shadow-sm' : 'px-4 py-3 rounded-lg border border-slate-600 bg-slate-800 min-w-[200px]'}
-                  style={{
-                    borderColor: editingCategoryColor,
-                    backgroundColor: `${editingCategoryColor}${isLight ? '12' : '15'}`,
-                  }}
-                >
-                  <div className="flex items-center gap-2 mb-2">
-                    <input
-                      type="text"
-                      value={editingCategoryName}
-                      onChange={(e) => setEditingCategoryName(e.target.value)}
-                      className={isLight ? 'flex-1 px-2 py-1 rounded border border-slate-300 bg-white text-slate-900 text-sm focus:border-emerald-500/50 focus:outline-none' : 'flex-1 px-2 py-1 rounded border border-slate-600 bg-slate-900 text-slate-100 text-sm focus:border-emerald-500/50 focus:outline-none'}
-                      placeholder="Category name"
-                      autoFocus
-                    />
-                  </div>
-                  <div className="flex items-center gap-2 mb-2">
-                    <label className={isLight ? 'text-xs text-slate-700' : 'text-xs text-slate-400'}>Color:</label>
-                    <input
-                      type="color"
-                      value={editingCategoryColor}
-                      onChange={(e) => setEditingCategoryColor(e.target.value)}
-                      className={isLight ? 'h-6 w-12 rounded border border-slate-300 cursor-pointer bg-white' : 'h-6 w-12 rounded border border-slate-600 cursor-pointer'}
-                    />
-                  </div>
-                  <div className="flex items-center gap-2">
-                    <button
-                      onClick={saveCategoryEdit}
-                      disabled={!editingCategoryName.trim() || isSaving}
-                      className={isLight ? 'flex-1 px-2 py-1 rounded bg-emerald-600 text-white text-xs font-semibold hover:bg-emerald-500 disabled:opacity-50 disabled:cursor-not-allowed' : 'flex-1 px-2 py-1 rounded bg-emerald-500 text-slate-950 text-xs font-medium hover:bg-emerald-400 disabled:opacity-50 disabled:cursor-not-allowed'}
-                    >
-                      Save
-                    </button>
-                    <button
-                      onClick={cancelEditingCategory}
-                      className={isLight ? 'px-2 py-1 rounded border-2 border-slate-400 bg-slate-100 text-slate-800 text-xs hover:bg-slate-200' : 'px-2 py-1 rounded border border-slate-600 bg-slate-700 text-slate-200 text-xs hover:bg-slate-600'}
-                    >
-                      Cancel
-                    </button>
-                  </div>
-                </div>
-              ) : (
+            {categories.map((cat) => (
                 <div key={cat.id} className="relative">
                   <button
                     onClick={() => selectCategory(cat.id)}
@@ -636,8 +678,7 @@ export function ToDoListTool({ toolId }: ToDoListToolProps) {
                     </div>
                   )}
                 </div>
-              )
-            )}
+            ))}
             <button
               onClick={() => {
                 setIsCreatingCategory(true);
@@ -710,6 +751,53 @@ export function ToDoListTool({ toolId }: ToDoListToolProps) {
         />
       )}
 
+      {editingCategoryId && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
+          <div className={isLight ? 'rounded-2xl border border-slate-200 bg-white p-6 max-w-md w-full mx-4 shadow-2xl' : 'rounded-2xl border border-slate-800 bg-slate-900 p-6 max-w-md w-full mx-4'}>
+            <h3 className={isLight ? 'text-xl font-semibold text-slate-900 mb-4' : 'text-xl font-semibold text-slate-50 mb-4'}>Edit category</h3>
+            <div className="flex items-end gap-2 flex-wrap">
+              <div className="flex-1 min-w-[200px]">
+                <label className={labelClass}>Category name</label>
+                <input
+                  type="text"
+                  value={editingCategoryName}
+                  onChange={(e) => setEditingCategoryName(e.target.value)}
+                  placeholder="Enter category name"
+                  className={inputClass}
+                  autoFocus
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter') saveCategoryEdit();
+                    if (e.key === 'Escape') cancelEditingCategory();
+                  }}
+                />
+              </div>
+              <div>
+                <label className={labelClass}>Color</label>
+                <input
+                  type="color"
+                  value={editingCategoryColor}
+                  onChange={(e) => setEditingCategoryColor(e.target.value)}
+                  className={isLight ? 'h-10 w-14 rounded border border-slate-300 cursor-pointer bg-white' : 'h-10 w-14 rounded border border-slate-600 cursor-pointer'}
+                />
+              </div>
+              <button
+                onClick={saveCategoryEdit}
+                disabled={!editingCategoryName.trim() || isSaving}
+                className={primaryButtonClass}
+              >
+                Save
+              </button>
+              <button
+                onClick={cancelEditingCategory}
+                className={secondaryButtonClass}
+              >
+                Cancel
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Delete category confirmation */}
       {deleteConfirmCategoryId && (
         <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
@@ -760,7 +848,7 @@ export function ToDoListTool({ toolId }: ToDoListToolProps) {
         </div>
       )}
 
-      {!selectedCategoryId && !isCreatingCategory && (
+      {!isLoadingCategories && !selectedCategoryId && !isCreatingCategory && (
         <div className="rounded-2xl border border-slate-800 bg-slate-900/70 p-8 text-center">
           <p className="text-slate-400">Select a category or create one to manage tasks.</p>
         </div>
@@ -768,8 +856,31 @@ export function ToDoListTool({ toolId }: ToDoListToolProps) {
 
       {selectedCategoryId && selectedCategory && (
         <>
+          <style
+            dangerouslySetInnerHTML={{
+              __html: `
+                .todo-print-status-text { display: none; }
+                @media print {
+                  body * { visibility: hidden; }
+                  .todo-list-print, .todo-list-print * { visibility: visible; }
+                  .todo-list-print {
+                    position: absolute;
+                    left: 0;
+                    top: 0;
+                    width: 100%;
+                    background: white;
+                    color: black;
+                    box-shadow: none;
+                    border: none;
+                  }
+                  .todo-list-print .print-only-hidden { display: none !important; visibility: hidden !important; }
+                  .todo-list-print .todo-print-status-text { display: inline !important; visibility: visible !important; }
+                }
+              `,
+            }}
+          />
           {/* Single card: category task list */}
-          <div className={cardClass}>
+          <div className={`${cardClass} todo-list-print`}>
             {/* Card header: category name + add task icon (left) | print + filter (right) */}
             <div className="flex items-center justify-between gap-4 flex-wrap mb-6">
               <div className="flex items-center gap-3">
@@ -780,7 +891,7 @@ export function ToDoListTool({ toolId }: ToDoListToolProps) {
                   <button
                     type="button"
                     onClick={startAddingTask}
-                    className={isLight ? 'px-3 py-2 rounded-lg bg-emerald-600 text-white text-sm font-semibold hover:bg-emerald-500 transition-colors disabled:opacity-50 disabled:cursor-not-allowed' : 'px-3 py-2 rounded-lg bg-emerald-500 text-slate-950 text-sm font-semibold hover:bg-emerald-400 transition-colors disabled:opacity-50 disabled:cursor-not-allowed'}
+                    className={`${isLight ? 'px-3 py-2 rounded-lg bg-emerald-600 text-white text-sm font-semibold hover:bg-emerald-500 transition-colors disabled:opacity-50 disabled:cursor-not-allowed' : 'px-3 py-2 rounded-lg bg-emerald-500 text-slate-950 text-sm font-semibold hover:bg-emerald-400 transition-colors disabled:opacity-50 disabled:cursor-not-allowed'} print-only-hidden`}
                     aria-label="Add new task"
                     title="+ Add Task"
                   >
@@ -788,7 +899,16 @@ export function ToDoListTool({ toolId }: ToDoListToolProps) {
                   </button>
                 )}
               </div>
-              <div className="flex items-center gap-2">
+              <div className="flex items-center gap-2 print-only-hidden">
+                <label className="flex items-center gap-2 cursor-pointer">
+                  <input
+                    type="checkbox"
+                    checked={hideCompleted}
+                    onChange={toggleHideCompleted}
+                    className={isLight ? 'rounded border-slate-400 bg-white text-emerald-600 focus:ring-emerald-500 focus:ring-offset-white w-4 h-4' : 'rounded border-slate-600 bg-slate-700 text-emerald-500 focus:ring-emerald-500 focus:ring-offset-slate-800 w-4 h-4'}
+                  />
+                  <span className={isLight ? 'text-sm text-slate-800' : 'text-sm text-slate-200'}>Hide completed</span>
+                </label>
                 <button
                   type="button"
                   onClick={() => typeof window !== 'undefined' && window.print()}
@@ -813,12 +933,6 @@ export function ToDoListTool({ toolId }: ToDoListToolProps) {
                     </svg>
                   </button>
                   {filterPopoverOpen && (
-                    <>
-                      <div
-                        className="fixed inset-0 z-40"
-                        onClick={() => setFilterPopoverOpen(false)}
-                        aria-hidden="true"
-                      />
                       <div className={isLight ? 'absolute right-0 top-full z-50 mt-1 w-72 rounded-lg border border-slate-200 bg-white py-3 px-4 shadow-lg ring-1 ring-slate-900/5' : 'absolute right-0 top-full z-50 mt-1 w-72 rounded-lg border border-slate-700 bg-slate-800 py-3 px-4 shadow-lg'}>
                         <div className="space-y-4">
                           <div>
@@ -850,7 +964,6 @@ export function ToDoListTool({ toolId }: ToDoListToolProps) {
                           </div>
                         </div>
                       </div>
-                    </>
                   )}
                 </div>
               </div>
@@ -858,7 +971,7 @@ export function ToDoListTool({ toolId }: ToDoListToolProps) {
 
             {/* Add task form */}
             {isAddingTask && (
-            <div className={isLight ? 'border-t border-slate-200 pt-6 mb-6' : 'border-t border-slate-700/70 pt-6 mb-6'}>
+            <div className={`${isLight ? 'border-t border-slate-200 pt-6 mb-6' : 'border-t border-slate-700/70 pt-6 mb-6'} print-only-hidden`}>
               <h3 className={isLight ? 'text-lg font-semibold text-slate-900 mb-4' : 'text-lg font-semibold text-slate-50 mb-4'}>New task</h3>
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4 space-y-4">
                 <div className="md:col-span-2">
@@ -956,7 +1069,7 @@ export function ToDoListTool({ toolId }: ToDoListToolProps) {
 
             {/* Edit task form */}
             {editingTaskId && editingTask && (
-              <div className={isLight ? 'border-t border-slate-200 pt-6 mb-6' : 'border-t border-slate-700/70 pt-6 mb-6'}>
+              <div className={`${isLight ? 'border-t border-slate-200 pt-6 mb-6' : 'border-t border-slate-700/70 pt-6 mb-6'} print-only-hidden`}>
                 <h3 className={isLight ? 'text-lg font-semibold text-slate-900 mb-4' : 'text-lg font-semibold text-slate-50 mb-4'}>Edit task</h3>
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                   <div className="md:col-span-2">
@@ -1058,9 +1171,11 @@ export function ToDoListTool({ toolId }: ToDoListToolProps) {
             {!isAddingTask && (
               <div className="overflow-x-auto">
                 {filteredAndSortedTasks.length === 0 ? (
-                  <p className="text-slate-400 text-center py-8 text-sm">
-                    No tasks match. Add a task or adjust filters.
-                  </p>
+                  tasksForCategory.length > 0 ? (
+                    <p className="text-slate-400 text-center py-8 text-sm">
+                      No tasks match. Adjust filters.
+                    </p>
+                  ) : null
                 ) : (
                   <table className="w-full min-w-[500px]">
                     <thead>
@@ -1069,7 +1184,7 @@ export function ToDoListTool({ toolId }: ToDoListToolProps) {
                         <th className={isLight ? 'text-left text-xs font-semibold uppercase tracking-wider text-slate-600 py-3 px-2' : 'text-left text-xs font-semibold uppercase tracking-wider text-slate-400 py-3 px-2'}>Due Date</th>
                         <th className={isLight ? 'text-left text-xs font-semibold uppercase tracking-wider text-slate-600 py-3 px-2' : 'text-left text-xs font-semibold uppercase tracking-wider text-slate-400 py-3 px-2'}>Priority</th>
                         <th className={isLight ? 'text-left text-xs font-semibold uppercase tracking-wider text-slate-600 py-3 px-2' : 'text-left text-xs font-semibold uppercase tracking-wider text-slate-400 py-3 px-2'}>Status</th>
-                        <th className={isLight ? 'w-20 text-right text-xs font-semibold uppercase tracking-wider text-slate-600 py-3 px-2' : 'w-20 text-right text-xs font-semibold uppercase tracking-wider text-slate-400 py-3 px-2'}>Actions</th>
+                        <th className={`${isLight ? 'w-20 text-right text-xs font-semibold uppercase tracking-wider text-slate-600 py-3 px-2' : 'w-20 text-right text-xs font-semibold uppercase tracking-wider text-slate-400 py-3 px-2'} print-only-hidden`}>Actions</th>
                       </tr>
                     </thead>
                     <tbody>
@@ -1079,7 +1194,7 @@ export function ToDoListTool({ toolId }: ToDoListToolProps) {
                           className={isLight ? 'border-b border-slate-200 hover:bg-slate-50 transition-colors' : 'border-b border-slate-800 hover:bg-slate-800/30 transition-colors'}
                         >
                           <td className="py-3 px-2">
-                            <div className={isLight ? 'font-medium text-slate-900' : 'font-medium text-slate-100'}>{task.taskName}</div>
+                            <div className={`${isLight ? 'font-medium text-slate-900' : 'font-medium text-slate-100'}${task.status === 'Completed' ? ' line-through' : ''}`}>{task.taskName}</div>
                             {task.notes && (
                               <div className={isLight ? 'text-xs text-slate-600 mt-0.5 line-clamp-2' : 'text-xs text-slate-400 mt-0.5 line-clamp-2'}>{task.notes}</div>
                             )}
@@ -1087,20 +1202,33 @@ export function ToDoListTool({ toolId }: ToDoListToolProps) {
                           <td className={isLight ? 'py-3 px-2 text-sm text-slate-700' : 'py-3 px-2 text-sm text-slate-300'}>
                             {task.dueDate ? formatDateForDisplay(task.dueDate) : '—'}
                           </td>
-                          <td className={isLight ? 'py-3 px-2 text-sm text-slate-700' : 'py-3 px-2 text-sm text-slate-300'}>{task.priority}</td>
+                          <td className="py-3 px-2">
+                            <select
+                              value={task.priority}
+                              onChange={(e) => updateTaskPriority(task.id, e.target.value as Priority)}
+                              className={`${isLight ? 'rounded-md border border-slate-300 bg-white px-2 py-1 text-sm text-slate-800 focus:border-emerald-500/50 focus:outline-none focus:ring-1 focus:ring-emerald-500/50' : 'rounded-md border border-slate-600 bg-slate-800 px-2 py-1 text-sm text-slate-200 focus:border-emerald-500/50 focus:outline-none focus:ring-1 focus:ring-emerald-500/50'} print-only-hidden`}
+                              aria-label={`Update priority for ${task.taskName}`}
+                            >
+                              {PRIORITIES.map((p) => (
+                                <option key={p} value={p}>{p}</option>
+                              ))}
+                            </select>
+                            <span className="todo-print-status-text">{task.priority}</span>
+                          </td>
                           <td className="py-3 px-2">
                             <select
                               value={task.status}
                               onChange={(e) => updateTaskStatus(task.id, e.target.value as TaskStatus)}
-                              className={isLight ? 'rounded-md border border-slate-300 bg-white px-2 py-1 text-sm text-slate-800 focus:border-emerald-500/50 focus:outline-none focus:ring-1 focus:ring-emerald-500/50' : 'rounded-md border border-slate-600 bg-slate-800 px-2 py-1 text-sm text-slate-200 focus:border-emerald-500/50 focus:outline-none focus:ring-1 focus:ring-emerald-500/50'}
+                              className={`${isLight ? 'rounded-md border border-slate-300 bg-white px-2 py-1 text-sm text-slate-800 focus:border-emerald-500/50 focus:outline-none focus:ring-1 focus:ring-emerald-500/50' : 'rounded-md border border-slate-600 bg-slate-800 px-2 py-1 text-sm text-slate-200 focus:border-emerald-500/50 focus:outline-none focus:ring-1 focus:ring-emerald-500/50'} print-only-hidden`}
                               aria-label={`Update status for ${task.taskName}`}
                             >
                               {STATUSES.map((s) => (
                                 <option key={s} value={s}>{s}</option>
                               ))}
                             </select>
+                            <span className="todo-print-status-text">{task.status}</span>
                           </td>
-                          <td className="py-3 px-2 text-right">
+                          <td className="py-3 px-2 text-right print-only-hidden">
                             <div className="flex items-center justify-end gap-1">
                               <button
                                 onClick={() => startEditingTask(task)}
@@ -1112,7 +1240,10 @@ export function ToDoListTool({ toolId }: ToDoListToolProps) {
                                 </svg>
                               </button>
                               <button
-                                onClick={() => setDeleteConfirmTaskId(task.id)}
+                                onClick={() => {
+                                  setDeleteConfirmText('');
+                                  setDeleteConfirmTaskId(task.id);
+                                }}
                                 className={rowIconDangerClass}
                                 aria-label="Delete task"
                               >
@@ -1132,28 +1263,80 @@ export function ToDoListTool({ toolId }: ToDoListToolProps) {
           </div>
 
           {/* Delete task confirmation */}
-          {deleteConfirmTaskId && (
+          {deleteConfirmTaskId && (() => {
+            const taskToDelete = tasks.find((t) => t.id === deleteConfirmTaskId);
+            const needsTypedConfirm = !!(taskToDelete?.notes.trim() || taskToDelete?.dueDate);
+            return (
             <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
               <div className={isLight ? 'rounded-2xl border border-slate-200 bg-white p-6 max-w-md w-full mx-4 shadow-2xl' : 'rounded-2xl border border-slate-800 bg-slate-900 p-6 max-w-md w-full mx-4'}>
                 <h3 className={isLight ? 'text-xl font-semibold text-slate-900 mb-2' : 'text-xl font-semibold text-slate-50 mb-2'}>Delete task</h3>
-                <p className={isLight ? 'text-slate-700 mb-4' : 'text-slate-300 mb-4'}>Are you sure you want to delete this task? This cannot be undone.</p>
-                <div className="flex gap-3">
-                  <button
-                    onClick={() => deleteTask(deleteConfirmTaskId)}
-                    className="flex-1 px-4 py-2 rounded-lg bg-red-600 text-white font-medium hover:bg-red-700"
-                  >
-                    Delete
-                  </button>
-                  <button
-                    onClick={() => setDeleteConfirmTaskId(null)}
-                    className={secondaryButtonClass}
-                  >
-                    Cancel
-                  </button>
-                </div>
+                {needsTypedConfirm ? (
+                  <>
+                    <div className={isLight ? 'rounded-lg border border-red-300 bg-red-50 px-4 py-3 mb-4' : 'rounded-lg border border-red-500/50 bg-red-500/10 px-4 py-3 mb-4'}>
+                      <p className={isLight ? 'text-red-700 font-semibold mb-2' : 'text-red-300 font-semibold mb-2'}>⚠️ This action cannot be undone.</p>
+                      <p className={isLight ? 'text-red-600 text-sm' : 'text-red-200 text-sm'}>
+                        {taskToDelete?.taskName} will be permanently deleted.
+                      </p>
+                    </div>
+                    <p className={isLight ? 'text-slate-700 mb-4' : 'text-slate-300 mb-4'}>
+                      Type <strong className="text-slate-200">delete</strong> to confirm:
+                    </p>
+                    <input
+                      type="text"
+                      value={deleteConfirmText}
+                      onChange={(e) => setDeleteConfirmText(e.target.value)}
+                      placeholder="Type 'delete' to confirm"
+                      className={isLight ? 'w-full px-4 py-2 rounded-lg border border-slate-300 bg-white text-slate-900 placeholder-slate-500 focus:border-red-500/50 focus:outline-none focus:ring-1 focus:ring-red-500/50 mb-4' : 'w-full px-4 py-2 rounded-lg border border-slate-700 bg-slate-800 text-slate-100 placeholder-slate-500 focus:border-red-500/50 focus:outline-none focus:ring-1 focus:ring-red-500/50 mb-4'}
+                      autoFocus
+                      onKeyDown={(e) => {
+                        if (e.key === 'Escape') {
+                          setDeleteConfirmTaskId(null);
+                          setDeleteConfirmText('');
+                        }
+                      }}
+                    />
+                    <div className="flex gap-3">
+                      <button
+                        onClick={() => deleteTask(deleteConfirmTaskId)}
+                        disabled={deleteConfirmText.toLowerCase() !== 'delete'}
+                        className="flex-1 px-4 py-2 rounded-lg bg-red-600 text-white font-medium hover:bg-red-700 disabled:opacity-50 disabled:cursor-not-allowed"
+                      >
+                        Delete
+                      </button>
+                      <button
+                        onClick={() => {
+                          setDeleteConfirmTaskId(null);
+                          setDeleteConfirmText('');
+                        }}
+                        className={secondaryButtonClass}
+                      >
+                        Cancel
+                      </button>
+                    </div>
+                  </>
+                ) : (
+                  <>
+                    <p className={isLight ? 'text-slate-700 mb-4' : 'text-slate-300 mb-4'}>Are you sure you want to delete this task? This cannot be undone.</p>
+                    <div className="flex gap-3">
+                      <button
+                        onClick={() => deleteTask(deleteConfirmTaskId)}
+                        className="flex-1 px-4 py-2 rounded-lg bg-red-600 text-white font-medium hover:bg-red-700"
+                      >
+                        Delete
+                      </button>
+                      <button
+                        onClick={() => setDeleteConfirmTaskId(null)}
+                        className={secondaryButtonClass}
+                      >
+                        Cancel
+                      </button>
+                    </div>
+                  </>
+                )}
               </div>
             </div>
-          )}
+            );
+          })()}
         </>
       )}
 
