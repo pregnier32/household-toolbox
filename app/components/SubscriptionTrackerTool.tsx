@@ -36,6 +36,18 @@ const DEFAULT_CATEGORIES = [
   'Other'
 ];
 
+// Date-only YYYY-MM-DD as local calendar day (not UTC midnight).
+function parseLocalDate(isoDate: string): Date | null {
+  const match = /^(\d{4})-(\d{2})-(\d{2})/.exec(isoDate);
+  if (!match) return null;
+  return new Date(Number(match[1]), Number(match[2]) - 1, Number(match[3]));
+}
+
+function formatLocalDate(isoDate: string): string {
+  const d = parseLocalDate(isoDate);
+  return d ? d.toLocaleDateString() : isoDate;
+}
+
 type SubscriptionTrackerToolProps = {
   toolId?: string;
 };
@@ -99,6 +111,7 @@ export function SubscriptionTrackerTool({ toolId }: SubscriptionTrackerToolProps
     notes: ''
   });
   const [showCustomCategory, setShowCustomCategory] = useState(false);
+  const [extraCategories, setExtraCategories] = useState<string[]>([]);
   const [isAdding, setIsAdding] = useState(false);
   
   // Edit state
@@ -117,6 +130,9 @@ export function SubscriptionTrackerTool({ toolId }: SubscriptionTrackerToolProps
   });
   const [showCustomCategoryEdit, setShowCustomCategoryEdit] = useState(false);
   
+  const [searchQuery, setSearchQuery] = useState('');
+  const [sortBy, setSortBy] = useState<'name' | 'renewal' | 'amount'>('name');
+
   // History state
   const [showHistory, setShowHistory] = useState(false);
   const [deleteConfirmId, setDeleteConfirmId] = useState<string | null>(null);
@@ -219,6 +235,29 @@ export function SubscriptionTrackerTool({ toolId }: SubscriptionTrackerToolProps
     } else {
       setShowCustomCategoryEdit(false);
       setEditingSubscription({ ...editingSubscription, category: value, customCategory: '' });
+    }
+  };
+
+  const commitCustomCategory = (rawName: string, target: 'new' | 'edit') => {
+    const name = rawName.trim();
+    if (!name) return;
+    const builtIn = DEFAULT_CATEGORIES.find((c) => c.toLowerCase() === name.toLowerCase());
+    const resolved = builtIn || name;
+    if (!builtIn) {
+      const known = [
+        ...extraCategories,
+        ...subscriptions.map((s) => s.category),
+      ].some((c) => c.toLowerCase() === name.toLowerCase());
+      if (!known) {
+        setExtraCategories((prev) => [...prev, name]);
+      }
+    }
+    if (target === 'new') {
+      setShowCustomCategory(false);
+      setNewSubscription({ ...newSubscription, category: resolved, customCategory: '' });
+    } else {
+      setShowCustomCategoryEdit(false);
+      setEditingSubscription({ ...editingSubscription, category: resolved, customCategory: '' });
     }
   };
 
@@ -339,11 +378,10 @@ export function SubscriptionTrackerTool({ toolId }: SubscriptionTrackerToolProps
 
   const startEditing = (subscription: Subscription) => {
     setEditingId(subscription.id);
-    const isCustomCategory = !DEFAULT_CATEGORIES.includes(subscription.category);
     setEditingSubscription({
       name: subscription.name,
-      category: isCustomCategory ? 'Other' : subscription.category,
-      customCategory: isCustomCategory ? subscription.category : '',
+      category: subscription.category,
+      customCategory: '',
       frequency: subscription.frequency,
       amount: subscription.amount.toString(),
       dayOfMonth: subscription.dayOfMonth?.toString() || '',
@@ -352,7 +390,7 @@ export function SubscriptionTrackerTool({ toolId }: SubscriptionTrackerToolProps
       addReminderToCalendar: subscription.addReminderToCalendar || false,
       notes: subscription.notes
     });
-    setShowCustomCategoryEdit(isCustomCategory);
+    setShowCustomCategoryEdit(false);
   };
 
   const cancelEditing = () => {
@@ -822,10 +860,10 @@ export function SubscriptionTrackerTool({ toolId }: SubscriptionTrackerToolProps
         
         if (subscription.frequency === 'annual') {
           if (subscription.billedDate) {
-            addText(`Billed Date: ${new Date(subscription.billedDate).toLocaleDateString()}`, 9, false, 10);
+            addText(`Billed Date: ${formatLocalDate(subscription.billedDate)}`, 9, false, 10);
           }
           if (subscription.renewalDate) {
-            addText(`Renewal Date: ${new Date(subscription.renewalDate).toLocaleDateString()}`, 9, false, 10);
+            addText(`Renewal Date: ${formatLocalDate(subscription.renewalDate)}`, 9, false, 10);
           }
         } else {
           if (subscription.dayOfMonth) {
@@ -834,11 +872,11 @@ export function SubscriptionTrackerTool({ toolId }: SubscriptionTrackerToolProps
         }
         
         if (subscription.dateAdded) {
-          addText(`Date Added: ${new Date(subscription.dateAdded).toLocaleDateString()}`, 9, false, 10);
+          addText(`Date Added: ${formatLocalDate(subscription.dateAdded)}`, 9, false, 10);
         }
         
         if (!subscription.isActive && subscription.dateInactivated) {
-          addText(`Date Inactivated: ${new Date(subscription.dateInactivated).toLocaleDateString()}`, 9, false, 10);
+          addText(`Date Inactivated: ${formatLocalDate(subscription.dateInactivated)}`, 9, false, 10);
         }
         
         if (subscription.notes) {
@@ -855,7 +893,44 @@ export function SubscriptionTrackerTool({ toolId }: SubscriptionTrackerToolProps
     setShowExportPopup(false);
   };
 
-  const activeSubscriptions = subscriptions.filter(sub => sub.isActive).sort((a, b) => a.name.localeCompare(b.name));
+  const categoryOptions = (() => {
+    const seen = new Set(DEFAULT_CATEGORIES.map((c) => c.toLowerCase()));
+    const customs: string[] = [];
+    for (const name of [...subscriptions.map((s) => s.category), ...extraCategories]) {
+      if (!name) continue;
+      const key = name.toLowerCase();
+      if (seen.has(key)) continue;
+      seen.add(key);
+      customs.push(name);
+    }
+    customs.sort((a, b) => a.localeCompare(b));
+    return [...DEFAULT_CATEGORIES, ...customs];
+  })();
+
+  const searchNeedle = searchQuery.trim().toLowerCase();
+  const categorySpend = calculateCategoryBreakdown();
+  const totalMonthlySpend = calculateMonthlySpend();
+  const activeSubscriptions = subscriptions
+    .filter(sub => sub.isActive)
+    .filter(sub =>
+      searchNeedle === '' ||
+      sub.name.toLowerCase().includes(searchNeedle) ||
+      sub.category.toLowerCase().includes(searchNeedle)
+    )
+    .sort((a, b) => {
+      if (sortBy === 'amount') {
+        return a.amount - b.amount || a.name.localeCompare(b.name);
+      }
+      if (sortBy === 'renewal') {
+        const aDate = a.renewalDate || '';
+        const bDate = b.renewalDate || '';
+        if (!aDate && !bDate) return a.name.localeCompare(b.name);
+        if (!aDate) return 1;
+        if (!bDate) return -1;
+        return aDate.localeCompare(bDate) || a.name.localeCompare(b.name);
+      }
+      return a.name.localeCompare(b.name);
+    });
   const inactiveSubscriptions = subscriptions.filter(sub => !sub.isActive).sort((a, b) => a.name.localeCompare(b.name));
 
   return (
@@ -924,24 +999,51 @@ export function SubscriptionTrackerTool({ toolId }: SubscriptionTrackerToolProps
                     <label className={labelClass}>
                       Category <span className="text-red-400">*</span>
                     </label>
-                    <select
-                      value={showCustomCategory ? 'Other' : newSubscription.category}
-                      onChange={(e) => handleCategoryChange(e.target.value)}
-                      className={selectClass}
-                    >
-                      <option value="">Select category</option>
-                      {DEFAULT_CATEGORIES.map(cat => (
-                        <option key={cat} value={cat}>{cat}</option>
-                      ))}
-                    </select>
+                    <div className="flex gap-2">
+                      <div className="flex-1 min-w-0">
+                        <select
+                          value={showCustomCategory ? 'Other' : newSubscription.category}
+                          onChange={(e) => handleCategoryChange(e.target.value)}
+                          className={selectClass}
+                        >
+                          <option value="">Select category</option>
+                          {categoryOptions.map(cat => (
+                            <option key={cat} value={cat}>{cat}</option>
+                          ))}
+                        </select>
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() => setShowCustomCategory(true)}
+                        className={secondaryButtonClass}
+                      >
+                        Add category
+                      </button>
+                    </div>
                     {showCustomCategory && (
-                      <input
-                        type="text"
-                        value={newSubscription.customCategory}
-                        onChange={(e) => setNewSubscription({ ...newSubscription, customCategory: e.target.value })}
-                        placeholder="Enter custom category"
-                        className={`${inputClass} mt-2`}
-                      />
+                      <div className="flex gap-2 mt-2">
+                        <input
+                          type="text"
+                          value={newSubscription.customCategory}
+                          onChange={(e) => setNewSubscription({ ...newSubscription, customCategory: e.target.value })}
+                          onKeyDown={(e) => {
+                            if (e.key === 'Enter') {
+                              e.preventDefault();
+                              commitCustomCategory(newSubscription.customCategory, 'new');
+                            }
+                          }}
+                          placeholder="Enter custom category"
+                          className={inputClass}
+                        />
+                        <button
+                          type="button"
+                          onClick={() => commitCustomCategory(newSubscription.customCategory, 'new')}
+                          disabled={!newSubscription.customCategory.trim()}
+                          className={primaryButtonClass}
+                        >
+                          Add
+                        </button>
+                      </div>
                     )}
                   </div>
                   <div>
@@ -1103,6 +1205,54 @@ export function SubscriptionTrackerTool({ toolId }: SubscriptionTrackerToolProps
             </div>
           )}
 
+          <div className={cardClass}>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div>
+                <label className={labelClass}>Search Subscriptions</label>
+                <input
+                  type="text"
+                  value={searchQuery}
+                  onChange={(e) => setSearchQuery(e.target.value)}
+                  placeholder="Search by name or category..."
+                  className={inputClass}
+                />
+              </div>
+              <div>
+                <label className={labelClass} htmlFor="st-sort">Sort</label>
+                <select
+                  id="st-sort"
+                  value={sortBy}
+                  onChange={(e) => setSortBy(e.target.value as 'name' | 'renewal' | 'amount')}
+                  className={selectClass}
+                >
+                  <option value="name">Name</option>
+                  <option value="renewal">Next renewal</option>
+                  <option value="amount">Amount</option>
+                </select>
+              </div>
+            </div>
+          </div>
+
+          <div className={cardClass}>
+            <h3 className={isLight ? 'text-lg font-semibold text-slate-900 mb-4' : 'text-lg font-semibold text-slate-50 mb-4'}>Monthly Spend by Category</h3>
+            {categorySpend.length > 0 ? (
+              <div className="space-y-2">
+                {categorySpend.map((category) => (
+                  <div key={category.name} className="flex items-center justify-between text-sm">
+                    <span className={isLight ? 'text-slate-700' : 'text-slate-300'}>{category.name}</span>
+                    <span className={isLight ? 'text-slate-900' : 'text-slate-100'}>${category.value.toFixed(2)}</span>
+                  </div>
+                ))}
+                <div className={`flex items-center justify-between text-sm pt-2 ${isLight ? 'border-t border-slate-200' : 'border-t border-slate-700'}`}>
+                  <span className={isLight ? 'font-medium text-slate-900' : 'font-medium text-slate-50'}>Total Monthly Spend</span>
+                  <span className={isLight ? 'font-medium text-slate-900' : 'font-medium text-slate-50'}>${totalMonthlySpend.toFixed(2)}</span>
+                </div>
+              </div>
+            ) : (
+              <p className={isLight ? 'text-slate-600 text-sm' : 'text-slate-400 text-sm'}>No active subscriptions.</p>
+            )}
+          </div>
+
           {/* Active Subscriptions */}
           <div className={cardClass}>
             <div className="flex items-center justify-between mb-4">
@@ -1133,24 +1283,51 @@ export function SubscriptionTrackerTool({ toolId }: SubscriptionTrackerToolProps
                             <label className="block text-sm font-medium text-slate-300 mb-2">
                               Category <span className="text-red-400">*</span>
                             </label>
-                            <select
-                              value={showCustomCategoryEdit ? 'Other' : editingSubscription.category}
-                              onChange={(e) => handleCategoryChangeEdit(e.target.value)}
-                              className="w-full px-4 py-2 rounded-lg border border-slate-700 bg-slate-900/70 text-slate-100 focus:border-emerald-500/50 focus:outline-none focus:ring-1 focus:ring-emerald-500/50"
-                            >
-                              <option value="">Select category</option>
-                              {DEFAULT_CATEGORIES.map(cat => (
-                                <option key={cat} value={cat}>{cat}</option>
-                              ))}
-                            </select>
+                            <div className="flex gap-2">
+                              <div className="flex-1 min-w-0">
+                                <select
+                                  value={showCustomCategoryEdit ? 'Other' : editingSubscription.category}
+                                  onChange={(e) => handleCategoryChangeEdit(e.target.value)}
+                                  className="w-full px-4 py-2 rounded-lg border border-slate-700 bg-slate-900/70 text-slate-100 focus:border-emerald-500/50 focus:outline-none focus:ring-1 focus:ring-emerald-500/50"
+                                >
+                                  <option value="">Select category</option>
+                                  {categoryOptions.map(cat => (
+                                    <option key={cat} value={cat}>{cat}</option>
+                                  ))}
+                                </select>
+                              </div>
+                              <button
+                                type="button"
+                                onClick={() => setShowCustomCategoryEdit(true)}
+                                className={secondaryButtonClass}
+                              >
+                                Add category
+                              </button>
+                            </div>
                             {showCustomCategoryEdit && (
-                              <input
-                                type="text"
-                                value={editingSubscription.customCategory}
-                                onChange={(e) => setEditingSubscription({ ...editingSubscription, customCategory: e.target.value })}
-                                placeholder="Enter custom category"
-                                className="w-full mt-2 px-3 py-2 rounded-lg border border-slate-700 bg-slate-900/70 text-slate-100 placeholder-slate-500 focus:border-emerald-500/50 focus:outline-none focus:ring-1 focus:ring-emerald-500/50"
-                              />
+                              <div className="flex gap-2 mt-2">
+                                <input
+                                  type="text"
+                                  value={editingSubscription.customCategory}
+                                  onChange={(e) => setEditingSubscription({ ...editingSubscription, customCategory: e.target.value })}
+                                  onKeyDown={(e) => {
+                                    if (e.key === 'Enter') {
+                                      e.preventDefault();
+                                      commitCustomCategory(editingSubscription.customCategory, 'edit');
+                                    }
+                                  }}
+                                  placeholder="Enter custom category"
+                                  className="w-full px-3 py-2 rounded-lg border border-slate-700 bg-slate-900/70 text-slate-100 placeholder-slate-500 focus:border-emerald-500/50 focus:outline-none focus:ring-1 focus:ring-emerald-500/50"
+                                />
+                                <button
+                                  type="button"
+                                  onClick={() => commitCustomCategory(editingSubscription.customCategory, 'edit')}
+                                  disabled={!editingSubscription.customCategory.trim()}
+                                  className={primaryButtonClass}
+                                >
+                                  Add
+                                </button>
+                              </div>
                             )}
                           </div>
                           <div>
@@ -1314,13 +1491,13 @@ export function SubscriptionTrackerTool({ toolId }: SubscriptionTrackerToolProps
                                 <div>
                                   <span className="text-slate-400">Billed Date:</span>
                                   <span className="ml-2 text-slate-200">
-                                    {subscription.billedDate ? new Date(subscription.billedDate).toLocaleDateString() : 'N/A'}
+                                    {subscription.billedDate ? formatLocalDate(subscription.billedDate) : 'N/A'}
                                   </span>
                                 </div>
                                 <div className="mt-1">
                                   <span className="text-slate-400">Renewal Date:</span>
                                   <span className="ml-2 text-slate-200">
-                                    {subscription.renewalDate ? new Date(subscription.renewalDate).toLocaleDateString() : 'N/A'}
+                                    {subscription.renewalDate ? formatLocalDate(subscription.renewalDate) : 'N/A'}
                                   </span>
                                 </div>
                               </div>
@@ -1378,7 +1555,11 @@ export function SubscriptionTrackerTool({ toolId }: SubscriptionTrackerToolProps
                 ))}
               </div>
             ) : (
-              <p className="text-slate-400 text-center py-8">No active subscriptions. Add one to get started!</p>
+              <p className="text-slate-400 text-center py-8">
+                {searchNeedle
+                  ? 'No matching subscriptions.'
+                  : 'No active subscriptions. Add one to get started!'}
+              </p>
             )}
           </div>
 
@@ -1418,7 +1599,7 @@ export function SubscriptionTrackerTool({ toolId }: SubscriptionTrackerToolProps
                             <div>
                               <span className="text-slate-500">Inactivated:</span>
                               <span className="ml-2 text-slate-400">
-                                {subscription.dateInactivated ? new Date(subscription.dateInactivated).toLocaleDateString() : 'N/A'}
+                                {subscription.dateInactivated ? formatLocalDate(subscription.dateInactivated) : 'N/A'}
                               </span>
                             </div>
                           </div>

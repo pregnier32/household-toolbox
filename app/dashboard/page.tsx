@@ -527,6 +527,11 @@ function CalendarView({
               <div className="space-y-3">
                 {selectedDay.events.map((event) => {
                   const scheduledDate = event.scheduled_date ? new Date(event.scheduled_date) : null;
+                  const subscriptionName =
+                    typeof event.metadata?.subscriptionName === 'string'
+                      ? event.metadata.subscriptionName.trim()
+                      : '';
+                  const detailName = subscriptionName || event.title;
                   const priorityColors = {
                     high: 'text-red-400',
                     medium: 'text-amber-400',
@@ -538,7 +543,7 @@ function CalendarView({
                       className="p-3 rounded-lg border border-slate-700 bg-slate-800/50"
                     >
                       <div className="flex items-start justify-between gap-2 mb-2">
-                        <h4 className="text-sm font-semibold text-slate-100 flex-1">{event.title}</h4>
+                        <h4 className="text-sm font-semibold text-slate-100 flex-1 min-w-0 break-words">{detailName}</h4>
                         {event.priority && (
                           <span className={`text-xs font-medium ${priorityColors[event.priority as keyof typeof priorityColors]}`}>
                             {event.priority.toUpperCase()}
