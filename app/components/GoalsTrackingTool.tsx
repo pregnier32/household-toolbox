@@ -55,6 +55,10 @@ export type Goal = {
 const DEFAULT_CATEGORY_NAMES = ['Home', 'Finance', 'Health', 'Career', 'Personal'];
 const DEFAULT_CATEGORY_COLORS = ['#10b981', '#3b82f6', '#8b5cf6', '#f59e0b', '#ec4899'];
 
+function isStockCategoryName(name: string): boolean {
+  return DEFAULT_CATEGORY_NAMES.includes(name);
+}
+
 function generateId(): string {
   return typeof crypto !== 'undefined' && crypto.randomUUID
     ? crypto.randomUUID()
@@ -131,6 +135,27 @@ export function getGoalPercentExport(goal: Goal): number {
     return Math.round((completed / goal.tasks.length) * 100);
   }
   return goal.percentComplete;
+}
+
+function getPhasePercent(goal: Goal, phaseId: string): number {
+  const phaseTasks = goal.tasks.filter((t) => t.phaseId === phaseId);
+  if (phaseTasks.length === 0) return 0;
+  const completed = phaseTasks.filter((t) => t.completed).length;
+  return Math.round((completed / phaseTasks.length) * 100);
+}
+
+function isGoalReminderOverdue(goal: Goal): boolean {
+  if (goal.reminderDays == null) return false;
+  const lastNote =
+    goal.updateNotes.length > 0
+      ? [...goal.updateNotes].sort((a, b) => b.noteDate.localeCompare(a.noteDate))[0]
+      : null;
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+  const daysSinceLastUpdate = lastNote
+    ? Math.floor((today.getTime() - new Date(lastNote.noteDate).getTime()) / (1000 * 60 * 60 * 24))
+    : Infinity;
+  return daysSinceLastUpdate >= goal.reminderDays;
 }
 
 type GoalsTrackingToolProps = {
@@ -343,8 +368,10 @@ export function GoalsTrackingTool({ toolId }: GoalsTrackingToolProps) {
     [toolId, showMessage]
   );
 
-  // Categories
-  const [selectedCategoryId, setSelectedCategoryId] = useState<string | null>(null);
+  // Categories — start with first in list when already loaded (no last-used store in this tool)
+  const [selectedCategoryId, setSelectedCategoryId] = useState<string | null>(
+    () => categories[0]?.id ?? null
+  );
   const [isCreatingNewCategory, setIsCreatingNewCategory] = useState(false);
   const [newCategoryName, setNewCategoryName] = useState('');
   const [newCategoryColor, setNewCategoryColor] = useState('#10b981');
@@ -379,10 +406,15 @@ export function GoalsTrackingTool({ toolId }: GoalsTrackingToolProps) {
   // Update note (when editing a goal)
   const [newUpdateNoteDate, setNewUpdateNoteDate] = useState(new Date().toISOString().split('T')[0]);
   const [newUpdateNoteText, setNewUpdateNoteText] = useState('');
+  const [isAddingUpdateOnCard, setIsAddingUpdateOnCard] = useState(false);
   const [editingNoteId, setEditingNoteId] = useState<string | null>(null);
   const [editNoteDate, setEditNoteDate] = useState('');
   const [editNoteText, setEditNoteText] = useState('');
   const [showAllUpdatesGoalId, setShowAllUpdatesGoalId] = useState<string | null>(null);
+
+  useEffect(() => {
+    setIsAddingUpdateOnCard(false);
+  }, [selectedGoalId]);
 
   // Filters
   const selectedCategory = categories.find((c) => c.id === selectedCategoryId);
@@ -392,16 +424,27 @@ export function GoalsTrackingTool({ toolId }: GoalsTrackingToolProps) {
       ? goalsInCategory.find((g) => g.id === selectedGoalId) ?? null
       : null;
 
-  // When category changes, select first goal or none and leave add form
+  // When categories load or change, keep a real selection if any exist
+  useEffect(() => {
+    if (categories.length === 0) {
+      setSelectedCategoryId(null);
+      return;
+    }
+    setSelectedCategoryId((prev) =>
+      prev && categories.some((c) => c.id === prev) ? prev : categories[0].id
+    );
+  }, [categories]);
+
+  // When category changes, keep the open goal only if it still belongs here; otherwise show the list
   useEffect(() => {
     if (!selectedCategoryId) return;
     const inCategory = goals.filter((g) => g.categoryId === selectedCategoryId);
-    const firstId = inCategory.length > 0 ? inCategory[0].id : null;
     setSelectedGoalId((prev) => {
       const stillInCategory = prev && inCategory.some((g) => g.id === prev);
-      return stillInCategory ? prev : firstId;
+      return stillInCategory ? prev : null;
     });
     setIsAddingGoal(false);
+    setIsAddingUpdateOnCard(false);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [selectedCategoryId]);
 
@@ -449,6 +492,12 @@ export function GoalsTrackingTool({ toolId }: GoalsTrackingToolProps) {
     setMenuOpenCategoryId(null);
   };
 
+  const cancelEditingCategory = () => {
+    setEditingCategoryId(null);
+    setEditingCategoryName('');
+    setEditingCategoryColor('#10b981');
+  };
+
   const saveCategoryEdit = async () => {
     if (!editingCategoryId || !editingCategoryName.trim()) return;
     if (toolId) {
@@ -475,11 +524,13 @@ export function GoalsTrackingTool({ toolId }: GoalsTrackingToolProps) {
         )
       );
     }
-    setEditingCategoryId(null);
+    cancelEditingCategory();
   };
 
   const deleteCategory = async () => {
     if (!deleteConfirmCategoryId || deleteConfirmText.toLowerCase() !== 'delete') return;
+    const deleting = categories.find((c) => c.id === deleteConfirmCategoryId);
+    if (deleting && isStockCategoryName(deleting.name)) return;
     if (toolId) {
       const ok = await apiPost('category', 'delete', { categoryId: deleteConfirmCategoryId });
       if (!ok) return;
@@ -513,8 +564,7 @@ export function GoalsTrackingTool({ toolId }: GoalsTrackingToolProps) {
 
   const cancelAddingGoal = () => {
     setIsAddingGoal(false);
-    const first = goalsInCategory[0];
-    setSelectedGoalId(first ? first.id : null);
+    setSelectedGoalId(null);
   };
 
   const addGoal = async () => {
@@ -610,35 +660,72 @@ export function GoalsTrackingTool({ toolId }: GoalsTrackingToolProps) {
     if (editingGoal) setEditingGoal((prev) => (prev ? { ...prev, ...updates } : null));
   };
 
-  const addUpdateNoteToEditingGoal = async () => {
-    if (!editingGoal || !newUpdateNoteText.trim()) return;
+  const markEditingGoalCompleted = async () => {
+    if (!editingGoal) return;
+    updateEditingGoal({ status: 'Completed' });
+    if (toolId) {
+      const data = await apiPost('goal', 'update', { goalId: editingGoal.id, status: 'Completed' });
+      if (!data?.goal) return;
+    }
+    setGoals((prev) => prev.map((g) => (g.id === editingGoal.id ? { ...g, status: 'Completed' } : g)));
+  };
+
+  const promptMarkCompletedIfReached100 = (prevPercent: number, nextPercent: number, status: GoalStatus) => {
+    if (prevPercent >= 100 || nextPercent < 100 || status === 'Completed') return;
+    if (window.confirm('Mark this goal Completed?')) {
+      void markEditingGoalCompleted();
+    }
+  };
+
+  const addUpdateNoteToGoal = async (goal: Goal | null) => {
+    if (!goal || !newUpdateNoteText.trim()) return;
+    let note: UpdateNote;
     if (toolId) {
       const data = await apiPost('update_note', 'create', {
-        goalId: editingGoal.id,
+        goalId: goal.id,
         noteDate: newUpdateNoteDate,
         note: newUpdateNoteText.trim(),
       });
       if (!data?.note) return;
-      const note: UpdateNote = {
+      note = {
         id: data.note.id,
         goalId: data.note.goalId,
         noteDate: data.note.noteDate,
         note: data.note.note,
       };
-      setEditingGoal((prev) =>
-        prev ? { ...prev, updateNotes: [...prev.updateNotes, note], lastUpdateDate: newUpdateNoteDate } : null
-      );
     } else {
-      const note: UpdateNote = {
+      note = {
         id: generateId(),
-        goalId: editingGoal.id,
+        goalId: goal.id,
         noteDate: newUpdateNoteDate,
         note: newUpdateNoteText.trim(),
       };
-      setEditingGoal((prev) =>
-        prev ? { ...prev, updateNotes: [...prev.updateNotes, note], lastUpdateDate: newUpdateNoteDate } : null
-      );
     }
+    const applyNote = (g: Goal) =>
+      g.id === goal.id
+        ? { ...g, updateNotes: [...g.updateNotes, note], lastUpdateDate: newUpdateNoteDate }
+        : g;
+    setGoals((prev) => prev.map(applyNote));
+    if (editingGoal?.id === goal.id) {
+      setEditingGoal((prev) => (prev ? applyNote(prev) : null));
+    }
+    setNewUpdateNoteText('');
+    setNewUpdateNoteDate(new Date().toISOString().split('T')[0]);
+    setIsAddingUpdateOnCard(false);
+  };
+
+  const addUpdateNoteToEditingGoal = async () => {
+    await addUpdateNoteToGoal(editingGoal);
+  };
+
+  const startAddingUpdateOnCard = () => {
+    setNewUpdateNoteDate(new Date().toISOString().split('T')[0]);
+    setNewUpdateNoteText('');
+    setIsAddingUpdateOnCard(true);
+  };
+
+  const cancelAddingUpdateOnCard = () => {
+    setIsAddingUpdateOnCard(false);
     setNewUpdateNoteText('');
     setNewUpdateNoteDate(new Date().toISOString().split('T')[0]);
   };
@@ -792,20 +879,25 @@ export function GoalsTrackingTool({ toolId }: GoalsTrackingToolProps) {
   const toggleTaskCompleted = async (taskId: string) => {
     const task = editingGoal?.tasks.find((t) => t.id === taskId);
     const next = task ? !task.completed : false;
-    setEditingGoal((prev) =>
-      prev
-        ? {
-            ...prev,
-            tasks: prev.tasks.map((t) => (t.id === taskId ? { ...t, completed: next } : t)),
-          }
-        : null
-    );
+    const nextGoal = editingGoal
+      ? { ...editingGoal, tasks: editingGoal.tasks.map((t) => (t.id === taskId ? { ...t, completed: next } : t)) }
+      : null;
+    const prevPercent = editingGoal ? getGoalPercent(editingGoal) : 0;
+    const nextPercent = nextGoal ? getGoalPercent(nextGoal) : 0;
+    setEditingGoal(nextGoal);
     if (toolId) await apiPost('task', 'update', { taskId, completed: next });
+    if (editingGoal) promptMarkCompletedIfReached100(prevPercent, nextPercent, editingGoal.status);
   };
 
   const deleteTask = async (taskId: string) => {
+    const nextGoal = editingGoal
+      ? { ...editingGoal, tasks: editingGoal.tasks.filter((t) => t.id !== taskId) }
+      : null;
+    const prevPercent = editingGoal ? getGoalPercent(editingGoal) : 0;
+    const nextPercent = nextGoal ? getGoalPercent(nextGoal) : 0;
     if (toolId) await apiPost('task', 'delete', { taskId });
-    setEditingGoal((prev) => (prev ? { ...prev, tasks: prev.tasks.filter((t) => t.id !== taskId) } : null));
+    setEditingGoal(nextGoal);
+    if (editingGoal) promptMarkCompletedIfReached100(prevPercent, nextPercent, editingGoal.status);
   };
 
   // Escape to close modals
@@ -822,11 +914,14 @@ export function GoalsTrackingTool({ toolId }: GoalsTrackingToolProps) {
           setDeleteConfirmGoalId(null);
           setDeleteGoalConfirmText('');
         }
+        if (editingCategoryId) {
+          cancelEditingCategory();
+        }
       }
     };
     window.addEventListener('keydown', onKeyDown);
     return () => window.removeEventListener('keydown', onKeyDown);
-  }, [deleteConfirmCategoryId, deleteConfirmGoalId, showAllUpdatesGoalId]);
+  }, [deleteConfirmCategoryId, deleteConfirmGoalId, showAllUpdatesGoalId, editingCategoryId]);
 
   return (
     <div className="space-y-6 relative">
@@ -854,49 +949,7 @@ export function GoalsTrackingTool({ toolId }: GoalsTrackingToolProps) {
 
         {!isCreatingNewCategory ? (
           <div className="flex items-center gap-3 flex-wrap">
-            {categories.map((cat) =>
-              editingCategoryId === cat.id ? (
-                <div
-                  key={cat.id}
-                  className={`px-4 py-3 rounded-lg border min-w-[200px] ${isLight ? 'bg-white' : 'border-slate-600 bg-slate-800'}`}
-                  style={{ borderColor: editingCategoryColor, backgroundColor: isLight ? `${editingCategoryColor}12` : `${editingCategoryColor}15` }}
-                >
-                  <div className="flex items-center gap-2 mb-2">
-                    <input
-                      type="text"
-                      value={editingCategoryName}
-                      onChange={(e) => setEditingCategoryName(e.target.value)}
-                      className={`flex-1 px-2 py-1 rounded border text-sm focus:border-emerald-500/50 focus:outline-none ${isLight ? 'border-slate-300 bg-white text-slate-900' : 'border-slate-600 bg-slate-900 text-slate-100'}`}
-                      placeholder="Category name"
-                      autoFocus
-                    />
-                  </div>
-                  <div className="flex items-center gap-2 mb-2">
-                    <label className={mutedSmallClass}>Color:</label>
-                    <input
-                      type="color"
-                      value={editingCategoryColor}
-                      onChange={(e) => setEditingCategoryColor(e.target.value)}
-                      className={`h-6 w-12 rounded cursor-pointer ${isLight ? 'border border-slate-300' : 'border border-slate-600'}`}
-                    />
-                  </div>
-                  <div className="flex items-center gap-2">
-                    <button
-                      onClick={saveCategoryEdit}
-                      disabled={!editingCategoryName.trim()}
-                      className={primaryButtonXsClass}
-                    >
-                      Save
-                    </button>
-                    <button
-                      onClick={() => setEditingCategoryId(null)}
-                      className={secondaryButtonSmClass}
-                    >
-                      Cancel
-                    </button>
-                  </div>
-                </div>
-              ) : (
+            {categories.map((cat) => (
                 <div key={cat.id} className="relative">
                   <button
                     onClick={() => selectCategory(cat.id)}
@@ -947,6 +1000,7 @@ export function GoalsTrackingTool({ toolId }: GoalsTrackingToolProps) {
                         </svg>
                         Edit
                       </button>
+                      {!isStockCategoryName(cat.name) && (
                       <button
                         type="button"
                         onClick={(e) => {
@@ -962,11 +1016,11 @@ export function GoalsTrackingTool({ toolId }: GoalsTrackingToolProps) {
                         </svg>
                         Delete
                       </button>
+                      )}
                     </div>
                   )}
                 </div>
-              )
-            )}
+            ))}
             <button
               type="button"
               onClick={() => {
@@ -1039,6 +1093,53 @@ export function GoalsTrackingTool({ toolId }: GoalsTrackingToolProps) {
         <div className="fixed inset-0 z-40" onClick={() => setMenuOpenCategoryId(null)} aria-hidden="true" />
       )}
 
+      {editingCategoryId && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+          <div className={modalCardConfirmClass}>
+            <h3 className={`${modalTitleClass} mb-4`}>Edit Category</h3>
+            <div className="flex items-end gap-2 flex-wrap">
+              <div className="flex-1 min-w-[200px]">
+                <label className={`block text-sm font-medium mb-2 ${isLight ? 'text-slate-700' : 'text-slate-300'}`}>
+                  Category Name
+                </label>
+                <input
+                  type="text"
+                  value={editingCategoryName}
+                  onChange={(e) => setEditingCategoryName(e.target.value)}
+                  placeholder="Enter category name"
+                  className={inputClassPad}
+                  autoFocus
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter') saveCategoryEdit();
+                    if (e.key === 'Escape') cancelEditingCategory();
+                  }}
+                />
+              </div>
+              <div className="flex items-center gap-2">
+                <label className={isLight ? 'text-sm text-slate-600' : 'text-sm text-slate-400'}>Color:</label>
+                <input
+                  type="color"
+                  value={editingCategoryColor}
+                  onChange={(e) => setEditingCategoryColor(e.target.value)}
+                  className={`h-8 w-12 rounded cursor-pointer ${isLight ? 'border border-slate-300' : 'border border-slate-600'}`}
+                />
+              </div>
+              <button
+                type="button"
+                onClick={saveCategoryEdit}
+                disabled={!editingCategoryName.trim()}
+                className={primaryButtonClass}
+              >
+                Save
+              </button>
+              <button type="button" onClick={cancelEditingCategory} className={secondaryButtonClass}>
+                Cancel
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Delete category confirmation */}
       {deleteConfirmCategoryId && (
         <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
@@ -1085,7 +1186,7 @@ export function GoalsTrackingTool({ toolId }: GoalsTrackingToolProps) {
         </div>
       )}
 
-      {!selectedCategoryId && !isCreatingNewCategory && (
+      {!isLoadingData && categories.length === 0 && !isCreatingNewCategory && (
         <div className={cardMutedClass}>
           <p className={isLight ? 'text-slate-600' : 'text-slate-400'}>Select a category or create one to manage goals.</p>
         </div>
@@ -1093,31 +1194,16 @@ export function GoalsTrackingTool({ toolId }: GoalsTrackingToolProps) {
 
       {selectedCategoryId && selectedCategory && (
         <>
-          {/* Category name + one tab per goal + Add Goal tab */}
+          {/* Category header + goal list (name + %) */}
           <div className={`border-b ${tabStripBorderClass}`}>
-            <div className="flex gap-2 items-center flex-wrap">
+            <div className="flex gap-2 items-center justify-between flex-wrap">
               <div
-                className={`px-4 py-2 text-[18px] font-medium whitespace-nowrap border-b-2 border-transparent ${
+                className={`px-4 py-2 text-[18px] font-medium whitespace-nowrap ${
                   isLight ? 'text-slate-800' : 'text-slate-200'
                 }`}
               >
-                {selectedCategory.name}:
+                {selectedCategory.name}
               </div>
-              {goalsInCategory.map((goal) => (
-                <button
-                  type="button"
-                  key={goal.id}
-                  onClick={() => {
-                    setSelectedGoalId(goal.id);
-                    setIsAddingGoal(false);
-                  }}
-                  className={`px-4 py-2 text-sm font-medium transition-colors whitespace-nowrap ${
-                    selectedGoalId === goal.id && !isAddingGoal ? goalSubTabActiveClass : goalSubTabInactiveClass
-                  }`}
-                >
-                  {goal.title}
-                </button>
-              ))}
               <button
                 type="button"
                 onClick={startAddingGoal}
@@ -1129,6 +1215,52 @@ export function GoalsTrackingTool({ toolId }: GoalsTrackingToolProps) {
               </button>
             </div>
           </div>
+
+          {!isAddingGoal && goalsInCategory.length > 0 && (
+            <div className={`${tableWrapClass} mt-4`}>
+              {goalsInCategory.map((goal, index) => {
+                const percent = getGoalPercent(goal);
+                const isOpen = selectedGoalId === goal.id;
+                return (
+                  <button
+                    type="button"
+                    key={goal.id}
+                    onClick={() => {
+                      setSelectedGoalId(goal.id);
+                      setIsAddingGoal(false);
+                    }}
+                    className={`w-full flex items-center justify-between gap-3 px-4 py-3 text-left text-sm font-medium transition-colors ${
+                      index > 0 ? `border-t ${borderDividerClass}` : ''
+                    } ${
+                      isOpen
+                        ? isLight
+                          ? 'bg-slate-100 text-slate-900'
+                          : 'bg-slate-800/50 text-slate-100'
+                        : isLight
+                          ? 'text-slate-800 hover:bg-slate-50'
+                          : 'text-slate-200 hover:bg-slate-800/30'
+                    }`}
+                  >
+                    <span className="inline-flex items-center gap-1.5 min-w-0">
+                      <span className="truncate">{goal.title}</span>
+                      {isGoalReminderOverdue(goal) && (
+                        <span
+                          className="inline-flex text-amber-400 shrink-0"
+                          title={`No update in ${goal.reminderDays} days — reminder overdue`}
+                          aria-label="Update reminder overdue"
+                        >
+                          <svg className="h-4 w-4" fill="currentColor" viewBox="0 0 24 24">
+                            <path fillRule="evenodd" d="M8.485 2.495c.673-1.167 2.357-1.167 3.03 0l6.28 10.875c.673 1.167-.17 2.625-1.516 2.625H3.72c-1.347 0-2.189-1.458-1.515-2.625L8.485 2.495zM10 9a1 1 0 011 1v3a1 1 0 11-2 0v-3a1 1 0 011-1zm0 7a1 1 0 100 2 1 1 0 000-2z" clipRule="evenodd" />
+                          </svg>
+                        </span>
+                      )}
+                    </span>
+                    <span className={`${panelStrongTextClass} shrink-0`}>{percent}%</span>
+                  </button>
+                );
+              })}
+            </div>
+          )}
 
           {/* Add goal form */}
           {isAddingGoal && (
@@ -1210,34 +1342,27 @@ export function GoalsTrackingTool({ toolId }: GoalsTrackingToolProps) {
             </div>
           )}
 
-          {/* Single goal view (one record per tab) */}
-          {!isAddingGoal && (
+          {!isAddingGoal && goalsInCategory.length === 0 && (
+            <div className={`${cardMutedClass} mt-4`}>
+              <p className={`mb-4 ${isLight ? 'text-slate-600' : 'text-slate-400'}`}>
+                No goal selected. Click &quot;+ Add Goal&quot; to create one.
+              </p>
+              <button type="button" onClick={startAddingGoal} className={primaryButtonClass}>
+                + Add Goal
+              </button>
+            </div>
+          )}
+
+          {/* Existing goal detail (opens from list row) */}
+          {!isAddingGoal && selectedGoal && (
             <div className="mt-4">
-              {!selectedGoal ? (
-                <div className={cardMutedClass}>
-                  <p className={`mb-4 ${isLight ? 'text-slate-600' : 'text-slate-400'}`}>
-                    No goal selected. Click &quot;+ Add Goal&quot; to create one.
-                  </p>
-                  <button type="button" onClick={startAddingGoal} className={primaryButtonClass}>
-                    + Add Goal
-                  </button>
-                </div>
-              ) : (
-                (() => {
+              {(() => {
                   const goal = selectedGoal;
                   const percent = getGoalPercent(goal);
                   const recentUpdates = [...goal.updateNotes]
                     .sort((a, b) => b.noteDate.localeCompare(a.noteDate))
                     .slice(0, 3);
-                  const lastNote = goal.updateNotes.length > 0
-                    ? [...goal.updateNotes].sort((a, b) => b.noteDate.localeCompare(a.noteDate))[0]
-                    : null;
-                  const today = new Date();
-                  today.setHours(0, 0, 0, 0);
-                  const daysSinceLastUpdate = lastNote
-                    ? Math.floor((today.getTime() - new Date(lastNote.noteDate).getTime()) / (1000 * 60 * 60 * 24))
-                    : Infinity;
-                  const showReminderWarning = goal.reminderDays != null && daysSinceLastUpdate >= goal.reminderDays;
+                  const showReminderWarning = isGoalReminderOverdue(goal);
                   return (
                     <div className={nestedGoalCardClass}>
                       <div className="flex flex-col md:flex-row items-stretch gap-6">
@@ -1250,13 +1375,14 @@ export function GoalsTrackingTool({ toolId }: GoalsTrackingToolProps) {
                               <h3 className={goalTitleHeroClass}>{goal.title}</h3>
                               {showReminderWarning && (
                                 <span
-                                  className="inline-flex text-amber-400 shrink-0"
+                                  className="inline-flex items-center gap-1.5 text-amber-400 shrink-0"
                                   title={`No update in ${goal.reminderDays} days — reminder overdue`}
                                   aria-label="Update reminder overdue"
                                 >
                                   <svg className="h-6 w-6" fill="currentColor" viewBox="0 0 24 24">
                                     <path fillRule="evenodd" d="M8.485 2.495c.673-1.167 2.357-1.167 3.03 0l6.28 10.875c.673 1.167-.17 2.625-1.516 2.625H3.72c-1.347 0-2.189-1.458-1.515-2.625L8.485 2.495zM10 9a1 1 0 011 1v3a1 1 0 11-2 0v-3a1 1 0 011-1zm0 7a1 1 0 100 2 1 1 0 000-2z" clipRule="evenodd" />
                                   </svg>
+                                  <span className="text-sm font-medium">Update overdue</span>
                                 </span>
                               )}
                             </div>
@@ -1377,7 +1503,48 @@ export function GoalsTrackingTool({ toolId }: GoalsTrackingToolProps) {
                                   </svg>
                                 </button>
                               )}
+                              {!isAddingUpdateOnCard && (
+                                <button
+                                  type="button"
+                                  onClick={startAddingUpdateOnCard}
+                                  className={`${addTaskLinkClass} mt-0`}
+                                >
+                                  Add update
+                                </button>
+                              )}
                             </div>
+                            {isAddingUpdateOnCard && (
+                              <div className="flex flex-wrap gap-2 mb-2">
+                                <input
+                                  type="date"
+                                  value={newUpdateNoteDate}
+                                  onChange={(e) => setNewUpdateNoteDate(e.target.value)}
+                                  className={`${inputClassPad} w-auto min-w-[140px]`}
+                                />
+                                <input
+                                  type="text"
+                                  value={newUpdateNoteText}
+                                  onChange={(e) => setNewUpdateNoteText(e.target.value)}
+                                  placeholder="What did you do?"
+                                  className={`${inputClassPad} flex-1 min-w-[160px]`}
+                                />
+                                <button
+                                  type="button"
+                                  onClick={() => addUpdateNoteToGoal(goal)}
+                                  disabled={!newUpdateNoteText.trim()}
+                                  className={primaryButtonSmClass}
+                                >
+                                  Add
+                                </button>
+                                <button
+                                  type="button"
+                                  onClick={cancelAddingUpdateOnCard}
+                                  className={secondaryButtonSmClass}
+                                >
+                                  Cancel
+                                </button>
+                              </div>
+                            )}
                             {recentUpdates.length === 0 ? (
                               <p className={bodyMutedClass}>No updates yet.</p>
                             ) : (
@@ -1396,8 +1563,7 @@ export function GoalsTrackingTool({ toolId }: GoalsTrackingToolProps) {
                       </div>
                     </div>
                   );
-                })()
-              )}
+                })()}
             </div>
           )}
 
@@ -1548,6 +1714,9 @@ export function GoalsTrackingTool({ toolId }: GoalsTrackingToolProps) {
                                   onChange={(e) => updatePhaseName(phase.id, e.target.value)}
                                   className={inlineInputClass}
                                 />
+                                <span className={`${panelStrongTextClass} shrink-0`}>
+                                  {getPhasePercent(editingGoal, phase.id)}%
+                                </span>
                                 <button
                                   type="button"
                                   onClick={() => deletePhaseFromEditingGoal(phase.id)}
@@ -1606,21 +1775,38 @@ export function GoalsTrackingTool({ toolId }: GoalsTrackingToolProps) {
                       <label className={`text-sm font-medium ${isLight ? 'text-slate-700' : 'text-slate-300'}`}>Completion %</label>
                       <span className={panelStrongTextClass}>{editingGoal.useTaskProgressForPercent ? 'From tasks' : editingGoal.percentComplete + '%'}</span>
                     </div>
-                    {!editingGoal.useTaskProgressForPercent && (
-                      <input
-                        type="range"
-                        min={0}
-                        max={100}
-                        value={editingGoal.percentComplete}
-                        onChange={(e) => updateEditingGoal({ percentComplete: Number(e.target.value) })}
-                        className={rangeClass}
-                      />
-                    )}
+                    <input
+                      type="range"
+                      min={0}
+                      max={100}
+                      value={editingGoal.percentComplete}
+                      onChange={(e) => {
+                        const percentComplete = Number(e.target.value);
+                        const prevPercent = getGoalPercent(editingGoal);
+                        updateEditingGoal({ percentComplete });
+                        promptMarkCompletedIfReached100(
+                          prevPercent,
+                          getGoalPercent({ ...editingGoal, percentComplete }),
+                          editingGoal.status
+                        );
+                      }}
+                      disabled={editingGoal.useTaskProgressForPercent}
+                      className={rangeClass}
+                    />
                     <label className="flex items-center gap-2 mt-2 cursor-pointer">
                       <input
                         type="checkbox"
                         checked={editingGoal.useTaskProgressForPercent}
-                        onChange={(e) => updateEditingGoal({ useTaskProgressForPercent: e.target.checked })}
+                        onChange={(e) => {
+                          const useTaskProgressForPercent = e.target.checked;
+                          const prevPercent = getGoalPercent(editingGoal);
+                          updateEditingGoal({ useTaskProgressForPercent });
+                          promptMarkCompletedIfReached100(
+                            prevPercent,
+                            getGoalPercent({ ...editingGoal, useTaskProgressForPercent }),
+                            editingGoal.status
+                          );
+                        }}
                         className={checkboxClass}
                       />
                       <span className={`text-sm ${isLight ? 'text-slate-700' : 'text-slate-300'}`}>

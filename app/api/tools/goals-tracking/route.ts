@@ -245,6 +245,25 @@ export async function POST(request: NextRequest) {
         if (!categoryId) {
           return NextResponse.json({ error: 'Category ID is required' }, { status: 400 });
         }
+        const { data: existing } = await supabaseServer
+          .from('tools_gt_categories')
+          .select('id, name')
+          .eq('id', categoryId)
+          .eq('user_id', user.id)
+          .eq('tool_id', toolId)
+          .maybeSingle();
+        if (!existing) {
+          return NextResponse.json({ error: 'Category not found' }, { status: 404 });
+        }
+        const { data: defaults } = await supabaseServer
+          .from('tools_gt_default_categories')
+          .select('name');
+        const stockNames = new Set(
+          (defaults?.length ? defaults.map((d: { name: string }) => d.name) : ['Home', 'Finance', 'Health', 'Career', 'Personal'])
+        );
+        if (stockNames.has(existing.name)) {
+          return NextResponse.json({ error: 'Default categories cannot be deleted' }, { status: 400 });
+        }
         const { error } = await supabaseServer
           .from('tools_gt_categories')
           .delete()
