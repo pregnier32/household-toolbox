@@ -890,28 +890,58 @@ export async function DELETE(request: NextRequest) {
       return NextResponse.json({ error: 'Pet ID is required' }, { status: 400 });
     }
 
-    // Fetch pet to get toolId if not provided
-    let finalToolId = toolId;
-    if (!finalToolId) {
-      const { data: pet, error: petError } = await supabaseServer
-        .from('tools_pcs_pets')
-        .select('tool_id')
-        .eq('id', petId)
-        .eq('user_id', user.id)
-        .single();
+    const { data: pet, error: petError } = await supabaseServer
+      .from('tools_pcs_pets')
+      .select('id, tool_id')
+      .eq('id', petId)
+      .eq('user_id', user.id)
+      .single();
 
-      if (petError || !pet) {
-        return NextResponse.json({ error: 'Pet not found' }, { status: 404 });
-      }
-      finalToolId = pet.tool_id;
+    if (petError || !pet) {
+      return NextResponse.json({ error: 'Pet not found' }, { status: 404 });
     }
 
-    // Delete dashboard items for this pet before deleting the pet
+    const finalToolId = toolId || pet.tool_id;
+
+    const { data: petDocs } = await supabaseServer
+      .from('tools_pcs_documents')
+      .select('file_url')
+      .eq('pet_id', petId);
+    const storagePaths = (petDocs || [])
+      .map((row: { file_url: string | null }) => {
+        if (!row.file_url) return null;
+        const marker = 'pet-care-schedule/';
+        const markerIndex = row.file_url.indexOf(marker);
+        if (markerIndex === -1) return null;
+        return row.file_url.slice(markerIndex + marker.length);
+      })
+      .filter((path: string | null): path is string => Boolean(path));
+    if (storagePaths.length > 0) {
+      await supabaseServer.storage.from('pet-care-schedule').remove(storagePaths);
+    }
+
     if (finalToolId) {
       await deleteDashboardItemsForPet(user.id, finalToolId, petId);
     }
 
-    // Delete pet (cascade will delete all related records)
+    const childTables = [
+      'tools_pcs_food_entries',
+      'tools_pcs_veterinary_records',
+      'tools_pcs_care_plan_items',
+      'tools_pcs_vaccinations',
+      'tools_pcs_appointments',
+      'tools_pcs_documents',
+      'tools_pcs_notes',
+    ] as const;
+
+    for (const table of childTables) {
+      const { error: childError } = await supabaseServer.from(table).delete().eq('pet_id', petId);
+      if (childError) {
+        console.error(`Error deleting ${table} for pet ${petId}:`, childError);
+        return NextResponse.json({ error: 'Failed to delete pet data' }, { status: 500 });
+      }
+    }
+
     const { error } = await supabaseServer
       .from('tools_pcs_pets')
       .delete()

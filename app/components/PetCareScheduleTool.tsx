@@ -110,6 +110,26 @@ const FREQUENCY_OPTIONS = [
   'As Needed'
 ];
 
+// Date-only YYYY-MM-DD as local calendar day (not UTC midnight).
+function parseLocalDate(isoDate: string): Date | null {
+  const match = /^(\d{4})-(\d{2})-(\d{2})/.exec(isoDate);
+  if (!match) return null;
+  return new Date(Number(match[1]), Number(match[2]) - 1, Number(match[3]));
+}
+
+function formatLocalDate(isoDate: string): string {
+  const d = parseLocalDate(isoDate);
+  return d ? d.toLocaleDateString() : isoDate;
+}
+
+function localToday(): string {
+  const d = new Date();
+  const year = d.getFullYear();
+  const month = String(d.getMonth() + 1).padStart(2, '0');
+  const day = String(d.getDate()).padStart(2, '0');
+  return `${year}-${month}-${day}`;
+}
+
 type Pet = {
   id: string;
   name: string;
@@ -259,7 +279,7 @@ export function PetCareScheduleTool({ toolId }: PetCareScheduleToolProps) {
   const [appointments, setAppointments] = useState<Appointment[]>([]);
   const [newAppointment, setNewAppointment] = useState({ date: '', time: '', type: '', veterinarian: '', notes: '', addToDashboard: false });
   const [editingAppointmentId, setEditingAppointmentId] = useState<string | null>(null);
-  const [editingAppointment, setEditingAppointment] = useState({ date: '', time: '', type: '', veterinarian: '', notes: '' });
+  const [editingAppointment, setEditingAppointment] = useState({ date: '', time: '', type: '', veterinarian: '', notes: '', addToDashboard: false });
   
   // Documents
   const [documents, setDocuments] = useState<Document[]>([]);
@@ -273,6 +293,9 @@ export function PetCareScheduleTool({ toolId }: PetCareScheduleToolProps) {
   const [editingNoteId, setEditingNoteId] = useState<string | null>(null);
   const [editingNote, setEditingNote] = useState({ content: '' });
   const [activeSection, setActiveSection] = useState<string>('info');
+  const [addingSection, setAddingSection] = useState<string | null>(null);
+  const [appointmentSearch, setAppointmentSearch] = useState('');
+  const [documentSearch, setDocumentSearch] = useState('');
   const [showExportPopup, setShowExportPopup] = useState(false);
   const [includeHistory, setIncludeHistory] = useState(false);
 
@@ -327,7 +350,7 @@ export function PetCareScheduleTool({ toolId }: PetCareScheduleToolProps) {
         startDate: c.startDate,
         endDate: c.endDate,
         notes: c.notes || '',
-        addToDashboard: false,
+        addToDashboard: Boolean(c.addToDashboard),
       })).sort((a, b) => a.name.localeCompare(b.name)),
       vaccinations: vaccinations.map(v => ({
         name: v.name.trim(),
@@ -342,7 +365,7 @@ export function PetCareScheduleTool({ toolId }: PetCareScheduleToolProps) {
         veterinarian: (a.veterinarian || '').trim(),
         notes: (a.notes || '').trim(),
         isUpcoming: a.isUpcoming,
-        addToDashboard: false,
+        addToDashboard: Boolean(a.addToDashboard),
       })).sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime()),
       documents: documents.map(d => {
         const doc: any = {
@@ -455,7 +478,7 @@ export function PetCareScheduleTool({ toolId }: PetCareScheduleToolProps) {
             startDate: c.start_date,
             endDate: c.end_date,
             notes: (c.notes && c.notes.trim()) ? c.notes.trim() : '',
-            addToDashboard: false,
+            addToDashboard: Boolean(c.add_to_dashboard),
             priority: (c.priority && ['low', 'medium', 'high'].includes(c.priority)) ? c.priority : 'medium' as 'low' | 'medium' | 'high',
           };
           console.log(`Loading care plan item: ${mappedItem.name}, notes: "${mappedItem.notes}"`);
@@ -478,7 +501,7 @@ export function PetCareScheduleTool({ toolId }: PetCareScheduleToolProps) {
           veterinarian: a.veterinarian || '',
           notes: a.notes || '',
           isUpcoming: a.is_upcoming,
-          addToDashboard: false,
+          addToDashboard: Boolean(a.add_to_dashboard),
         })));
         
         setDocuments((pet.documents || []).map((d: any) => ({
@@ -600,7 +623,7 @@ export function PetCareScheduleTool({ toolId }: PetCareScheduleToolProps) {
               startDate: c.startDate,
               endDate: c.endDate,
               notes: notesValue,
-              addToDashboard: false,
+              addToDashboard: Boolean(c.addToDashboard),
               priority: (c.priority && ['low', 'medium', 'high'].includes(c.priority)) ? c.priority : 'medium',
             };
           }),
@@ -617,7 +640,7 @@ export function PetCareScheduleTool({ toolId }: PetCareScheduleToolProps) {
             veterinarian: a.veterinarian,
             notes: a.notes || '',
             isUpcoming: a.isUpcoming,
-            addToDashboard: false,
+            addToDashboard: Boolean(a.addToDashboard),
           })),
           documents: documents.map(d => {
             const doc: any = {
@@ -818,7 +841,7 @@ export function PetCareScheduleTool({ toolId }: PetCareScheduleToolProps) {
             startDate: c.start_date,
             endDate: c.end_date,
             notes: c.notes || '',
-            addToDashboard: false,
+            addToDashboard: Boolean(c.add_to_dashboard),
           })),
           vaccinations: (currentPet.vaccinations || []).map((v: any) => ({
             name: v.name,
@@ -833,7 +856,7 @@ export function PetCareScheduleTool({ toolId }: PetCareScheduleToolProps) {
             veterinarian: a.veterinarian || '',
             notes: a.notes || '',
             isUpcoming: a.is_upcoming,
-            addToDashboard: false,
+            addToDashboard: Boolean(a.add_to_dashboard),
           })),
           documents: (currentPet.documents || []).map((d: any) => ({
             name: d.name,
@@ -944,7 +967,7 @@ export function PetCareScheduleTool({ toolId }: PetCareScheduleToolProps) {
             startDate: c.start_date,
             endDate: c.end_date,
             notes: c.notes || '',
-            addToDashboard: false,
+            addToDashboard: Boolean(c.add_to_dashboard),
           })),
           vaccinations: (currentPet.vaccinations || []).map((v: any) => ({
             name: v.name,
@@ -959,7 +982,7 @@ export function PetCareScheduleTool({ toolId }: PetCareScheduleToolProps) {
             veterinarian: a.veterinarian || '',
             notes: a.notes || '',
             isUpcoming: a.is_upcoming,
-            addToDashboard: false,
+            addToDashboard: Boolean(a.add_to_dashboard),
           })),
           documents: (currentPet.documents || []).map((d: any) => ({
             name: d.name,
@@ -1063,6 +1086,9 @@ export function PetCareScheduleTool({ toolId }: PetCareScheduleToolProps) {
     setDocuments([]);
     setNotes([]);
     setCurrentNote('');
+    setAddingSection(null);
+    setAppointmentSearch('');
+    setDocumentSearch('');
   };
 
   const handlePetTypeChange = (value: string) => {
@@ -1088,7 +1114,7 @@ export function PetCareScheduleTool({ toolId }: PetCareScheduleToolProps) {
         id: Date.now().toString(),
         name: currentFood.name,
         rating: currentFood.rating,
-        startDate: new Date().toISOString().split('T')[0],
+        startDate: localToday(),
         endDate: null,
         isCurrent: true,
         notes: currentFood.notes || ''
@@ -1097,6 +1123,7 @@ export function PetCareScheduleTool({ toolId }: PetCareScheduleToolProps) {
       setFoods(prev => prev.map(f => ({ ...f, isCurrent: false })));
       setFoods(prev => [...prev, newFood]);
       setCurrentFood({ name: '', rating: null, notes: '' });
+      setAddingSection(null);
       // Save to database immediately
       setTimeout(() => savePetData(), 100);
     }
@@ -1105,7 +1132,7 @@ export function PetCareScheduleTool({ toolId }: PetCareScheduleToolProps) {
   const moveFoodToHistory = (foodId: string) => {
     setFoods(prev => prev.map(f => 
       f.id === foodId 
-        ? { ...f, isCurrent: false, endDate: new Date().toISOString().split('T')[0] }
+        ? { ...f, isCurrent: false, endDate: localToday() }
         : f
     ));
     // Save to database immediately
@@ -1173,14 +1200,15 @@ export function PetCareScheduleTool({ toolId }: PetCareScheduleToolProps) {
         name: newCareItem.name,
         frequency: newCareItem.frequency,
         isActive: true,
-        startDate: new Date().toISOString().split('T')[0],
+        startDate: localToday(),
         endDate: null,
         notes: newCareItem.notes || '',
-        addToDashboard: false,
+        addToDashboard: Boolean(newCareItem.addToDashboard),
         priority: newCareItem.priority || 'medium'
       };
       setCarePlanItems(prev => [...prev, newItem]);
       setNewCareItem({ name: '', frequency: 'Daily', notes: '', addToDashboard: false, priority: 'medium' });
+      setAddingSection(null);
       // Save to database immediately
       setTimeout(() => savePetData(), 100);
     }
@@ -1192,7 +1220,7 @@ export function PetCareScheduleTool({ toolId }: PetCareScheduleToolProps) {
         ? { 
             ...item, 
             isActive: !item.isActive,
-            endDate: item.isActive ? new Date().toISOString().split('T')[0] : null
+            endDate: item.isActive ? localToday() : null
           }
         : item
     ));
@@ -1207,7 +1235,7 @@ export function PetCareScheduleTool({ toolId }: PetCareScheduleToolProps) {
       name: item.name, 
       frequency: item.frequency, 
       notes: item.notes || '',
-      addToDashboard: false,
+      addToDashboard: Boolean(item.addToDashboard),
       priority: item.priority || 'medium'
     });
   };
@@ -1231,7 +1259,7 @@ export function PetCareScheduleTool({ toolId }: PetCareScheduleToolProps) {
             name: editingCareItem.name.trim(),
             frequency: editingCareItem.frequency,
             notes: notesValue,
-            addToDashboard: false,
+            addToDashboard: Boolean(editingCareItem.addToDashboard),
             priority: editingCareItem.priority || 'medium'
           }
         : item
@@ -1262,6 +1290,7 @@ export function PetCareScheduleTool({ toolId }: PetCareScheduleToolProps) {
       };
       setVaccinations(prev => [...prev, vaccination]);
       setNewVaccination({ name: '', date: '', veterinarian: '', notes: '' });
+      setAddingSection(null);
       // Save to database immediately
       setTimeout(() => savePetData(), 100);
     }
@@ -1312,16 +1341,17 @@ export function PetCareScheduleTool({ toolId }: PetCareScheduleToolProps) {
   };
 
   const addAppointment = async () => {
-    const todayKey = new Date().toISOString().split('T')[0];
+    const todayKey = localToday();
     if (newAppointment.date && newAppointment.type.trim()) {
       const appointment: Appointment = {
         id: Date.now().toString(),
         ...newAppointment,
         isUpcoming: newAppointment.date >= todayKey,
-        addToDashboard: false
+        addToDashboard: Boolean(newAppointment.addToDashboard)
       };
       setAppointments(prev => [...prev, appointment]);
       setNewAppointment({ date: '', time: '', type: '', veterinarian: '', notes: '', addToDashboard: false });
+      setAddingSection(null);
       // Save to database immediately
       setTimeout(() => savePetData(), 100);
     }
@@ -1334,18 +1364,19 @@ export function PetCareScheduleTool({ toolId }: PetCareScheduleToolProps) {
       time: appointment.time || '',
       type: appointment.type,
       veterinarian: appointment.veterinarian || '',
-      notes: appointment.notes || ''
+      notes: appointment.notes || '',
+      addToDashboard: Boolean(appointment.addToDashboard)
     });
   };
 
   const cancelEditingAppointment = () => {
     setEditingAppointmentId(null);
-    setEditingAppointment({ date: '', time: '', type: '', veterinarian: '', notes: '' });
+    setEditingAppointment({ date: '', time: '', type: '', veterinarian: '', notes: '', addToDashboard: false });
   };
 
   const saveAppointmentEdit = async () => {
     if (!editingAppointmentId || !editingAppointment.date || !editingAppointment.type.trim()) return;
-    const todayKey = new Date().toISOString().split('T')[0];
+    const todayKey = localToday();
     const updatedAppointments = appointments.map((appointment) =>
       appointment.id === editingAppointmentId
         ? {
@@ -1355,14 +1386,15 @@ export function PetCareScheduleTool({ toolId }: PetCareScheduleToolProps) {
             type: editingAppointment.type.trim(),
             veterinarian: editingAppointment.veterinarian || '',
             notes: editingAppointment.notes || '',
-            isUpcoming: editingAppointment.date >= todayKey
+            isUpcoming: editingAppointment.date >= todayKey,
+            addToDashboard: Boolean(editingAppointment.addToDashboard)
           }
         : appointment
     );
 
     setAppointments(updatedAppointments);
     setEditingAppointmentId(null);
-    setEditingAppointment({ date: '', time: '', type: '', veterinarian: '', notes: '' });
+    setEditingAppointment({ date: '', time: '', type: '', veterinarian: '', notes: '', addToDashboard: false });
 
     setTimeout(() => {
       savePetData(undefined, undefined, undefined, undefined, updatedAppointments);
@@ -1374,7 +1406,7 @@ export function PetCareScheduleTool({ toolId }: PetCareScheduleToolProps) {
       const record: VeterinaryRecord = {
         id: Date.now().toString(),
         ...newVetRecord,
-        dateAdded: new Date().toISOString().split('T')[0],
+        dateAdded: localToday(),
         notes: newVetRecord.notes || ''
       };
       setVeterinaryRecords(prev => [...prev, record]);
@@ -1387,6 +1419,7 @@ export function PetCareScheduleTool({ toolId }: PetCareScheduleToolProps) {
         status: 'Active',
         notes: ''
       });
+      setAddingSection(null);
       // Save to database immediately
       setTimeout(() => savePetData(), 100);
     }
@@ -1474,6 +1507,7 @@ export function PetCareScheduleTool({ toolId }: PetCareScheduleToolProps) {
       };
       setDocuments(prev => [...prev, document]);
       setNewDocument({ name: '', date: '', description: '', file: null });
+      setAddingSection(null);
       // Save to database immediately
       setTimeout(() => savePetData(), 100);
     }
@@ -1547,11 +1581,12 @@ export function PetCareScheduleTool({ toolId }: PetCareScheduleToolProps) {
       const note: Note = {
         id: Date.now().toString(),
         content: currentNote,
-        date: new Date().toISOString().split('T')[0],
+        date: localToday(),
         isCurrent: true
       };
       setNotes(prev => [...prev, note]);
       setCurrentNote('');
+      setAddingSection(null);
       // Save to database immediately
       setTimeout(() => savePetData(), 100);
     }
@@ -1929,6 +1964,10 @@ export function PetCareScheduleTool({ toolId }: PetCareScheduleToolProps) {
   };
 
   const selectedPet = pets.find(p => p.id === selectedPetId);
+  const documentNeedle = documentSearch.trim().toLowerCase();
+  const filteredDocuments = documents.filter((doc) =>
+    documentNeedle === '' || doc.name.toLowerCase().includes(documentNeedle)
+  );
 
   return (
     <div className="space-y-6">
@@ -2070,6 +2109,9 @@ export function PetCareScheduleTool({ toolId }: PetCareScheduleToolProps) {
                     }}
                   >
                     <div className="font-medium text-center">{pet.name}</div>
+                    <div className={isLight ? 'text-xs text-center text-slate-600 mt-0.5' : 'text-xs text-center text-slate-300 mt-0.5 opacity-80'}>
+                      {pet.custom_pet_type || pet.pet_type || '—'}
+                    </div>
                   </button>
                   {/* Ellipsis Menu Button */}
                   <button
@@ -2079,6 +2121,7 @@ export function PetCareScheduleTool({ toolId }: PetCareScheduleToolProps) {
                     }}
                     className={isLight ? 'absolute top-1 right-1 p-1 rounded hover:bg-slate-100 transition-colors' : 'absolute top-1 right-1 p-1 rounded hover:bg-slate-700/50 transition-colors'}
                     title="Pet options"
+                    aria-label="Pet options"
                   >
                     <svg className={isLight ? 'h-4 w-4 text-slate-600 hover:text-slate-900' : 'h-4 w-4 text-slate-400 hover:text-slate-200'} fill="currentColor" viewBox="0 0 24 24">
                       <path d="M12 8c1.1 0 2-.9 2-2s-.9-2-2-2-2 .9-2 2 .9 2 2 2zm0 2c-1.1 0-2 .9-2 2s.9 2 2 2 2-.9 2-2-.9-2-2-2zm0 6c-1.1 0-2 .9-2 2s.9 2 2 2 2-.9 2-2-.9-2-2-2z" />
@@ -2128,6 +2171,7 @@ export function PetCareScheduleTool({ toolId }: PetCareScheduleToolProps) {
               }}
               className={isLight ? 'px-4 py-3 rounded-lg border-2 border-slate-400 bg-slate-100 text-slate-700 hover:bg-slate-200 hover:text-slate-900 transition-all duration-200 flex items-center justify-center min-w-[60px]' : 'px-4 py-3 rounded-lg border border-slate-700 bg-slate-800/50 text-slate-300 hover:border-emerald-500/50 hover:bg-emerald-500/10 hover:text-emerald-300 transition-all duration-200 flex items-center justify-center min-w-[60px]'}
               title="Add New Pet"
+              aria-label="Add New Pet"
             >
               <svg className="h-6 w-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
@@ -2466,6 +2510,13 @@ export function PetCareScheduleTool({ toolId }: PetCareScheduleToolProps) {
       {/* Food Section */}
       {activeSection === 'food' && (
         <div className="space-y-6">
+          {addingSection !== 'food' ? (
+            <div className="flex justify-start">
+              <button type="button" onClick={() => setAddingSection('food')} className={primaryButtonClass}>
+                + Add Food
+              </button>
+            </div>
+          ) : (
           <div className="rounded-2xl border border-slate-800 bg-slate-900/70 p-6">
             <h3 className="text-lg font-semibold text-slate-50 mb-4">Enter New Food Item</h3>
             <div className="space-y-4">
@@ -2495,14 +2546,27 @@ export function PetCareScheduleTool({ toolId }: PetCareScheduleToolProps) {
                   className="w-full px-3 py-2 rounded-lg border border-slate-700 bg-slate-900/70 text-slate-100 placeholder-slate-500 focus:border-emerald-500/50 focus:outline-none focus:ring-1 focus:ring-emerald-500/50 resize-none"
                 />
               </div>
-              <button
-                onClick={addCurrentFood}
-                className={primaryButtonClass}
-              >
-                Add Current Food
-              </button>
+              <div className="flex gap-2">
+                <button
+                  onClick={addCurrentFood}
+                  className={primaryButtonClass}
+                >
+                  Add Current Food
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setAddingSection(null);
+                    setCurrentFood({ name: '', rating: null, notes: '' });
+                  }}
+                  className={secondaryButtonClass}
+                >
+                  Cancel
+                </button>
+              </div>
             </div>
           </div>
+          )}
 
           {foods.filter(f => f.isCurrent).length > 0 && (
             <div className="rounded-2xl border border-slate-800 bg-slate-900/70 p-6">
@@ -2560,7 +2624,7 @@ export function PetCareScheduleTool({ toolId }: PetCareScheduleToolProps) {
                       <div className="flex items-center justify-between">
                         <div className="flex-1">
                           <h4 className="text-slate-100 font-medium">{food.name}</h4>
-                          <p className="text-sm text-slate-400">Started: {new Date(food.startDate).toLocaleDateString()}</p>
+                          <p className="text-sm text-slate-400">Started: {formatLocalDate(food.startDate)}</p>
                           {food.rating && (
                             <div className="mt-2">
                               <span className="text-sm text-slate-300">Rating: </span>
@@ -2671,7 +2735,7 @@ export function PetCareScheduleTool({ toolId }: PetCareScheduleToolProps) {
                         <div className="flex-1">
                           <h4 className="text-slate-100 font-medium">{food.name}</h4>
                           <p className="text-sm text-slate-400">
-                            {new Date(food.startDate).toLocaleDateString()} - {food.endDate ? new Date(food.endDate).toLocaleDateString() : 'Present'}
+                            {formatLocalDate(food.startDate)} - {food.endDate ? formatLocalDate(food.endDate) : 'Present'}
                           </p>
                           {food.rating && (
                             <div className="mt-2">
@@ -2724,6 +2788,13 @@ export function PetCareScheduleTool({ toolId }: PetCareScheduleToolProps) {
       {/* Veterinary Contact Section */}
       {activeSection === 'vet' && (
         <div className="space-y-6">
+          {addingSection !== 'vet' ? (
+            <div className="flex justify-start">
+              <button type="button" onClick={() => setAddingSection('vet')} className={primaryButtonClass}>
+                + Add Veterinary Contact
+              </button>
+            </div>
+          ) : (
           <div className={cardClass}>
             <h3 className={sectionTitleClass}>Add Veterinary Contact</h3>
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -2799,13 +2870,34 @@ export function PetCareScheduleTool({ toolId }: PetCareScheduleToolProps) {
                 />
               </div>
             </div>
-            <button
-              onClick={addVeterinaryRecord}
-              className={`mt-4 ${primaryButtonClass}`}
-            >
-              Add Veterinary Contact
-            </button>
+            <div className="flex gap-2 mt-4">
+              <button
+                onClick={addVeterinaryRecord}
+                className={primaryButtonClass}
+              >
+                Add Veterinary Contact
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  setAddingSection(null);
+                  setNewVetRecord({
+                    veterinarianName: '',
+                    clinicName: '',
+                    phone: '',
+                    email: '',
+                    address: '',
+                    status: 'Active',
+                    notes: ''
+                  });
+                }}
+                className={secondaryButtonClass}
+              >
+                Cancel
+              </button>
+            </div>
           </div>
+          )}
 
           {veterinaryRecords.filter(r => r.status === 'Active').length > 0 && (
             <div className={cardClass}>
@@ -2938,13 +3030,14 @@ export function PetCareScheduleTool({ toolId }: PetCareScheduleToolProps) {
                             {record.notes && (
                               <p className="text-sm text-slate-300 mt-2 italic">"{record.notes}"</p>
                             )}
-                            <p className="text-xs text-slate-500 mt-2">Added: {new Date(record.dateAdded).toLocaleDateString()}</p>
+                            <p className="text-xs text-slate-500 mt-2">Added: {formatLocalDate(record.dateAdded)}</p>
                           </div>
                           <div className="flex gap-1.5 ml-4">
                             <button
                               onClick={() => startEditingVetRecord(record)}
                               className={rowIconEmeraldClass}
                               title="Edit contact"
+                              aria-label="Edit contact"
                             >
                               <svg className="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" /></svg>
                             </button>
@@ -2952,6 +3045,7 @@ export function PetCareScheduleTool({ toolId }: PetCareScheduleToolProps) {
                               onClick={() => toggleVetRecordStatus(record.id)}
                               className={rowIconSecondaryClass}
                               title="Move to history"
+                              aria-label="Move to history"
                             >
                               <svg className="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M20.25 7.5l-.625 10.632a2.25 2.25 0 01-2.247 2.118H6.622a2.25 2.25 0 01-2.247-2.118L3.75 7.5M10 11.25h4M3.375 7.5h17.25c.621 0 1.125-.504 1.125-1.125v-1.5c0-.621-.504-1.125-1.125-1.125H3.375c-.621 0-1.125.504-1.125 1.125v1.5c0 .621.504 1.125 1.125 1.125z" /></svg>
                             </button>
@@ -2959,6 +3053,7 @@ export function PetCareScheduleTool({ toolId }: PetCareScheduleToolProps) {
                               onClick={() => requestDeleteEntry('veterinary contact', () => deleteItem(veterinaryRecords, setVeterinaryRecords, record.id))}
                               className={rowIconDangerClass}
                               title="Delete contact"
+                              aria-label="Delete contact"
                             >
                               <svg className="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" /></svg>
                             </button>
@@ -3102,24 +3197,30 @@ export function PetCareScheduleTool({ toolId }: PetCareScheduleToolProps) {
                             {record.notes && (
                               <p className="text-sm text-slate-300 mt-2 italic">"{record.notes}"</p>
                             )}
-                            <p className="text-xs text-slate-500 mt-2">Added: {new Date(record.dateAdded).toLocaleDateString()}</p>
+                            <p className="text-xs text-slate-500 mt-2">Added: {formatLocalDate(record.dateAdded)}</p>
                           </div>
                           <div className="flex gap-1.5 ml-4">
                             <button
                               onClick={() => startEditingVetRecord(record)}
                               className={rowIconEmeraldClass}
+                              title="Edit contact"
+                              aria-label="Edit contact"
                             >
                               <svg className="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" /></svg>
                             </button>
                             <button
                               onClick={() => toggleVetRecordStatus(record.id)}
                               className={rowIconSecondaryClass}
+                              title="Return to active"
+                              aria-label="Return to active"
                             >
                               <svg className="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 15L3 9m0 0l6-6M3 9h12a6 6 0 010 12h-3" /></svg>
                             </button>
                             <button
                               onClick={() => requestDeleteEntry('veterinary contact history record', () => deleteItem(veterinaryRecords, setVeterinaryRecords, record.id))}
                               className={rowIconDangerClass}
+                              title="Delete contact"
+                              aria-label="Delete contact"
                             >
                               <svg className="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" /></svg>
                             </button>
@@ -3137,6 +3238,13 @@ export function PetCareScheduleTool({ toolId }: PetCareScheduleToolProps) {
       {/* Care Plan Section */}
       {activeSection === 'care' && (
         <div className="space-y-6">
+          {addingSection !== 'care' ? (
+            <div className="flex justify-start">
+              <button type="button" onClick={() => setAddingSection('care')} className={primaryButtonClass}>
+                + Add Care Item
+              </button>
+            </div>
+          ) : (
           <div className={cardClass}>
             <h3 className={sectionTitleClass}>Add Care Plan Item</h3>
             <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
@@ -3185,13 +3293,38 @@ export function PetCareScheduleTool({ toolId }: PetCareScheduleToolProps) {
                 className={`${selectClass} placeholder-slate-500 resize-none`}
               />
             </div>
-            <button
-              onClick={addCarePlanItem}
-              className={`mt-4 ${primaryButtonClass}`}
-            >
-              Add Care Item
-            </button>
+            <div className="flex items-center gap-3 mt-4">
+              <input
+                type="checkbox"
+                id="pcs-care-add-dashboard"
+                checked={newCareItem.addToDashboard}
+                onChange={(e) => setNewCareItem({ ...newCareItem, addToDashboard: e.target.checked })}
+                className={isLight ? 'w-5 h-5 rounded border-slate-400 bg-white text-emerald-600 focus:ring-emerald-500 focus:ring-offset-white' : 'w-5 h-5 rounded border-slate-600 bg-slate-700 text-emerald-500 focus:ring-emerald-500 focus:ring-offset-slate-800'}
+              />
+              <label htmlFor="pcs-care-add-dashboard" className={isLight ? 'text-sm text-slate-700 cursor-pointer' : 'text-sm text-slate-300 cursor-pointer'}>
+                Add to calendar
+              </label>
+            </div>
+            <div className="flex gap-2 mt-4">
+              <button
+                onClick={addCarePlanItem}
+                className={primaryButtonClass}
+              >
+                Add Care Item
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  setAddingSection(null);
+                  setNewCareItem({ name: '', frequency: 'Daily', notes: '', addToDashboard: false, priority: 'medium' });
+                }}
+                className={secondaryButtonClass}
+              >
+                Cancel
+              </button>
+            </div>
           </div>
+          )}
 
           {carePlanItems.filter(item => item.isActive).length > 0 && (
             <div className="rounded-2xl border border-slate-800 bg-slate-900/70 p-6">
@@ -3247,6 +3380,18 @@ export function PetCareScheduleTool({ toolId }: PetCareScheduleToolProps) {
                             className="w-full px-3 py-2 rounded-lg border border-slate-700 bg-slate-900/70 text-slate-100 placeholder-slate-500 focus:border-emerald-500/50 focus:outline-none focus:ring-1 focus:ring-emerald-500/50 resize-none"
                           />
                         </div>
+                        <div className="flex items-center gap-3">
+                          <input
+                            type="checkbox"
+                            id="pcs-care-edit-dashboard"
+                            checked={editingCareItem.addToDashboard}
+                            onChange={(e) => setEditingCareItem({ ...editingCareItem, addToDashboard: e.target.checked })}
+                            className={isLight ? 'w-5 h-5 rounded border-slate-400 bg-white text-emerald-600 focus:ring-emerald-500 focus:ring-offset-white' : 'w-5 h-5 rounded border-slate-600 bg-slate-700 text-emerald-500 focus:ring-emerald-500 focus:ring-offset-slate-800'}
+                          />
+                          <label htmlFor="pcs-care-edit-dashboard" className={isLight ? 'text-sm text-slate-700 cursor-pointer' : 'text-sm text-slate-300 cursor-pointer'}>
+                            Add to calendar
+                          </label>
+                        </div>
                         <div className="flex gap-2">
                           <button
                             onClick={saveCareItemEdit}
@@ -3274,7 +3419,7 @@ export function PetCareScheduleTool({ toolId }: PetCareScheduleToolProps) {
                             </div>
                             <div>
                               <p className="text-xs text-slate-400 uppercase mb-1">Started</p>
-                              <p className="text-sm text-slate-200">{new Date(item.startDate).toLocaleDateString()}</p>
+                              <p className="text-sm text-slate-200">{formatLocalDate(item.startDate)}</p>
                             </div>
                             <div>
                               <p className="text-xs text-slate-400 uppercase mb-1">Priority</p>
@@ -3373,6 +3518,18 @@ export function PetCareScheduleTool({ toolId }: PetCareScheduleToolProps) {
                             className="w-full px-3 py-2 rounded-lg border border-slate-700 bg-slate-900/70 text-slate-100 placeholder-slate-500 focus:border-emerald-500/50 focus:outline-none focus:ring-1 focus:ring-emerald-500/50 resize-none"
                           />
                         </div>
+                        <div className="flex items-center gap-3">
+                          <input
+                            type="checkbox"
+                            id="pcs-care-edit-dashboard"
+                            checked={editingCareItem.addToDashboard}
+                            onChange={(e) => setEditingCareItem({ ...editingCareItem, addToDashboard: e.target.checked })}
+                            className={isLight ? 'w-5 h-5 rounded border-slate-400 bg-white text-emerald-600 focus:ring-emerald-500 focus:ring-offset-white' : 'w-5 h-5 rounded border-slate-600 bg-slate-700 text-emerald-500 focus:ring-emerald-500 focus:ring-offset-slate-800'}
+                          />
+                          <label htmlFor="pcs-care-edit-dashboard" className={isLight ? 'text-sm text-slate-700 cursor-pointer' : 'text-sm text-slate-300 cursor-pointer'}>
+                            Add to calendar
+                          </label>
+                        </div>
                         <div className="flex gap-2">
                           <button
                             onClick={saveCareItemEdit}
@@ -3401,7 +3558,7 @@ export function PetCareScheduleTool({ toolId }: PetCareScheduleToolProps) {
                             <div>
                               <p className="text-xs text-slate-400 uppercase mb-1">Started</p>
                               <p className="text-sm text-slate-200">
-                                {new Date(item.startDate).toLocaleDateString()} - {item.endDate ? new Date(item.endDate).toLocaleDateString() : 'Present'}
+                                {formatLocalDate(item.startDate)} - {item.endDate ? formatLocalDate(item.endDate) : 'Present'}
                               </p>
                             </div>
                             <div>
@@ -3454,6 +3611,13 @@ export function PetCareScheduleTool({ toolId }: PetCareScheduleToolProps) {
       {/* Vaccinations Section */}
       {activeSection === 'vaccinations' && (
         <div className="space-y-6">
+          {addingSection !== 'vaccinations' ? (
+            <div className="flex justify-start">
+              <button type="button" onClick={() => setAddingSection('vaccinations')} className={primaryButtonClass}>
+                + Add Vaccination
+              </button>
+            </div>
+          ) : (
           <div className={cardClass}>
             <h3 className={sectionTitleClass}>Add Vaccination</h3>
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -3497,13 +3661,26 @@ export function PetCareScheduleTool({ toolId }: PetCareScheduleToolProps) {
                 />
               </div>
             </div>
-            <button
-              onClick={addVaccination}
-              className={`mt-4 ${primaryButtonClass}`}
-            >
-              Add Vaccination
-            </button>
+            <div className="flex gap-2 mt-4">
+              <button
+                onClick={addVaccination}
+                className={primaryButtonClass}
+              >
+                Add Vaccination
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  setAddingSection(null);
+                  setNewVaccination({ name: '', date: '', veterinarian: '', notes: '' });
+                }}
+                className={secondaryButtonClass}
+              >
+                Cancel
+              </button>
+            </div>
           </div>
+          )}
 
           {vaccinations.length > 0 && (
             <div className={cardClass}>
@@ -3576,7 +3753,7 @@ export function PetCareScheduleTool({ toolId }: PetCareScheduleToolProps) {
                         <div className="flex items-start justify-between">
                           <div className="flex-1">
                             <h4 className="text-slate-100 font-medium">{vaccination.name}</h4>
-                            <p className="text-sm text-slate-400">Date: {new Date(vaccination.date).toLocaleDateString()}</p>
+                            <p className="text-sm text-slate-400">Date: {formatLocalDate(vaccination.date)}</p>
                             {vaccination.veterinarian && (
                               <p className="text-sm text-slate-400">Veterinarian: {vaccination.veterinarian}</p>
                             )}
@@ -3588,12 +3765,16 @@ export function PetCareScheduleTool({ toolId }: PetCareScheduleToolProps) {
                             <button
                               onClick={() => startEditingVaccination(vaccination)}
                               className={rowIconEmeraldClass}
+                              title="Edit vaccination"
+                              aria-label="Edit vaccination"
                             >
                               <svg className="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" /></svg>
                             </button>
                             <button
                               onClick={() => requestDeleteEntry('vaccination record', () => deleteItem(vaccinations, setVaccinations, vaccination.id))}
                               className={rowIconDangerClass}
+                              title="Delete vaccination"
+                              aria-label="Delete vaccination"
                             >
                               <svg className="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" /></svg>
                             </button>
@@ -3612,16 +3793,28 @@ export function PetCareScheduleTool({ toolId }: PetCareScheduleToolProps) {
       {activeSection === 'appointments' && (
         <div className="space-y-6">
           {(() => {
-            const todayKey = new Date().toISOString().split('T')[0];
+            const todayKey = localToday();
+            const appointmentNeedle = appointmentSearch.trim().toLowerCase();
+            const matchesAppointmentName = (a: Appointment) =>
+              appointmentNeedle === '' || a.type.toLowerCase().includes(appointmentNeedle);
             const upcomingAppointments = appointments
               .filter((a) => a.date >= todayKey)
+              .filter(matchesAppointmentName)
               .sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
             const historyAppointments = appointments
               .filter((a) => a.date < todayKey)
+              .filter(matchesAppointmentName)
               .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
 
             return (
               <>
+          {addingSection !== 'appointments' ? (
+            <div className="flex justify-start">
+              <button type="button" onClick={() => setAddingSection('appointments')} className={primaryButtonClass}>
+                + Add Appointment
+              </button>
+            </div>
+          ) : (
           <div className={cardClass}>
             <h3 className={sectionTitleClass}>Add Appointment</h3>
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -3673,13 +3866,51 @@ export function PetCareScheduleTool({ toolId }: PetCareScheduleToolProps) {
                   className="w-full px-3 py-2 rounded-lg border border-slate-700 bg-slate-900/70 text-slate-100 placeholder-slate-500 focus:border-emerald-500/50 focus:outline-none focus:ring-1 focus:ring-emerald-500/50"
                 />
               </div>
+              <div className="md:col-span-2">
+                <div className="flex items-center gap-3">
+                  <input
+                    type="checkbox"
+                    id="pcs-appt-add-dashboard"
+                    checked={newAppointment.addToDashboard}
+                    onChange={(e) => setNewAppointment({ ...newAppointment, addToDashboard: e.target.checked })}
+                    className={isLight ? 'w-5 h-5 rounded border-slate-400 bg-white text-emerald-600 focus:ring-emerald-500 focus:ring-offset-white' : 'w-5 h-5 rounded border-slate-600 bg-slate-700 text-emerald-500 focus:ring-emerald-500 focus:ring-offset-slate-800'}
+                  />
+                  <label htmlFor="pcs-appt-add-dashboard" className={isLight ? 'text-sm text-slate-700 cursor-pointer' : 'text-sm text-slate-300 cursor-pointer'}>
+                    Add to calendar
+                  </label>
+                </div>
+              </div>
             </div>
-            <button
-              onClick={addAppointment}
-              className={`mt-4 ${primaryButtonClass}`}
-            >
-              Add Appointment
-            </button>
+            <div className="flex gap-2 mt-4">
+              <button
+                onClick={addAppointment}
+                className={primaryButtonClass}
+              >
+                Add Appointment
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  setAddingSection(null);
+                  setNewAppointment({ date: '', time: '', type: '', veterinarian: '', notes: '', addToDashboard: false });
+                }}
+                className={secondaryButtonClass}
+              >
+                Cancel
+              </button>
+            </div>
+          </div>
+          )}
+
+          <div className={cardClass}>
+            <label className={labelClass}>Search Appointments</label>
+            <input
+              type="text"
+              value={appointmentSearch}
+              onChange={(e) => setAppointmentSearch(e.target.value)}
+              placeholder="Search by name..."
+              className={inputClass}
+            />
           </div>
 
           {upcomingAppointments.length > 0 && (
@@ -3736,6 +3967,20 @@ export function PetCareScheduleTool({ toolId }: PetCareScheduleToolProps) {
                                 className={`${inputClass} resize-none`}
                               />
                             </div>
+                            <div className="md:col-span-2">
+                              <div className="flex items-center gap-3">
+                                <input
+                                  type="checkbox"
+                                  id="pcs-appt-edit-dashboard"
+                                  checked={editingAppointment.addToDashboard}
+                                  onChange={(e) => setEditingAppointment({ ...editingAppointment, addToDashboard: e.target.checked })}
+                                  className={isLight ? 'w-5 h-5 rounded border-slate-400 bg-white text-emerald-600 focus:ring-emerald-500 focus:ring-offset-white' : 'w-5 h-5 rounded border-slate-600 bg-slate-700 text-emerald-500 focus:ring-emerald-500 focus:ring-offset-slate-800'}
+                                />
+                                <label htmlFor="pcs-appt-edit-dashboard" className={isLight ? 'text-sm text-slate-700 cursor-pointer' : 'text-sm text-slate-300 cursor-pointer'}>
+                                  Add to calendar
+                                </label>
+                              </div>
+                            </div>
                           </div>
                           <div className="flex gap-2">
                             <button
@@ -3758,7 +4003,7 @@ export function PetCareScheduleTool({ toolId }: PetCareScheduleToolProps) {
                           <div className="flex-1">
                             <h4 className="text-slate-100 font-medium">{appointment.type}</h4>
                             <p className="text-sm text-slate-400">
-                              {new Date(appointment.date).toLocaleDateString()} {appointment.time && `at ${appointment.time}`}
+                              {formatLocalDate(appointment.date)} {appointment.time && `at ${appointment.time}`}
                             </p>
                             {appointment.veterinarian && (
                               <p className="text-sm text-slate-400">Veterinarian: {appointment.veterinarian}</p>
@@ -3847,6 +4092,20 @@ export function PetCareScheduleTool({ toolId }: PetCareScheduleToolProps) {
                                 className={`${inputClass} resize-none`}
                               />
                             </div>
+                            <div className="md:col-span-2">
+                              <div className="flex items-center gap-3">
+                                <input
+                                  type="checkbox"
+                                  id="pcs-appt-edit-dashboard"
+                                  checked={editingAppointment.addToDashboard}
+                                  onChange={(e) => setEditingAppointment({ ...editingAppointment, addToDashboard: e.target.checked })}
+                                  className={isLight ? 'w-5 h-5 rounded border-slate-400 bg-white text-emerald-600 focus:ring-emerald-500 focus:ring-offset-white' : 'w-5 h-5 rounded border-slate-600 bg-slate-700 text-emerald-500 focus:ring-emerald-500 focus:ring-offset-slate-800'}
+                                />
+                                <label htmlFor="pcs-appt-edit-dashboard" className={isLight ? 'text-sm text-slate-700 cursor-pointer' : 'text-sm text-slate-300 cursor-pointer'}>
+                                  Add to calendar
+                                </label>
+                              </div>
+                            </div>
                           </div>
                           <div className="flex gap-2">
                             <button
@@ -3869,7 +4128,7 @@ export function PetCareScheduleTool({ toolId }: PetCareScheduleToolProps) {
                           <div className="flex-1">
                             <h4 className="text-slate-100 font-medium">{appointment.type}</h4>
                             <p className="text-sm text-slate-400">
-                              {new Date(appointment.date).toLocaleDateString()} {appointment.time && `at ${appointment.time}`}
+                              {formatLocalDate(appointment.date)} {appointment.time && `at ${appointment.time}`}
                             </p>
                             {appointment.veterinarian && (
                               <p className="text-sm text-slate-400">Veterinarian: {appointment.veterinarian}</p>
@@ -3912,6 +4171,13 @@ export function PetCareScheduleTool({ toolId }: PetCareScheduleToolProps) {
       {/* Documents Section */}
       {activeSection === 'documents' && (
         <div className="space-y-6">
+          {addingSection !== 'documents' ? (
+            <div className="flex justify-start">
+              <button type="button" onClick={() => setAddingSection('documents')} className={primaryButtonClass}>
+                + Add Document
+              </button>
+            </div>
+          ) : (
           <div className={cardClass}>
             <h3 className={sectionTitleClass}>Upload Document</h3>
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -3968,19 +4234,43 @@ export function PetCareScheduleTool({ toolId }: PetCareScheduleToolProps) {
                 </div>
               </div>
             </div>
-            <button
-              onClick={addDocument}
-              className={`mt-4 ${primaryButtonClass}`}
-            >
-              Add Document
-            </button>
+            <div className="flex gap-2 mt-4">
+              <button
+                onClick={addDocument}
+                className={primaryButtonClass}
+              >
+                Add Document
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  setAddingSection(null);
+                  setNewDocument({ name: '', date: '', description: '', file: null });
+                }}
+                className={secondaryButtonClass}
+              >
+                Cancel
+              </button>
+            </div>
+          </div>
+          )}
+
+          <div className={cardClass}>
+            <label className={labelClass}>Search Documents</label>
+            <input
+              type="text"
+              value={documentSearch}
+              onChange={(e) => setDocumentSearch(e.target.value)}
+              placeholder="Search by name..."
+              className={inputClass}
+            />
           </div>
 
-          {documents.length > 0 && (
+          {filteredDocuments.length > 0 && (
             <div className={cardClass}>
               <h3 className={sectionTitleClass}>Documents</h3>
               <div className="space-y-3">
-                {documents
+                {filteredDocuments
                   .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime())
                   .map(document => (
                     <div key={document.id} className={nestedCardClass}>
@@ -4037,7 +4327,7 @@ export function PetCareScheduleTool({ toolId }: PetCareScheduleToolProps) {
                         <div className="flex items-start justify-between">
                           <div className="flex-1">
                             <h4 className="text-slate-100 font-medium">{document.name}</h4>
-                            <p className="text-sm text-slate-400">Date: {new Date(document.date).toLocaleDateString()}</p>
+                            <p className="text-sm text-slate-400">Date: {formatLocalDate(document.date)}</p>
                             {document.description && (
                               <p className="text-sm text-slate-400 mt-1">Description: {document.description}</p>
                             )}
@@ -4056,6 +4346,7 @@ export function PetCareScheduleTool({ toolId }: PetCareScheduleToolProps) {
                                 onClick={() => handleDocumentClick(document)}
                                 className={rowIconSecondaryClass}
                                 title="Download file"
+                                aria-label="Download file"
                               >
                                 <svg className="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
@@ -4065,12 +4356,16 @@ export function PetCareScheduleTool({ toolId }: PetCareScheduleToolProps) {
                             <button
                               onClick={() => startEditingDocument(document)}
                               className={rowIconEmeraldClass}
+                              title="Edit document"
+                              aria-label="Edit document"
                             >
                               <svg className="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" /></svg>
                             </button>
                             <button
                               onClick={() => requestDeleteEntry('document', () => deleteItem(documents, setDocuments, document.id))}
                               className={rowIconDangerClass}
+                              title="Delete document"
+                              aria-label="Delete document"
                             >
                               <svg className="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" /></svg>
                             </button>
@@ -4088,6 +4383,13 @@ export function PetCareScheduleTool({ toolId }: PetCareScheduleToolProps) {
       {/* Notes Section */}
       {activeSection === 'notes' && (
         <div className="space-y-6">
+          {addingSection !== 'notes' ? (
+            <div className="flex justify-start">
+              <button type="button" onClick={() => setAddingSection('notes')} className={primaryButtonClass}>
+                + Add Note
+              </button>
+            </div>
+          ) : (
           <div className={cardClass}>
             <h3 className={sectionTitleClass}>Add Note</h3>
             <textarea
@@ -4097,13 +4399,26 @@ export function PetCareScheduleTool({ toolId }: PetCareScheduleToolProps) {
               rows={4}
               className="w-full px-4 py-2 rounded-lg border border-slate-700 bg-slate-900/70 text-slate-100 placeholder-slate-500 focus:border-emerald-500/50 focus:outline-none focus:ring-1 focus:ring-emerald-500/50"
             />
-            <button
-              onClick={addNote}
-              className={`mt-4 ${primaryButtonClass}`}
-            >
-              Add Note
-            </button>
+            <div className="flex gap-2 mt-4">
+              <button
+                onClick={addNote}
+                className={primaryButtonClass}
+              >
+                Add Note
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  setAddingSection(null);
+                  setCurrentNote('');
+                }}
+                className={secondaryButtonClass}
+              >
+                Cancel
+              </button>
+            </div>
           </div>
+          )}
 
           {notes.filter(n => n.isCurrent).length > 0 && (
             <div className={cardClass}>
@@ -4143,24 +4458,30 @@ export function PetCareScheduleTool({ toolId }: PetCareScheduleToolProps) {
                         <div className="flex items-start justify-between">
                           <div className="flex-1">
                             <p className="text-slate-100 whitespace-pre-wrap">{note.content}</p>
-                            <p className="text-sm text-slate-400 mt-2">Date: {new Date(note.date).toLocaleDateString()}</p>
+                            <p className="text-sm text-slate-400 mt-2">Date: {formatLocalDate(note.date)}</p>
                           </div>
                           <div className="flex gap-1.5 ml-4">
                             <button
                               onClick={() => startEditingNote(note)}
                               className={rowIconEmeraldClass}
+                              title="Edit note"
+                              aria-label="Edit note"
                             >
                               <svg className="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" /></svg>
                             </button>
                             <button
                               onClick={() => archiveNote(note.id)}
                               className={rowIconSecondaryClass}
+                              title="Move to history"
+                              aria-label="Move to history"
                             >
                               <svg className="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M20.25 7.5l-.625 10.632a2.25 2.25 0 01-2.247 2.118H6.622a2.25 2.25 0 01-2.247-2.118L3.75 7.5M10 11.25h4M3.375 7.5h17.25c.621 0 1.125-.504 1.125-1.125v-1.5c0-.621-.504-1.125-1.125-1.125H3.375c-.621 0-1.125.504-1.125 1.125v1.5c0 .621.504 1.125 1.125 1.125z" /></svg>
                             </button>
                             <button
                               onClick={() => requestDeleteEntry('current note', () => deleteItem(notes, setNotes, note.id))}
                               className={rowIconDangerClass}
+                              title="Delete note"
+                              aria-label="Delete note"
                             >
                               <svg className="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" /></svg>
                             </button>
@@ -4211,7 +4532,7 @@ export function PetCareScheduleTool({ toolId }: PetCareScheduleToolProps) {
                         <div className="flex items-start justify-between">
                           <div className="flex-1">
                             <p className="text-slate-100 whitespace-pre-wrap">{note.content}</p>
-                            <p className="text-sm text-slate-400 mt-2">Date: {new Date(note.date).toLocaleDateString()}</p>
+                            <p className="text-sm text-slate-400 mt-2">Date: {formatLocalDate(note.date)}</p>
                           </div>
                           <div className="flex gap-1.5 ml-4">
                             <button
