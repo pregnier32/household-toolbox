@@ -266,6 +266,7 @@ export async function GET(request: NextRequest) {
         .eq('user_id', user.id)
         .eq('tool_id', toolId);
 
+      // Fallback if tools_mp_meals.scale is not applied yet.
       if (mealsError && /scale/.test(mealsError.message ?? '')) {
         const retry = await supabaseServer
           .from('tools_mp_meals')
