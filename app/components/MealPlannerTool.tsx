@@ -36,13 +36,126 @@ type Meal = {
   instructions: string;
   ingredientIds: string[];
   prepTimeMinutes: number | null;
+  scale: number;
   difficulty: 'easy' | 'medium' | 'hard' | '';
   rating: number; // 0-5
   isActive?: boolean;
 };
 
 type DayKey = 'mon' | 'tue' | 'wed' | 'thu' | 'fri' | 'sat' | 'sun';
-type DayAssignments = Record<DayKey, string[]>; // meal ids per day
+type DaySlot = 'breakfast' | 'lunch' | 'dinner';
+type SlotAssignment = { mealId: string; isLeftover: boolean };
+type DaySlotMeals = Record<DaySlot, SlotAssignment | ''>;
+type DayAssignments = Record<DayKey, DaySlotMeals>;
+
+const DAY_KEYS_LIST: DayKey[] = ['mon', 'tue', 'wed', 'thu', 'fri', 'sat', 'sun'];
+const DAY_SLOTS: { key: DaySlot; label: string }[] = [
+  { key: 'breakfast', label: 'Breakfast' },
+  { key: 'lunch', label: 'Lunch' },
+  { key: 'dinner', label: 'Dinner' },
+];
+
+function emptySlots(): DaySlotMeals {
+  return { breakfast: '', lunch: '', dinner: '' };
+}
+
+function emptyDayAssignments(): DayAssignments {
+  return DAY_KEYS_LIST.reduce((acc, k) => {
+    acc[k] = emptySlots();
+    return acc;
+  }, {} as DayAssignments);
+}
+
+function toSlotAssignment(mealId: string, isLeftover = false): SlotAssignment | '' {
+  return mealId ? { mealId, isLeftover } : '';
+}
+
+function slotMealId(slot: SlotAssignment | '' | string | undefined): string {
+  if (!slot) return '';
+  if (typeof slot === 'string') return slot;
+  return slot.mealId ?? '';
+}
+
+function slotIsLeftover(slot: SlotAssignment | '' | string | undefined): boolean {
+  return typeof slot === 'object' && !!slot && !!slot.isLeftover;
+}
+
+function parseSlotValue(value: unknown): SlotAssignment | '' {
+  if (typeof value === 'string') return toSlotAssignment(value);
+  if (value && typeof value === 'object') {
+    const mealId = typeof (value as { mealId?: unknown }).mealId === 'string'
+      ? (value as { mealId: string }).mealId
+      : '';
+    const isLeftover = !!(value as { isLeftover?: unknown }).isLeftover;
+    return toSlotAssignment(mealId, isLeftover);
+  }
+  return '';
+}
+
+function legacyIdsToSlots(ids: string[]): DaySlotMeals {
+  const slots = emptySlots();
+  if (ids.length === 1) {
+    slots.dinner = toSlotAssignment(ids[0]);
+    return slots;
+  }
+  DAY_SLOTS.forEach(({ key }, i) => {
+    if (ids[i]) slots[key] = toSlotAssignment(ids[i]);
+  });
+  return slots;
+}
+
+function normalizeDaySlots(value: unknown): DaySlotMeals {
+  if (Array.isArray(value)) {
+    return legacyIdsToSlots(value.filter((id): id is string => typeof id === 'string' && id.length > 0));
+  }
+  if (value && typeof value === 'object') {
+    const slots = emptySlots();
+    for (const { key } of DAY_SLOTS) {
+      slots[key] = parseSlotValue((value as Record<string, unknown>)[key]);
+    }
+    return slots;
+  }
+  return emptySlots();
+}
+
+function normalizeWeekAssignments(raw: unknown): DayAssignments {
+  const out = emptyDayAssignments();
+  if (!raw || typeof raw !== 'object') return out;
+  for (const k of DAY_KEYS_LIST) {
+    out[k] = normalizeDaySlots((raw as Record<string, unknown>)[k]);
+  }
+  return out;
+}
+
+function cloneAssignments(assignments: DayAssignments): DayAssignments {
+  return normalizeWeekAssignments(assignments);
+}
+
+function slottedMealIds(slots: DaySlotMeals | undefined): string[] {
+  if (!slots) return [];
+  return DAY_SLOTS.map(({ key }) => slotMealId(slots[key])).filter(Boolean);
+}
+
+function hasCookOccurrence(
+  assignments: DayAssignments,
+  mealId: string,
+  exceptDay: DayKey,
+  exceptSlot: DaySlot
+): boolean {
+  for (const day of DAY_KEYS_LIST) {
+    for (const { key: slot } of DAY_SLOTS) {
+      if (day === exceptDay && slot === exceptSlot) continue;
+      const value = assignments[day]?.[slot];
+      if (slotMealId(value) === mealId && !slotIsLeftover(value)) return true;
+    }
+  }
+  return false;
+}
+
+function mealScale(meal: { scale?: number } | undefined): number {
+  const n = Number(meal?.scale);
+  return Number.isFinite(n) && n > 0 ? n : 1;
+}
 
 type MealPlanRecord = {
   id: string;
@@ -50,6 +163,7 @@ type MealPlanRecord = {
   startDate: string; // YYYY-MM-DD (Monday)
   assignments: DayAssignments;
   isActive: boolean;
+  groceryCheckedItemIds?: string[];
 };
 
 /** Parse YYYY-MM-DD as local date (avoids UTC midnight shifting the day in some timezones). */
@@ -142,6 +256,9 @@ export function MealPlannerTool({ toolId }: MealPlannerToolProps) {
   const deleteConfirmInputClass = isLight
     ? 'w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900 placeholder-slate-500 focus:border-red-500/50 focus:outline-none focus:ring-1 focus:ring-red-500/50 mb-4'
     : 'w-full rounded-lg border border-slate-700 bg-slate-900/70 px-3 py-2 text-sm text-slate-100 placeholder-slate-500 focus:border-red-500/50 focus:outline-none focus:ring-1 focus:ring-red-500/50 mb-4';
+  const checkboxClass = isLight
+    ? 'rounded border-slate-400 bg-white text-emerald-600 focus:ring-emerald-500 focus:ring-offset-white w-4 h-4'
+    : 'rounded border-slate-600 bg-slate-700 text-emerald-500 focus:ring-emerald-500 focus:ring-offset-slate-800 w-4 h-4';
   const [activeTab, setActiveTab] = useState<'meal-plan' | 'meals' | 'meal-types' | 'items'>('meal-plan');
 
   const [masterItems, setMasterItems] = useState<MasterItem[]>([]);
@@ -192,7 +309,7 @@ export function MealPlannerTool({ toolId }: MealPlannerToolProps) {
       const res = await fetch(`${API_BASE}?toolId=${encodeURIComponent(toolId)}&resource=meals`);
       if (!res.ok) throw new Error('Failed to fetch meals');
       const data = await res.json();
-      setMeals(data.meals ?? []);
+      setMeals((data.meals ?? []).map((m: Meal) => ({ ...m, scale: mealScale(m) })));
     } catch (e) {
       console.error('Fetch meals error:', e);
     } finally {
@@ -207,7 +324,12 @@ export function MealPlannerTool({ toolId }: MealPlannerToolProps) {
       const res = await fetch(`${API_BASE}?toolId=${encodeURIComponent(toolId)}&resource=plans`);
       if (!res.ok) throw new Error('Failed to fetch plans');
       const data = await res.json();
-      setMealPlans(data.plans ?? []);
+      setMealPlans(
+        (data.plans ?? []).map((p: MealPlanRecord) => ({
+          ...p,
+          assignments: normalizeWeekAssignments(p.assignments),
+        }))
+      );
     } catch (e) {
       console.error('Fetch plans error:', e);
     } finally {
@@ -406,6 +528,7 @@ export function MealPlannerTool({ toolId }: MealPlannerToolProps) {
     instructions: '',
     ingredientIds: [] as string[],
     prepTimeMinutes: '' as number | '',
+    scale: 1 as number | '',
     difficulty: '' as Meal['difficulty'],
     rating: 0,
   });
@@ -426,6 +549,7 @@ export function MealPlannerTool({ toolId }: MealPlannerToolProps) {
       instructions: '',
       ingredientIds: [],
       prepTimeMinutes: '',
+      scale: 1,
       difficulty: '',
       rating: 0,
     });
@@ -444,6 +568,11 @@ export function MealPlannerTool({ toolId }: MealPlannerToolProps) {
     const diff = mealForm.difficulty || '';
     if (!mealForm.name.trim() || !toolId) return;
     const prepVal = prep === null || isNaN(prep) ? null : prep;
+    const scaleVal = mealForm.scale === '' ? 1 : Number(mealForm.scale);
+    if (!Number.isFinite(scaleVal) || scaleVal <= 0) {
+      alert('Scale must be a number greater than 0.');
+      return;
+    }
     try {
       if (editingMealId) {
         const res = await fetch(API_BASE, {
@@ -459,6 +588,7 @@ export function MealPlannerTool({ toolId }: MealPlannerToolProps) {
             instructions: mealForm.instructions.trim(),
             ingredientIds: mealForm.ingredientIds,
             prepTimeMinutes: prepVal,
+            scale: scaleVal,
             difficulty: diff || null,
             rating: mealForm.rating,
           }),
@@ -477,6 +607,7 @@ export function MealPlannerTool({ toolId }: MealPlannerToolProps) {
             instructions: mealForm.instructions.trim(),
             ingredientIds: mealForm.ingredientIds,
             prepTimeMinutes: prepVal,
+            scale: scaleVal,
             difficulty: diff || null,
             rating: mealForm.rating,
           }),
@@ -502,6 +633,7 @@ export function MealPlannerTool({ toolId }: MealPlannerToolProps) {
       instructions: meal.instructions,
       ingredientIds: [...meal.ingredientIds],
       prepTimeMinutes: meal.prepTimeMinutes ?? '',
+      scale: mealScale(meal),
       difficulty: meal.difficulty,
       rating: meal.rating,
     });
@@ -663,23 +795,19 @@ export function MealPlannerTool({ toolId }: MealPlannerToolProps) {
   const [isCreatingPlan, setIsCreatingPlan] = useState(false);
   const [newPlanName, setNewPlanName] = useState('');
   const [newPlanStartDate, setNewPlanStartDate] = useState(() => getNextMonday());
-  const [newPlanAssignments, setNewPlanAssignments] = useState<DayAssignments>(() =>
-    ['mon', 'tue', 'wed', 'thu', 'fri', 'sat', 'sun'].reduce(
-      (acc, k) => ({ ...acc, [k as DayKey]: [] }),
-      {} as DayAssignments
-    )
-  );
+  const [newPlanAssignments, setNewPlanAssignments] = useState<DayAssignments>(() => emptyDayAssignments());
   const [buildFromHistoryPlanId, setBuildFromHistoryPlanId] = useState('');
   const [editingPlanId, setEditingPlanId] = useState<string | null>(null);
   const [editingPlanName, setEditingPlanName] = useState('');
   const [editingPlanStartDate, setEditingPlanStartDate] = useState('');
   const [editingPlanAssignments, setEditingPlanAssignments] = useState<DayAssignments | null>(null);
-  const [mealPickerOpenFor, setMealPickerOpenFor] = useState<{ planId: string; day: DayKey } | null>(null);
+  const [mealPickerOpenFor, setMealPickerOpenFor] = useState<{ planId: string; day: DayKey; slot: DaySlot } | null>(null);
   const [mealPickerSearch, setMealPickerSearch] = useState('');
   const [mealPickerTypeFilter, setMealPickerTypeFilter] = useState('');
   const [deleteConfirmPlanId, setDeleteConfirmPlanId] = useState<string | null>(null);
   const [deleteConfirmPlanText, setDeleteConfirmPlanText] = useState('');
   const [cartOpenPlanId, setCartOpenPlanId] = useState<string | null>(null);
+  const [isPushingGrocery, setIsPushingGrocery] = useState(false);
   const [printingPlanId, setPrintingPlanId] = useState<string | null>(null);
 
   const activePlans = useMemo(() => mealPlans.filter((p) => p.isActive), [mealPlans]);
@@ -693,28 +821,30 @@ export function MealPlannerTool({ toolId }: MealPlannerToolProps) {
   const setPlanAssignment = (
     planId: string,
     day: DayKey,
-    mealIds: string[],
+    slots: DaySlotMeals,
     isEditing: boolean
   ) => {
     if (isEditing && editingPlanAssignments) {
-      setEditingPlanAssignments({ ...editingPlanAssignments, [day]: mealIds });
+      setEditingPlanAssignments({ ...editingPlanAssignments, [day]: slots });
     } else if (isEditing) {
       const plan = mealPlans.find((p) => p.id === planId);
-      if (plan) setEditingPlanAssignments({ ...plan.assignments, [day]: mealIds });
+      if (plan) setEditingPlanAssignments({ ...plan.assignments, [day]: slots });
     } else {
-      setNewPlanAssignments((prev) => ({ ...prev, [day]: mealIds }));
+      setNewPlanAssignments((prev) => ({ ...prev, [day]: slots }));
     }
   };
 
-  const addMealToDay = async (planId: string, day: DayKey, mealId: string, isEditing: boolean) => {
+  const addMealToDay = async (planId: string, day: DayKey, slot: DaySlot, mealId: string, isEditing: boolean) => {
     const plan = mealPlans.find((p) => p.id === planId);
-    const current = isEditing
-      ? editingPlanAssignments?.[day] ?? plan?.assignments[day] ?? []
-      : plan
-        ? (plan.assignments[day] ?? [])
-        : newPlanAssignments[day];
-    if (current.includes(mealId)) return;
-    const next = [...current, mealId];
+    const current = normalizeDaySlots(
+      isEditing
+        ? editingPlanAssignments?.[day] ?? plan?.assignments[day]
+        : plan
+          ? plan.assignments[day]
+          : newPlanAssignments[day]
+    );
+    if (slotMealId(current[slot]) === mealId) return;
+    const next = { ...current, [slot]: toSlotAssignment(mealId) };
     if (isEditing) {
       setPlanAssignment(planId, day, next, true);
     } else if (plan && toolId) {
@@ -735,14 +865,16 @@ export function MealPlannerTool({ toolId }: MealPlannerToolProps) {
     }
   };
 
-  const removeMealFromDay = async (planId: string, day: DayKey, mealId: string, isEditing: boolean) => {
+  const removeMealFromDay = async (planId: string, day: DayKey, slot: DaySlot, isEditing: boolean) => {
     const plan = mealPlans.find((p) => p.id === planId);
-    const current = isEditing
-      ? editingPlanAssignments?.[day] ?? plan?.assignments[day] ?? []
-      : plan
-        ? (plan.assignments[day] ?? [])
-        : newPlanAssignments[day];
-    const next = current.filter((id) => id !== mealId);
+    const current = normalizeDaySlots(
+      isEditing
+        ? editingPlanAssignments?.[day] ?? plan?.assignments[day]
+        : plan
+          ? plan.assignments[day]
+          : newPlanAssignments[day]
+    );
+    const next = { ...current, [slot]: '' as const };
     if (isEditing) {
       setPlanAssignment(planId, day, next, true);
     } else if (plan && toolId) {
@@ -763,14 +895,49 @@ export function MealPlannerTool({ toolId }: MealPlannerToolProps) {
     }
   };
 
+  const toggleLeftover = async (planId: string, day: DayKey, slot: DaySlot, isEditing: boolean) => {
+    const plan = mealPlans.find((p) => p.id === planId);
+    const week = isEditing
+      ? editingPlanAssignments ?? plan?.assignments
+      : plan?.assignments ?? newPlanAssignments;
+    const current = normalizeDaySlots(week?.[day]);
+    const mealId = slotMealId(current[slot]);
+    if (!mealId) return;
+    const makingLeftover = !slotIsLeftover(current[slot]);
+    const allAssignments = (week ? normalizeWeekAssignments(week) : emptyDayAssignments());
+    if (makingLeftover && !hasCookOccurrence(allAssignments, mealId, day, slot)) {
+      alert('Mark another day as the cook day first.');
+      return;
+    }
+    const next = { ...current, [slot]: toSlotAssignment(mealId, makingLeftover) };
+    if (isEditing) {
+      setPlanAssignment(planId, day, next, true);
+    } else if (plan && toolId) {
+      const newAssignments = { ...plan.assignments, [day]: next };
+      try {
+        const res = await fetch(API_BASE, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ action: 'updatePlan', toolId, planId, assignments: newAssignments }),
+        });
+        if (!res.ok) throw new Error('Failed to update plan');
+        await fetchPlans();
+      } catch (e) {
+        console.error('Toggle leftover error:', e);
+      }
+    } else {
+      setPlanAssignment(planId, day, next, false);
+    }
+  };
+
   const createPlan = async () => {
     if (!newPlanName.trim() || !toolId) return;
     const assignments = buildFromHistoryPlanId
       ? (() => {
           const from = mealPlans.find((p) => p.id === buildFromHistoryPlanId);
-          return from ? { ...from.assignments } : newPlanAssignments;
+          return from ? cloneAssignments(from.assignments) : cloneAssignments(newPlanAssignments);
         })()
-      : { ...newPlanAssignments };
+      : cloneAssignments(newPlanAssignments);
     try {
       const res = await fetch(API_BASE, {
         method: 'POST',
@@ -788,12 +955,7 @@ export function MealPlannerTool({ toolId }: MealPlannerToolProps) {
       await fetchPlans();
       setNewPlanName('');
       setNewPlanStartDate(getNextMonday());
-      setNewPlanAssignments(
-        ['mon', 'tue', 'wed', 'thu', 'fri', 'sat', 'sun'].reduce(
-          (acc, k) => ({ ...acc, [k as DayKey]: [] }),
-          {} as DayAssignments
-        )
-      );
+      setNewPlanAssignments(emptyDayAssignments());
       setBuildFromHistoryPlanId('');
       setIsCreatingPlan(false);
     } catch (e) {
@@ -805,7 +967,7 @@ export function MealPlannerTool({ toolId }: MealPlannerToolProps) {
     setEditingPlanId(plan.id);
     setEditingPlanName(plan.name);
     setEditingPlanStartDate(plan.startDate);
-    setEditingPlanAssignments({ ...plan.assignments });
+    setEditingPlanAssignments(cloneAssignments(plan.assignments));
   };
 
   const saveEditingPlan = async () => {
@@ -877,12 +1039,110 @@ export function MealPlannerTool({ toolId }: MealPlannerToolProps) {
     const plan = mealPlans.find((p) => p.id === historyPlanId && !p.isActive);
     if (!plan) return;
     setBuildFromHistoryPlanId(historyPlanId);
-    setNewPlanAssignments(
-      Object.fromEntries(
-        (['mon', 'tue', 'wed', 'thu', 'fri', 'sat', 'sun'] as const).map((k) => [k, [...plan.assignments[k]]])
-      ) as DayAssignments
-    );
+    setNewPlanAssignments(cloneAssignments(plan.assignments));
     setNewPlanStartDate(plan.startDate);
+  };
+
+  const toggleGroceryItemChecked = async (planId: string, itemId: string, isChecked: boolean) => {
+    const previous = mealPlans.find((p) => p.id === planId)?.groceryCheckedItemIds ?? [];
+    setMealPlans((prev) =>
+      prev.map((p) => {
+        if (p.id !== planId) return p;
+        const ids = new Set(p.groceryCheckedItemIds ?? []);
+        if (isChecked) ids.add(itemId);
+        else ids.delete(itemId);
+        return { ...p, groceryCheckedItemIds: Array.from(ids) };
+      })
+    );
+    if (!toolId) return;
+    try {
+      const res = await fetch(API_BASE, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action: 'setGroceryItemChecked', toolId, planId, itemId, isChecked }),
+      });
+      if (!res.ok) throw new Error('Failed to save grocery check');
+    } catch (e) {
+      console.error('Set grocery item checked error:', e);
+      setMealPlans((prev) =>
+        prev.map((p) => (p.id === planId ? { ...p, groceryCheckedItemIds: previous } : p))
+      );
+    }
+  };
+
+  const saveGroceryAsShoppingList = async (plan: MealPlanRecord) => {
+    const groceryItems = getConsolidatedItems(plan);
+    if (groceryItems.length === 0) {
+      alert('No grocery lines to save. Assign meals to days first.');
+      return;
+    }
+    if (!window.confirm(`Create an Active Shopping List named "${plan.name}" from these grocery lines?`)) {
+      return;
+    }
+    setIsPushingGrocery(true);
+    try {
+      const toolsRes = await fetch('/api/tools');
+      if (!toolsRes.ok) throw new Error('Failed to load tools');
+      const toolsData = await toolsRes.json();
+      const slTool = (toolsData.tools ?? []).find((t: { name?: string }) => t.name === 'Shopping List');
+      if (!slTool?.id) throw new Error('Shopping List tool was not found.');
+
+      const itemsRes = await fetch(
+        `/api/tools/shopping-list?toolId=${encodeURIComponent(slTool.id)}&resource=items`
+      );
+      if (!itemsRes.ok) throw new Error('Failed to load Shopping List items');
+      const itemsData = await itemsRes.json();
+      const slItems: { id: string; name: string; category?: string }[] = itemsData.items ?? [];
+      const byName = new Map(slItems.map((i) => [i.name.trim().toLowerCase(), i]));
+
+      const lineItems: { itemId: string; quantity: number | null }[] = [];
+      for (const row of groceryItems) {
+        const key = row.name.trim().toLowerCase();
+        let slItem = byName.get(key);
+        if (!slItem) {
+          const createItemRes = await fetch('/api/tools/shopping-list', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              action: 'createItem',
+              toolId: slTool.id,
+              name: row.name,
+              category: row.category || 'Other',
+            }),
+          });
+          if (!createItemRes.ok) throw new Error(`Failed to add "${row.name}" to Shopping List`);
+          const created = await createItemRes.json();
+          slItem = created.item;
+          if (slItem?.name) byName.set(slItem.name.trim().toLowerCase(), slItem);
+        }
+        if (!slItem?.id) throw new Error(`Could not match "${row.name}"`);
+        lineItems.push({
+          itemId: slItem.id,
+          quantity: Number.isFinite(row.count) && row.count > 0 ? row.count : null,
+        });
+      }
+
+      const createListRes = await fetch('/api/tools/shopping-list', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          action: 'createList',
+          toolId: slTool.id,
+          name: plan.name,
+          listDate: plan.startDate,
+          items: lineItems,
+        }),
+      });
+      if (!createListRes.ok) {
+        const err = await createListRes.json().catch(() => ({}));
+        throw new Error((err as { error?: string }).error || 'Failed to create Shopping List');
+      }
+      alert('Active Shopping List created.');
+    } catch (e) {
+      alert(e instanceof Error ? e.message : 'Failed to save as Shopping List.');
+    } finally {
+      setIsPushingGrocery(false);
+    }
   };
 
   // Consolidated shopping list for a plan (all ingredient item ids from assigned meals, with duplicate count and category)
@@ -891,12 +1151,15 @@ export function MealPlannerTool({ toolId }: MealPlannerToolProps) {
     const assign = getPlanAssignments(plan);
     const countByItemId = new Map<string, number>();
     for (const day of dayKeys) {
-      const mealIds = assign[day] ?? [];
-      for (const mealId of mealIds) {
+      for (const { key: slot } of DAY_SLOTS) {
+        const value = assign[day]?.[slot];
+        const mealId = slotMealId(value);
+        if (!mealId || slotIsLeftover(value)) continue;
         const meal = meals.find((m) => m.id === mealId);
         if (meal) {
+          const scale = mealScale(meal);
           for (const itemId of meal.ingredientIds) {
-            countByItemId.set(itemId, (countByItemId.get(itemId) ?? 0) + 1);
+            countByItemId.set(itemId, (countByItemId.get(itemId) ?? 0) + scale);
           }
         }
       }
@@ -979,14 +1242,12 @@ export function MealPlannerTool({ toolId }: MealPlannerToolProps) {
 
   return (
     <>
-      {/* Print layout: landscape, meal plan on top, shopping list below — only visible when printing */}
+      {/* Print layout: landscape week grid only — visible when printing */}
       {printingPlanId && (() => {
         const plan = mealPlans.find((p) => p.id === printingPlanId);
         if (!plan) return null;
         const assignments = getPlanAssignments(plan);
         const dates = getDatesForWeek(plan.startDate);
-        const printItems = getConsolidatedItems(plan);
-        const printGroups = groupConsolidatedItemsByCategory(printItems);
 
         const fullPrintContent = (
           <>
@@ -995,26 +1256,24 @@ export function MealPlannerTool({ toolId }: MealPlannerToolProps) {
                 __html: `
                   @media print {
                     @page { size: landscape; }
-                    body > *:not(.meal-plan-full-print) { display: none !important; }
+                    html, body { background: white !important; color: black !important; }
+                    body * { visibility: hidden; }
+                    .meal-plan-full-print, .meal-plan-full-print * { visibility: visible; }
                     .meal-plan-full-print {
                       display: block !important;
-                      position: static !important; left: auto !important;
+                      position: absolute !important; left: 0 !important; top: 0 !important;
                       width: 100% !important; max-width: none !important; height: auto !important;
                       overflow: visible !important;
                       background: white !important; color: black !important;
                       padding: 1rem !important; font-size: 12px;
                       border: none !important; border-radius: 0 !important; box-shadow: none !important;
                     }
-                    .meal-plan-full-print .print-meal-plan { margin-bottom: 20px; }
+                    .meal-plan-full-print .print-title { color: black !important; }
                     .meal-plan-full-print .print-week-grid { display: grid; grid-template-columns: repeat(7, 1fr); gap: 8px; margin-top: 8px; }
                     .meal-plan-full-print .print-day-cell { border: 1px solid #cbd5e1; padding: 6px; min-height: 60px; color: black; }
                     .meal-plan-full-print .print-day-label { font-weight: 700; text-transform: uppercase; color: black; }
                     .meal-plan-full-print .print-day-date { font-size: 10px; color: black; margin-bottom: 4px; }
                     .meal-plan-full-print .print-meal-name { font-size: 11px; margin: 2px 0; color: black; }
-                    .meal-plan-full-print .print-list-title { font-weight: 700; margin-top: 16px; margin-bottom: 8px; font-size: 14px; color: black; }
-                    .meal-plan-full-print .print-category { font-weight: 600; text-transform: uppercase; margin-top: 10px; margin-bottom: 4px; font-size: 11px; color: #059669; }
-                    .meal-plan-full-print .print-list-items { margin-left: 12px; list-style: disc; }
-                    .meal-plan-full-print .print-list-items li { margin: 2px 0; color: black; }
                   }
                 `,
               }}
@@ -1033,31 +1292,19 @@ export function MealPlannerTool({ toolId }: MealPlannerToolProps) {
                     <div key={key} className="print-day-cell">
                       <div className="print-day-label">{label}</div>
                       <div className="print-day-date">{formatDateDisplay(date)}</div>
-                      {(assignments[key] ?? []).map((mealId) => {
-                        const meal = meals.find((m) => m.id === mealId);
+                      {DAY_SLOTS.map(({ key: slot, label: slotLabel }) => {
+                        const value = assignments[key]?.[slot];
+                        const mealId = slotMealId(value);
+                        const meal = mealId ? meals.find((m) => m.id === mealId) : undefined;
                         return meal ? (
-                          <div key={mealId} className="print-meal-name">{meal.name}</div>
+                          <div key={slot} className="print-meal-name">
+                            {slotLabel}: {meal.name}{slotIsLeftover(value) ? ' (Leftover)' : ''}
+                          </div>
                         ) : null;
                       })}
                     </div>
                   ))}
                 </div>
-              </div>
-              <div className="print-shopping-list">
-                <div className="print-list-title">Shopping list</div>
-                {printGroups.map(({ category, items: categoryItems }) => (
-                  <div key={category}>
-                    <div className="print-category">{category}</div>
-                    <ul className="print-list-items">
-                      {categoryItems.map(({ itemId, name, count }) => (
-                        <li key={itemId}>
-                          {name}
-                          {count > 1 ? ` (×${count})` : ''}
-                        </li>
-                      ))}
-                    </ul>
-                  </div>
-                ))}
               </div>
             </div>
           </>
@@ -1562,7 +1809,7 @@ export function MealPlannerTool({ toolId }: MealPlannerToolProps) {
                   rows={4}
                 />
               </div>
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                 <div>
                   <label className="block text-xs font-medium text-slate-300 mb-1.5">Estimated prep time (minutes)</label>
                   <input
@@ -1576,6 +1823,23 @@ export function MealPlannerTool({ toolId }: MealPlannerToolProps) {
                       }))
                     }
                     placeholder="e.g., 30"
+                    className="w-full rounded-lg border border-slate-700 bg-slate-900/70 px-3 py-2 text-sm text-slate-100 placeholder-slate-500 focus:border-emerald-500/50 focus:outline-none focus:ring-1 focus:ring-emerald-500/50"
+                  />
+                </div>
+                <div>
+                  <label className="block text-xs font-medium text-slate-300 mb-1.5">Scale</label>
+                  <input
+                    type="number"
+                    min={0.01}
+                    step="any"
+                    value={mealForm.scale === '' ? '' : mealForm.scale}
+                    onChange={(e) =>
+                      setMealForm((f) => ({
+                        ...f,
+                        scale: e.target.value === '' ? '' : Number(e.target.value),
+                      }))
+                    }
+                    placeholder="1"
                     className="w-full rounded-lg border border-slate-700 bg-slate-900/70 px-3 py-2 text-sm text-slate-100 placeholder-slate-500 focus:border-emerald-500/50 focus:outline-none focus:ring-1 focus:ring-emerald-500/50"
                   />
                 </div>
@@ -1914,12 +2178,7 @@ export function MealPlannerTool({ toolId }: MealPlannerToolProps) {
                 onClick={() => {
                   setNewPlanName('');
                   setNewPlanStartDate(getNextMonday());
-                  setNewPlanAssignments(
-                    ['mon', 'tue', 'wed', 'thu', 'fri', 'sat', 'sun'].reduce(
-                      (acc, k) => ({ ...acc, [k as DayKey]: [] }),
-                      {} as DayAssignments
-                    )
-                  );
+                  setNewPlanAssignments(emptyDayAssignments());
                   setBuildFromHistoryPlanId('');
                   setIsCreatingPlan(true);
                 }}
@@ -2134,53 +2393,70 @@ export function MealPlannerTool({ toolId }: MealPlannerToolProps) {
                                 : 'border border-slate-700 bg-slate-800/50'
                             }`}
                           >
-                            <div className="flex items-start justify-between gap-2 mb-2">
-                              <div>
-                                <p
-                                  className={`text-xs font-semibold uppercase tracking-wider ${
-                                    isLight ? 'text-emerald-700' : 'text-emerald-300'
-                                  }`}
-                                >
-                                  {label}
-                                </p>
-                                <p className="text-xs text-slate-500 mt-0.5">{formatDateDisplay(date)}</p>
-                              </div>
-                              <button
-                                type="button"
-                                onClick={() => setMealPickerOpenFor({ planId: plan.id, day: key })}
-                                aria-label="Add meal"
-                                title="Add meal"
-                                className="rounded-lg p-1.5 text-slate-400 hover:bg-slate-700 hover:text-slate-200 transition-colors flex-shrink-0"
+                            <div className="mb-2">
+                              <p
+                                className={`text-xs font-semibold uppercase tracking-wider ${
+                                  isLight ? 'text-emerald-700' : 'text-emerald-300'
+                                }`}
                               >
-                                <svg className="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
-                                </svg>
-                              </button>
+                                {label}
+                              </p>
+                              <p className="text-xs text-slate-500 mt-0.5">{formatDateDisplay(date)}</p>
                             </div>
-                            <div className="space-y-1 min-h-[44px]">
-                              {(assignments[key] ?? []).map((mealId) => {
-                                const meal = meals.find((m) => m.id === mealId);
-                                return meal ? (
-                                  <div
-                                    key={mealId}
-                                    className={`flex items-center justify-between gap-1 text-sm rounded px-2 py-1 ${
-                                      isLight
-                                        ? 'text-slate-800 bg-white border border-slate-300'
-                                        : 'text-slate-200 bg-slate-700/50'
-                                    }`}
-                                  >
-                                    <span className="truncate">{meal.name}</span>
-                                    <button
-                                      type="button"
-                                      onClick={() => removeMealFromDay(plan.id, key, mealId, isEditing)}
-                                      aria-label={`Remove ${meal.name}`}
-                                      title="Remove"
-                                      className="rounded p-0.5 text-slate-400 hover:text-red-300 flex-shrink-0"
-                                    >
-                                      ×
-                                    </button>
+                            <div className="space-y-2 min-h-[44px]">
+                              {DAY_SLOTS.map(({ key: slot, label: slotLabel }) => {
+                                const value = assignments[key]?.[slot];
+                                const mealId = slotMealId(value);
+                                const isLeftover = slotIsLeftover(value);
+                                const meal = mealId ? meals.find((m) => m.id === mealId) : undefined;
+                                const leftoverLabel = isLeftover ? 'Mark as cook' : 'Mark as leftover';
+                                return (
+                                  <div key={slot} className="space-y-0.5">
+                                    <p className="text-[10px] font-semibold uppercase tracking-wider text-slate-500">{slotLabel}</p>
+                                    {meal ? (
+                                      <div
+                                        className={`flex items-center justify-between gap-1 text-sm rounded px-2 py-1 ${
+                                          isLight
+                                            ? 'text-slate-800 bg-white border border-slate-300'
+                                            : 'text-slate-200 bg-slate-700/50'
+                                        }`}
+                                      >
+                                        <span className="min-w-0 break-words" title={isLeftover ? `${meal.name} (Leftover)` : meal.name}>
+                                          {meal.name}
+                                          {isLeftover ? ' (Leftover)' : ''}
+                                        </span>
+                                        <button
+                                          type="button"
+                                          onClick={() => toggleLeftover(plan.id, key, slot, isEditing)}
+                                          aria-label={leftoverLabel}
+                                          title={leftoverLabel}
+                                          className="text-[10px] uppercase tracking-wider text-slate-400 hover:text-slate-200 flex-shrink-0"
+                                        >
+                                          Leftover
+                                        </button>
+                                        <button
+                                          type="button"
+                                          onClick={() => removeMealFromDay(plan.id, key, slot, isEditing)}
+                                          aria-label={`Remove ${meal.name}`}
+                                          title={`Remove ${meal.name}`}
+                                          className="rounded p-0.5 text-slate-400 hover:text-red-300 flex-shrink-0"
+                                        >
+                                          ×
+                                        </button>
+                                      </div>
+                                    ) : (
+                                      <button
+                                        type="button"
+                                        onClick={() => setMealPickerOpenFor({ planId: plan.id, day: key, slot })}
+                                        aria-label={`Add ${slotLabel}`}
+                                        title={`Add ${slotLabel}`}
+                                        className="text-xs text-slate-400 hover:text-slate-200"
+                                      >
+                                        Add
+                                      </button>
+                                    )}
                                   </div>
-                                ) : null;
+                                );
                               })}
                             </div>
                           </div>
@@ -2312,53 +2588,70 @@ export function MealPlannerTool({ toolId }: MealPlannerToolProps) {
                                 : 'border border-slate-700 bg-slate-800/50'
                             }`}
                           >
-                            <div className="flex items-start justify-between gap-2 mb-2">
-                              <div>
-                                <p
-                                  className={`text-xs font-semibold uppercase tracking-wider ${
-                                    isLight ? 'text-emerald-700' : 'text-emerald-300'
-                                  }`}
-                                >
-                                  {label}
-                                </p>
-                                <p className="text-xs text-slate-500 mt-0.5">{formatDateDisplay(date)}</p>
-                              </div>
-                              <button
-                                type="button"
-                                onClick={() => setMealPickerOpenFor({ planId: plan.id, day: key })}
-                                aria-label="Add meal"
-                                title="Add meal"
-                                className="rounded-lg p-1.5 text-slate-400 hover:bg-slate-700 hover:text-slate-200 transition-colors flex-shrink-0"
+                            <div className="mb-2">
+                              <p
+                                className={`text-xs font-semibold uppercase tracking-wider ${
+                                  isLight ? 'text-emerald-700' : 'text-emerald-300'
+                                }`}
                               >
-                                <svg className="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
-                                </svg>
-                              </button>
+                                {label}
+                              </p>
+                              <p className="text-xs text-slate-500 mt-0.5">{formatDateDisplay(date)}</p>
                             </div>
-                            <div className="space-y-1 min-h-[44px]">
-                              {(assignments[key] ?? []).map((mealId) => {
-                                const meal = meals.find((m) => m.id === mealId);
-                                return meal ? (
-                                  <div
-                                    key={mealId}
-                                    className={`flex items-center justify-between gap-1 text-sm rounded px-2 py-1 ${
-                                      isLight
-                                        ? 'text-slate-800 bg-white border border-slate-300'
-                                        : 'text-slate-200 bg-slate-700/50'
-                                    }`}
-                                  >
-                                    <span className="truncate">{meal.name}</span>
-                                    <button
-                                      type="button"
-                                      onClick={() => removeMealFromDay(plan.id, key, mealId, isEditing)}
-                                      aria-label={`Remove ${meal.name}`}
-                                      title="Remove"
-                                      className="rounded p-0.5 text-slate-400 hover:text-red-300 flex-shrink-0"
-                                    >
-                                      ×
-                                    </button>
+                            <div className="space-y-2 min-h-[44px]">
+                              {DAY_SLOTS.map(({ key: slot, label: slotLabel }) => {
+                                const value = assignments[key]?.[slot];
+                                const mealId = slotMealId(value);
+                                const isLeftover = slotIsLeftover(value);
+                                const meal = mealId ? meals.find((m) => m.id === mealId) : undefined;
+                                const leftoverLabel = isLeftover ? 'Mark as cook' : 'Mark as leftover';
+                                return (
+                                  <div key={slot} className="space-y-0.5">
+                                    <p className="text-[10px] font-semibold uppercase tracking-wider text-slate-500">{slotLabel}</p>
+                                    {meal ? (
+                                      <div
+                                        className={`flex items-center justify-between gap-1 text-sm rounded px-2 py-1 ${
+                                          isLight
+                                            ? 'text-slate-800 bg-white border border-slate-300'
+                                            : 'text-slate-200 bg-slate-700/50'
+                                        }`}
+                                      >
+                                        <span className="min-w-0 break-words" title={isLeftover ? `${meal.name} (Leftover)` : meal.name}>
+                                          {meal.name}
+                                          {isLeftover ? ' (Leftover)' : ''}
+                                        </span>
+                                        <button
+                                          type="button"
+                                          onClick={() => toggleLeftover(plan.id, key, slot, isEditing)}
+                                          aria-label={leftoverLabel}
+                                          title={leftoverLabel}
+                                          className="text-[10px] uppercase tracking-wider text-slate-400 hover:text-slate-200 flex-shrink-0"
+                                        >
+                                          Leftover
+                                        </button>
+                                        <button
+                                          type="button"
+                                          onClick={() => removeMealFromDay(plan.id, key, slot, isEditing)}
+                                          aria-label={`Remove ${meal.name}`}
+                                          title={`Remove ${meal.name}`}
+                                          className="rounded p-0.5 text-slate-400 hover:text-red-300 flex-shrink-0"
+                                        >
+                                          ×
+                                        </button>
+                                      </div>
+                                    ) : (
+                                      <button
+                                        type="button"
+                                        onClick={() => setMealPickerOpenFor({ planId: plan.id, day: key, slot })}
+                                        aria-label={`Add ${slotLabel}`}
+                                        title={`Add ${slotLabel}`}
+                                        className="text-xs text-slate-400 hover:text-slate-200"
+                                      >
+                                        Add
+                                      </button>
+                                    )}
                                   </div>
-                                ) : null;
+                                );
                               })}
                             </div>
                           </div>
@@ -2384,7 +2677,9 @@ export function MealPlannerTool({ toolId }: MealPlannerToolProps) {
             onClick={(e) => e.stopPropagation()}
           >
             <div className="flex items-center justify-between mb-4">
-              <h3 className={isLight ? 'text-lg font-semibold text-slate-900' : 'text-lg font-semibold text-slate-50'}>Pick a meal</h3>
+              <h3 className={isLight ? 'text-lg font-semibold text-slate-900' : 'text-lg font-semibold text-slate-50'}>
+                Pick a meal{mealPickerOpenFor.slot ? ` — ${DAY_SLOTS.find((s) => s.key === mealPickerOpenFor.slot)?.label ?? ''}` : ''}
+              </h3>
               <button
                 type="button"
                 onClick={() => setMealPickerOpenFor(null)}
@@ -2431,7 +2726,7 @@ export function MealPlannerTool({ toolId }: MealPlannerToolProps) {
                       onClick={() => {
                         const plan = mealPlans.find((p) => p.id === mealPickerOpenFor.planId);
                         const isEditing = plan && editingPlanId === plan.id;
-                        addMealToDay(mealPickerOpenFor.planId, mealPickerOpenFor.day, meal.id, !!isEditing);
+                        addMealToDay(mealPickerOpenFor.planId, mealPickerOpenFor.day, mealPickerOpenFor.slot, meal.id, !!isEditing);
                         setMealPickerOpenFor(null);
                       }}
                       className="w-full text-left px-4 py-3 rounded-lg border border-slate-700 bg-slate-800/50 hover:bg-slate-700 text-slate-200 transition-colors"
@@ -2461,16 +2756,18 @@ export function MealPlannerTool({ toolId }: MealPlannerToolProps) {
               dangerouslySetInnerHTML={{
                 __html: `
                   @media print {
-                    body > *:not(.meal-plan-cart-print) { display: none !important; }
+                    html, body { background: white !important; color: black !important; }
+                    body * { visibility: hidden; }
+                    .meal-plan-cart-print, .meal-plan-cart-print * { visibility: visible; }
                     .meal-plan-cart-print {
                       display: block !important;
-                      position: static !important; left: auto !important;
+                      position: absolute !important; left: 0 !important; top: 0 !important;
                       width: 100% !important; max-width: none !important; height: auto !important;
                       overflow: visible !important;
                       background: white !important; color: black !important; padding: 1rem !important;
                       border: none !important; border-radius: 0 !important; box-shadow: none !important;
                     }
-                    .meal-plan-cart-print .print-title { display: block !important; color: black; }
+                    .meal-plan-cart-print .print-title { display: block !important; color: black !important; }
                     .meal-plan-cart-print .report-category { color: #059669; }
                     .meal-plan-cart-print p, .meal-plan-cart-print ul, .meal-plan-cart-print li { color: black; }
                   }
@@ -2528,6 +2825,16 @@ export function MealPlannerTool({ toolId }: MealPlannerToolProps) {
                   <div className="flex items-center gap-1 flex-shrink-0">
                     <button
                       type="button"
+                      onClick={() => saveGroceryAsShoppingList(plan)}
+                      disabled={isPushingGrocery || items.length === 0}
+                      aria-label="Save as Shopping List"
+                      title="Save as Shopping List"
+                      className="rounded-lg px-2 py-1.5 text-xs font-semibold text-slate-200 hover:bg-slate-800 transition-colors shrink-0 disabled:opacity-50 disabled:cursor-not-allowed"
+                    >
+                      Save as Shopping List
+                    </button>
+                    <button
+                      type="button"
                       onClick={() => window.print()}
                       aria-label="Print list"
                       title="Print list"
@@ -2563,13 +2870,26 @@ export function MealPlannerTool({ toolId }: MealPlannerToolProps) {
                         <p className="report-category text-xs font-semibold uppercase tracking-[0.18em] text-emerald-300 mb-1">
                           {category}
                         </p>
-                        <ul className="text-sm text-slate-200 list-disc list-inside ml-0 space-y-0.5">
-                          {categoryItems.map(({ itemId, name, count }) => (
-                            <li key={itemId}>
-                              {name}
-                              {count > 1 ? ` (×${count})` : ''}
-                            </li>
-                          ))}
+                        <ul className="text-sm text-slate-200 list-none ml-0 space-y-0.5">
+                          {categoryItems.map(({ itemId, name, count }) => {
+                            const label = count > 1 ? `${name} (×${count})` : name;
+                            const isChecked = (plan.groceryCheckedItemIds ?? []).includes(itemId);
+                            return (
+                              <li key={itemId} className="flex items-center gap-2">
+                                <input
+                                  type="checkbox"
+                                  checked={isChecked}
+                                  onChange={(e) => toggleGroceryItemChecked(plan.id, itemId, e.target.checked)}
+                                  aria-label={label}
+                                  className={checkboxClass}
+                                />
+                                <span>
+                                  {name}
+                                  {count > 1 ? ` (×${count})` : ''}
+                                </span>
+                              </li>
+                            );
+                          })}
                         </ul>
                       </div>
                     ))}

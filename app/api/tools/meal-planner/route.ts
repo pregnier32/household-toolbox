@@ -3,6 +3,119 @@ import { getSession } from '@/lib/session';
 import { supabaseServer } from '@/lib/supabaseServer';
 
 const DAY_KEYS = ['mon', 'tue', 'wed', 'thu', 'fri', 'sat', 'sun'] as const;
+const DAY_SLOTS = ['breakfast', 'lunch', 'dinner'] as const;
+type DaySlot = (typeof DAY_SLOTS)[number];
+type SlotAssignment = { mealId: string; isLeftover: boolean };
+type DaySlotMeals = Record<DaySlot, SlotAssignment | ''>;
+type DayAssignments = Record<string, DaySlotMeals | string[]>;
+
+function asIdList(value: unknown): string[] {
+  if (!Array.isArray(value)) return [];
+  return value.filter((id): id is string => typeof id === 'string' && id.length > 0);
+}
+
+function parseScale(value: unknown): number {
+  const n = typeof value === 'number' ? value : Number(value);
+  if (!Number.isFinite(n) || n <= 0) return 1;
+  return n;
+}
+
+function emptySlots(): DaySlotMeals {
+  return { breakfast: '', lunch: '', dinner: '' };
+}
+
+function emptyWeekAssignments(): Record<(typeof DAY_KEYS)[number], DaySlotMeals> {
+  const out = {} as Record<(typeof DAY_KEYS)[number], DaySlotMeals>;
+  for (const d of DAY_KEYS) out[d] = emptySlots();
+  return out;
+}
+
+function toSlotAssignment(mealId: string, isLeftover = false): SlotAssignment | '' {
+  return mealId ? { mealId, isLeftover } : '';
+}
+
+function slotMealId(slot: SlotAssignment | '' | string | undefined): string {
+  if (!slot) return '';
+  if (typeof slot === 'string') return slot;
+  return slot.mealId ?? '';
+}
+
+function slotIsLeftover(slot: SlotAssignment | '' | string | undefined): boolean {
+  return typeof slot === 'object' && !!slot && !!slot.isLeftover;
+}
+
+function parseSlotValue(value: unknown): SlotAssignment | '' {
+  if (typeof value === 'string') return toSlotAssignment(value);
+  if (value && typeof value === 'object') {
+    const mealId =
+      typeof (value as { mealId?: unknown }).mealId === 'string' ? (value as { mealId: string }).mealId : '';
+    const isLeftover = !!(value as { isLeftover?: unknown }).isLeftover;
+    return toSlotAssignment(mealId, isLeftover);
+  }
+  return '';
+}
+
+function legacyIdsToSlots(ids: string[]): DaySlotMeals {
+  const slots = emptySlots();
+  if (ids.length === 1) {
+    slots.dinner = toSlotAssignment(ids[0]);
+    return slots;
+  }
+  DAY_SLOTS.forEach((key, i) => {
+    if (ids[i]) slots[key] = toSlotAssignment(ids[i]);
+  });
+  return slots;
+}
+
+function normalizeDaySlots(value: unknown): DaySlotMeals {
+  if (Array.isArray(value)) {
+    return legacyIdsToSlots(value.filter((id): id is string => typeof id === 'string' && id.length > 0));
+  }
+  if (value && typeof value === 'object') {
+    const slots = emptySlots();
+    for (const key of DAY_SLOTS) {
+      slots[key] = parseSlotValue((value as Record<string, unknown>)[key]);
+    }
+    return slots;
+  }
+  return emptySlots();
+}
+
+function rowsToWeekAssignments(
+  rows: {
+    day_key: string;
+    meal_id: string;
+    display_order?: number;
+    slot_key?: string | null;
+    is_leftover?: boolean | null;
+  }[]
+) {
+  const byDay: Record<string, typeof rows> = {};
+  for (const d of DAY_KEYS) byDay[d] = [];
+  for (const row of rows) {
+    if (byDay[row.day_key]) byDay[row.day_key].push(row);
+  }
+  const assignments = emptyWeekAssignments();
+  for (const d of DAY_KEYS) {
+    const dayRows = byDay[d];
+    const hasSlot = dayRows.some((r) => r.slot_key && DAY_SLOTS.includes(r.slot_key as DaySlot));
+    if (!hasSlot) {
+      assignments[d] = legacyIdsToSlots(dayRows.map((r) => r.meal_id));
+    } else {
+      const slots = emptySlots();
+      for (const r of dayRows) {
+        const assignment = toSlotAssignment(r.meal_id, !!r.is_leftover);
+        if (r.slot_key && DAY_SLOTS.includes(r.slot_key as DaySlot)) {
+          slots[r.slot_key as DaySlot] = assignment;
+        } else if (!slots.dinner) {
+          slots.dinner = assignment;
+        }
+      }
+      assignments[d] = slots;
+    }
+  }
+  return assignments;
+}
 const DEFAULT_MEAL_TYPES = [
   'Breakfast',
   'Lunch',
@@ -147,11 +260,21 @@ export async function GET(request: NextRequest) {
     }
 
     if (resource === 'meals') {
-      const { data: meals, error: mealsError } = await supabaseServer
+      let { data: meals, error: mealsError } = await supabaseServer
         .from('tools_mp_meals')
-        .select('id, meal_type_id, name, description, instructions, prep_time_minutes, difficulty, rating, is_active')
+        .select('id, meal_type_id, name, description, instructions, prep_time_minutes, difficulty, rating, is_active, scale')
         .eq('user_id', user.id)
         .eq('tool_id', toolId);
+
+      if (mealsError && /scale/.test(mealsError.message ?? '')) {
+        const retry = await supabaseServer
+          .from('tools_mp_meals')
+          .select('id, meal_type_id, name, description, instructions, prep_time_minutes, difficulty, rating, is_active')
+          .eq('user_id', user.id)
+          .eq('tool_id', toolId);
+        meals = retry.data;
+        mealsError = retry.error;
+      }
 
       if (mealsError) {
         console.error('Meal planner fetch meals:', mealsError);
@@ -166,6 +289,7 @@ export async function GET(request: NextRequest) {
         instructions: string;
         ingredientIds: string[];
         prepTimeMinutes: number | null;
+        scale: number;
         difficulty: string;
         rating: number;
         isActive: boolean;
@@ -186,6 +310,7 @@ export async function GET(request: NextRequest) {
           instructions: m.instructions ?? '',
           ingredientIds,
           prepTimeMinutes: m.prep_time_minutes ?? null,
+          scale: parseScale((m as { scale?: unknown }).scale),
           difficulty: m.difficulty ?? '',
           rating: m.rating ?? 0,
           isActive: m.is_active !== false,
@@ -195,12 +320,23 @@ export async function GET(request: NextRequest) {
     }
 
     if (resource === 'plans') {
-      const { data: plans, error: plansError } = await supabaseServer
+      let { data: plans, error: plansError } = await supabaseServer
         .from('tools_mp_plans')
-        .select('id, name, start_date, is_active')
+        .select('id, name, start_date, is_active, grocery_checked_item_ids')
         .eq('user_id', user.id)
         .eq('tool_id', toolId)
         .order('start_date', { ascending: false });
+
+      if (plansError && /grocery_checked_item_ids/.test(plansError.message ?? '')) {
+        const retry = await supabaseServer
+          .from('tools_mp_plans')
+          .select('id, name, start_date, is_active')
+          .eq('user_id', user.id)
+          .eq('tool_id', toolId)
+          .order('start_date', { ascending: false });
+        plans = retry.data;
+        plansError = retry.error;
+      }
 
       if (plansError) {
         console.error('Meal planner fetch plans:', plansError);
@@ -212,28 +348,46 @@ export async function GET(request: NextRequest) {
         name: string;
         startDate: string;
         isActive: boolean;
-        assignments: Record<string, string[]>;
+        groceryCheckedItemIds: string[];
+        assignments: Record<string, DaySlotMeals>;
       }[] = [];
 
       for (const p of plans || []) {
-        const { data: assignRows } = await supabaseServer
+        let { data: assignRows, error: assignErr } = await supabaseServer
           .from('tools_mp_plan_assignments')
-          .select('day_key, meal_id, display_order')
+          .select('day_key, meal_id, display_order, slot_key, is_leftover')
           .eq('plan_id', p.id)
           .order('day_key', { ascending: true })
           .order('display_order', { ascending: true });
 
-        const assignments: Record<string, string[]> = {};
-        for (const d of DAY_KEYS) assignments[d] = [];
-        for (const row of assignRows || []) {
-          const day = row.day_key as (typeof DAY_KEYS)[number];
-          if (assignments[day]) assignments[day].push(row.meal_id);
+        if (assignErr && /is_leftover/.test(assignErr.message ?? '')) {
+          const retry = await supabaseServer
+            .from('tools_mp_plan_assignments')
+            .select('day_key, meal_id, display_order, slot_key')
+            .eq('plan_id', p.id)
+            .order('day_key', { ascending: true })
+            .order('display_order', { ascending: true });
+          assignRows = retry.data;
+          assignErr = retry.error;
         }
+
+        if (assignErr && /slot_key/.test(assignErr.message ?? '')) {
+          const retry = await supabaseServer
+            .from('tools_mp_plan_assignments')
+            .select('day_key, meal_id, display_order')
+            .eq('plan_id', p.id)
+            .order('day_key', { ascending: true })
+            .order('display_order', { ascending: true });
+          assignRows = retry.data;
+        }
+
+        const assignments = rowsToWeekAssignments(assignRows || []);
         list.push({
           id: p.id,
           name: p.name,
           startDate: p.start_date,
           isActive: !!p.is_active,
+          groceryCheckedItemIds: asIdList(p.grocery_checked_item_ids),
           assignments,
         });
       }
@@ -247,14 +401,30 @@ export async function GET(request: NextRequest) {
   }
 }
 
-type DayAssignments = Record<string, string[]>;
-
 function assignmentsToRows(planId: string, assignments: DayAssignments) {
-  const rows: { plan_id: string; day_key: string; meal_id: string; display_order: number }[] = [];
+  const rows: {
+    plan_id: string;
+    day_key: string;
+    meal_id: string;
+    display_order: number;
+    slot_key: string;
+    is_leftover: boolean;
+  }[] = [];
   for (const day of DAY_KEYS) {
-    const mealIds = assignments[day] ?? [];
-    mealIds.forEach((mealId, i) => {
-      rows.push({ plan_id: planId, day_key: day, meal_id: mealId, display_order: i });
+    const slots = normalizeDaySlots(assignments[day]);
+    DAY_SLOTS.forEach((slot, i) => {
+      const value = slots[slot];
+      const mealId = slotMealId(value);
+      if (mealId) {
+        rows.push({
+          plan_id: planId,
+          day_key: day,
+          meal_id: mealId,
+          display_order: i,
+          slot_key: slot,
+          is_leftover: slotIsLeftover(value),
+        });
+      }
     });
   }
   return rows;
@@ -407,6 +577,7 @@ export async function POST(request: NextRequest) {
         instructions,
         ingredientIds,
         prepTimeMinutes,
+        scale,
         difficulty,
         rating,
       } = body as {
@@ -416,6 +587,7 @@ export async function POST(request: NextRequest) {
         instructions?: string;
         ingredientIds?: string[];
         prepTimeMinutes?: number | null;
+        scale?: number;
         difficulty?: string | null;
         rating?: number;
       };
@@ -432,6 +604,7 @@ export async function POST(request: NextRequest) {
           description: (description ?? '').trim(),
           instructions: (instructions ?? '').trim(),
           prep_time_minutes: prepTimeMinutes ?? null,
+          scale: parseScale(scale),
           difficulty: difficulty || null,
           rating: rating ?? 0,
           is_active: true,
@@ -459,6 +632,7 @@ export async function POST(request: NextRequest) {
           instructions: meal.instructions ?? '',
           ingredientIds: itemIds,
           prepTimeMinutes: meal.prep_time_minutes ?? null,
+          scale: parseScale(meal.scale),
           difficulty: meal.difficulty ?? '',
           rating: meal.rating ?? 0,
         },
@@ -474,6 +648,7 @@ export async function POST(request: NextRequest) {
         instructions,
         ingredientIds,
         prepTimeMinutes,
+        scale,
         difficulty,
         rating,
       } = body as {
@@ -484,6 +659,7 @@ export async function POST(request: NextRequest) {
         instructions?: string;
         ingredientIds?: string[];
         prepTimeMinutes?: number | null;
+        scale?: number;
         difficulty?: string | null;
         rating?: number;
       };
@@ -496,6 +672,7 @@ export async function POST(request: NextRequest) {
       if (description !== undefined) updates.description = (description ?? '').trim();
       if (instructions !== undefined) updates.instructions = (instructions ?? '').trim();
       if (prepTimeMinutes !== undefined) updates.prep_time_minutes = prepTimeMinutes ?? null;
+      if (scale !== undefined) updates.scale = parseScale(scale);
       if (difficulty !== undefined) updates.difficulty = difficulty || null;
       if (rating !== undefined) updates.rating = rating ?? 0;
       if (Object.keys(updates).length > 0) {
@@ -564,22 +741,36 @@ export async function POST(request: NextRequest) {
       if (!name?.trim()) {
         return NextResponse.json({ error: 'Plan name is required' }, { status: 400 });
       }
-      let assign: DayAssignments = assignments ?? {};
+      let assign = emptyWeekAssignments();
       if (copyFromPlanId) {
-        const { data: fromRows } = await supabaseServer
+        let { data: fromRows, error: fromErr } = await supabaseServer
           .from('tools_mp_plan_assignments')
-          .select('day_key, meal_id, display_order')
+          .select('day_key, meal_id, display_order, slot_key, is_leftover')
           .eq('plan_id', copyFromPlanId)
           .order('day_key')
           .order('display_order');
-        assign = {} as DayAssignments;
-        for (const d of DAY_KEYS) assign[d] = [];
-        for (const row of fromRows || []) {
-          const day = row.day_key as (typeof DAY_KEYS)[number];
-          if (assign[day]) assign[day].push(row.meal_id);
+        if (fromErr && /is_leftover/.test(fromErr.message ?? '')) {
+          const retry = await supabaseServer
+            .from('tools_mp_plan_assignments')
+            .select('day_key, meal_id, display_order, slot_key')
+            .eq('plan_id', copyFromPlanId)
+            .order('day_key')
+            .order('display_order');
+          fromRows = retry.data;
+          fromErr = retry.error;
         }
-      } else {
-        for (const d of DAY_KEYS) if (!assign[d]) assign[d] = [];
+        if (fromErr && /slot_key/.test(fromErr.message ?? '')) {
+          const retry = await supabaseServer
+            .from('tools_mp_plan_assignments')
+            .select('day_key, meal_id, display_order')
+            .eq('plan_id', copyFromPlanId)
+            .order('day_key')
+            .order('display_order');
+          fromRows = retry.data;
+        }
+        assign = rowsToWeekAssignments(fromRows || []);
+      } else if (assignments) {
+        for (const d of DAY_KEYS) assign[d] = normalizeDaySlots(assignments[d]);
       }
       const { data: plan, error: planErr } = await supabaseServer
         .from('tools_mp_plans')
@@ -604,6 +795,7 @@ export async function POST(request: NextRequest) {
           name: plan.name,
           startDate: plan.start_date,
           isActive: true,
+          groceryCheckedItemIds: [],
           assignments: assign,
         },
       });
@@ -649,6 +841,35 @@ export async function POST(request: NextRequest) {
       const { error } = await supabaseServer
         .from('tools_mp_plans')
         .delete()
+        .eq('id', planId)
+        .eq('user_id', user.id)
+        .eq('tool_id', toolId);
+      if (error) return NextResponse.json({ error: error.message }, { status: 500 });
+      return NextResponse.json({ success: true });
+    }
+
+    if (action === 'setGroceryItemChecked') {
+      const { planId, itemId, isChecked } = body as { planId: string; itemId: string; isChecked: boolean };
+      if (!planId || !itemId) {
+        return NextResponse.json({ error: 'Plan ID and item ID are required' }, { status: 400 });
+      }
+      const { data: plan, error: planErr } = await supabaseServer
+        .from('tools_mp_plans')
+        .select('id, grocery_checked_item_ids')
+        .eq('id', planId)
+        .eq('user_id', user.id)
+        .eq('tool_id', toolId)
+        .maybeSingle();
+      if (planErr || !plan) {
+        return NextResponse.json({ error: 'Plan not found' }, { status: 404 });
+      }
+      const current = asIdList(plan.grocery_checked_item_ids);
+      const next = isChecked
+        ? current.includes(itemId) ? current : [...current, itemId]
+        : current.filter((id) => id !== itemId);
+      const { error } = await supabaseServer
+        .from('tools_mp_plans')
+        .update({ grocery_checked_item_ids: next })
         .eq('id', planId)
         .eq('user_id', user.id)
         .eq('tool_id', toolId);
