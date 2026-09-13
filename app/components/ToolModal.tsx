@@ -79,7 +79,7 @@ export function ToolModal({ tool, isOpen, onClose, onBuy, isBuying = false, buyM
         className="relative my-auto flex w-full max-w-lg max-h-[90vh] flex-col overflow-hidden rounded-2xl border border-slate-800 bg-slate-900 shadow-2xl"
         onClick={(e) => e.stopPropagation()}
       >
-        <div className="min-h-0 flex-1 overflow-y-auto p-6">
+        <div className="shrink-0 px-6 pt-6">
         {/* Close button */}
         <button
           onClick={onClose}
@@ -131,20 +131,6 @@ export function ToolModal({ tool, isOpen, onClose, onBuy, isBuying = false, buyM
           </div>
         )}
 
-        {/* Tool Tip */}
-        {tool.tool_tip && (
-          <div className="mb-4">
-            <p className="text-sm text-slate-300">{tool.tool_tip}</p>
-          </div>
-        )}
-
-        {/* Description */}
-        {tool.description && (
-          <div className="mb-6">
-            <p className="text-sm text-slate-400 whitespace-pre-line">{tool.description}</p>
-          </div>
-        )}
-
         {/* Buy Message */}
         {buyMessage && (
           <div
@@ -157,11 +143,10 @@ export function ToolModal({ tool, isOpen, onClose, onBuy, isBuying = false, buyM
             {buyMessage.text}
           </div>
         )}
-        </div>
 
         {/* Buy Button - Only show for tools that are not "coming_soon" */}
         {tool.status !== 'coming_soon' && (
-          <div className="shrink-0 border-t border-slate-800 bg-slate-900 px-6 py-4">
+          <div className="pb-4">
             <button
               onClick={handleBuy}
               disabled={isBuying}
@@ -171,6 +156,23 @@ export function ToolModal({ tool, isOpen, onClose, onBuy, isBuying = false, buyM
             </button>
           </div>
         )}
+        </div>
+
+        <div className="min-h-0 flex-1 overflow-y-auto px-6 pb-6">
+        {/* Tool Tip */}
+        {tool.tool_tip && (
+          <div className="mb-4">
+            <p className="text-sm text-slate-300">{tool.tool_tip}</p>
+          </div>
+        )}
+
+        {/* Description */}
+        {tool.description && (
+          <div className="mb-2">
+            <p className="text-sm text-slate-400 whitespace-pre-line">{tool.description}</p>
+          </div>
+        )}
+        </div>
       </div>
     </div>
   );

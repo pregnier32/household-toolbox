@@ -30,7 +30,7 @@ function ReceiptNeededWarning({ isLight }: { isLight: boolean }) {
     <div
       className={`mt-2 flex items-center gap-2 text-xs font-medium ${isLight ? 'text-amber-700' : 'text-amber-300'}`}
       role="status"
-      aria-label="Receipt still needed for this record"
+      aria-label="Receipt still needed — attach a receipt. This is not Reimbursable pending."
     >
       <span
         className="inline-flex shrink-0 items-center justify-center rounded-full border-2 border-amber-400 bg-amber-500/15 p-1 text-amber-500"
@@ -45,7 +45,7 @@ function ReceiptNeededWarning({ isLight }: { isLight: boolean }) {
           />
         </svg>
       </span>
-      <span>Receipt still needed for this record.</span>
+      <span>Receipt still needed — attach a receipt. This is not Reimbursable pending.</span>
     </div>
   );
 }
@@ -89,6 +89,7 @@ type HsaAccount = {
   id: string;
   name: string;
   card_color: string;
+  contributionLimits: Record<string, number>;
   deposits: DepositRecord[];
   expenses: ExpenseRecord[];
 };
@@ -128,6 +129,38 @@ function sumInCalendarYear<T extends { date: string; amount: number }>(rows: T[]
 type HSATrackerToolProps = {
   toolId?: string;
 };
+
+function lastAccountStorageKey(toolId: string) {
+  return `hsa-last-account:${toolId}`;
+}
+
+function readLastAccountId(toolId: string): string | null {
+  try {
+    return localStorage.getItem(lastAccountStorageKey(toolId));
+  } catch {
+    return null;
+  }
+}
+
+function writeLastAccountId(toolId: string, accountId: string) {
+  try {
+    localStorage.setItem(lastAccountStorageKey(toolId), accountId);
+  } catch {
+    /* ignore quota / private mode */
+  }
+}
+
+function pickOpenAccountId(list: HsaAccount[], prev: string | null, toolId?: string): string | null {
+  if (!list.length) return null;
+  const ids = new Set(list.map((a) => a.id));
+  if (prev && ids.has(prev)) return prev;
+  const lastUsed = toolId ? readLastAccountId(toolId) : null;
+  if (lastUsed && ids.has(lastUsed)) return lastUsed;
+  if (list.length === 1) return list[0].id;
+  const self = list.find((a) => a.name === 'Self');
+  if (self) return self.id;
+  return list[0].id;
+}
 
 export function HSATrackerTool({ toolId }: HSATrackerToolProps) {
   const { resolvedTheme } = useTheme();
@@ -237,7 +270,10 @@ export function HSATrackerTool({ toolId }: HSATrackerToolProps) {
       const res = await fetch(`/api/tools/hsa-tracker?toolId=${encodeURIComponent(toolId)}`);
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || 'Failed to load');
-      const loaded = (data.accounts ?? []) as HsaAccount[];
+      const loaded = ((data.accounts ?? []) as HsaAccount[]).map((a) => ({
+        ...a,
+        contributionLimits: a.contributionLimits ?? {},
+      }));
       setAccounts(loaded);
     } catch (e) {
       showMessage('error', e instanceof Error ? e.message : 'Failed to load HSA data');
@@ -256,9 +292,11 @@ export function HSATrackerTool({ toolId }: HSATrackerToolProps) {
       return;
     }
     if (!selectedAccountId || !accounts.some((a) => a.id === selectedAccountId)) {
-      setSelectedAccountId(accounts[0].id);
+      const next = pickOpenAccountId(accounts, selectedAccountId, toolId);
+      setSelectedAccountId(next);
+      if (next && toolId) writeLastAccountId(toolId, next);
     }
-  }, [accounts, selectedAccountId]);
+  }, [accounts, selectedAccountId, toolId]);
 
   const apiPost = useCallback(
     async (resource: 'account' | 'deposit' | 'expense', action: string, payload: Record<string, unknown>) => {
@@ -294,12 +332,14 @@ export function HSATrackerTool({ toolId }: HSATrackerToolProps) {
 
   const currentYear = new Date().getFullYear();
   const [summaryYear, setSummaryYear] = useState<number>(currentYear);
+  const [contributionLimitDraft, setContributionLimitDraft] = useState('');
 
   const selectedAccount = accounts.find((a) => a.id === selectedAccountId) ?? null;
 
   const availableYears = useMemo(() => {
     const years = new Set<number>();
     years.add(currentYear);
+    years.add(currentYear - 1);
     for (const a of accounts) {
       for (const d of a.deposits) {
         const y = parseInt(d.date.slice(0, 4), 10);
@@ -316,6 +356,7 @@ export function HSATrackerTool({ toolId }: HSATrackerToolProps) {
   const summaryMetrics = useMemo(() => {
     if (!selectedAccount) {
       return {
+        startingBalance: 0,
         balanceEndOfYear: 0,
         depositsYtd: 0,
         expensesYtd: 0,
@@ -324,6 +365,7 @@ export function HSATrackerTool({ toolId }: HSATrackerToolProps) {
     }
     const { deposits, expenses } = selectedAccount;
     const dec31 = `${summaryYear}-12-31`;
+    const startingBalance = balanceBeforeYear(deposits, expenses, summaryYear);
     const balanceEndOfYear = balanceThroughDate(deposits, expenses, dec31);
     const depositsYtd = sumInCalendarYear(deposits, summaryYear, 1);
     const expensesYtd = sumInCalendarYear(expenses, summaryYear, 1);
@@ -335,8 +377,50 @@ export function HSATrackerTool({ toolId }: HSATrackerToolProps) {
           e.reimbursedYet === 'No'
       )
       .reduce((s, e) => s + e.amount, 0);
-    return { balanceEndOfYear, depositsYtd, expensesYtd, reimbursablePending };
+    return { startingBalance, balanceEndOfYear, depositsYtd, expensesYtd, reimbursablePending };
   }, [selectedAccount, summaryYear]);
+
+  const storedContributionLimit = selectedAccount?.contributionLimits[String(summaryYear)];
+
+  useEffect(() => {
+    setContributionLimitDraft(storedContributionLimit == null ? '' : String(storedContributionLimit));
+  }, [selectedAccountId, summaryYear, storedContributionLimit]);
+
+  const saveContributionLimit = async () => {
+    if (!selectedAccountId || !selectedAccount) return;
+    const raw = contributionLimitDraft.trim();
+    if (raw === '' && storedContributionLimit == null) return;
+    if (raw !== '' && storedContributionLimit != null && parseFloat(raw) === storedContributionLimit) return;
+    const nextLimits = { ...selectedAccount.contributionLimits };
+    if (raw === '') {
+      delete nextLimits[String(summaryYear)];
+    } else {
+      const n = parseFloat(raw);
+      if (!Number.isFinite(n) || n < 0) {
+        alert('Enter a valid contribution limit of 0 or more, or leave blank.');
+        setContributionLimitDraft(storedContributionLimit == null ? '' : String(storedContributionLimit));
+        return;
+      }
+      nextLimits[String(summaryYear)] = Math.round(n * 100) / 100;
+    }
+
+    if (toolId) {
+      const data = await apiPost('account', 'update', {
+        accountId: selectedAccountId,
+        contributionLimits: nextLimits,
+      });
+      if (!data?.account) return;
+      const saved = (data.account as { contributionLimits?: Record<string, number> }).contributionLimits ?? nextLimits;
+      setAccounts((prev) =>
+        prev.map((a) => (a.id === selectedAccountId ? { ...a, contributionLimits: saved } : a))
+      );
+      return;
+    }
+
+    setAccounts((prev) =>
+      prev.map((a) => (a.id === selectedAccountId ? { ...a, contributionLimits: nextLimits } : a))
+    );
+  };
 
   const [isAddingDeposit, setIsAddingDeposit] = useState(false);
   const [editingDepositId, setEditingDepositId] = useState<string | null>(null);
@@ -374,6 +458,7 @@ export function HSATrackerTool({ toolId }: HSATrackerToolProps) {
 
   const [reportYear, setReportYear] = useState(currentYear);
   const [showReportModal, setShowReportModal] = useState(false);
+  const [csvExportMessage, setCsvExportMessage] = useState<string | null>(null);
 
   const resetDepositForm = useCallback(() => {
     const y = summaryYear;
@@ -410,6 +495,7 @@ export function HSATrackerTool({ toolId }: HSATrackerToolProps) {
 
   const selectAccount = (id: string) => {
     setSelectedAccountId(id);
+    if (toolId) writeLastAccountId(toolId, id);
     setMenuOpenAccountId(null);
     setEditingAccountId(null);
     setIsCreatingAccount(false);
@@ -431,16 +517,21 @@ export function HSATrackerTool({ toolId }: HSATrackerToolProps) {
       const data = await apiPost('account', 'create', { name, card_color: newAccountColor });
       if (!data?.account) return;
       const acc = data.account as HsaAccount;
-      setAccounts((prev) => [...prev, acc]);
+      setAccounts((prev) => [...prev, { ...acc, contributionLimits: acc.contributionLimits ?? {} }]);
       setSelectedAccountId(acc.id);
+      writeLastAccountId(toolId, acc.id);
       setIsCreatingAccount(false);
       showMessage('success', 'Account created');
       return;
     }
 
     const id = generateId();
-    setAccounts((prev) => [...prev, { id, name, card_color: newAccountColor, deposits: [], expenses: [] }]);
+    setAccounts((prev) => [
+      ...prev,
+      { id, name, card_color: newAccountColor, contributionLimits: {}, deposits: [], expenses: [] },
+    ]);
     setSelectedAccountId(id);
+    if (toolId) writeLastAccountId(toolId, id);
     setIsCreatingAccount(false);
   };
 
@@ -500,7 +591,9 @@ export function HSATrackerTool({ toolId }: HSATrackerToolProps) {
     setAccounts((prev) => prev.filter((a) => a.id !== deleteConfirmAccountId));
     if (selectedAccountId === deleteConfirmAccountId) {
       const remaining = accounts.filter((a) => a.id !== deleteConfirmAccountId);
-      setSelectedAccountId(remaining[0]?.id ?? null);
+      const next = remaining[0]?.id ?? null;
+      setSelectedAccountId(next);
+      if (next && toolId) writeLastAccountId(toolId, next);
     }
     setDeleteConfirmAccountId(null);
     setDeleteConfirmText('');
@@ -707,6 +800,7 @@ export function HSATrackerTool({ toolId }: HSATrackerToolProps) {
 
   const removeExpense = async () => {
     if (!deleteExpenseId || !selectedAccountId) return;
+    if (deleteConfirmText.trim().toLowerCase() !== 'delete') return;
 
     if (toolId) {
       const data = await apiPost('expense', 'delete', { expenseId: deleteExpenseId });
@@ -719,6 +813,7 @@ export function HSATrackerTool({ toolId }: HSATrackerToolProps) {
         )
       );
       setDeleteExpenseId(null);
+      setDeleteConfirmText('');
       showMessage('success', 'Expense deleted');
       return;
     }
@@ -731,6 +826,7 @@ export function HSATrackerTool({ toolId }: HSATrackerToolProps) {
       )
     );
     setDeleteExpenseId(null);
+    setDeleteConfirmText('');
   };
 
   const generateReportPdf = useCallback(async () => {
@@ -855,6 +951,67 @@ export function HSATrackerTool({ toolId }: HSATrackerToolProps) {
     pdf.save(`HSA_Report_${accountName.replace(/\s+/g, '_')}_${year}.pdf`);
     setShowReportModal(false);
   }, [reportYear, selectedAccount]);
+
+  const exportReportCsv = () => {
+    if (!selectedAccount) return;
+    const year = reportYear;
+    const { deposits, expenses, name: accountName } = selectedAccount;
+    const inYear = (iso: string) => iso.startsWith(String(year));
+    const yearDeposits = deposits.filter((d) => inYear(d.date));
+    const yearExpenses = expenses.filter((e) => inYear(e.date));
+    if (yearDeposits.length === 0 && yearExpenses.length === 0) {
+      setCsvExportMessage(`No deposits or expenses for ${year}.`);
+      return;
+    }
+    setCsvExportMessage(null);
+
+    type CsvLine = { date: string; type: 'Deposit' | 'Expense'; name: string; amount: number; categoryOrSource: string };
+    const lines: CsvLine[] = [
+      ...yearDeposits.map((d) => ({
+        date: d.date,
+        type: 'Deposit' as const,
+        name: d.name,
+        amount: d.amount,
+        categoryOrSource: d.source,
+      })),
+      ...yearExpenses.map((e) => ({
+        date: e.date,
+        type: 'Expense' as const,
+        name: e.name,
+        amount: e.amount,
+        categoryOrSource: e.category,
+      })),
+    ].sort((a, b) => a.date.localeCompare(b.date) || a.type.localeCompare(b.type));
+
+    let running = balanceBeforeYear(deposits, expenses, year);
+    const escapeCsv = (value: string | number) => {
+      const s = String(value);
+      if (/[",\n\r]/.test(s)) return `"${s.replace(/"/g, '""')}"`;
+      return s;
+    };
+    const rows = [
+      ['Type', 'Date', 'Name', 'Amount', 'Category/Source', 'Running balance'],
+      ...lines.map((row) => {
+        running += row.type === 'Deposit' ? row.amount : -row.amount;
+        return [
+          row.type,
+          row.date,
+          row.name,
+          row.amount.toFixed(2),
+          row.categoryOrSource,
+          running.toFixed(2),
+        ];
+      }),
+    ];
+    const csv = rows.map((r) => r.map(escapeCsv).join(',')).join('\r\n');
+    const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `HSA_${accountName.replace(/\s+/g, '_')}_${year}.csv`;
+    a.click();
+    URL.revokeObjectURL(url);
+  };
 
   useEffect(() => {
     const onKeyDown = (e: KeyboardEvent) => {
@@ -1131,36 +1288,69 @@ export function HSATrackerTool({ toolId }: HSATrackerToolProps) {
 
           {mainTab === 'summary' && (
             <div className="space-y-6">
-              <div
-                className={`flex flex-nowrap items-center gap-3 ${cardClass}`}
-                role="group"
-                aria-label="Summary year filter"
-              >
-                <label
-                  htmlFor="hsa-summary-year"
-                  className={`shrink-0 text-xs font-medium whitespace-nowrap ${isLight ? 'text-slate-700' : 'text-slate-300'}`}
-                >
-                  Summary year
-                </label>
-                <select
-                  id="hsa-summary-year"
-                  value={summaryYear}
-                  onChange={(e) => setSummaryYear(Number(e.target.value))}
-                  className={
-                    isLight
-                      ? 'shrink-0 rounded-lg border border-slate-300 bg-white px-3 py-1.5 text-sm text-slate-900 focus:border-emerald-500/50 focus:outline-none focus:ring-1 focus:ring-emerald-500/50'
-                      : 'shrink-0 rounded-lg border border-slate-700 bg-slate-900/70 px-3 py-1.5 text-sm text-slate-100 focus:border-emerald-500/50 focus:outline-none focus:ring-1 focus:ring-emerald-500/50'
-                  }
-                >
-                  {availableYears.map((y) => (
-                    <option key={y} value={y}>
-                      {y}
-                    </option>
-                  ))}
-                </select>
-                <span className={`${mutedSmallClass} min-w-0 whitespace-nowrap`}>
-                  KPI amounts use calendar year {summaryYear}. Balance is as of 12/31/{summaryYear}.
-                </span>
+              <div className={cardClass} role="group" aria-label="Summary year filter">
+                <div className="flex flex-nowrap items-center gap-3">
+                  <label
+                    htmlFor="hsa-summary-year"
+                    className={`shrink-0 text-xs font-medium whitespace-nowrap ${isLight ? 'text-slate-700' : 'text-slate-300'}`}
+                  >
+                    Summary year
+                  </label>
+                  <select
+                    id="hsa-summary-year"
+                    value={summaryYear}
+                    onChange={(e) => setSummaryYear(Number(e.target.value))}
+                    className={
+                      isLight
+                        ? 'shrink-0 rounded-lg border border-slate-300 bg-white px-3 py-1.5 text-sm text-slate-900 focus:border-emerald-500/50 focus:outline-none focus:ring-1 focus:ring-emerald-500/50'
+                        : 'shrink-0 rounded-lg border border-slate-700 bg-slate-900/70 px-3 py-1.5 text-sm text-slate-100 focus:border-emerald-500/50 focus:outline-none focus:ring-1 focus:ring-emerald-500/50'
+                    }
+                  >
+                    {availableYears.map((y) => (
+                      <option key={y} value={y}>
+                        {y}
+                      </option>
+                    ))}
+                  </select>
+                  <span className={`${mutedSmallClass} min-w-0 whitespace-nowrap`}>
+                    KPI amounts use calendar year {summaryYear}. Balance is as of 12/31/{summaryYear}.
+                  </span>
+                </div>
+                <p className={`${mutedSmallClass} mt-3`}>
+                  Starting 1/1/{summaryYear}: {formatMoney(summaryMetrics.startingBalance)} — matches
+                  ending 12/31/{summaryYear - 1}.
+                </p>
+                <div className="mt-4 max-w-xs">
+                  <label htmlFor="hsa-contribution-limit" className={labelClassSm}>
+                    Annual contribution limit (optional)
+                  </label>
+                  <div className={currencyFieldWrapClass}>
+                    <span className={currencyFieldPrefixClass}>$</span>
+                    <input
+                      id="hsa-contribution-limit"
+                      type="number"
+                      min="0"
+                      step="0.01"
+                      placeholder="Leave blank"
+                      value={contributionLimitDraft}
+                      onChange={(e) => setContributionLimitDraft(e.target.value)}
+                      onBlur={() => void saveContributionLimit()}
+                      onKeyDown={(e) => {
+                        if (e.key === 'Enter') {
+                          e.currentTarget.blur();
+                        }
+                      }}
+                      className={currencyFieldInputClass}
+                      aria-label="Annual contribution limit in USD"
+                    />
+                  </div>
+                  {storedContributionLimit != null ? (
+                    <p className={`${mutedSmallClass} mt-2`}>
+                      Remaining: {formatMoney(storedContributionLimit - summaryMetrics.depositsYtd)}{' '}
+                      (limit − Deposits YTD)
+                    </p>
+                  ) : null}
+                </div>
               </div>
 
               <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
@@ -1202,6 +1392,9 @@ export function HSATrackerTool({ toolId }: HSATrackerToolProps) {
                     className={`mt-2 text-2xl font-semibold tabular-nums ${isLight ? 'text-slate-900' : 'text-slate-50'}`}
                   >
                     {formatMoney(summaryMetrics.reimbursablePending)}
+                  </p>
+                  <p className={`${mutedSmallClass} mt-2`}>
+                    Unreimbursed out-of-pocket $ — not receipt status.
                   </p>
                 </div>
               </div>
@@ -1728,7 +1921,10 @@ export function HSATrackerTool({ toolId }: HSATrackerToolProps) {
                             </button>
                             <button
                               type="button"
-                              onClick={() => setDeleteExpenseId(ex.id)}
+                              onClick={() => {
+                                setDeleteExpenseId(ex.id);
+                                setDeleteConfirmText('');
+                              }}
                               className={rowIconDangerClass}
                               aria-label="Delete expense"
                               title="Delete expense"
@@ -1762,9 +1958,33 @@ export function HSATrackerTool({ toolId }: HSATrackerToolProps) {
                   Generate a PDF with starting balance, all deposits and expenses in date order for the year you choose,
                   running totals, and ending balance.
                 </p>
-                <button type="button" onClick={() => setShowReportModal(true)} className={primaryButtonClass}>
-                  Generate PDF Report
-                </button>
+                <label className={labelClassSm} htmlFor="hsa-report-year">
+                  Year
+                </label>
+                <select
+                  id="hsa-report-year"
+                  value={reportYear}
+                  onChange={(e) => {
+                    setReportYear(Number(e.target.value));
+                    setCsvExportMessage(null);
+                  }}
+                  className={`${inputClassPad} mb-4 max-w-xs`}
+                >
+                  {availableYears.map((y) => (
+                    <option key={y} value={y}>
+                      {y}
+                    </option>
+                  ))}
+                </select>
+                <div className="flex flex-wrap gap-2">
+                  <button type="button" onClick={exportReportCsv} className={secondaryButtonClass}>
+                    Export CSV
+                  </button>
+                  <button type="button" onClick={() => setShowReportModal(true)} className={primaryButtonClass}>
+                    Generate PDF Report
+                  </button>
+                </div>
+                {csvExportMessage ? <p className={`${mutedSmallClass} mt-3`}>{csvExportMessage}</p> : null}
               </div>
             </div>
           )}
@@ -1863,13 +2083,39 @@ export function HSATrackerTool({ toolId }: HSATrackerToolProps) {
       {deleteExpenseId && (
         <div className={modalBackdropClass}>
           <div className={modalCardConfirmClass}>
-            <h3 className={modalTitleClass}>Delete expense?</h3>
-            <p className={`${deleteInstructionTextClass} mt-2`}>This cannot be undone.</p>
-            <div className="flex gap-2 mt-4">
-              <button type="button" onClick={removeExpense} className="flex-1 rounded-lg bg-red-600 px-4 py-2 text-white font-semibold hover:bg-red-700">
-                Delete
+            <div className={deleteWarningBoxClass}>
+              <p className={deleteWarningTextClass}>⚠️ Warning</p>
+              <p className={isLight ? 'text-red-600 text-sm' : 'text-red-200 text-sm'}>
+                This will permanently remove this expense.
+              </p>
+            </div>
+            <p className={deleteInstructionTextClass}>
+              Type <span className="font-semibold">delete</span> to confirm.
+            </p>
+            <input
+              type="text"
+              value={deleteConfirmText}
+              onChange={(e) => setDeleteConfirmText(e.target.value)}
+              placeholder="Type 'delete' to confirm"
+              className={deleteConfirmInputClass}
+            />
+            <div className="flex gap-2">
+              <button
+                type="button"
+                onClick={removeExpense}
+                disabled={deleteConfirmText.trim().toLowerCase() !== 'delete'}
+                className="flex-1 rounded-lg bg-red-600 px-4 py-2.5 text-sm font-semibold text-white hover:bg-red-700 disabled:cursor-not-allowed disabled:opacity-50"
+              >
+                Delete Permanently
               </button>
-              <button type="button" onClick={() => setDeleteExpenseId(null)} className={secondaryButtonClass}>
+              <button
+                type="button"
+                onClick={() => {
+                  setDeleteExpenseId(null);
+                  setDeleteConfirmText('');
+                }}
+                className={secondaryButtonClass}
+              >
                 Cancel
               </button>
             </div>

@@ -164,6 +164,33 @@ function formatHistoryBalanceLine(record: Pick<AppointmentRecord, 'totalBilled' 
     .join(' · ');
 }
 
+function readHsaLastAccountId(hsaToolId: string): string | null {
+  try {
+    return localStorage.getItem(`hsa-last-account:${hsaToolId}`);
+  } catch {
+    return null;
+  }
+}
+
+function pickHsaAccountId(accounts: { id: string; name: string }[], hsaToolId: string): string | null {
+  if (!accounts.length) return null;
+  const ids = new Set(accounts.map((a) => a.id));
+  const lastUsed = readHsaLastAccountId(hsaToolId);
+  if (lastUsed && ids.has(lastUsed)) return lastUsed;
+  if (accounts.length === 1) return accounts[0].id;
+  const self = accounts.find((a) => a.name === 'Self');
+  if (self) return self.id;
+  return accounts[0].id;
+}
+
+function hsaAmountFromHealthcare(record: AppointmentRecord): number {
+  const due = parseCurrency(record.currentAmountDue);
+  if (due > 0) return due;
+  const responsibility = Math.max(0, parseCurrency(record.totalBilled) - parseCurrency(record.insurancePaid));
+  if (responsibility > 0) return responsibility;
+  return parseCurrency(record.totalBilled);
+}
+
 function formatMemberRollupLine(memberRecords: AppointmentRecord[]): string {
   const upcoming = memberRecords.filter((r) => r.isUpcoming).length;
   const history = memberRecords.filter((r) => !r.isUpcoming).length;
@@ -295,6 +322,7 @@ export function HealthcareApptsHistoryTool({ toolId }: HealthcareApptsHistoryToo
   const [isLoadingHeaders, setIsLoadingHeaders] = useState(false);
   const [isLoadingRecords, setIsLoadingRecords] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
+  const [addingToHsaRecordId, setAddingToHsaRecordId] = useState<string | null>(null);
   const [saveMessage, setSaveMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
 
   const showMessage = (type: 'success' | 'error', text: string) => {
@@ -694,6 +722,65 @@ export function HealthcareApptsHistoryTool({ toolId }: HealthcareApptsHistoryToo
       setSaveMessage({ type: 'error', text: e instanceof Error ? e.message : 'Failed to delete' });
     } finally {
       setIsSaving(false);
+    }
+  };
+
+  const addToHsa = async (record: AppointmentRecord) => {
+    const amount = hsaAmountFromHealthcare(record);
+    if (!record.appointmentDate || amount <= 0) {
+      const msg = 'Add to HSA needs a date and an amount (Due, or billed minus insurance).';
+      alert(msg);
+      showMessage('error', msg);
+      return;
+    }
+
+    setAddingToHsaRecordId(record.id);
+    try {
+      const toolsRes = await fetch('/api/tools');
+      const toolsData = await toolsRes.json().catch(() => ({}));
+      if (!toolsRes.ok) throw new Error((toolsData as { error?: string }).error || 'Failed to find HSA Tracker');
+      const hsaTool = ((toolsData.tools ?? []) as { id: string; name: string }[]).find(
+        (t) => t.name === 'HSA Tracker'
+      );
+      if (!hsaTool) throw new Error('HSA Tracker is not available.');
+
+      const hsaRes = await fetch(`/api/tools/hsa-tracker?toolId=${encodeURIComponent(hsaTool.id)}`);
+      const hsaData = await hsaRes.json().catch(() => ({}));
+      if (!hsaRes.ok) throw new Error((hsaData as { error?: string }).error || 'Failed to load HSA accounts');
+      const accounts = (hsaData.accounts ?? []) as { id: string; name: string }[];
+      const accountId = pickHsaAccountId(accounts, hsaTool.id);
+      if (!accountId) throw new Error('No HSA account available. Open HSA Tracker once to create one.');
+
+      const name = record.reasonForVisit.trim() || record.careFacility.trim() || record.providerInfo.trim() || 'Healthcare visit';
+      const providerOrStore = record.providerInfo.trim() || record.careFacility.trim();
+      const createRes = await fetch('/api/tools/hsa-tracker', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          resource: 'expense',
+          action: 'create',
+          toolId: hsaTool.id,
+          accountId,
+          name,
+          date: record.appointmentDate,
+          amount,
+          providerOrStore,
+          category: 'Doctor Visit',
+          paymentMethod: 'Out of Pocket',
+          reimbursedYet: 'No',
+          notes: `From Healthcare. Record ${record.id}`,
+          healthcareRecordId: record.id,
+        }),
+      });
+      const createData = await createRes.json().catch(() => ({}));
+      if (!createRes.ok) throw new Error((createData as { error?: string }).error || 'Failed to create HSA expense');
+      showMessage('success', 'Added to HSA Tracker.');
+    } catch (e) {
+      const msg = e instanceof Error ? e.message : 'Failed to add to HSA';
+      alert(msg);
+      showMessage('error', msg);
+    } finally {
+      setAddingToHsaRecordId(null);
     }
   };
 
@@ -1778,6 +1865,20 @@ export function HealthcareApptsHistoryTool({ toolId }: HealthcareApptsHistoryToo
                             )}
                           </div>
                           <div className="flex shrink-0 items-center gap-1.5 ml-4">
+                            <button
+                              type="button"
+                              onClick={() => void addToHsa(record)}
+                              disabled={addingToHsaRecordId === record.id}
+                              className={
+                                isLight
+                                  ? 'text-sm font-medium text-emerald-700 hover:text-emerald-900 disabled:opacity-50 disabled:cursor-not-allowed'
+                                  : 'text-sm font-medium text-emerald-300 hover:text-emerald-200 disabled:opacity-50 disabled:cursor-not-allowed'
+                              }
+                              aria-label="Add to HSA"
+                              title="Add to HSA"
+                            >
+                              {addingToHsaRecordId === record.id ? 'Adding…' : 'Add to HSA'}
+                            </button>
                             <button
                               type="button"
                               onClick={() => startEditingRecord(record)}

@@ -41,6 +41,16 @@ function parseAmount(value: number | string): number {
   return typeof value === 'number' ? value : parseFloat(String(value));
 }
 
+function parseContributionLimits(raw: unknown): Record<string, number> {
+  if (!raw || typeof raw !== 'object' || Array.isArray(raw)) return {};
+  const out: Record<string, number> = {};
+  for (const [k, v] of Object.entries(raw as Record<string, unknown>)) {
+    const n = typeof v === 'number' ? v : parseFloat(String(v));
+    if (Number.isFinite(n) && n >= 0) out[k] = n;
+  }
+  return out;
+}
+
 function mapDeposit(row: DepositRow) {
   return {
     id: row.id,
@@ -133,7 +143,7 @@ export async function GET(request: NextRequest) {
 
     const { data: accountRows, error: accountsError } = await supabaseServer
       .from('tools_hsa_accounts')
-      .select('id, name, card_color, display_order')
+      .select('id, name, card_color, display_order, contribution_limits')
       .eq('user_id', user.id)
       .eq('tool_id', toolId)
       .order('display_order', { ascending: true });
@@ -184,6 +194,9 @@ export async function GET(request: NextRequest) {
       id: a.id,
       name: a.name,
       card_color: a.card_color || '#10b981',
+      contributionLimits: parseContributionLimits(
+        (a as { contribution_limits?: unknown }).contribution_limits
+      ),
       deposits: deposits.filter((d) => d.account_id === a.id).map(mapDeposit),
       expenses: expenses.filter((e) => e.account_id === a.id).map(mapExpense),
     }));
@@ -248,6 +261,7 @@ export async function POST(request: NextRequest) {
             id: data.id,
             name: data.name,
             card_color: data.card_color || '#10b981',
+            contributionLimits: parseContributionLimits(data.contribution_limits),
             deposits: [],
             expenses: [],
           },
@@ -255,18 +269,26 @@ export async function POST(request: NextRequest) {
       }
 
       if (action === 'update') {
-        const { accountId, name, card_color } = body as {
+        const { accountId, name, card_color, contributionLimits } = body as {
           accountId: string;
           name?: string;
           card_color?: string;
+          contributionLimits?: Record<string, number>;
         };
         if (!accountId) {
           return NextResponse.json({ error: 'Account ID is required' }, { status: 400 });
         }
 
-        const updates: Record<string, string> = {};
+        const updates: Record<string, unknown> = {};
         if (name !== undefined) updates.name = name.trim();
         if (card_color !== undefined) updates.card_color = card_color;
+        if (contributionLimits !== undefined) {
+          updates.contribution_limits = parseContributionLimits(contributionLimits);
+        }
+
+        if (Object.keys(updates).length === 0) {
+          return NextResponse.json({ error: 'No account fields to update' }, { status: 400 });
+        }
 
         const { data, error } = await supabaseServer
           .from('tools_hsa_accounts')
@@ -287,6 +309,7 @@ export async function POST(request: NextRequest) {
             id: data.id,
             name: data.name,
             card_color: data.card_color || '#10b981',
+            contributionLimits: parseContributionLimits(data.contribution_limits),
           },
         });
       }

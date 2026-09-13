@@ -16,6 +16,7 @@ CREATE TABLE IF NOT EXISTS tools_hsa_accounts (
   name TEXT NOT NULL,
   card_color TEXT NOT NULL DEFAULT '#10b981',
   display_order INTEGER NOT NULL DEFAULT 0,
+  contribution_limits JSONB NOT NULL DEFAULT '{}'::jsonb,
   created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
   updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
 );
@@ -23,6 +24,10 @@ CREATE TABLE IF NOT EXISTS tools_hsa_accounts (
 CREATE INDEX IF NOT EXISTS idx_hsa_accounts_user_id ON tools_hsa_accounts(user_id);
 CREATE INDEX IF NOT EXISTS idx_hsa_accounts_tool_id ON tools_hsa_accounts(tool_id);
 CREATE INDEX IF NOT EXISTS idx_hsa_accounts_user_tool ON tools_hsa_accounts(user_id, tool_id);
+
+-- After-launch: optional owner-editable annual limits keyed by calendar year (e.g. {"2026": 4000})
+ALTER TABLE tools_hsa_accounts
+  ADD COLUMN IF NOT EXISTS contribution_limits JSONB NOT NULL DEFAULT '{}'::jsonb;
 
 -- ============================================================================
 -- DEFAULT ACCOUNTS (optional seed for first-time setup; read-only for users)
