@@ -156,7 +156,7 @@ export async function GET(request: NextRequest) {
         .eq('tool_id', toolId)
         .order('display_order', { ascending: true });
       if (!retry.error) {
-        accountRows = retry.data;
+        accountRows = (retry.data ?? []).map((row) => ({ ...row, contribution_limits: {} })) as typeof accountRows;
         accountsError = null;
       }
     }

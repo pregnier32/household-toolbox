@@ -79,7 +79,7 @@ async function fetchListLineItems(listId: string): Promise<MappedListItem[]> {
       .select(columns)
       .eq('list_id', listId)
       .order('display_order', { ascending: true });
-    if (!error) return mapListItemRows((data || []) as ListItemRow[]);
+    if (!error) return mapListItemRows((data || []) as unknown as ListItemRow[]);
     if (!isMissingColumnError(error)) {
       console.error('Error fetching list items:', error);
       return [];

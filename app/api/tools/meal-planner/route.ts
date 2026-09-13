@@ -273,7 +273,7 @@ export async function GET(request: NextRequest) {
           .select('id, meal_type_id, name, description, instructions, prep_time_minutes, difficulty, rating, is_active')
           .eq('user_id', user.id)
           .eq('tool_id', toolId);
-        meals = (retry.data ?? []).map((row) => ({ ...row, scale: undefined }));
+        meals = (retry.data ?? []).map((row) => ({ ...row, scale: null })) as typeof meals;
         mealsError = retry.error;
       }
 
