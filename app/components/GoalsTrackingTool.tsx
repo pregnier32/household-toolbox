@@ -411,6 +411,7 @@ export function GoalsTrackingTool({ toolId }: GoalsTrackingToolProps) {
   const [deleteGoalConfirmText, setDeleteGoalConfirmText] = useState('');
 
   const [selectedGoalId, setSelectedGoalId] = useState<string | null>(null);
+  const [completePrompt, setCompletePrompt] = useState<{ goalId: string; resumeSave?: boolean } | null>(null);
 
   // Update note (when editing a goal)
   const [newUpdateNoteDate, setNewUpdateNoteDate] = useState(new Date().toISOString().split('T')[0]);
@@ -420,7 +421,6 @@ export function GoalsTrackingTool({ toolId }: GoalsTrackingToolProps) {
   const [editNoteText, setEditNoteText] = useState('');
   const [showAllUpdatesGoalId, setShowAllUpdatesGoalId] = useState<string | null>(null);
   const promptedAt100GoalIdRef = useRef<string | null>(null);
-  const lastPromptVisitGoalIdRef = useRef<string | null>(null);
 
   useEffect(() => {
     setNewUpdateNoteText('');
@@ -637,15 +637,8 @@ export function GoalsTrackingTool({ toolId }: GoalsTrackingToolProps) {
     setEditingNoteId(null);
   };
 
-  const saveGoalEdit = async () => {
+  const persistGoalEdit = async (status: GoalStatus) => {
     if (!editingGoal) return;
-    const percent = getGoalPercent(editingGoal);
-    let status = editingGoal.status;
-    if (percent >= 100 && status !== 'Completed') {
-      if (promptMarkCompletedIfAt100(percent, status, editingGoal.id, { allowAlreadyAt100: true })) {
-        status = 'Completed';
-      }
-    }
     if (toolId) {
       const data = await apiPost('goal', 'update', {
         goalId: editingGoal.id,
@@ -673,6 +666,18 @@ export function GoalsTrackingTool({ toolId }: GoalsTrackingToolProps) {
     setEditingNoteId(null);
   };
 
+  const saveGoalEdit = async () => {
+    if (!editingGoal) return;
+    const percent = getGoalPercent(editingGoal);
+    const status = editingGoal.status;
+    if (percent >= 100 && status !== 'Completed') {
+      if (promptMarkCompletedIfAt100(percent, status, editingGoal.id, { allowAlreadyAt100: true, resumeSave: true })) {
+        return;
+      }
+    }
+    await persistGoalEdit(status);
+  };
+
   const updateEditingGoal = (updates: Partial<Goal>) => {
     if (editingGoal) setEditingGoal((prev) => (prev ? { ...prev, ...updates } : null));
   };
@@ -692,7 +697,7 @@ export function GoalsTrackingTool({ toolId }: GoalsTrackingToolProps) {
     nextPercent: number,
     status: GoalStatus,
     goalId: string,
-    options?: { prevPercent?: number; allowAlreadyAt100?: boolean }
+    options?: { prevPercent?: number; allowAlreadyAt100?: boolean; resumeSave?: boolean }
   ): boolean => {
     if (nextPercent < 100) {
       if (promptedAt100GoalIdRef.current === goalId) promptedAt100GoalIdRef.current = null;
@@ -704,31 +709,34 @@ export function GoalsTrackingTool({ toolId }: GoalsTrackingToolProps) {
     }
     if (promptedAt100GoalIdRef.current === goalId) return false;
     promptedAt100GoalIdRef.current = goalId;
-    if (window.confirm('Mark this goal Completed?')) {
-      void markGoalCompleted(goalId);
-      return true;
+    setCompletePrompt({ goalId, resumeSave: options?.resumeSave });
+    return true;
+  };
+
+  const confirmMarkGoalCompleted = () => {
+    if (!completePrompt) return;
+    const { goalId, resumeSave } = completePrompt;
+    setCompletePrompt(null);
+    if (resumeSave) {
+      void persistGoalEdit('Completed');
+      return;
     }
-    return false;
+    void markGoalCompleted(goalId);
+  };
+
+  const cancelMarkGoalCompleted = () => {
+    if (!completePrompt) return;
+    const resumeSave = completePrompt.resumeSave;
+    setCompletePrompt(null);
+    if (resumeSave && editingGoal) {
+      void persistGoalEdit(editingGoal.status);
+    }
   };
 
   const promptMarkCompletedIfReached100 = (prevPercent: number, nextPercent: number, status: GoalStatus) => {
     if (!editingGoal) return;
     promptMarkCompletedIfAt100(nextPercent, status, editingGoal.id, { prevPercent });
   };
-
-  // Visit of an already-at-100% goal (list select / remaining-after-delete). Once per selectedGoalId, not every re-render.
-  useEffect(() => {
-    if (lastPromptVisitGoalIdRef.current !== selectedGoalId) {
-      lastPromptVisitGoalIdRef.current = selectedGoalId;
-      promptedAt100GoalIdRef.current = null;
-    }
-    if (!selectedGoalId) return;
-    const goal = goals.find((g) => g.id === selectedGoalId);
-    if (!goal) return;
-    promptMarkCompletedIfAt100(getGoalPercent(goal), goal.status, goal.id, { allowAlreadyAt100: true });
-    // prompt helper is recreated each render; selectedGoalId + goals drive the visit.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [selectedGoalId, goals, getGoalPercent]);
 
   const addUpdateNoteToGoal = async (goal: Goal | null) => {
     if (!goal || !newUpdateNoteText.trim()) return;
@@ -955,6 +963,10 @@ export function GoalsTrackingTool({ toolId }: GoalsTrackingToolProps) {
           setDeleteConfirmCategoryId(null);
           setDeleteConfirmText('');
         }
+        if (completePrompt) {
+          cancelMarkGoalCompleted();
+          return;
+        }
         if (deleteConfirmGoalId) {
           setDeleteConfirmGoalId(null);
           setDeleteGoalConfirmText('');
@@ -966,7 +978,7 @@ export function GoalsTrackingTool({ toolId }: GoalsTrackingToolProps) {
     };
     window.addEventListener('keydown', onKeyDown);
     return () => window.removeEventListener('keydown', onKeyDown);
-  }, [deleteConfirmCategoryId, deleteConfirmGoalId, showAllUpdatesGoalId, editingCategoryId]);
+  }, [deleteConfirmCategoryId, deleteConfirmGoalId, showAllUpdatesGoalId, editingCategoryId, completePrompt]);
 
   return (
     <div className="space-y-6 relative">
@@ -2006,6 +2018,27 @@ export function GoalsTrackingTool({ toolId }: GoalsTrackingToolProps) {
                       </button>
                     </div>
                   </div>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {completePrompt && (
+            <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-[60] p-4">
+              <div className={modalCardConfirmClass} role="dialog" aria-modal="true" aria-labelledby="gt-complete-goal-title">
+                <h3 id="gt-complete-goal-title" className={`${modalTitleClass} mb-2`}>
+                  Mark goal completed?
+                </h3>
+                <p className={deleteInstructionTextClass}>
+                  This goal is at 100%. Do you want to mark it Completed?
+                </p>
+                <div className="flex gap-3">
+                  <button type="button" onClick={confirmMarkGoalCompleted} className={`flex-1 ${primaryButtonClass}`}>
+                    Mark Completed
+                  </button>
+                  <button type="button" onClick={cancelMarkGoalCompleted} className={secondaryButtonClass}>
+                    Cancel
+                  </button>
                 </div>
               </div>
             </div>

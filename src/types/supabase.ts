@@ -10,226 +10,10 @@ export type Database = {
   // Allows to automatically instantiate createClient with right options
   // instead of createClient<Database, { PostgrestVersion: 'XX' }>(URL, KEY)
   __InternalSupabase: {
-    PostgrestVersion: "13.0.5"
-  }
-  graphql_public: {
-    Tables: {
-      [_ in never]: never
-    }
-    Views: {
-      [_ in never]: never
-    }
-    Functions: {
-      graphql: {
-        Args: {
-          extensions?: Json
-          operationName?: string
-          query?: string
-          variables?: Json
-        }
-        Returns: Json
-      }
-    }
-    Enums: {
-      [_ in never]: never
-    }
-    CompositeTypes: {
-      [_ in never]: never
-    }
+    PostgrestVersion: "14.5"
   }
   public: {
     Tables: {
-      billing_active: {
-        Row: {
-          amount: number
-          billing_date: string
-          billing_period_end: string
-          billing_period_start: string
-          created_at: string | null
-          id: string
-          item_type: string
-          status: string
-          tool_id: string | null
-          tool_name: string | null
-          updated_at: string | null
-          user_id: string
-          users_tools_id: string | null
-        }
-        Insert: {
-          amount: number
-          billing_date: string
-          billing_period_end: string
-          billing_period_start: string
-          created_at?: string | null
-          id?: string
-          item_type: string
-          status?: string
-          tool_id?: string | null
-          tool_name?: string | null
-          updated_at?: string | null
-          user_id: string
-          users_tools_id?: string | null
-        }
-        Update: {
-          amount?: number
-          billing_date?: string
-          billing_period_end?: string
-          billing_period_start?: string
-          created_at?: string | null
-          id?: string
-          item_type?: string
-          status?: string
-          tool_id?: string | null
-          tool_name?: string | null
-          updated_at?: string | null
-          user_id?: string
-          users_tools_id?: string | null
-        }
-        Relationships: [
-          {
-            foreignKeyName: "billing_active_tool_id_fkey"
-            columns: ["tool_id"]
-            isOneToOne: false
-            referencedRelation: "tools"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "billing_active_user_id_fkey"
-            columns: ["user_id"]
-            isOneToOne: false
-            referencedRelation: "users"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "billing_active_users_tools_id_fkey"
-            columns: ["users_tools_id"]
-            isOneToOne: false
-            referencedRelation: "users_tools"
-            referencedColumns: ["id"]
-          },
-        ]
-      }
-      billing_history: {
-        Row: {
-          amount: number
-          billing_date: string
-          billing_period_end: string
-          billing_period_start: string
-          created_at: string
-          id: string
-          invoice_id: string | null
-          item_type: string
-          notes: string | null
-          payment_intent_id: string | null
-          processed_at: string | null
-          status: string
-          tool_id: string | null
-          tool_name: string | null
-          updated_at: string
-          user_id: string
-          users_tools_id: string | null
-        }
-        Insert: {
-          amount: number
-          billing_date: string
-          billing_period_end: string
-          billing_period_start: string
-          created_at: string
-          id?: string
-          invoice_id?: string | null
-          item_type: string
-          notes?: string | null
-          payment_intent_id?: string | null
-          processed_at?: string | null
-          status: string
-          tool_id?: string | null
-          tool_name?: string | null
-          updated_at: string
-          user_id: string
-          users_tools_id?: string | null
-        }
-        Update: {
-          amount?: number
-          billing_date?: string
-          billing_period_end?: string
-          billing_period_start?: string
-          created_at?: string
-          id?: string
-          invoice_id?: string | null
-          item_type?: string
-          notes?: string | null
-          payment_intent_id?: string | null
-          processed_at?: string | null
-          status?: string
-          tool_id?: string | null
-          tool_name?: string | null
-          updated_at?: string
-          user_id?: string
-          users_tools_id?: string | null
-        }
-        Relationships: [
-          {
-            foreignKeyName: "billing_history_tool_id_fkey"
-            columns: ["tool_id"]
-            isOneToOne: false
-            referencedRelation: "tools"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "billing_history_user_id_fkey"
-            columns: ["user_id"]
-            isOneToOne: false
-            referencedRelation: "users"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "billing_history_users_tools_id_fkey"
-            columns: ["users_tools_id"]
-            isOneToOne: false
-            referencedRelation: "users_tools"
-            referencedColumns: ["id"]
-          },
-        ]
-      }
-      cron_job_logs: {
-        Row: {
-          completed_at: string | null
-          created_at: string
-          duration_ms: number | null
-          error_details: string | null
-          execution_data: Json | null
-          id: string
-          job_name: string
-          message: string | null
-          started_at: string
-          status: string
-        }
-        Insert: {
-          completed_at?: string | null
-          created_at?: string
-          duration_ms?: number | null
-          error_details?: string | null
-          execution_data?: Json | null
-          id?: string
-          job_name: string
-          message?: string | null
-          started_at?: string
-          status: string
-        }
-        Update: {
-          completed_at?: string | null
-          created_at?: string
-          duration_ms?: number | null
-          error_details?: string | null
-          execution_data?: Json | null
-          id?: string
-          job_name?: string
-          message?: string | null
-          started_at?: string
-          status?: string
-        }
-        Relationships: []
-      }
       dashboard_items: {
         Row: {
           created_at: string
@@ -328,48 +112,6 @@ export type Database = {
           },
         ]
       }
-      promo_codes: {
-        Row: {
-          active: boolean
-          code: string
-          created_at: string | null
-          description: string | null
-          discount_type: string
-          discount_value: number
-          expires_at: string
-          id: string
-          max_uses: number | null
-          updated_at: string | null
-          usage_count: number
-        }
-        Insert: {
-          active?: boolean
-          code: string
-          created_at?: string | null
-          description?: string | null
-          discount_type: string
-          discount_value: number
-          expires_at: string
-          id?: string
-          max_uses?: number | null
-          updated_at?: string | null
-          usage_count?: number
-        }
-        Update: {
-          active?: boolean
-          code?: string
-          created_at?: string | null
-          description?: string | null
-          discount_type?: string
-          discount_value?: number
-          expires_at?: string
-          id?: string
-          max_uses?: number | null
-          updated_at?: string | null
-          usage_count?: number
-        }
-        Relationships: []
-      }
       settings: {
         Row: {
           created_at: string | null
@@ -464,6 +206,171 @@ export type Database = {
           updated_at?: string | null
         }
         Relationships: []
+      }
+      tools_ab_address_tags: {
+        Row: {
+          address_id: string
+          created_at: string
+          id: string
+          tag_id: string
+        }
+        Insert: {
+          address_id: string
+          created_at?: string
+          id?: string
+          tag_id: string
+        }
+        Update: {
+          address_id?: string
+          created_at?: string
+          id?: string
+          tag_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "tools_ab_address_tags_address_id_fkey"
+            columns: ["address_id"]
+            isOneToOne: false
+            referencedRelation: "tools_ab_addresses"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "tools_ab_address_tags_tag_id_fkey"
+            columns: ["tag_id"]
+            isOneToOne: false
+            referencedRelation: "tools_ab_tags"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      tools_ab_addresses: {
+        Row: {
+          city: string
+          country: string
+          created_at: string
+          date_added: string
+          date_inactivated: string | null
+          email: string
+          first_name: string
+          id: string
+          is_active: boolean
+          last_name: string
+          mailing_name: string
+          phone: string
+          state: string
+          street_address: string
+          tool_id: string
+          updated_at: string
+          user_id: string
+          zip: string
+        }
+        Insert: {
+          city?: string
+          country?: string
+          created_at?: string
+          date_added?: string
+          date_inactivated?: string | null
+          email?: string
+          first_name?: string
+          id?: string
+          is_active?: boolean
+          last_name?: string
+          mailing_name: string
+          phone?: string
+          state?: string
+          street_address?: string
+          tool_id: string
+          updated_at?: string
+          user_id: string
+          zip?: string
+        }
+        Update: {
+          city?: string
+          country?: string
+          created_at?: string
+          date_added?: string
+          date_inactivated?: string | null
+          email?: string
+          first_name?: string
+          id?: string
+          is_active?: boolean
+          last_name?: string
+          mailing_name?: string
+          phone?: string
+          state?: string
+          street_address?: string
+          tool_id?: string
+          updated_at?: string
+          user_id?: string
+          zip?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "tools_ab_addresses_tool_id_fkey"
+            columns: ["tool_id"]
+            isOneToOne: false
+            referencedRelation: "tools"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "tools_ab_addresses_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "users"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      tools_ab_tags: {
+        Row: {
+          created_at: string
+          date_added: string
+          date_inactivated: string | null
+          id: string
+          is_active: boolean
+          name: string
+          tool_id: string
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          date_added?: string
+          date_inactivated?: string | null
+          id?: string
+          is_active?: boolean
+          name: string
+          tool_id: string
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          date_added?: string
+          date_inactivated?: string | null
+          id?: string
+          is_active?: boolean
+          name?: string
+          tool_id?: string
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "tools_ab_tags_tool_id_fkey"
+            columns: ["tool_id"]
+            isOneToOne: false
+            referencedRelation: "tools"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "tools_ab_tags_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "users"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       tools_ce_categories: {
         Row: {
@@ -591,6 +498,1015 @@ export type Database = {
             columns: ["user_id"]
             isOneToOne: false
             referencedRelation: "users"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      tools_cs_categories: {
+        Row: {
+          created_at: string
+          icon_key: string | null
+          id: string
+          is_default: boolean
+          name: string
+          tool_id: string
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          icon_key?: string | null
+          id?: string
+          is_default?: boolean
+          name: string
+          tool_id: string
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          icon_key?: string | null
+          id?: string
+          is_default?: boolean
+          name?: string
+          tool_id?: string
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "tools_cs_categories_tool_id_fkey"
+            columns: ["tool_id"]
+            isOneToOne: false
+            referencedRelation: "tools"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "tools_cs_categories_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "users"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      tools_cs_completions: {
+        Row: {
+          completed_date: string
+          created_at: string
+          id: string
+          lateness: string
+          scheduled_date: string
+          task_id: string
+          tool_id: string
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          completed_date: string
+          created_at?: string
+          id?: string
+          lateness: string
+          scheduled_date: string
+          task_id: string
+          tool_id: string
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          completed_date?: string
+          created_at?: string
+          id?: string
+          lateness?: string
+          scheduled_date?: string
+          task_id?: string
+          tool_id?: string
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "tools_cs_completions_task_id_fkey"
+            columns: ["task_id"]
+            isOneToOne: false
+            referencedRelation: "tools_cs_tasks"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "tools_cs_completions_tool_id_fkey"
+            columns: ["tool_id"]
+            isOneToOne: false
+            referencedRelation: "tools"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "tools_cs_completions_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "users"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      tools_cs_default_categories: {
+        Row: {
+          created_at: string
+          display_order: number
+          icon_key: string | null
+          id: string
+          name: string
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          display_order?: number
+          icon_key?: string | null
+          id?: string
+          name: string
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          display_order?: number
+          icon_key?: string | null
+          id?: string
+          name?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
+      tools_cs_default_items: {
+        Row: {
+          category_name: string
+          created_at: string
+          description: string
+          display_order: number
+          id: string
+          name: string
+          source_key: string
+          updated_at: string
+        }
+        Insert: {
+          category_name: string
+          created_at?: string
+          description?: string
+          display_order?: number
+          id?: string
+          name: string
+          source_key: string
+          updated_at?: string
+        }
+        Update: {
+          category_name?: string
+          created_at?: string
+          description?: string
+          display_order?: number
+          id?: string
+          name?: string
+          source_key?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
+      tools_cs_items: {
+        Row: {
+          category_id: string
+          created_at: string
+          description: string
+          id: string
+          is_default: boolean
+          is_hidden: boolean
+          name: string
+          notes: string
+          source_key: string | null
+          tool_id: string
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          category_id: string
+          created_at?: string
+          description?: string
+          id?: string
+          is_default?: boolean
+          is_hidden?: boolean
+          name: string
+          notes?: string
+          source_key?: string | null
+          tool_id: string
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          category_id?: string
+          created_at?: string
+          description?: string
+          id?: string
+          is_default?: boolean
+          is_hidden?: boolean
+          name?: string
+          notes?: string
+          source_key?: string | null
+          tool_id?: string
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "tools_cs_items_category_id_fkey"
+            columns: ["category_id"]
+            isOneToOne: false
+            referencedRelation: "tools_cs_categories"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "tools_cs_items_tool_id_fkey"
+            columns: ["tool_id"]
+            isOneToOne: false
+            referencedRelation: "tools"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "tools_cs_items_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "users"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      tools_cs_tasks: {
+        Row: {
+          created_at: string
+          date_added: string
+          date_inactivated: string | null
+          day_of_month: number | null
+          days_of_week: Json | null
+          frequency: string
+          id: string
+          interval_count: number | null
+          interval_unit: string | null
+          is_active: boolean
+          item_id: string
+          last_completed_date: string | null
+          next_due_date: string
+          tool_id: string
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          date_added?: string
+          date_inactivated?: string | null
+          day_of_month?: number | null
+          days_of_week?: Json | null
+          frequency: string
+          id?: string
+          interval_count?: number | null
+          interval_unit?: string | null
+          is_active?: boolean
+          item_id: string
+          last_completed_date?: string | null
+          next_due_date: string
+          tool_id: string
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          date_added?: string
+          date_inactivated?: string | null
+          day_of_month?: number | null
+          days_of_week?: Json | null
+          frequency?: string
+          id?: string
+          interval_count?: number | null
+          interval_unit?: string | null
+          is_active?: boolean
+          item_id?: string
+          last_completed_date?: string | null
+          next_due_date?: string
+          tool_id?: string
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "tools_cs_tasks_item_id_fkey"
+            columns: ["item_id"]
+            isOneToOne: true
+            referencedRelation: "tools_cs_items"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "tools_cs_tasks_tool_id_fkey"
+            columns: ["tool_id"]
+            isOneToOne: false
+            referencedRelation: "tools"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "tools_cs_tasks_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "users"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      tools_ebp_categories: {
+        Row: {
+          created_at: string
+          date_added: string
+          date_inactivated: string | null
+          id: string
+          is_active: boolean
+          name: string
+          tool_id: string
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          date_added?: string
+          date_inactivated?: string | null
+          id?: string
+          is_active?: boolean
+          name: string
+          tool_id: string
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          date_added?: string
+          date_inactivated?: string | null
+          id?: string
+          is_active?: boolean
+          name?: string
+          tool_id?: string
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "tools_ebp_categories_tool_id_fkey"
+            columns: ["tool_id"]
+            isOneToOne: false
+            referencedRelation: "tools"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "tools_ebp_categories_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "users"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      tools_ebp_default_categories: {
+        Row: {
+          created_at: string
+          display_order: number
+          id: string
+          name: string
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          display_order?: number
+          id?: string
+          name: string
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          display_order?: number
+          id?: string
+          name?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
+      tools_ebp_default_types: {
+        Row: {
+          created_at: string
+          display_order: number
+          id: string
+          name: string
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          display_order?: number
+          id?: string
+          name: string
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          display_order?: number
+          id?: string
+          name?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
+      tools_ebp_event_category_budgets: {
+        Row: {
+          budget_amount: number
+          category_id: string
+          created_at: string
+          event_id: string
+          id: string
+          updated_at: string
+        }
+        Insert: {
+          budget_amount: number
+          category_id: string
+          created_at?: string
+          event_id: string
+          id?: string
+          updated_at?: string
+        }
+        Update: {
+          budget_amount?: number
+          category_id?: string
+          created_at?: string
+          event_id?: string
+          id?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "tools_ebp_event_category_budgets_category_id_fkey"
+            columns: ["category_id"]
+            isOneToOne: false
+            referencedRelation: "tools_ebp_categories"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "tools_ebp_event_category_budgets_event_id_fkey"
+            columns: ["event_id"]
+            isOneToOne: false
+            referencedRelation: "tools_ebp_events"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      tools_ebp_events: {
+        Row: {
+          created_at: string
+          date_added: string
+          date_inactivated: string | null
+          event_date: string
+          id: string
+          is_active: boolean
+          name: string
+          notes: string
+          tool_id: string
+          type_id: string
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          date_added?: string
+          date_inactivated?: string | null
+          event_date: string
+          id?: string
+          is_active?: boolean
+          name: string
+          notes?: string
+          tool_id: string
+          type_id: string
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          date_added?: string
+          date_inactivated?: string | null
+          event_date?: string
+          id?: string
+          is_active?: boolean
+          name?: string
+          notes?: string
+          tool_id?: string
+          type_id?: string
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "tools_ebp_events_tool_id_fkey"
+            columns: ["tool_id"]
+            isOneToOne: false
+            referencedRelation: "tools"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "tools_ebp_events_type_id_fkey"
+            columns: ["type_id"]
+            isOneToOne: false
+            referencedRelation: "tools_ebp_types"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "tools_ebp_events_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "users"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      tools_ebp_expense_splits: {
+        Row: {
+          amount: number
+          created_at: string
+          display_order: number
+          expense_id: string
+          id: string
+          updated_at: string
+          vendor_id: string
+        }
+        Insert: {
+          amount: number
+          created_at?: string
+          display_order?: number
+          expense_id: string
+          id?: string
+          updated_at?: string
+          vendor_id: string
+        }
+        Update: {
+          amount?: number
+          created_at?: string
+          display_order?: number
+          expense_id?: string
+          id?: string
+          updated_at?: string
+          vendor_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "tools_ebp_expense_splits_expense_id_fkey"
+            columns: ["expense_id"]
+            isOneToOne: false
+            referencedRelation: "tools_ebp_expenses"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "tools_ebp_expense_splits_vendor_id_fkey"
+            columns: ["vendor_id"]
+            isOneToOne: false
+            referencedRelation: "tools_ebp_vendors"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      tools_ebp_expenses: {
+        Row: {
+          amount: number
+          category_id: string
+          created_at: string
+          event_id: string
+          expense_date: string
+          id: string
+          note: string
+          updated_at: string
+          vendor_id: string
+        }
+        Insert: {
+          amount: number
+          category_id: string
+          created_at?: string
+          event_id: string
+          expense_date: string
+          id?: string
+          note?: string
+          updated_at?: string
+          vendor_id: string
+        }
+        Update: {
+          amount?: number
+          category_id?: string
+          created_at?: string
+          event_id?: string
+          expense_date?: string
+          id?: string
+          note?: string
+          updated_at?: string
+          vendor_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "tools_ebp_expenses_category_id_fkey"
+            columns: ["category_id"]
+            isOneToOne: false
+            referencedRelation: "tools_ebp_categories"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "tools_ebp_expenses_event_id_fkey"
+            columns: ["event_id"]
+            isOneToOne: false
+            referencedRelation: "tools_ebp_events"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "tools_ebp_expenses_vendor_id_fkey"
+            columns: ["vendor_id"]
+            isOneToOne: false
+            referencedRelation: "tools_ebp_vendors"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      tools_ebp_types: {
+        Row: {
+          created_at: string
+          date_added: string
+          date_inactivated: string | null
+          id: string
+          is_active: boolean
+          name: string
+          tool_id: string
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          date_added?: string
+          date_inactivated?: string | null
+          id?: string
+          is_active?: boolean
+          name: string
+          tool_id: string
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          date_added?: string
+          date_inactivated?: string | null
+          id?: string
+          is_active?: boolean
+          name?: string
+          tool_id?: string
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "tools_ebp_types_tool_id_fkey"
+            columns: ["tool_id"]
+            isOneToOne: false
+            referencedRelation: "tools"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "tools_ebp_types_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "users"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      tools_ebp_vendors: {
+        Row: {
+          contact_person: string
+          created_at: string
+          date_added: string
+          date_inactivated: string | null
+          email: string
+          id: string
+          is_active: boolean
+          name: string
+          notes: string
+          phone: string
+          service_provided: string
+          tool_id: string
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          contact_person?: string
+          created_at?: string
+          date_added?: string
+          date_inactivated?: string | null
+          email?: string
+          id?: string
+          is_active?: boolean
+          name: string
+          notes?: string
+          phone?: string
+          service_provided?: string
+          tool_id: string
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          contact_person?: string
+          created_at?: string
+          date_added?: string
+          date_inactivated?: string | null
+          email?: string
+          id?: string
+          is_active?: boolean
+          name?: string
+          notes?: string
+          phone?: string
+          service_provided?: string
+          tool_id?: string
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "tools_ebp_vendors_tool_id_fkey"
+            columns: ["tool_id"]
+            isOneToOne: false
+            referencedRelation: "tools"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "tools_ebp_vendors_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "users"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      tools_gt_categories: {
+        Row: {
+          card_color: string
+          created_at: string | null
+          display_order: number
+          id: string
+          name: string
+          tool_id: string
+          updated_at: string | null
+          user_id: string
+        }
+        Insert: {
+          card_color?: string
+          created_at?: string | null
+          display_order?: number
+          id?: string
+          name: string
+          tool_id: string
+          updated_at?: string | null
+          user_id: string
+        }
+        Update: {
+          card_color?: string
+          created_at?: string | null
+          display_order?: number
+          id?: string
+          name?: string
+          tool_id?: string
+          updated_at?: string | null
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "tools_gt_categories_tool_id_fkey"
+            columns: ["tool_id"]
+            isOneToOne: false
+            referencedRelation: "tools"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "tools_gt_categories_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "users"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      tools_gt_default_categories: {
+        Row: {
+          card_color: string
+          created_at: string | null
+          display_order: number
+          id: string
+          name: string
+          updated_at: string | null
+        }
+        Insert: {
+          card_color?: string
+          created_at?: string | null
+          display_order?: number
+          id?: string
+          name: string
+          updated_at?: string | null
+        }
+        Update: {
+          card_color?: string
+          created_at?: string | null
+          display_order?: number
+          id?: string
+          name?: string
+          updated_at?: string | null
+        }
+        Relationships: []
+      }
+      tools_gt_goals: {
+        Row: {
+          category_id: string
+          created_at: string | null
+          description: string | null
+          id: string
+          last_update_date: string | null
+          percent_complete: number
+          priority: string
+          reminder_days: number | null
+          show_on_dashboard: boolean
+          status: string
+          target_date: string | null
+          title: string
+          tool_id: string
+          updated_at: string | null
+          use_task_progress_for_percent: boolean
+          user_id: string
+        }
+        Insert: {
+          category_id: string
+          created_at?: string | null
+          description?: string | null
+          id?: string
+          last_update_date?: string | null
+          percent_complete?: number
+          priority?: string
+          reminder_days?: number | null
+          show_on_dashboard?: boolean
+          status?: string
+          target_date?: string | null
+          title: string
+          tool_id: string
+          updated_at?: string | null
+          use_task_progress_for_percent?: boolean
+          user_id: string
+        }
+        Update: {
+          category_id?: string
+          created_at?: string | null
+          description?: string | null
+          id?: string
+          last_update_date?: string | null
+          percent_complete?: number
+          priority?: string
+          reminder_days?: number | null
+          show_on_dashboard?: boolean
+          status?: string
+          target_date?: string | null
+          title?: string
+          tool_id?: string
+          updated_at?: string | null
+          use_task_progress_for_percent?: boolean
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "tools_gt_goals_category_id_fkey"
+            columns: ["category_id"]
+            isOneToOne: false
+            referencedRelation: "tools_gt_categories"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "tools_gt_goals_tool_id_fkey"
+            columns: ["tool_id"]
+            isOneToOne: false
+            referencedRelation: "tools"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "tools_gt_goals_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "users"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      tools_gt_phases: {
+        Row: {
+          created_at: string | null
+          display_order: number
+          goal_id: string
+          id: string
+          name: string
+          updated_at: string | null
+        }
+        Insert: {
+          created_at?: string | null
+          display_order?: number
+          goal_id: string
+          id?: string
+          name: string
+          updated_at?: string | null
+        }
+        Update: {
+          created_at?: string | null
+          display_order?: number
+          goal_id?: string
+          id?: string
+          name?: string
+          updated_at?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "tools_gt_phases_goal_id_fkey"
+            columns: ["goal_id"]
+            isOneToOne: false
+            referencedRelation: "tools_gt_goals"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      tools_gt_tasks: {
+        Row: {
+          completed: boolean
+          created_at: string | null
+          goal_id: string
+          id: string
+          phase_id: string
+          title: string
+          updated_at: string | null
+        }
+        Insert: {
+          completed?: boolean
+          created_at?: string | null
+          goal_id: string
+          id?: string
+          phase_id: string
+          title: string
+          updated_at?: string | null
+        }
+        Update: {
+          completed?: boolean
+          created_at?: string | null
+          goal_id?: string
+          id?: string
+          phase_id?: string
+          title?: string
+          updated_at?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "tools_gt_tasks_goal_id_fkey"
+            columns: ["goal_id"]
+            isOneToOne: false
+            referencedRelation: "tools_gt_goals"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "tools_gt_tasks_phase_id_fkey"
+            columns: ["phase_id"]
+            isOneToOne: false
+            referencedRelation: "tools_gt_phases"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      tools_gt_update_notes: {
+        Row: {
+          created_at: string | null
+          goal_id: string
+          id: string
+          note: string
+          note_date: string
+          updated_at: string | null
+        }
+        Insert: {
+          created_at?: string | null
+          goal_id: string
+          id?: string
+          note?: string
+          note_date: string
+          updated_at?: string | null
+        }
+        Update: {
+          created_at?: string | null
+          goal_id?: string
+          id?: string
+          note?: string
+          note_date?: string
+          updated_at?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "tools_gt_update_notes_goal_id_fkey"
+            columns: ["goal_id"]
+            isOneToOne: false
+            referencedRelation: "tools_gt_goals"
             referencedColumns: ["id"]
           },
         ]
@@ -783,6 +1699,590 @@ export type Database = {
           },
           {
             foreignKeyName: "tools_hcah_records_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "users"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      tools_hms_categories: {
+        Row: {
+          created_at: string
+          icon_key: string | null
+          id: string
+          is_default: boolean
+          name: string
+          tool_id: string
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          icon_key?: string | null
+          id?: string
+          is_default?: boolean
+          name: string
+          tool_id: string
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          icon_key?: string | null
+          id?: string
+          is_default?: boolean
+          name?: string
+          tool_id?: string
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "tools_hms_categories_tool_id_fkey"
+            columns: ["tool_id"]
+            isOneToOne: false
+            referencedRelation: "tools"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "tools_hms_categories_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "users"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      tools_hms_completions: {
+        Row: {
+          completed_date: string
+          cost: number | null
+          created_at: string
+          id: string
+          lateness: string
+          notes: string
+          scheduled_date: string
+          task_id: string
+          tool_id: string
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          completed_date: string
+          cost?: number | null
+          created_at?: string
+          id?: string
+          lateness: string
+          notes?: string
+          scheduled_date: string
+          task_id: string
+          tool_id: string
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          completed_date?: string
+          cost?: number | null
+          created_at?: string
+          id?: string
+          lateness?: string
+          notes?: string
+          scheduled_date?: string
+          task_id?: string
+          tool_id?: string
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "tools_hms_completions_task_id_fkey"
+            columns: ["task_id"]
+            isOneToOne: false
+            referencedRelation: "tools_hms_tasks"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "tools_hms_completions_tool_id_fkey"
+            columns: ["tool_id"]
+            isOneToOne: false
+            referencedRelation: "tools"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "tools_hms_completions_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "users"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      tools_hms_default_categories: {
+        Row: {
+          created_at: string
+          display_order: number
+          icon_key: string | null
+          id: string
+          name: string
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          display_order?: number
+          icon_key?: string | null
+          id?: string
+          name: string
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          display_order?: number
+          icon_key?: string | null
+          id?: string
+          name?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
+      tools_hms_default_items: {
+        Row: {
+          category_name: string
+          created_at: string
+          default_location: string
+          description: string
+          display_order: number
+          id: string
+          name: string
+          source_key: string
+          updated_at: string
+        }
+        Insert: {
+          category_name: string
+          created_at?: string
+          default_location?: string
+          description?: string
+          display_order?: number
+          id?: string
+          name: string
+          source_key: string
+          updated_at?: string
+        }
+        Update: {
+          category_name?: string
+          created_at?: string
+          default_location?: string
+          description?: string
+          display_order?: number
+          id?: string
+          name?: string
+          source_key?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
+      tools_hms_items: {
+        Row: {
+          category_id: string
+          created_at: string
+          default_location: string
+          description: string
+          id: string
+          is_default: boolean
+          is_hidden: boolean
+          name: string
+          notes: string
+          source_key: string | null
+          tool_id: string
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          category_id: string
+          created_at?: string
+          default_location?: string
+          description?: string
+          id?: string
+          is_default?: boolean
+          is_hidden?: boolean
+          name: string
+          notes?: string
+          source_key?: string | null
+          tool_id: string
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          category_id?: string
+          created_at?: string
+          default_location?: string
+          description?: string
+          id?: string
+          is_default?: boolean
+          is_hidden?: boolean
+          name?: string
+          notes?: string
+          source_key?: string | null
+          tool_id?: string
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "tools_hms_items_category_id_fkey"
+            columns: ["category_id"]
+            isOneToOne: false
+            referencedRelation: "tools_hms_categories"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "tools_hms_items_tool_id_fkey"
+            columns: ["tool_id"]
+            isOneToOne: false
+            referencedRelation: "tools"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "tools_hms_items_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "users"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      tools_hms_tasks: {
+        Row: {
+          created_at: string
+          date_added: string
+          date_inactivated: string | null
+          day_of_month: number | null
+          days_of_week: Json | null
+          description_override: string
+          frequency: string
+          id: string
+          interval_count: number | null
+          interval_unit: string | null
+          interval_years: number | null
+          is_active: boolean
+          item_id: string
+          last_completed_date: string | null
+          location: string
+          months: Json | null
+          next_due_date: string
+          notes: string
+          provider_name: string
+          provider_notes: string
+          provider_phone: string
+          provider_website: string
+          tool_id: string
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          date_added?: string
+          date_inactivated?: string | null
+          day_of_month?: number | null
+          days_of_week?: Json | null
+          description_override?: string
+          frequency: string
+          id?: string
+          interval_count?: number | null
+          interval_unit?: string | null
+          interval_years?: number | null
+          is_active?: boolean
+          item_id: string
+          last_completed_date?: string | null
+          location?: string
+          months?: Json | null
+          next_due_date: string
+          notes?: string
+          provider_name?: string
+          provider_notes?: string
+          provider_phone?: string
+          provider_website?: string
+          tool_id: string
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          date_added?: string
+          date_inactivated?: string | null
+          day_of_month?: number | null
+          days_of_week?: Json | null
+          description_override?: string
+          frequency?: string
+          id?: string
+          interval_count?: number | null
+          interval_unit?: string | null
+          interval_years?: number | null
+          is_active?: boolean
+          item_id?: string
+          last_completed_date?: string | null
+          location?: string
+          months?: Json | null
+          next_due_date?: string
+          notes?: string
+          provider_name?: string
+          provider_notes?: string
+          provider_phone?: string
+          provider_website?: string
+          tool_id?: string
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "tools_hms_tasks_item_id_fkey"
+            columns: ["item_id"]
+            isOneToOne: true
+            referencedRelation: "tools_hms_items"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "tools_hms_tasks_tool_id_fkey"
+            columns: ["tool_id"]
+            isOneToOne: false
+            referencedRelation: "tools"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "tools_hms_tasks_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "users"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      tools_hsa_accounts: {
+        Row: {
+          card_color: string
+          created_at: string | null
+          display_order: number
+          id: string
+          name: string
+          tool_id: string
+          updated_at: string | null
+          user_id: string
+        }
+        Insert: {
+          card_color?: string
+          created_at?: string | null
+          display_order?: number
+          id?: string
+          name: string
+          tool_id: string
+          updated_at?: string | null
+          user_id: string
+        }
+        Update: {
+          card_color?: string
+          created_at?: string | null
+          display_order?: number
+          id?: string
+          name?: string
+          tool_id?: string
+          updated_at?: string | null
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "tools_hsa_accounts_tool_id_fkey"
+            columns: ["tool_id"]
+            isOneToOne: false
+            referencedRelation: "tools"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "tools_hsa_accounts_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "users"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      tools_hsa_default_accounts: {
+        Row: {
+          card_color: string
+          created_at: string | null
+          display_order: number
+          id: string
+          name: string
+          updated_at: string | null
+        }
+        Insert: {
+          card_color?: string
+          created_at?: string | null
+          display_order?: number
+          id?: string
+          name: string
+          updated_at?: string | null
+        }
+        Update: {
+          card_color?: string
+          created_at?: string | null
+          display_order?: number
+          id?: string
+          name?: string
+          updated_at?: string | null
+        }
+        Relationships: []
+      }
+      tools_hsa_deposits: {
+        Row: {
+          account_id: string
+          amount: number
+          created_at: string | null
+          date: string
+          id: string
+          is_repeatable: boolean
+          name: string
+          note: string
+          recurrence_end: string | null
+          recurrence_frequency: string | null
+          recurrence_start: string | null
+          source: string
+          tax_year: number
+          tool_id: string
+          updated_at: string | null
+          user_id: string
+        }
+        Insert: {
+          account_id: string
+          amount: number
+          created_at?: string | null
+          date: string
+          id?: string
+          is_repeatable?: boolean
+          name: string
+          note?: string
+          recurrence_end?: string | null
+          recurrence_frequency?: string | null
+          recurrence_start?: string | null
+          source: string
+          tax_year: number
+          tool_id: string
+          updated_at?: string | null
+          user_id: string
+        }
+        Update: {
+          account_id?: string
+          amount?: number
+          created_at?: string | null
+          date?: string
+          id?: string
+          is_repeatable?: boolean
+          name?: string
+          note?: string
+          recurrence_end?: string | null
+          recurrence_frequency?: string | null
+          recurrence_start?: string | null
+          source?: string
+          tax_year?: number
+          tool_id?: string
+          updated_at?: string | null
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "tools_hsa_deposits_account_id_fkey"
+            columns: ["account_id"]
+            isOneToOne: false
+            referencedRelation: "tools_hsa_accounts"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "tools_hsa_deposits_tool_id_fkey"
+            columns: ["tool_id"]
+            isOneToOne: false
+            referencedRelation: "tools"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "tools_hsa_deposits_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "users"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      tools_hsa_expenses: {
+        Row: {
+          account_id: string
+          amount: number
+          category: string
+          created_at: string | null
+          date: string
+          id: string
+          name: string
+          notes: string
+          payment_method: string
+          provider_or_store: string
+          reimbursed: boolean
+          reimbursement_date: string | null
+          tool_id: string
+          updated_at: string | null
+          user_id: string
+          warn_until_receipt: boolean
+        }
+        Insert: {
+          account_id: string
+          amount: number
+          category: string
+          created_at?: string | null
+          date: string
+          id?: string
+          name: string
+          notes?: string
+          payment_method: string
+          provider_or_store?: string
+          reimbursed?: boolean
+          reimbursement_date?: string | null
+          tool_id: string
+          updated_at?: string | null
+          user_id: string
+          warn_until_receipt?: boolean
+        }
+        Update: {
+          account_id?: string
+          amount?: number
+          category?: string
+          created_at?: string | null
+          date?: string
+          id?: string
+          name?: string
+          notes?: string
+          payment_method?: string
+          provider_or_store?: string
+          reimbursed?: boolean
+          reimbursement_date?: string | null
+          tool_id?: string
+          updated_at?: string | null
+          user_id?: string
+          warn_until_receipt?: boolean
+        }
+        Relationships: [
+          {
+            foreignKeyName: "tools_hsa_expenses_account_id_fkey"
+            columns: ["account_id"]
+            isOneToOne: false
+            referencedRelation: "tools_hsa_accounts"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "tools_hsa_expenses_tool_id_fkey"
+            columns: ["tool_id"]
+            isOneToOne: false
+            referencedRelation: "tools"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "tools_hsa_expenses_user_id_fkey"
             columns: ["user_id"]
             isOneToOne: false
             referencedRelation: "users"
@@ -983,6 +2483,310 @@ export type Database = {
           },
           {
             foreignKeyName: "tools_id_tags_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "users"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      tools_mp_items: {
+        Row: {
+          category: string
+          created_at: string | null
+          display_order: number
+          id: string
+          name: string
+          tool_id: string
+          updated_at: string | null
+          user_id: string
+        }
+        Insert: {
+          category: string
+          created_at?: string | null
+          display_order?: number
+          id?: string
+          name: string
+          tool_id: string
+          updated_at?: string | null
+          user_id: string
+        }
+        Update: {
+          category?: string
+          created_at?: string | null
+          display_order?: number
+          id?: string
+          name?: string
+          tool_id?: string
+          updated_at?: string | null
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "tools_mp_items_tool_id_fkey"
+            columns: ["tool_id"]
+            isOneToOne: false
+            referencedRelation: "tools"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "tools_mp_items_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "users"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      tools_mp_meal_ingredients: {
+        Row: {
+          created_at: string | null
+          display_order: number
+          id: string
+          item_id: string
+          meal_id: string
+        }
+        Insert: {
+          created_at?: string | null
+          display_order?: number
+          id?: string
+          item_id: string
+          meal_id: string
+        }
+        Update: {
+          created_at?: string | null
+          display_order?: number
+          id?: string
+          item_id?: string
+          meal_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "tools_mp_meal_ingredients_item_id_fkey"
+            columns: ["item_id"]
+            isOneToOne: false
+            referencedRelation: "tools_mp_items"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "tools_mp_meal_ingredients_meal_id_fkey"
+            columns: ["meal_id"]
+            isOneToOne: false
+            referencedRelation: "tools_mp_meals"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      tools_mp_meal_types: {
+        Row: {
+          created_at: string | null
+          display_order: number
+          id: string
+          name: string
+          tool_id: string
+          updated_at: string | null
+          user_id: string
+        }
+        Insert: {
+          created_at?: string | null
+          display_order?: number
+          id?: string
+          name: string
+          tool_id: string
+          updated_at?: string | null
+          user_id: string
+        }
+        Update: {
+          created_at?: string | null
+          display_order?: number
+          id?: string
+          name?: string
+          tool_id?: string
+          updated_at?: string | null
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "tools_mp_meal_types_tool_id_fkey"
+            columns: ["tool_id"]
+            isOneToOne: false
+            referencedRelation: "tools"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "tools_mp_meal_types_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "users"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      tools_mp_meals: {
+        Row: {
+          created_at: string | null
+          description: string
+          difficulty: string | null
+          id: string
+          instructions: string
+          is_active: boolean
+          meal_type_id: string | null
+          name: string
+          prep_time_minutes: number | null
+          rating: number
+          scale: number
+          tool_id: string
+          updated_at: string | null
+          user_id: string
+        }
+        Insert: {
+          created_at?: string | null
+          description?: string
+          difficulty?: string | null
+          id?: string
+          instructions?: string
+          is_active?: boolean
+          meal_type_id?: string | null
+          name: string
+          prep_time_minutes?: number | null
+          rating?: number
+          scale?: number
+          tool_id: string
+          updated_at?: string | null
+          user_id: string
+        }
+        Update: {
+          created_at?: string | null
+          description?: string
+          difficulty?: string | null
+          id?: string
+          instructions?: string
+          is_active?: boolean
+          meal_type_id?: string | null
+          name?: string
+          prep_time_minutes?: number | null
+          rating?: number
+          scale?: number
+          tool_id?: string
+          updated_at?: string | null
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "tools_mp_meals_meal_type_id_fkey"
+            columns: ["meal_type_id"]
+            isOneToOne: false
+            referencedRelation: "tools_mp_meal_types"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "tools_mp_meals_tool_id_fkey"
+            columns: ["tool_id"]
+            isOneToOne: false
+            referencedRelation: "tools"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "tools_mp_meals_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "users"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      tools_mp_plan_assignments: {
+        Row: {
+          created_at: string | null
+          day_key: string
+          display_order: number
+          id: string
+          is_leftover: boolean
+          meal_id: string
+          plan_id: string
+          slot_key: string | null
+        }
+        Insert: {
+          created_at?: string | null
+          day_key: string
+          display_order?: number
+          id?: string
+          is_leftover?: boolean
+          meal_id: string
+          plan_id: string
+          slot_key?: string | null
+        }
+        Update: {
+          created_at?: string | null
+          day_key?: string
+          display_order?: number
+          id?: string
+          is_leftover?: boolean
+          meal_id?: string
+          plan_id?: string
+          slot_key?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "tools_mp_plan_assignments_meal_id_fkey"
+            columns: ["meal_id"]
+            isOneToOne: false
+            referencedRelation: "tools_mp_meals"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "tools_mp_plan_assignments_plan_id_fkey"
+            columns: ["plan_id"]
+            isOneToOne: false
+            referencedRelation: "tools_mp_plans"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      tools_mp_plans: {
+        Row: {
+          created_at: string | null
+          grocery_checked_item_ids: string[]
+          id: string
+          is_active: boolean
+          name: string
+          start_date: string
+          tool_id: string
+          updated_at: string | null
+          user_id: string
+        }
+        Insert: {
+          created_at?: string | null
+          grocery_checked_item_ids?: string[]
+          id?: string
+          is_active?: boolean
+          name: string
+          start_date: string
+          tool_id: string
+          updated_at?: string | null
+          user_id: string
+        }
+        Update: {
+          created_at?: string | null
+          grocery_checked_item_ids?: string[]
+          id?: string
+          is_active?: boolean
+          name?: string
+          start_date?: string
+          tool_id?: string
+          updated_at?: string | null
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "tools_mp_plans_tool_id_fkey"
+            columns: ["tool_id"]
+            isOneToOne: false
+            referencedRelation: "tools"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "tools_mp_plans_user_id_fkey"
             columns: ["user_id"]
             isOneToOne: false
             referencedRelation: "users"
@@ -1898,6 +3702,180 @@ export type Database = {
           },
         ]
       }
+      tools_sl_default_items: {
+        Row: {
+          category: string
+          created_at: string | null
+          display_order: number
+          id: string
+          name: string
+          updated_at: string | null
+        }
+        Insert: {
+          category: string
+          created_at?: string | null
+          display_order?: number
+          id?: string
+          name: string
+          updated_at?: string | null
+        }
+        Update: {
+          category?: string
+          created_at?: string | null
+          display_order?: number
+          id?: string
+          name?: string
+          updated_at?: string | null
+        }
+        Relationships: []
+      }
+      tools_sl_items: {
+        Row: {
+          category: string
+          created_at: string | null
+          display_order: number
+          id: string
+          name: string
+          tool_id: string
+          updated_at: string | null
+          user_id: string
+        }
+        Insert: {
+          category: string
+          created_at?: string | null
+          display_order?: number
+          id?: string
+          name: string
+          tool_id: string
+          updated_at?: string | null
+          user_id: string
+        }
+        Update: {
+          category?: string
+          created_at?: string | null
+          display_order?: number
+          id?: string
+          name?: string
+          tool_id?: string
+          updated_at?: string | null
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "tools_sl_items_tool_id_fkey"
+            columns: ["tool_id"]
+            isOneToOne: false
+            referencedRelation: "tools"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "tools_sl_items_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "users"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      tools_sl_list_items: {
+        Row: {
+          created_at: string | null
+          display_order: number
+          id: string
+          is_checked: boolean
+          item_id: string
+          list_id: string
+          quantity: number | null
+          unit: string | null
+        }
+        Insert: {
+          created_at?: string | null
+          display_order?: number
+          id?: string
+          is_checked?: boolean
+          item_id: string
+          list_id: string
+          quantity?: number | null
+          unit?: string | null
+        }
+        Update: {
+          created_at?: string | null
+          display_order?: number
+          id?: string
+          is_checked?: boolean
+          item_id?: string
+          list_id?: string
+          quantity?: number | null
+          unit?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "tools_sl_list_items_item_id_fkey"
+            columns: ["item_id"]
+            isOneToOne: false
+            referencedRelation: "tools_sl_items"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "tools_sl_list_items_list_id_fkey"
+            columns: ["list_id"]
+            isOneToOne: false
+            referencedRelation: "tools_sl_lists"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      tools_sl_lists: {
+        Row: {
+          created_at: string | null
+          id: string
+          is_active: boolean
+          list_date: string
+          name: string
+          show_on_dashboard: boolean
+          tool_id: string
+          updated_at: string | null
+          user_id: string
+        }
+        Insert: {
+          created_at?: string | null
+          id?: string
+          is_active?: boolean
+          list_date: string
+          name: string
+          show_on_dashboard?: boolean
+          tool_id: string
+          updated_at?: string | null
+          user_id: string
+        }
+        Update: {
+          created_at?: string | null
+          id?: string
+          is_active?: boolean
+          list_date?: string
+          name?: string
+          show_on_dashboard?: boolean
+          tool_id?: string
+          updated_at?: string | null
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "tools_sl_lists_tool_id_fkey"
+            columns: ["tool_id"]
+            isOneToOne: false
+            referencedRelation: "tools"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "tools_sl_lists_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "users"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       tools_st_subscriptions: {
         Row: {
           add_reminder_to_calendar: boolean | null
@@ -1983,10 +3961,341 @@ export type Database = {
           },
         ]
       }
+      tools_tdl_categories: {
+        Row: {
+          card_color: string | null
+          created_at: string | null
+          id: string
+          name: string
+          show_on_dashboard: boolean
+          tool_id: string
+          updated_at: string | null
+          user_id: string
+        }
+        Insert: {
+          card_color?: string | null
+          created_at?: string | null
+          id?: string
+          name: string
+          show_on_dashboard?: boolean
+          tool_id: string
+          updated_at?: string | null
+          user_id: string
+        }
+        Update: {
+          card_color?: string | null
+          created_at?: string | null
+          id?: string
+          name?: string
+          show_on_dashboard?: boolean
+          tool_id?: string
+          updated_at?: string | null
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "tools_tdl_categories_tool_id_fkey"
+            columns: ["tool_id"]
+            isOneToOne: false
+            referencedRelation: "tools"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "tools_tdl_categories_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "users"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      tools_tdl_default_categories: {
+        Row: {
+          card_color: string | null
+          created_at: string | null
+          display_order: number
+          id: string
+          name: string
+          updated_at: string | null
+        }
+        Insert: {
+          card_color?: string | null
+          created_at?: string | null
+          display_order?: number
+          id?: string
+          name: string
+          updated_at?: string | null
+        }
+        Update: {
+          card_color?: string | null
+          created_at?: string | null
+          display_order?: number
+          id?: string
+          name?: string
+          updated_at?: string | null
+        }
+        Relationships: []
+      }
+      tools_tdl_tasks: {
+        Row: {
+          category_id: string
+          created_at: string | null
+          due_date: string | null
+          id: string
+          notes: string | null
+          priority: string
+          status: string
+          task_name: string
+          tool_id: string
+          updated_at: string | null
+          user_id: string
+        }
+        Insert: {
+          category_id: string
+          created_at?: string | null
+          due_date?: string | null
+          id?: string
+          notes?: string | null
+          priority?: string
+          status?: string
+          task_name: string
+          tool_id: string
+          updated_at?: string | null
+          user_id: string
+        }
+        Update: {
+          category_id?: string
+          created_at?: string | null
+          due_date?: string | null
+          id?: string
+          notes?: string | null
+          priority?: string
+          status?: string
+          task_name?: string
+          tool_id?: string
+          updated_at?: string | null
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "tools_tdl_tasks_category_id_fkey"
+            columns: ["category_id"]
+            isOneToOne: false
+            referencedRelation: "tools_tdl_categories"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "tools_tdl_tasks_tool_id_fkey"
+            columns: ["tool_id"]
+            isOneToOne: false
+            referencedRelation: "tools"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "tools_tdl_tasks_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "users"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      tools_tl_journal_notes: {
+        Row: {
+          created_at: string
+          id: string
+          name: string
+          note_date: string
+          note_text: string
+          trip_id: string
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          name: string
+          note_date: string
+          note_text: string
+          trip_id: string
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          name?: string
+          note_date?: string
+          note_text?: string
+          trip_id?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "tools_tl_journal_notes_trip_id_fkey"
+            columns: ["trip_id"]
+            isOneToOne: false
+            referencedRelation: "tools_tl_trips"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      tools_tl_lodging: {
+        Row: {
+          check_in_date: string | null
+          check_out_date: string | null
+          created_at: string
+          id: string
+          lodging_type: string | null
+          name: string
+          notes: string
+          rating: number
+          trip_id: string
+          updated_at: string
+        }
+        Insert: {
+          check_in_date?: string | null
+          check_out_date?: string | null
+          created_at?: string
+          id?: string
+          lodging_type?: string | null
+          name: string
+          notes?: string
+          rating?: number
+          trip_id: string
+          updated_at?: string
+        }
+        Update: {
+          check_in_date?: string | null
+          check_out_date?: string | null
+          created_at?: string
+          id?: string
+          lodging_type?: string | null
+          name?: string
+          notes?: string
+          rating?: number
+          trip_id?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "tools_tl_lodging_trip_id_fkey"
+            columns: ["trip_id"]
+            isOneToOne: false
+            referencedRelation: "tools_tl_trips"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      tools_tl_trips: {
+        Row: {
+          add_to_dashboard: boolean
+          best_memory: string
+          biggest_surprise: string
+          budget_notes: string
+          created_at: string
+          departure_location: string
+          destination: string
+          end_date: string
+          highlight_of_trip: string
+          id: string
+          include_in_travel_counts: boolean | null
+          number_of_days: number | null
+          planned_budget: number | null
+          primary_destination: string
+          start_date: string
+          tool_id: string
+          total_trip_cost: number | null
+          transportation_methods: string[]
+          travel_companions: string
+          trip_goal: string | null
+          trip_goal_other: string
+          trip_name: string
+          trip_rating: number
+          trip_type: string | null
+          updated_at: string
+          user_id: string
+          would_recommend: string | null
+          would_return: string | null
+        }
+        Insert: {
+          add_to_dashboard?: boolean
+          best_memory?: string
+          biggest_surprise?: string
+          budget_notes?: string
+          created_at?: string
+          departure_location?: string
+          destination?: string
+          end_date: string
+          highlight_of_trip?: string
+          id?: string
+          include_in_travel_counts?: boolean | null
+          number_of_days?: number | null
+          planned_budget?: number | null
+          primary_destination?: string
+          start_date: string
+          tool_id: string
+          total_trip_cost?: number | null
+          transportation_methods?: string[]
+          travel_companions?: string
+          trip_goal?: string | null
+          trip_goal_other?: string
+          trip_name: string
+          trip_rating?: number
+          trip_type?: string | null
+          updated_at?: string
+          user_id: string
+          would_recommend?: string | null
+          would_return?: string | null
+        }
+        Update: {
+          add_to_dashboard?: boolean
+          best_memory?: string
+          biggest_surprise?: string
+          budget_notes?: string
+          created_at?: string
+          departure_location?: string
+          destination?: string
+          end_date?: string
+          highlight_of_trip?: string
+          id?: string
+          include_in_travel_counts?: boolean | null
+          number_of_days?: number | null
+          planned_budget?: number | null
+          primary_destination?: string
+          start_date?: string
+          tool_id?: string
+          total_trip_cost?: number | null
+          transportation_methods?: string[]
+          travel_companions?: string
+          trip_goal?: string | null
+          trip_goal_other?: string
+          trip_name?: string
+          trip_rating?: number
+          trip_type?: string | null
+          updated_at?: string
+          user_id?: string
+          would_recommend?: string | null
+          would_return?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "tools_tl_trips_tool_id_fkey"
+            columns: ["tool_id"]
+            isOneToOne: false
+            referencedRelation: "tools"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "tools_tl_trips_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "users"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       users: {
         Row: {
           active: string
-          billing_date: string | null
           created_at: string
           email: string
           first_name: string
@@ -2001,7 +4310,6 @@ export type Database = {
         }
         Insert: {
           active: string
-          billing_date?: string | null
           created_at?: string
           email: string
           first_name: string
@@ -2016,7 +4324,6 @@ export type Database = {
         }
         Update: {
           active?: string
-          billing_date?: string | null
           created_at?: string
           email?: string
           first_name?: string
@@ -2033,58 +4340,33 @@ export type Database = {
       }
       users_tools: {
         Row: {
-          cancellation_effective_date: string | null
           created_at: string | null
-          has_used_trial: boolean | null
           id: string
           price: number
-          promo_code_id: string | null
-          promo_expiration_date: string | null
           status: string
           tool_id: string
-          trial_end_date: string | null
-          trial_start_date: string | null
           updated_at: string | null
           user_id: string
         }
         Insert: {
-          cancellation_effective_date?: string | null
           created_at?: string | null
-          has_used_trial?: boolean | null
           id?: string
           price: number
-          promo_code_id?: string | null
-          promo_expiration_date?: string | null
           status?: string
           tool_id: string
-          trial_end_date?: string | null
-          trial_start_date?: string | null
           updated_at?: string | null
           user_id: string
         }
         Update: {
-          cancellation_effective_date?: string | null
           created_at?: string | null
-          has_used_trial?: boolean | null
           id?: string
           price?: number
-          promo_code_id?: string | null
-          promo_expiration_date?: string | null
           status?: string
           tool_id?: string
-          trial_end_date?: string | null
-          trial_start_date?: string | null
           updated_at?: string | null
           user_id?: string
         }
         Relationships: [
-          {
-            foreignKeyName: "users_tools_promo_code_id_fkey"
-            columns: ["promo_code_id"]
-            isOneToOne: false
-            referencedRelation: "promo_codes"
-            referencedColumns: ["id"]
-          },
           {
             foreignKeyName: "users_tools_tool_id_fkey"
             columns: ["tool_id"]
@@ -2125,12 +4407,12 @@ export type Tables<
   DefaultSchemaTableNameOrOptions extends
     | keyof (DefaultSchema["Tables"] & DefaultSchema["Views"])
     | { schema: keyof DatabaseWithoutInternals },
-  TableName extends DefaultSchemaTableNameOrOptions extends {
+  TableName extends (DefaultSchemaTableNameOrOptions extends {
     schema: keyof DatabaseWithoutInternals
   }
     ? keyof (DatabaseWithoutInternals[DefaultSchemaTableNameOrOptions["schema"]]["Tables"] &
         DatabaseWithoutInternals[DefaultSchemaTableNameOrOptions["schema"]]["Views"])
-    : never = never,
+    : never) = never,
 > = DefaultSchemaTableNameOrOptions extends {
   schema: keyof DatabaseWithoutInternals
 }
@@ -2154,11 +4436,11 @@ export type TablesInsert<
   DefaultSchemaTableNameOrOptions extends
     | keyof DefaultSchema["Tables"]
     | { schema: keyof DatabaseWithoutInternals },
-  TableName extends DefaultSchemaTableNameOrOptions extends {
+  TableName extends (DefaultSchemaTableNameOrOptions extends {
     schema: keyof DatabaseWithoutInternals
   }
     ? keyof DatabaseWithoutInternals[DefaultSchemaTableNameOrOptions["schema"]]["Tables"]
-    : never = never,
+    : never) = never,
 > = DefaultSchemaTableNameOrOptions extends {
   schema: keyof DatabaseWithoutInternals
 }
@@ -2179,11 +4461,11 @@ export type TablesUpdate<
   DefaultSchemaTableNameOrOptions extends
     | keyof DefaultSchema["Tables"]
     | { schema: keyof DatabaseWithoutInternals },
-  TableName extends DefaultSchemaTableNameOrOptions extends {
+  TableName extends (DefaultSchemaTableNameOrOptions extends {
     schema: keyof DatabaseWithoutInternals
   }
     ? keyof DatabaseWithoutInternals[DefaultSchemaTableNameOrOptions["schema"]]["Tables"]
-    : never = never,
+    : never) = never,
 > = DefaultSchemaTableNameOrOptions extends {
   schema: keyof DatabaseWithoutInternals
 }
@@ -2204,11 +4486,11 @@ export type Enums<
   DefaultSchemaEnumNameOrOptions extends
     | keyof DefaultSchema["Enums"]
     | { schema: keyof DatabaseWithoutInternals },
-  EnumName extends DefaultSchemaEnumNameOrOptions extends {
+  EnumName extends (DefaultSchemaEnumNameOrOptions extends {
     schema: keyof DatabaseWithoutInternals
   }
     ? keyof DatabaseWithoutInternals[DefaultSchemaEnumNameOrOptions["schema"]]["Enums"]
-    : never = never,
+    : never) = never,
 > = DefaultSchemaEnumNameOrOptions extends {
   schema: keyof DatabaseWithoutInternals
 }
@@ -2221,11 +4503,11 @@ export type CompositeTypes<
   PublicCompositeTypeNameOrOptions extends
     | keyof DefaultSchema["CompositeTypes"]
     | { schema: keyof DatabaseWithoutInternals },
-  CompositeTypeName extends PublicCompositeTypeNameOrOptions extends {
+  CompositeTypeName extends (PublicCompositeTypeNameOrOptions extends {
     schema: keyof DatabaseWithoutInternals
   }
     ? keyof DatabaseWithoutInternals[PublicCompositeTypeNameOrOptions["schema"]]["CompositeTypes"]
-    : never = never,
+    : never) = never,
 > = PublicCompositeTypeNameOrOptions extends {
   schema: keyof DatabaseWithoutInternals
 }
@@ -2235,9 +4517,6 @@ export type CompositeTypes<
     : never
 
 export const Constants = {
-  graphql_public: {
-    Enums: {},
-  },
   public: {
     Enums: {},
   },
