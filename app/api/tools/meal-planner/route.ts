@@ -272,7 +272,7 @@ export async function GET(request: NextRequest) {
           .select('id, meal_type_id, name, description, instructions, prep_time_minutes, difficulty, rating, is_active')
           .eq('user_id', user.id)
           .eq('tool_id', toolId);
-        meals = retry.data;
+        meals = (retry.data ?? []).map((row) => ({ ...row, scale: undefined }));
         mealsError = retry.error;
       }
 
@@ -334,7 +334,7 @@ export async function GET(request: NextRequest) {
           .eq('user_id', user.id)
           .eq('tool_id', toolId)
           .order('start_date', { ascending: false });
-        plans = retry.data;
+        plans = (retry.data ?? []).map((row) => ({ ...row, grocery_checked_item_ids: [] }));
         plansError = retry.error;
       }
 
@@ -367,7 +367,7 @@ export async function GET(request: NextRequest) {
             .eq('plan_id', p.id)
             .order('day_key', { ascending: true })
             .order('display_order', { ascending: true });
-          assignRows = retry.data;
+          assignRows = (retry.data ?? []).map((row) => ({ ...row, is_leftover: false }));
           assignErr = retry.error;
         }
 
@@ -378,7 +378,8 @@ export async function GET(request: NextRequest) {
             .eq('plan_id', p.id)
             .order('day_key', { ascending: true })
             .order('display_order', { ascending: true });
-          assignRows = retry.data;
+          assignRows = (retry.data ?? []).map((row) => ({ ...row, slot_key: null, is_leftover: false }));
+          assignErr = retry.error;
         }
 
         const assignments = rowsToWeekAssignments(assignRows || []);
@@ -756,7 +757,7 @@ export async function POST(request: NextRequest) {
             .eq('plan_id', copyFromPlanId)
             .order('day_key')
             .order('display_order');
-          fromRows = retry.data;
+          fromRows = (retry.data ?? []).map((row) => ({ ...row, is_leftover: false }));
           fromErr = retry.error;
         }
         if (fromErr && /slot_key/.test(fromErr.message ?? '')) {
@@ -766,7 +767,8 @@ export async function POST(request: NextRequest) {
             .eq('plan_id', copyFromPlanId)
             .order('day_key')
             .order('display_order');
-          fromRows = retry.data;
+          fromRows = (retry.data ?? []).map((row) => ({ ...row, slot_key: null, is_leftover: false }));
+          fromErr = retry.error;
         }
         assign = rowsToWeekAssignments(fromRows || []);
       } else if (assignments) {
