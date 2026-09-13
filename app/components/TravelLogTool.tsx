@@ -59,6 +59,7 @@ export type TripRecord = {
   wouldReturn: YesNoMaybe | '';
   wouldRecommend: YesNoMaybe | '';
   includeInTravelCounts: YesNo | '';
+  addToDashboard: boolean;
   dateAdded: string;
 };
 
@@ -113,6 +114,10 @@ function formatCurrency(value: string): string {
   if (parts.length > 2) return parts[0] + '.' + parts.slice(1).join('');
   if (parts[1] && parts[1].length > 2) return parts[0] + '.' + parts[1].substring(0, 2);
   return numericValue;
+}
+
+function mapsSearchHref(query: string): string {
+  return `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(query)}`;
 }
 
 function formatCurrencyDisplay(value: string): string {
@@ -173,6 +178,7 @@ function emptyTripForm(): TripFormState {
     wouldReturn: '',
     wouldRecommend: '',
     includeInTravelCounts: '',
+    addToDashboard: false,
   };
 }
 
@@ -201,6 +207,7 @@ function tripToForm(trip: TripRecord): TripFormState {
     wouldReturn: trip.wouldReturn,
     wouldRecommend: trip.wouldRecommend,
     includeInTravelCounts: trip.includeInTravelCounts ?? '',
+    addToDashboard: trip.addToDashboard === true,
   };
 }
 
@@ -655,7 +662,6 @@ function LodgingSection({ form, setForm }: LodgingSectionProps) {
                 <button
                   type="button"
                   onClick={saveLodging}
-                  disabled={!draft.name.trim()}
                   className={primaryButtonClass}
                 >
                   {editingId ? 'Save lodging' : 'Add lodging'}
@@ -938,7 +944,6 @@ function JournalSection({ form, setForm }: JournalSectionProps) {
                 <button
                   type="button"
                   onClick={saveJournal}
-                  disabled={!draft.name.trim() || !draft.text.trim()}
                   className={primaryButtonClass}
                 >
                   {editingId ? 'Save note' : 'Add note'}
@@ -1176,6 +1181,9 @@ export function TravelLogTool({ toolId }: TravelLogToolProps) {
       }
 
       const data = await response.json();
+      if (data.pinFailed) {
+        alert('Failed to update Calendar pin. Please try again.');
+      }
       if (data.trip) {
         setTrips((prev) => [...prev, data.trip as TripRecord]);
       } else {
@@ -1224,6 +1232,9 @@ export function TravelLogTool({ toolId }: TravelLogToolProps) {
       }
 
       const data = await response.json();
+      if (data.pinFailed) {
+        alert('Failed to update Calendar pin. Please try again.');
+      }
       if (data.trip) {
         setTrips((prev) =>
           prev.map((t) => (t.id === editingId ? (data.trip as TripRecord) : t))
@@ -1545,6 +1556,21 @@ export function TravelLogTool({ toolId }: TravelLogToolProps) {
               )}
             </div>
           </div>
+          <div className="flex items-center gap-3 mt-4">
+            <input
+              type="checkbox"
+              id="tl-add-to-calendar"
+              checked={form.addToDashboard}
+              onChange={(e) => setForm((f) => ({ ...f, addToDashboard: e.target.checked }))}
+              className={checkboxClass}
+            />
+            <label
+              htmlFor="tl-add-to-calendar"
+              className={isLight ? 'text-sm text-slate-700 cursor-pointer' : 'text-sm text-slate-300 cursor-pointer'}
+            >
+              Add to calendar
+            </label>
+          </div>
         </div>
 
         <LodgingSection form={form} setForm={setForm} />
@@ -1666,6 +1692,15 @@ export function TravelLogTool({ toolId }: TravelLogToolProps) {
     const days = calculateTripDays(trip.startDate, trip.endDate);
     const goalDisplay =
       trip.tripGoal === 'Other' && trip.tripGoalOther ? trip.tripGoalOther : trip.tripGoal;
+    const destinationText = (trip.destination || trip.primaryDestination).trim();
+    const plannedBudget = trip.plannedBudget.trim();
+    const totalTripCost = trip.totalTripCost.trim();
+    const budgetSummary = [
+      plannedBudget ? `Planned ${formatCurrencyDisplay(plannedBudget)}` : null,
+      totalTripCost ? `Cost ${formatCurrencyDisplay(totalTripCost)}` : null,
+    ]
+      .filter(Boolean)
+      .join(' · ');
 
     return (
       <div className="flex-1 min-w-0">
@@ -1677,12 +1712,17 @@ export function TravelLogTool({ toolId }: TravelLogToolProps) {
           {goalDisplay && <span className={tagChipNeutralClass}>{goalDisplay}</span>}
         </div>
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2 text-sm mb-3">
-          {(trip.destination || trip.primaryDestination) && (
+          {destinationText && (
             <div>
               <span className={metaLabelClass}>Destination: </span>
-              <span className={metaValueClass}>
-                {trip.destination || trip.primaryDestination}
-              </span>
+              <a
+                href={mapsSearchHref(destinationText)}
+                target="_blank"
+                rel="noopener noreferrer"
+                className={`${metaValueClass} underline`}
+              >
+                {destinationText}
+              </a>
             </div>
           )}
           {trip.startDate && (
@@ -1708,6 +1748,9 @@ export function TravelLogTool({ toolId }: TravelLogToolProps) {
             </div>
           )}
         </div>
+        {budgetSummary && (
+          <p className={`text-sm mb-2 ${metaLabelClass}`}>{budgetSummary}</p>
+        )}
         {trip.tripRating > 0 && (
           <div className="mb-2">
             <StarRating value={trip.tripRating} label={`${trip.tripName} rating`} size="sm" />

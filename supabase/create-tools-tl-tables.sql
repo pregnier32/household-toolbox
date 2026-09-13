@@ -54,6 +54,9 @@ CREATE TABLE IF NOT EXISTS tools_tl_trips (
   -- UI: "Include this trip in your travel counts?" — NULL = unanswered, TRUE/FALSE = Yes/No
   include_in_travel_counts BOOLEAN,
 
+  -- UI: "Add to calendar" — pin start/end on Dashboard Calendar. Default false; existing rows stay unpinned.
+  add_to_dashboard BOOLEAN NOT NULL DEFAULT false,
+
   created_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT NOW(),
   updated_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT NOW(),
 
@@ -68,6 +71,14 @@ CREATE INDEX IF NOT EXISTS idx_tl_trips_trip_name ON tools_tl_trips(trip_name);
 CREATE INDEX IF NOT EXISTS idx_tl_trips_include_in_travel_counts
   ON tools_tl_trips(include_in_travel_counts)
   WHERE include_in_travel_counts IS NOT NULL;
+
+-- After-launch pin column (idempotent for DBs created before add_to_dashboard)
+ALTER TABLE tools_tl_trips
+  ADD COLUMN IF NOT EXISTS add_to_dashboard BOOLEAN NOT NULL DEFAULT false;
+
+CREATE INDEX IF NOT EXISTS idx_tl_trips_add_to_dashboard
+  ON tools_tl_trips(add_to_dashboard)
+  WHERE add_to_dashboard = true;
 
 -- ============================================================================
 -- LODGING (many per trip)
