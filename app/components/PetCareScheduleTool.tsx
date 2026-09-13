@@ -1206,26 +1206,26 @@ export function PetCareScheduleTool({ toolId }: PetCareScheduleToolProps) {
         addToDashboard: Boolean(newCareItem.addToDashboard),
         priority: newCareItem.priority || 'medium'
       };
-      setCarePlanItems(prev => [...prev, newItem]);
+      const updatedItems = [...carePlanItems, newItem];
+      setCarePlanItems(updatedItems);
       setNewCareItem({ name: '', frequency: 'Daily', notes: '', addToDashboard: false, priority: 'medium' });
       setAddingSection(null);
-      // Save to database immediately
-      setTimeout(() => savePetData(), 100);
+      setTimeout(() => savePetData(updatedItems), 100);
     }
   };
 
   const toggleCarePlanItem = (itemId: string) => {
-    setCarePlanItems(prev => prev.map(item => 
-      item.id === itemId 
-        ? { 
-            ...item, 
+    const updatedItems = carePlanItems.map(item =>
+      item.id === itemId
+        ? {
+            ...item,
             isActive: !item.isActive,
             endDate: item.isActive ? localToday() : null
           }
         : item
-    ));
-    // Save to database immediately
-    setTimeout(() => savePetData(), 100);
+    );
+    setCarePlanItems(updatedItems);
+    setTimeout(() => savePetData(updatedItems), 100);
   };
 
   const startEditingCareItem = (item: CarePlanItem) => {

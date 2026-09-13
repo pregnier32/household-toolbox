@@ -42,11 +42,19 @@ function parseAmount(value: number | string): number {
 }
 
 function parseContributionLimits(raw: unknown): Record<string, number> {
-  if (!raw || typeof raw !== 'object' || Array.isArray(raw)) return {};
+  let value = raw;
+  if (typeof value === 'string') {
+    try {
+      value = JSON.parse(value);
+    } catch {
+      return {};
+    }
+  }
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return {};
   const out: Record<string, number> = {};
-  for (const [k, v] of Object.entries(raw as Record<string, unknown>)) {
+  for (const [k, v] of Object.entries(value as Record<string, unknown>)) {
     const n = typeof v === 'number' ? v : parseFloat(String(v));
-    if (Number.isFinite(n) && n >= 0) out[k] = n;
+    if (Number.isFinite(n) && n >= 0) out[String(k)] = n;
   }
   return out;
 }
@@ -303,7 +311,7 @@ export async function POST(request: NextRequest) {
           return NextResponse.json({ error: 'No account fields to update' }, { status: 400 });
         }
 
-        const { data, error } = await supabaseServer
+        let { data, error } = await supabaseServer
           .from('tools_hsa_accounts')
           .update(updates)
           .eq('id', accountId)
@@ -312,17 +320,54 @@ export async function POST(request: NextRequest) {
           .select()
           .single();
 
+        if (error && contributionLimits !== undefined && /contribution_limits/i.test(error.message ?? '')) {
+          console.error(
+            'HSA contribution_limits persist failed — run supabase/create-tools-hsa-tables.sql ALTER for tools_hsa_accounts.contribution_limits:',
+            error
+          );
+          const withoutLimits = { ...updates };
+          delete withoutLimits.contribution_limits;
+          if (Object.keys(withoutLimits).length > 0) {
+            const retry = await supabaseServer
+              .from('tools_hsa_accounts')
+              .update(withoutLimits)
+              .eq('id', accountId)
+              .eq('user_id', user.id)
+              .eq('tool_id', toolId)
+              .select('id, name, card_color')
+              .single();
+            data = retry.data as typeof data;
+            error = retry.error;
+          } else {
+            const existing = await supabaseServer
+              .from('tools_hsa_accounts')
+              .select('id, name, card_color')
+              .eq('id', accountId)
+              .eq('user_id', user.id)
+              .eq('tool_id', toolId)
+              .single();
+            data = existing.data as typeof data;
+            error = existing.error;
+          }
+        }
+
         if (error) {
           console.error('HSA account update error:', error);
           return NextResponse.json({ error: error.message }, { status: 500 });
         }
+
+        const fromDb = parseContributionLimits(
+          (data as { contribution_limits?: unknown }).contribution_limits
+        );
+        const fromBody =
+          contributionLimits !== undefined ? parseContributionLimits(contributionLimits) : fromDb;
 
         return NextResponse.json({
           account: {
             id: data.id,
             name: data.name,
             card_color: data.card_color || '#10b981',
-            contributionLimits: parseContributionLimits(data.contribution_limits),
+            contributionLimits: Object.keys(fromDb).length > 0 ? fromDb : fromBody,
           },
         });
       }

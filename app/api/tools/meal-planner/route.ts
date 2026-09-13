@@ -47,22 +47,29 @@ function slotIsLeftover(slot: SlotAssignment | '' | string | undefined): boolean
 function parseSlotValue(value: unknown): SlotAssignment | '' {
   if (typeof value === 'string') return toSlotAssignment(value);
   if (value && typeof value === 'object') {
-    const mealId =
-      typeof (value as { mealId?: unknown }).mealId === 'string' ? (value as { mealId: string }).mealId : '';
-    const isLeftover = !!(value as { isLeftover?: unknown }).isLeftover;
+    const raw = value as { mealId?: unknown; meal_id?: unknown; isLeftover?: unknown; is_leftover?: unknown };
+    const mealId = typeof raw.mealId === 'string' ? raw.mealId : typeof raw.meal_id === 'string' ? raw.meal_id : '';
+    const isLeftover = !!(raw.isLeftover ?? raw.is_leftover);
     return toSlotAssignment(mealId, isLeftover);
   }
   return '';
 }
 
-function legacyIdsToSlots(ids: string[]): DaySlotMeals {
+function legacyIdsToSlots(
+  ids: string[] | { meal_id: string; is_leftover?: boolean | null }[]
+): DaySlotMeals {
   const slots = emptySlots();
-  if (ids.length === 1) {
-    slots.dinner = toSlotAssignment(ids[0]);
+  const rows = ids.map((entry) =>
+    typeof entry === 'string'
+      ? { meal_id: entry, is_leftover: false }
+      : { meal_id: entry.meal_id, is_leftover: !!entry.is_leftover }
+  );
+  if (rows.length === 1) {
+    slots.dinner = toSlotAssignment(rows[0].meal_id, rows[0].is_leftover);
     return slots;
   }
   DAY_SLOTS.forEach((key, i) => {
-    if (ids[i]) slots[key] = toSlotAssignment(ids[i]);
+    if (rows[i]) slots[key] = toSlotAssignment(rows[i].meal_id, rows[i].is_leftover);
   });
   return slots;
 }
@@ -100,7 +107,7 @@ function rowsToWeekAssignments(
     const dayRows = byDay[d];
     const hasSlot = dayRows.some((r) => r.slot_key && DAY_SLOTS.includes(r.slot_key as DaySlot));
     if (!hasSlot) {
-      assignments[d] = legacyIdsToSlots(dayRows.map((r) => r.meal_id));
+      assignments[d] = legacyIdsToSlots(dayRows);
     } else {
       const slots = emptySlots();
       for (const r of dayRows) {
@@ -451,18 +458,30 @@ function hasLeftoverWithoutCook(assignments: DayAssignments): boolean {
   return false;
 }
 
+const LEFTOVER_COLUMN_REQUIRED =
+  'Leftover mark could not be saved. Apply supabase/ADD_mp_plan_assignments_is_leftover.sql on the live database.';
+
 async function insertAssignmentRows(rows: ReturnType<typeof assignmentsToRows>) {
   if (rows.length === 0) return { error: null };
+  const hasLeftoverRow = rows.some((r) => r.is_leftover);
   let { error } = await supabaseServer.from('tools_mp_plan_assignments').insert(rows);
   if (error && /is_leftover/.test(error.message ?? '')) {
+    if (hasLeftoverRow) {
+      return { error: { message: LEFTOVER_COLUMN_REQUIRED } };
+    }
     const withoutLeftover = rows.map(({ is_leftover: _isLeftover, ...rest }) => rest);
     const retry = await supabaseServer.from('tools_mp_plan_assignments').insert(withoutLeftover);
     error = retry.error;
   }
   if (error && /slot_key/.test(error.message ?? '')) {
-    const withoutSlot = rows.map(({ slot_key: _slotKey, is_leftover: _isLeftover, ...rest }) => rest);
+    const withoutSlot = hasLeftoverRow
+      ? rows.map(({ slot_key: _slotKey, ...rest }) => rest)
+      : rows.map(({ slot_key: _slotKey, is_leftover: _isLeftover, ...rest }) => rest);
     const retry = await supabaseServer.from('tools_mp_plan_assignments').insert(withoutSlot);
     error = retry.error;
+    if (error && /is_leftover/.test(error.message ?? '') && hasLeftoverRow) {
+      return { error: { message: LEFTOVER_COLUMN_REQUIRED } };
+    }
   }
   return { error };
 }
@@ -869,10 +888,32 @@ export async function POST(request: NextRequest) {
         if (hasLeftoverWithoutCook(assignments)) {
           return NextResponse.json({ error: 'Mark another day as the cook day first.' }, { status: 400 });
         }
+        let { data: previous, error: prevErr } = await supabaseServer
+          .from('tools_mp_plan_assignments')
+          .select('plan_id, day_key, meal_id, display_order, slot_key, is_leftover')
+          .eq('plan_id', planId);
+        if (prevErr && /is_leftover/.test(prevErr.message ?? '')) {
+          const retry = await supabaseServer
+            .from('tools_mp_plan_assignments')
+            .select('plan_id, day_key, meal_id, display_order, slot_key')
+            .eq('plan_id', planId);
+          previous = retry.data;
+          prevErr = retry.error;
+        }
+        if (prevErr && /slot_key/.test(prevErr.message ?? '')) {
+          const retry = await supabaseServer
+            .from('tools_mp_plan_assignments')
+            .select('plan_id, day_key, meal_id, display_order')
+            .eq('plan_id', planId);
+          previous = retry.data;
+        }
         await supabaseServer.from('tools_mp_plan_assignments').delete().eq('plan_id', planId);
         const rows = assignmentsToRows(planId, assignments);
         const { error: insertErr } = await insertAssignmentRows(rows);
         if (insertErr) {
+          if (previous?.length) {
+            await supabaseServer.from('tools_mp_plan_assignments').insert(previous);
+          }
           return NextResponse.json({ error: insertErr.message }, { status: 500 });
         }
       }

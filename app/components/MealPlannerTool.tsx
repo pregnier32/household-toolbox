@@ -83,10 +83,9 @@ function slotIsLeftover(slot: SlotAssignment | '' | string | undefined): boolean
 function parseSlotValue(value: unknown): SlotAssignment | '' {
   if (typeof value === 'string') return toSlotAssignment(value);
   if (value && typeof value === 'object') {
-    const mealId = typeof (value as { mealId?: unknown }).mealId === 'string'
-      ? (value as { mealId: string }).mealId
-      : '';
-    const isLeftover = !!(value as { isLeftover?: unknown }).isLeftover;
+    const raw = value as { mealId?: unknown; meal_id?: unknown; isLeftover?: unknown; is_leftover?: unknown };
+    const mealId = typeof raw.mealId === 'string' ? raw.mealId : typeof raw.meal_id === 'string' ? raw.meal_id : '';
+    const isLeftover = !!(raw.isLeftover ?? raw.is_leftover);
     return toSlotAssignment(mealId, isLeftover);
   }
   return '';
@@ -948,7 +947,11 @@ export function MealPlannerTool({ toolId }: MealPlannerToolProps) {
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ action: 'updatePlan', toolId, planId, assignments: newAssignments }),
         });
-        if (!res.ok) throw new Error('Failed to update plan');
+        if (!res.ok) {
+          const err = await res.json().catch(() => ({}));
+          alert((err as { error?: string }).error || 'Failed to update leftover');
+          return;
+        }
         await fetchPlans();
       } catch (e) {
         console.error('Toggle leftover error:', e);
@@ -1128,58 +1131,31 @@ export function MealPlannerTool({ toolId }: MealPlannerToolProps) {
       const toolsRes = await fetch('/api/tools');
       if (!toolsRes.ok) throw new Error('Failed to load tools');
       const toolsData = await toolsRes.json();
-      const slTool = (toolsData.tools ?? []).find((t: { name?: string }) => t.name === 'Shopping List');
-      if (!slTool?.id) throw new Error('Shopping List tool was not found.');
-
-      const itemsRes = await fetch(
-        `/api/tools/shopping-list?toolId=${encodeURIComponent(slTool.id)}&resource=items`
+      const slTools = ((toolsData.tools ?? []) as { id?: string; name?: string; isOwned?: boolean }[]).filter(
+        (t) => t.name === 'Shopping List' && t.id
       );
-      if (!itemsRes.ok) throw new Error('Failed to load Shopping List items');
-      const itemsData = await itemsRes.json();
-      const slItems: { id: string; name: string; category?: string }[] = itemsData.items ?? [];
-      const byName = new Map(slItems.map((i) => [i.name.trim().toLowerCase(), i]));
-
-      const lineItems: { itemId: string; quantity: number | null }[] = [];
-      for (const row of groceryItems) {
-        const key = row.name.trim().toLowerCase();
-        let slItem = byName.get(key);
-        if (!slItem) {
-          const createItemRes = await fetch('/api/tools/shopping-list', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-              action: 'createItem',
-              toolId: slTool.id,
-              name: row.name,
-              category: row.category || 'Other',
-            }),
-          });
-          if (!createItemRes.ok) throw new Error(`Failed to add "${row.name}" to Shopping List`);
-          const created = await createItemRes.json();
-          slItem = created.item;
-          if (slItem?.name) byName.set(slItem.name.trim().toLowerCase(), slItem);
-        }
-        if (!slItem?.id) throw new Error(`Could not match "${row.name}"`);
-        lineItems.push({
-          itemId: slItem.id,
-          quantity: Number.isFinite(row.count) && row.count > 0 ? row.count : null,
-        });
-      }
+      const slTool = slTools.find((t) => t.isOwned) ?? slTools[0];
+      const slToolId = slTool?.id || toolId;
+      if (!slToolId) throw new Error('Shopping List tool was not found.');
 
       const createListRes = await fetch('/api/tools/shopping-list', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           action: 'createList',
-          toolId: slTool.id,
+          toolId: slToolId,
           name: plan.name,
           listDate: plan.startDate,
-          items: lineItems,
+          groceryLines: groceryItems.map((row) => ({
+            name: row.name,
+            category: row.category || 'Other',
+            quantity: Number.isFinite(row.count) && row.count > 0 ? row.count : null,
+          })),
         }),
       });
-      if (!createListRes.ok) {
-        const err = await createListRes.json().catch(() => ({}));
-        throw new Error((err as { error?: string }).error || 'Failed to create Shopping List');
+      const created = await createListRes.json().catch(() => ({}));
+      if (!createListRes.ok || !(created as { list?: { id?: string } }).list?.id) {
+        throw new Error((created as { error?: string }).error || 'Failed to create Shopping List');
       }
       alert('Active Shopping List created.');
     } catch (e) {

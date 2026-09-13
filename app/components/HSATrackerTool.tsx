@@ -160,7 +160,9 @@ function readAccountsCache(toolId: string): HsaAccount[] {
     if (!raw) return [];
     const parsed = JSON.parse(raw) as HsaAccount[];
     if (!Array.isArray(parsed)) return [];
-    return parsed.filter((a) => a && typeof a.id === 'string' && typeof a.name === 'string');
+    return parsed
+      .filter((a) => a && typeof a.id === 'string' && typeof a.name === 'string')
+      .map((a) => ({ ...a, contributionLimits: a.contributionLimits ?? {} }));
   } catch {
     return [];
   }
@@ -172,6 +174,22 @@ function writeAccountsCache(toolId: string, list: HsaAccount[]) {
   } catch {
     /* ignore quota / private mode */
   }
+}
+
+function parseContributionLimitInput(raw: string): number | undefined {
+  const t = raw.trim();
+  if (t === '') return undefined;
+  const n = parseFloat(t);
+  if (!Number.isFinite(n) || n < 0) return undefined;
+  return Math.round(n * 100) / 100;
+}
+
+function getLimitForYear(limits: Record<string, number> | undefined, year: number): number | undefined {
+  if (!limits) return undefined;
+  const v = limits[String(year)];
+  if (v == null) return undefined;
+  const n = typeof v === 'number' ? v : parseFloat(String(v));
+  return Number.isFinite(n) && n >= 0 ? n : undefined;
 }
 
 function pickOpenAccountId(list: HsaAccount[], prev: string | null, toolId?: string): string | null {
@@ -433,46 +451,56 @@ export function HSATrackerTool({ toolId }: HSATrackerToolProps) {
     return { startingBalance, balanceEndOfYear, depositsYtd, expensesYtd, reimbursablePending };
   }, [selectedAccount, summaryYear]);
 
-  const storedContributionLimit = selectedAccount?.contributionLimits[String(summaryYear)];
+  const storedContributionLimit = getLimitForYear(selectedAccount?.contributionLimits, summaryYear);
+  const draftContributionLimit = parseContributionLimitInput(contributionLimitDraft);
+  const effectiveContributionLimit =
+    contributionLimitDraft.trim() === ''
+      ? storedContributionLimit
+      : (draftContributionLimit ?? storedContributionLimit);
 
   useEffect(() => {
     setContributionLimitDraft(storedContributionLimit == null ? '' : String(storedContributionLimit));
   }, [selectedAccountId, summaryYear, storedContributionLimit]);
 
+  const applyContributionLimits = (accountId: string, nextLimits: Record<string, number>) => {
+    setAccounts((prev) =>
+      prev.map((a) => (a.id === accountId ? { ...a, contributionLimits: nextLimits } : a))
+    );
+  };
+
   const saveContributionLimit = async () => {
     if (!selectedAccountId || !selectedAccount) return;
     const raw = contributionLimitDraft.trim();
     if (raw === '' && storedContributionLimit == null) return;
-    if (raw !== '' && storedContributionLimit != null && parseFloat(raw) === storedContributionLimit) return;
+    if (raw !== '' && storedContributionLimit != null && parseContributionLimitInput(raw) === storedContributionLimit) {
+      return;
+    }
     const nextLimits = { ...selectedAccount.contributionLimits };
     if (raw === '') {
       delete nextLimits[String(summaryYear)];
     } else {
-      const n = parseFloat(raw);
-      if (!Number.isFinite(n) || n < 0) {
+      const n = parseContributionLimitInput(raw);
+      if (n == null) {
         alert('Enter a valid contribution limit of 0 or more, or leave blank.');
         setContributionLimitDraft(storedContributionLimit == null ? '' : String(storedContributionLimit));
         return;
       }
-      nextLimits[String(summaryYear)] = Math.round(n * 100) / 100;
+      nextLimits[String(summaryYear)] = n;
     }
+
+    applyContributionLimits(selectedAccountId, nextLimits);
 
     if (toolId) {
       const data = await apiPost('account', 'update', {
         accountId: selectedAccountId,
         contributionLimits: nextLimits,
       });
-      if (!data?.account) return;
-      const saved = (data.account as { contributionLimits?: Record<string, number> }).contributionLimits ?? nextLimits;
-      setAccounts((prev) =>
-        prev.map((a) => (a.id === selectedAccountId ? { ...a, contributionLimits: saved } : a))
-      );
-      return;
+      const saved = (data?.account as { contributionLimits?: Record<string, number> } | undefined)
+        ?.contributionLimits;
+      if (saved && Object.keys(saved).length > 0) {
+        applyContributionLimits(selectedAccountId, saved);
+      }
     }
-
-    setAccounts((prev) =>
-      prev.map((a) => (a.id === selectedAccountId ? { ...a, contributionLimits: nextLimits } : a))
-    );
   };
 
   const [isAddingDeposit, setIsAddingDeposit] = useState(false);
@@ -1409,13 +1437,13 @@ export function HSATrackerTool({ toolId }: HSATrackerToolProps) {
                       aria-label="Annual contribution limit in USD"
                     />
                   </div>
-                  {storedContributionLimit != null ? (
-                    <p className={`mt-2 ${isLight ? 'text-sm text-slate-800' : 'text-sm text-slate-200'}`}>
-                      Remaining: {formatMoney(storedContributionLimit - summaryMetrics.depositsYtd)}{' '}
-                      (limit − Deposits YTD)
-                    </p>
-                  ) : null}
                 </div>
+                {effectiveContributionLimit != null ? (
+                  <p className={`mt-2 ${isLight ? 'text-sm text-slate-800' : 'text-sm text-slate-200'}`}>
+                    Remaining: {formatMoney(effectiveContributionLimit - summaryMetrics.depositsYtd)}{' '}
+                    (limit − Deposits YTD)
+                  </p>
+                ) : null}
               </div>
 
               <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">

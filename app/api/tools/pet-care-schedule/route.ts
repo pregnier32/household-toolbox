@@ -57,63 +57,6 @@ async function uploadFile(
   }
 }
 
-// Helper function to calculate next due date based on frequency
-function calculateNextDueDate(frequency: string, startDate: string): string {
-  const start = new Date(startDate);
-  const now = new Date();
-  let nextDate = new Date(start);
-
-  // If start date is in the future, use it
-  if (start > now) {
-    return start.toISOString().split('T')[0];
-  }
-
-  // Calculate next occurrence based on frequency
-  switch (frequency) {
-    case 'Daily':
-      nextDate.setDate(now.getDate() + 1);
-      break;
-    case 'Every 2 Days':
-      const daysSinceStart = Math.floor((now.getTime() - start.getTime()) / (1000 * 60 * 60 * 24));
-      const nextOccurrence = Math.ceil((daysSinceStart + 1) / 2) * 2;
-      nextDate = new Date(start);
-      nextDate.setDate(start.getDate() + nextOccurrence);
-      break;
-    case 'Every 3 Days':
-      const daysSinceStart3 = Math.floor((now.getTime() - start.getTime()) / (1000 * 60 * 60 * 24));
-      const nextOccurrence3 = Math.ceil((daysSinceStart3 + 1) / 3) * 3;
-      nextDate = new Date(start);
-      nextDate.setDate(start.getDate() + nextOccurrence3);
-      break;
-    case 'Weekly':
-      nextDate.setDate(now.getDate() + 7);
-      break;
-    case 'Every 2 Weeks':
-      nextDate.setDate(now.getDate() + 14);
-      break;
-    case 'Monthly':
-      nextDate.setMonth(now.getMonth() + 1);
-      break;
-    case 'Every 3 Months':
-      nextDate.setMonth(now.getMonth() + 3);
-      break;
-    case 'Every 6 Months':
-      nextDate.setMonth(now.getMonth() + 6);
-      break;
-    case 'Yearly':
-      nextDate.setFullYear(now.getFullYear() + 1);
-      break;
-    case 'As Needed':
-      // For "As Needed", set to 30 days from now as a reminder
-      nextDate.setDate(now.getDate() + 30);
-      break;
-    default:
-      nextDate.setDate(now.getDate() + 7); // Default to weekly
-  }
-
-  return nextDate.toISOString().split('T')[0];
-}
-
 // Helper function to create dashboard item
 async function createDashboardItem(
   userId: string,
@@ -644,17 +587,14 @@ export async function POST(request: NextRequest) {
             console.log(`Care Item: ${careItem.name}, is_active: ${isActive}, add_to_dashboard: ${addToDashboard}, end_date: ${careItem.end_date}, endDateValid: ${endDateValid}`);
             
             if (isActive && endDateValid && addToDashboard) {
-              const nextDueDate = calculateNextDueDate(careItem.frequency, careItem.start_date);
-              console.log(`Calculated next due date for ${careItem.name}: ${nextDueDate}`);
-              
-              // Use user-selected priority, default to 'medium' if not set
-              const priority: 'low' | 'medium' | 'high' = (careItem.priority && ['low', 'medium', 'high'].includes(careItem.priority)) 
-                ? careItem.priority 
+              const careDate = careItem.start_date || new Date().toISOString().split('T')[0];
+              const priority: 'low' | 'medium' | 'high' = (careItem.priority && ['low', 'medium', 'high'].includes(careItem.priority))
+                ? careItem.priority
                 : 'medium';
 
-              // Same calendar_event + scheduled_date path Appointments already use (dashboard Calendar tab)
+              // Same calendar_event + scheduled_date path Appointments use (care date, not a computed next-due)
               const scheduledDateTime = (() => {
-                const dateTime = new Date(nextDueDate);
+                const dateTime = new Date(careDate);
                 dateTime.setHours(9, 0, 0, 0);
                 return dateTime.toISOString();
               })();

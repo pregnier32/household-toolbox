@@ -72,6 +72,29 @@ const LIST_ITEM_SELECTS = [
   'item_id, tools_sl_items ( name, category )',
 ];
 
+async function mergeQtyUnit(listId: string, items: MappedListItem[]): Promise<MappedListItem[]> {
+  const { data, error } = await supabaseServer
+    .from('tools_sl_list_items')
+    .select('item_id, quantity, unit')
+    .eq('list_id', listId);
+  if (error || !data) return items;
+  const byItem = new Map(
+    (data as { item_id: string; quantity?: number | null; unit?: string | null }[]).map((row) => [
+      row.item_id,
+      row,
+    ])
+  );
+  return items.map((item) => {
+    const extra = byItem.get(item.itemId);
+    if (!extra) return item;
+    return {
+      ...item,
+      quantity: extra.quantity == null || !Number.isFinite(Number(extra.quantity)) ? null : Number(extra.quantity),
+      unit: extra.unit ?? null,
+    };
+  });
+}
+
 async function fetchListLineItems(listId: string): Promise<MappedListItem[]> {
   for (const columns of LIST_ITEM_SELECTS) {
     const { data, error } = await supabaseServer
@@ -79,7 +102,13 @@ async function fetchListLineItems(listId: string): Promise<MappedListItem[]> {
       .select(columns)
       .eq('list_id', listId)
       .order('display_order', { ascending: true });
-    if (!error) return mapListItemRows((data || []) as unknown as ListItemRow[]);
+    if (!error) {
+      const mapped = mapListItemRows((data || []) as unknown as ListItemRow[]);
+      const needsQtyMerge = mapped.some(
+        (item) => item.quantity == null && (item.unit == null || item.unit === '')
+      );
+      return needsQtyMerge ? mergeQtyUnit(listId, mapped) : mapped;
+    }
     if (!isMissingColumnError(error)) {
       console.error('Error fetching list items:', error);
       return [];
@@ -97,6 +126,27 @@ type ListItemInsert = {
   unit: string | null;
 };
 
+async function patchLineItemQtyUnit(rows: ListItemInsert[]): Promise<void> {
+  const toPatch = rows.filter((r) => r.quantity != null || (r.unit != null && r.unit !== ''));
+  if (toPatch.length === 0) return;
+  for (const row of toPatch) {
+    const { error } = await supabaseServer
+      .from('tools_sl_list_items')
+      .update({ quantity: row.quantity, unit: row.unit })
+      .eq('list_id', row.list_id)
+      .eq('item_id', row.item_id);
+    if (!error) continue;
+    if (isMissingColumnError(error)) {
+      console.error(
+        'SMS-198: tools_sl_list_items.quantity/unit missing or not in schema cache — apply supabase/ADD_sl_list_items_quantity_unit.sql and reload PostgREST schema'
+      );
+      return;
+    }
+    console.error('Error updating list item qty/unit:', error);
+    return;
+  }
+}
+
 async function insertListLineItems(rows: ListItemInsert[]): Promise<string | null> {
   if (rows.length === 0) return null;
   const core = rows.map(({ list_id, item_id, display_order }) => ({ list_id, item_id, display_order }));
@@ -113,17 +163,127 @@ async function insertListLineItems(rows: ListItemInsert[]): Promise<string | nul
     display_order,
     is_checked,
   }));
-  // Keep qty/unit on a path that does not depend on is_checked existing.
+  // Items first (is_checked path already green). Qty/unit patched after insert so a
+  // missing-column fallback cannot silently drop them when the columns exist.
   const attempts: Record<string, unknown>[][] = [rows, withQtyUnit, withChecked, core];
   let lastMessage = 'Failed to save list items';
   for (const payload of attempts) {
     const { error } = await supabaseServer.from('tools_sl_list_items').insert(payload);
-    if (!error) return null;
+    if (!error) {
+      await patchLineItemQtyUnit(rows);
+      return null;
+    }
     lastMessage = error.message;
     if (!isMissingColumnError(error)) break;
   }
   console.error('Error inserting list items:', lastMessage);
   return lastMessage;
+}
+
+type GroceryLineWrite = { name?: string; category?: string; quantity?: unknown };
+
+async function resolveShoppingListToolId(userId: string, requestedToolId?: string) {
+  const { data: named } = await supabaseServer
+    .from('tools')
+    .select('id, name')
+    .eq('name', 'Shopping List');
+  const slTools = named ?? [];
+  const { data: owned } = await supabaseServer
+    .from('users_tools')
+    .select('tool_id')
+    .eq('user_id', userId)
+    .eq('status', 'active');
+  const ownedIds = new Set((owned ?? []).map((row) => row.tool_id));
+  const ownedSl = slTools.find((tool) => ownedIds.has(tool.id));
+  if (ownedSl) return ownedSl.id;
+  if (requestedToolId && slTools.some((tool) => tool.id === requestedToolId)) return requestedToolId;
+  return slTools[0]?.id ?? null;
+}
+
+async function ensureItemsFromGroceryLines(
+  userId: string,
+  toolId: string,
+  lines: GroceryLineWrite[]
+): Promise<LineItemWrite[]> {
+  await copyDefaultsToUser(userId, toolId);
+  const { data: existing, error: itemsError } = await supabaseServer
+    .from('tools_sl_items')
+    .select('id, name, display_order')
+    .eq('user_id', userId)
+    .eq('tool_id', toolId);
+  if (itemsError) {
+    throw new Error(itemsError.message || 'Failed to load Shopping List items');
+  }
+  const byName = new Map(
+    (existing ?? []).map((item) => [item.name.trim().toLowerCase(), item] as const)
+  );
+  let displayOrder = (existing ?? []).reduce((max, item) => Math.max(max, item.display_order ?? 0), -1);
+  const merged = new Map<string, LineItemWrite>();
+  for (const line of lines) {
+    const name = (line.name ?? '').trim();
+    if (!name) continue;
+    const key = name.toLowerCase();
+    let item = byName.get(key);
+    if (!item) {
+      displayOrder += 1;
+      const { data: created, error: createError } = await supabaseServer
+        .from('tools_sl_items')
+        .insert({
+          user_id: userId,
+          tool_id: toolId,
+          name,
+          category: (line.category ?? '').trim() || 'Other',
+          display_order: displayOrder,
+        })
+        .select('id, name, display_order')
+        .single();
+      if (createError || !created) {
+        throw new Error(createError?.message || `Failed to add "${name}" to Shopping List`);
+      }
+      item = created;
+      byName.set(key, item);
+    }
+    const quantity = normalizeQuantity(line.quantity);
+    const prev = merged.get(item.id);
+    if (prev) {
+      const prevQty = normalizeQuantity(prev.quantity);
+      merged.set(item.id, {
+        itemId: item.id,
+        quantity: prevQty == null && quantity == null ? null : (prevQty ?? 0) + (quantity ?? 0),
+      });
+    } else {
+      merged.set(item.id, { itemId: item.id, quantity });
+    }
+  }
+  return Array.from(merged.values());
+}
+
+async function insertShoppingList(
+  userId: string,
+  toolId: string,
+  name: string,
+  listDate: string
+) {
+  const payload = {
+    user_id: userId,
+    tool_id: toolId,
+    name: name.trim(),
+    list_date: listDate || new Date().toISOString().split('T')[0],
+    is_active: true,
+    show_on_dashboard: false,
+  };
+  let { data: list, error: listError } = await supabaseServer
+    .from('tools_sl_lists')
+    .insert(payload)
+    .select()
+    .single();
+  if (listError && isMissingColumnError(listError) && /show_on_dashboard/.test(listError.message ?? '')) {
+    const { show_on_dashboard: _show, ...withoutDashboard } = payload;
+    const retry = await supabaseServer.from('tools_sl_lists').insert(withoutDashboard).select().single();
+    list = retry.data;
+    listError = retry.error;
+  }
+  return { list, listError };
 }
 
 async function copyDefaultsToUser(userId: string, toolId: string) {
@@ -303,34 +463,45 @@ export async function POST(request: NextRequest) {
     }
 
     if (action === 'createList') {
-      const { name, listDate, itemIds, items: itemWrites } = body as {
+      const { name, listDate, itemIds, items: itemWrites, groceryLines } = body as {
         name: string;
         listDate: string;
         itemIds?: string[];
         items?: LineItemWrite[];
+        groceryLines?: GroceryLineWrite[];
       };
       if (!name?.trim()) {
         return NextResponse.json({ error: 'List name is required' }, { status: 400 });
       }
-      const { data: list, error: listError } = await supabaseServer
-        .from('tools_sl_lists')
-        .insert({
-          user_id: user.id,
-          tool_id: toolId,
-          name: name.trim(),
-          list_date: listDate || new Date().toISOString().split('T')[0],
-          is_active: true,
-          show_on_dashboard: false,
-        })
-        .select()
-        .single();
+      const listToolId = groceryLines?.length
+        ? await resolveShoppingListToolId(user.id, toolId)
+        : toolId;
+      if (!listToolId) {
+        return NextResponse.json({ error: 'Shopping List tool was not found.' }, { status: 400 });
+      }
+      let createItems = lineItemsFromBody(itemIds, itemWrites);
+      if (groceryLines?.length) {
+        try {
+          createItems = await ensureItemsFromGroceryLines(user.id, listToolId, groceryLines);
+        } catch (e) {
+          return NextResponse.json(
+            { error: e instanceof Error ? e.message : 'Failed to match grocery lines' },
+            { status: 500 }
+          );
+        }
+      }
+      const { list, listError } = await insertShoppingList(
+        user.id,
+        listToolId,
+        name,
+        listDate || new Date().toISOString().split('T')[0]
+      );
 
-      if (listError) {
+      if (listError || !list?.id) {
         console.error('Error creating list:', listError);
-        return NextResponse.json({ error: listError.message }, { status: 500 });
+        return NextResponse.json({ error: listError?.message || 'Failed to create Shopping List' }, { status: 500 });
       }
 
-      const createItems = lineItemsFromBody(itemIds, itemWrites);
       if (createItems.length) {
         const insertError = await insertListLineItems(
           createItems.map((item, i: number) => ({
