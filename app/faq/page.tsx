@@ -5,6 +5,7 @@ import { useEffect, useState } from 'react';
 import { UserMenu } from '../components/UserMenu';
 import { SideLogo } from '../components/SideLogo';
 import { useTheme } from '../components/AppThemeProvider';
+import { completeSignOut } from '@/lib/client-sign-out';
 
 type FAQItem = {
   question: string;
@@ -112,8 +113,7 @@ export default function FAQ() {
   }, []);
 
   const handleSignOut = async () => {
-    await fetch('/api/auth/signout', { method: 'POST' });
-    router.push('/');
+    await completeSignOut();
   };
 
   const toggleFAQ = (index: number) => {

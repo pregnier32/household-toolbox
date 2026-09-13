@@ -67,6 +67,13 @@ const NEW_LOCK_QUESTION_COUNT = 2;
 const emptySecurityQuestions = (): SecurityQuestion[] =>
   Array.from({ length: NEW_LOCK_QUESTION_COUNT }, () => ({ questionId: '', answer: '' }));
 
+const hasUniqueAnsweredLockQuestions = (questions: SecurityQuestion[] | null | undefined) => {
+  if (!questions) return false;
+  const valid = questions.filter(q => q.questionId && q.answer.trim());
+  if (valid.length !== NEW_LOCK_QUESTION_COUNT) return false;
+  return new Set(valid.map(q => q.questionId)).size === NEW_LOCK_QUESTION_COUNT;
+};
+
 const localCalendarDate = (date = new Date()) => {
   const y = date.getFullYear();
   const m = String(date.getMonth() + 1).padStart(2, '0');
@@ -1568,7 +1575,7 @@ export function NotesTool({ toolId }: NotesToolProps) {
                     <div className="mt-4 pt-4 border-t border-slate-700">
                       <h4 className="text-sm font-semibold text-slate-300 mb-3">Password Recovery Security Questions</h4>
                       <p className="text-xs text-slate-400 mb-4">
-                        Please select and answer 2 security questions. These will be used to recover your password if you forget it.
+                        Please select and answer {NEW_LOCK_QUESTION_COUNT} security questions. These will be used to recover your password if you forget it.
                       </p>
                       <div className="space-y-4">
                         {newNote.securityQuestions.map((sq, index) => (
@@ -1728,7 +1735,9 @@ export function NotesTool({ toolId }: NotesToolProps) {
                                 viewPassword: e.target.checked ? editingNote.viewPassword : '',
                                 confirmPassword: e.target.checked ? editingNote.confirmPassword : '',
                                 securityQuestions: e.target.checked
-                                  ? editingNote.securityQuestions
+                                  ? (editingNote.securityQuestions.length === NEW_LOCK_QUESTION_COUNT
+                                      ? editingNote.securityQuestions
+                                      : emptySecurityQuestions())
                                   : emptySecurityQuestions()
                               })}
                               className="w-5 h-5 rounded border-slate-600 bg-slate-700 text-emerald-500 focus:ring-emerald-500 focus:ring-offset-slate-800"
@@ -1824,7 +1833,7 @@ export function NotesTool({ toolId }: NotesToolProps) {
                             <div className="mt-4 pt-4 border-t border-slate-700">
                               <h4 className="text-sm font-semibold text-slate-300 mb-3">Password Recovery Security Questions</h4>
                               <p className="text-xs text-slate-400 mb-4">
-                                Please select and answer 2 security questions. These will be used to recover your password if you forget it.
+                                Please select and answer {NEW_LOCK_QUESTION_COUNT} security questions. These will be used to recover your password if you forget it.
                               </p>
                               <div className="space-y-4">
                                 {editingNote.securityQuestions.map((sq, index) => (
@@ -1879,7 +1888,8 @@ export function NotesTool({ toolId }: NotesToolProps) {
                               !editingNote.note.trim() ||
                               editingNote.selectedTags.length === 0 ||
                               (editingNote.requiresPasswordForView && editingNote.viewPassword.trim() && editingNote.viewPassword !== '••••••••' && editingNote.viewPassword !== editingNote.confirmPassword) ||
-                              (editingNote.requiresPasswordForView && !editingNote.viewPassword.trim() && (!note.requiresPasswordForView || !note.viewPassword))
+                              (editingNote.requiresPasswordForView && !editingNote.viewPassword.trim() && (!note.requiresPasswordForView || !note.viewPassword)) ||
+                              (editingNote.requiresPasswordForView && !note.requiresPasswordForView && !hasUniqueAnsweredLockQuestions(editingNote.securityQuestions))
                             }
                             className={primaryButtonClass}
                           >

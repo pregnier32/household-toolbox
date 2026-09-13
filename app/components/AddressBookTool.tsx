@@ -860,6 +860,11 @@ export function AddressBookTool({ toolId }: AddressBookToolProps) {
       : isLight
         ? 'text-xs text-slate-600'
         : 'text-xs text-slate-300';
+    const personName = [record.firstName, record.lastName]
+      .map((part) => part.trim())
+      .filter(Boolean)
+      .join(' ');
+    const primaryLine = personName || record.mailingName;
 
     if (editingId === record.id) {
       return (
@@ -890,7 +895,7 @@ export function AddressBookTool({ toolId }: AddressBookToolProps) {
         <div className="flex items-start justify-between gap-3">
           <div className="flex-1 min-w-0">
             <div className="flex items-center gap-2 mb-1.5 flex-wrap">
-              <h4 className={nameClass}>{record.mailingName}</h4>
+              <h4 className={nameClass}>{primaryLine}</h4>
               <div className="flex flex-wrap gap-1.5">
                 {record.tags.map((tagId) => {
                   const tag = tags.find((t) => t.id === tagId);
@@ -902,11 +907,6 @@ export function AddressBookTool({ toolId }: AddressBookToolProps) {
                 })}
               </div>
             </div>
-            {(record.firstName || record.lastName) && (
-              <p className={metaClass}>
-                {[record.firstName, record.lastName].filter(Boolean).join(' ')}
-              </p>
-            )}
             <p className={`${metaClass} mt-1`}>{formatAddressLine(record)}</p>
             {(record.email || record.phone) && (
               <p className={`${metaClass} mt-1`}>

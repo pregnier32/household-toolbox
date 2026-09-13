@@ -53,12 +53,17 @@ export async function getSession(): Promise<{ id: string; email: string; firstNa
 
 export async function deleteSession() {
   const cookieStore = await cookies();
-  cookieStore.delete(SESSION_COOKIE_NAME);
+  // Path must match createSession or the browser keeps the cookie after Sign Out.
+  cookieStore.delete({
+    name: SESSION_COOKIE_NAME,
+    path: '/',
+  });
   cookieStore.set(SESSION_COOKIE_NAME, '', {
     httpOnly: true,
     secure: process.env.NODE_ENV === 'production',
     sameSite: 'lax',
     maxAge: 0,
+    expires: new Date(0),
     path: '/',
   });
 }

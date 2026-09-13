@@ -152,6 +152,26 @@ function hasCookOccurrence(
   return false;
 }
 
+const LEFTOVER_ONLY_ALERT = 'Mark another day as the cook day first.';
+
+function hasLeftoverWithoutCook(assignments: DayAssignments): boolean {
+  const leftoverIds = new Set<string>();
+  const cookIds = new Set<string>();
+  for (const day of DAY_KEYS_LIST) {
+    for (const { key: slot } of DAY_SLOTS) {
+      const value = assignments[day]?.[slot];
+      const mealId = slotMealId(value);
+      if (!mealId) continue;
+      if (slotIsLeftover(value)) leftoverIds.add(mealId);
+      else cookIds.add(mealId);
+    }
+  }
+  for (const id of leftoverIds) {
+    if (!cookIds.has(id)) return true;
+  }
+  return false;
+}
+
 function mealScale(meal: { scale?: number } | undefined): number {
   const n = Number(meal?.scale);
   return Number.isFinite(n) && n > 0 ? n : 1;
@@ -875,6 +895,14 @@ export function MealPlannerTool({ toolId }: MealPlannerToolProps) {
           : newPlanAssignments[day]
     );
     const next = { ...current, [slot]: '' as const };
+    const week = isEditing
+      ? editingPlanAssignments ?? plan?.assignments
+      : plan?.assignments ?? newPlanAssignments;
+    const nextWeek = { ...(week ? normalizeWeekAssignments(week) : emptyDayAssignments()), [day]: next };
+    if (hasLeftoverWithoutCook(nextWeek)) {
+      alert(LEFTOVER_ONLY_ALERT);
+      return;
+    }
     if (isEditing) {
       setPlanAssignment(planId, day, next, true);
     } else if (plan && toolId) {
@@ -906,7 +934,7 @@ export function MealPlannerTool({ toolId }: MealPlannerToolProps) {
     const makingLeftover = !slotIsLeftover(current[slot]);
     const allAssignments = (week ? normalizeWeekAssignments(week) : emptyDayAssignments());
     if (makingLeftover && !hasCookOccurrence(allAssignments, mealId, day, slot)) {
-      alert('Mark another day as the cook day first.');
+      alert(LEFTOVER_ONLY_ALERT);
       return;
     }
     const next = { ...current, [slot]: toSlotAssignment(mealId, makingLeftover) };
@@ -938,6 +966,10 @@ export function MealPlannerTool({ toolId }: MealPlannerToolProps) {
           return from ? cloneAssignments(from.assignments) : cloneAssignments(newPlanAssignments);
         })()
       : cloneAssignments(newPlanAssignments);
+    if (hasLeftoverWithoutCook(assignments)) {
+      alert(LEFTOVER_ONLY_ALERT);
+      return;
+    }
     try {
       const res = await fetch(API_BASE, {
         method: 'POST',
@@ -951,7 +983,11 @@ export function MealPlannerTool({ toolId }: MealPlannerToolProps) {
           copyFromPlanId: buildFromHistoryPlanId || undefined,
         }),
       });
-      if (!res.ok) throw new Error('Failed to create plan');
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}));
+        alert((err as { error?: string }).error || 'Failed to create plan');
+        return;
+      }
       await fetchPlans();
       setNewPlanName('');
       setNewPlanStartDate(getNextMonday());
@@ -972,6 +1008,10 @@ export function MealPlannerTool({ toolId }: MealPlannerToolProps) {
 
   const saveEditingPlan = async () => {
     if (!editingPlanId || !editingPlanAssignments || !toolId) return;
+    if (hasLeftoverWithoutCook(editingPlanAssignments)) {
+      alert(LEFTOVER_ONLY_ALERT);
+      return;
+    }
     try {
       const res = await fetch(API_BASE, {
         method: 'POST',
@@ -985,7 +1025,11 @@ export function MealPlannerTool({ toolId }: MealPlannerToolProps) {
           assignments: editingPlanAssignments,
         }),
       });
-      if (!res.ok) throw new Error('Failed to update plan');
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}));
+        alert((err as { error?: string }).error || 'Failed to update plan');
+        return;
+      }
       await fetchPlans();
       setEditingPlanId(null);
       setEditingPlanName('');

@@ -132,6 +132,14 @@ function normalizeVendorSplits(
   return { total, parts };
 }
 
+async function assertSplitsTableAvailable() {
+  const { error } = await supabaseServer.from('tools_ebp_expense_splits').select('id').limit(1);
+  if (error && isMissingRelationError(error)) {
+    throw new Error('Expense splits table is missing. Run supabase/UPDATE_ebp_expense_splits.sql.');
+  }
+  if (error) throw error;
+}
+
 async function fetchExpenseSplits(expenseIds: string[]): Promise<DbSplit[]> {
   if (expenseIds.length === 0) return [];
   const { data, error } = await supabaseServer
@@ -166,23 +174,26 @@ function mapExpense(row: DbExpense, splits: DbSplit[]) {
 }
 
 async function replaceExpenseSplits(expenseId: string, parts: VendorSplitPart[]) {
-  const { error: deleteError } = await supabaseServer
+  if (parts.length <= 1) {
+    const { error: deleteError } = await supabaseServer
+      .from('tools_ebp_expense_splits')
+      .delete()
+      .eq('expense_id', expenseId);
+    if (deleteError && !isMissingRelationError(deleteError)) throw deleteError;
+    return;
+  }
+
+  const { data: inserted, error: insertError } = await supabaseServer
     .from('tools_ebp_expense_splits')
-    .delete()
-    .eq('expense_id', expenseId);
-
-  if (deleteError && !isMissingRelationError(deleteError)) throw deleteError;
-
-  if (parts.length <= 1) return;
-
-  const { error: insertError } = await supabaseServer.from('tools_ebp_expense_splits').insert(
-    parts.map((part, index) => ({
-      expense_id: expenseId,
-      vendor_id: part.vendorId,
-      amount: part.amount,
-      display_order: index,
-    }))
-  );
+    .insert(
+      parts.map((part, index) => ({
+        expense_id: expenseId,
+        vendor_id: part.vendorId,
+        amount: part.amount,
+        display_order: index,
+      }))
+    )
+    .select('id');
 
   if (insertError) {
     if (isMissingRelationError(insertError)) {
@@ -190,6 +201,14 @@ async function replaceExpenseSplits(expenseId: string, parts: VendorSplitPart[])
     }
     throw insertError;
   }
+
+  const keepIds = (inserted ?? []).map((row) => row.id);
+  let deleteQuery = supabaseServer.from('tools_ebp_expense_splits').delete().eq('expense_id', expenseId);
+  if (keepIds.length > 0) {
+    deleteQuery = deleteQuery.not('id', 'in', `(${keepIds.join(',')})`);
+  }
+  const { error: deleteError } = await deleteQuery;
+  if (deleteError && !isMissingRelationError(deleteError)) throw deleteError;
 }
 
 async function ensureDefaultCategories(userId: string, toolId: string) {
@@ -649,6 +668,17 @@ export async function POST(request: NextRequest) {
 
       const primaryVendorId = normalized.parts[0].vendorId;
 
+      if (normalized.parts.length > 1) {
+        try {
+          await assertSplitsTableAvailable();
+        } catch (splitError: unknown) {
+          return NextResponse.json(
+            { error: splitError instanceof Error ? splitError.message : 'Failed to save expense splits' },
+            { status: 500 }
+          );
+        }
+      }
+
       if (action === 'addExpense') {
         const { data: created, error } = await supabaseServer
           .from('tools_ebp_expenses')
@@ -672,6 +702,7 @@ export async function POST(request: NextRequest) {
           await replaceExpenseSplits(created.id, normalized.parts);
         } catch (splitError: unknown) {
           console.error('Error adding expense splits:', splitError);
+          await supabaseServer.from('tools_ebp_expenses').delete().eq('id', created.id);
           return NextResponse.json(
             { error: splitError instanceof Error ? splitError.message : 'Failed to save expense splits' },
             { status: 500 }

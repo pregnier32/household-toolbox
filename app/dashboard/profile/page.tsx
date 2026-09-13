@@ -6,6 +6,7 @@ import { UserMenu } from '../../components/UserMenu';
 import { SideLogo } from '../../components/SideLogo';
 import { useTheme } from '../../components/AppThemeProvider';
 import { updateProfile, changePassword } from '../../actions/auth';
+import { completeSignOut } from '@/lib/client-sign-out';
 
 type User = {
   id: string;
@@ -83,8 +84,7 @@ export default function Profile() {
   }, [router]);
 
   const handleSignOut = async () => {
-    await fetch('/api/auth/signout', { method: 'POST' });
-    router.push('/');
+    await completeSignOut();
   };
 
   const handleEdit = () => {

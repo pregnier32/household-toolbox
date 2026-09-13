@@ -6,6 +6,7 @@ import { useTheme } from './AppThemeProvider';
 type ShoppingListItemRef = {
   itemId: string;
   name: string; // denormalized for display
+  category?: string;
   isChecked?: boolean;
   quantity?: number | null;
   unit?: string | null;
@@ -122,8 +123,8 @@ export function ShoppingListTool({ toolId }: ShoppingListToolProps) {
     ? 'flex items-center justify-between p-2 rounded-lg border border-slate-300 bg-white hover:bg-slate-100 transition-colors'
     : 'flex items-center justify-between p-2 rounded-lg border border-slate-700 bg-slate-800/50 hover:bg-slate-800 transition-colors';
   const groupedCategoryHeadingClass = isLight
-    ? 'text-xs font-semibold uppercase tracking-[0.18em] text-emerald-800 border-b border-slate-300 pb-1 whitespace-normal break-words'
-    : 'text-xs font-semibold uppercase tracking-[0.18em] text-emerald-300 border-b border-slate-700 pb-1 whitespace-normal break-words';
+    ? 'text-xs font-semibold uppercase tracking-[0.18em] text-emerald-800 border-b border-slate-300 pb-1 whitespace-normal break-words overflow-visible'
+    : 'text-xs font-semibold uppercase tracking-[0.18em] text-emerald-300 border-b border-slate-700 pb-1 whitespace-normal break-words overflow-visible';
   const groupedCategoryListClass = isLight
     ? 'text-sm text-slate-700 list-disc list-inside ml-0 mt-1 space-y-0.5'
     : 'text-sm text-slate-200 list-disc list-inside ml-0 mt-1 space-y-0.5';
@@ -178,9 +179,9 @@ export function ShoppingListTool({ toolId }: ShoppingListToolProps) {
     }
   };
 
-  const fetchLists = async () => {
+  const fetchLists = async (opts?: { silent?: boolean }) => {
     if (!toolId) return;
-    setListsLoading(true);
+    if (!opts?.silent) setListsLoading(true);
     try {
       const res = await fetch(`/api/tools/shopping-list?toolId=${encodeURIComponent(toolId)}&resource=lists`);
       if (!res.ok) throw new Error('Failed to fetch lists');
@@ -192,13 +193,14 @@ export function ShoppingListTool({ toolId }: ShoppingListToolProps) {
           date: string;
           isActive: boolean;
           showOnDashboard?: boolean;
-          items: { itemId: string; name: string; isChecked?: boolean; quantity?: number | null; unit?: string | null }[];
+          items: { itemId: string; name: string; category?: string; isChecked?: boolean; quantity?: number | null; unit?: string | null }[];
         }) => ({
           id: l.id,
           name: l.name,
           date: l.date,
           items: (l.items ?? []).map((item) => ({
             ...item,
+            category: item.category ?? '',
             isChecked: !!item.isChecked,
             quantity: item.quantity == null || !Number.isFinite(Number(item.quantity)) ? null : Number(item.quantity),
             unit: item.unit ?? '',
@@ -211,7 +213,7 @@ export function ShoppingListTool({ toolId }: ShoppingListToolProps) {
     } catch (e) {
       console.error('Fetch lists error:', e);
     } finally {
-      setListsLoading(false);
+      if (!opts?.silent) setListsLoading(false);
     }
   };
 
@@ -272,7 +274,7 @@ export function ShoppingListTool({ toolId }: ShoppingListToolProps) {
   const groupListItemsByCategory = (items: ShoppingListItemRef[]) => {
     const byCategory = new Map<string, ShoppingListItemRef[]>();
     for (const ref of items) {
-      const cat = getCategoryForItemId(ref.itemId) || 'Other';
+      const cat = (ref.category || '').trim() || getCategoryForItemId(ref.itemId) || 'Other';
       if (!byCategory.has(cat)) byCategory.set(cat, []);
       byCategory.get(cat)!.push(ref);
     }
@@ -348,7 +350,7 @@ export function ShoppingListTool({ toolId }: ShoppingListToolProps) {
 
   const addItemToNewList = (item: MasterItem) => {
     if (newListItems.some((ref) => ref.itemId === item.id)) return;
-    setNewListItems((prev) => [...prev, { itemId: item.id, name: item.name }]);
+    setNewListItems((prev) => [...prev, { itemId: item.id, name: item.name, category: item.category }]);
   };
 
   const removeItemFromNewList = (itemId: string) => {
@@ -453,9 +455,10 @@ export function ShoppingListTool({ toolId }: ShoppingListToolProps) {
         body: JSON.stringify({ action: 'setListItemChecked', toolId, listId, itemId, isChecked }),
       });
       if (!res.ok) throw new Error('Failed to update item');
+      await fetchLists({ silent: true });
     } catch (e) {
       console.error('Set list item checked error:', e);
-      await fetchLists();
+      await fetchLists({ silent: true });
     }
   };
 
@@ -522,7 +525,7 @@ export function ShoppingListTool({ toolId }: ShoppingListToolProps) {
 
   const addItemToEditingList = (item: MasterItem) => {
     if (editingListItems.some((ref) => ref.itemId === item.id)) return;
-    setEditingListItems((prev) => [...prev, { itemId: item.id, name: item.name }]);
+    setEditingListItems((prev) => [...prev, { itemId: item.id, name: item.name, category: item.category }]);
   };
 
   const removeItemFromEditingList = (itemId: string) => {
@@ -994,8 +997,8 @@ export function ShoppingListTool({ toolId }: ShoppingListToolProps) {
                                 style={{ gridTemplateColumns: 'repeat(5, minmax(0, 1fr))' }}
                               >
                                 {groups.map(({ category, items: categoryItems }) => (
-                                  <div key={category}>
-                                    <p className={groupedCategoryHeadingClass} title={category} style={{ maxWidth: '100%' }}>
+                                  <div key={category} className="min-w-0">
+                                    <p className={groupedCategoryHeadingClass}>
                                       {category}
                                     </p>
                                     <ul className={groupedCategoryListClass}>
@@ -1015,7 +1018,10 @@ export function ShoppingListTool({ toolId }: ShoppingListToolProps) {
                           <div className="flex items-center gap-1">
                             <button
                               type="button"
-                              onClick={() => setViewListId(list.id)}
+                              onClick={() => {
+                                setViewListId(list.id);
+                                void fetchLists({ silent: true });
+                              }}
                               aria-label="View full list"
                               title="View full list"
                               className={rowIconSecondaryClass}
@@ -1228,8 +1234,8 @@ export function ShoppingListTool({ toolId }: ShoppingListToolProps) {
                                 style={{ gridTemplateColumns: 'repeat(5, minmax(0, 1fr))' }}
                               >
                                 {groups.map(({ category, items: categoryItems }) => (
-                                  <div key={category}>
-                                    <p className={groupedCategoryHeadingClass} title={category} style={{ maxWidth: '100%' }}>
+                                  <div key={category} className="min-w-0">
+                                    <p className={groupedCategoryHeadingClass}>
                                       {category}
                                     </p>
                                     <ul className={groupedCategoryListClass}>
@@ -1248,7 +1254,10 @@ export function ShoppingListTool({ toolId }: ShoppingListToolProps) {
                         <div className="flex items-center gap-1 flex-shrink-0">
                           <button
                             type="button"
-                            onClick={() => setViewListId(list.id)}
+                            onClick={() => {
+                              setViewListId(list.id);
+                              void fetchLists({ silent: true });
+                            }}
                             aria-label="View full list"
                             title="View full list"
                             className={rowIconSecondaryClass}
@@ -1335,31 +1344,35 @@ export function ShoppingListTool({ toolId }: ShoppingListToolProps) {
                       margin: 0 !important;
                       padding: 0 !important;
                     }
+                    .shopping-list-print-overlay .print-only-hidden {
+                      display: none !important;
+                      visibility: hidden !important;
+                    }
                     .shopping-list-view-print {
-                      position: fixed !important;
-                      left: 0 !important;
-                      top: 0 !important;
-                      width: 100% !important;
+                      position: absolute;
+                      left: 0;
+                      top: 0;
+                      width: 100%;
                       max-height: none !important;
                       overflow: visible !important;
-                      background: white !important;
-                      color: black !important;
-                      padding: 1rem !important;
-                      box-shadow: none !important;
-                      border: none !important;
+                      background: white;
+                      color: black;
+                      padding: 1rem;
+                      box-shadow: none;
+                      border: none;
                     }
-                    .shopping-list-view-print .print-only-hidden { display: none !important; visibility: hidden !important; }
-                    .shopping-list-view-print .print-title {
-                      display: block !important;
-                      visibility: visible !important;
-                      color: black !important;
-                    }
+                    .shopping-list-view-print,
                     .shopping-list-view-print p,
                     .shopping-list-view-print li,
                     .shopping-list-view-print span,
                     .shopping-list-view-print ul {
                       color: black !important;
                       background: transparent !important;
+                    }
+                    .shopping-list-view-print .print-title {
+                      display: block !important;
+                      visibility: visible !important;
+                      color: black !important;
                     }
                   }
                 `,

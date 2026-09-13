@@ -2,6 +2,21 @@ import { NextRequest, NextResponse } from 'next/server';
 import { getSession } from '@/lib/session';
 import { supabaseServer } from '@/lib/supabaseServer';
 
+const FALLBACK_STOCK_CATEGORY_NAMES = ['Home', 'Finance', 'Health', 'Career', 'Personal'];
+
+function normalizeCategoryName(name: string): string {
+  return (name ?? '').trim().toLowerCase();
+}
+
+function stockCategoryNameSet(defaults?: { name: string }[] | null): Set<string> {
+  const names = defaults?.length ? defaults.map((d) => d.name) : FALLBACK_STOCK_CATEGORY_NAMES;
+  return new Set(names.map((n) => normalizeCategoryName(n)));
+}
+
+function isStockCategoryName(name: string, defaults?: { name: string }[] | null): boolean {
+  return stockCategoryNameSet(defaults).has(normalizeCategoryName(name));
+}
+
 // Copy default categories to user when they have none
 async function copyDefaultsToUser(userId: string, toolId: string) {
   const { data: existing } = await supabaseServer
@@ -159,11 +174,15 @@ export async function GET(request: NextRequest) {
       )
     );
 
+    const { data: defaultRows } = await supabaseServer.from('tools_gt_default_categories').select('name');
+    const stockNames = stockCategoryNameSet(defaultRows);
+
     return NextResponse.json({
       categories: (categories ?? []).map((c: { id: string; name: string; card_color: string }) => ({
         id: c.id,
         name: c.name,
         card_color: c.card_color || '#10b981',
+        isStock: stockNames.has(normalizeCategoryName(c.name)),
       })),
       goals,
     });
@@ -258,10 +277,7 @@ export async function POST(request: NextRequest) {
         const { data: defaults } = await supabaseServer
           .from('tools_gt_default_categories')
           .select('name');
-        const stockNames = new Set(
-          (defaults?.length ? defaults.map((d: { name: string }) => d.name) : ['Home', 'Finance', 'Health', 'Career', 'Personal'])
-        );
-        if (stockNames.has(existing.name)) {
+        if (isStockCategoryName(existing.name, defaults)) {
           return NextResponse.json({ error: 'Default categories cannot be deleted' }, { status: 400 });
         }
         const { error } = await supabaseServer

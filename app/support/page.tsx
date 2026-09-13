@@ -5,6 +5,7 @@ import { useEffect, useState } from 'react';
 import { UserMenu } from '../components/UserMenu';
 import { SideLogo } from '../components/SideLogo';
 import { useTheme } from '../components/AppThemeProvider';
+import { completeSignOut } from '@/lib/client-sign-out';
 
 type RequestType = 'question' | 'support' | 'feature' | 'custom_tool';
 
@@ -81,8 +82,7 @@ export default function Support() {
   }, []);
 
   const handleSignOut = async () => {
-    await fetch('/api/auth/signout', { method: 'POST' });
-    router.push('/');
+    await completeSignOut();
   };
 
   const requestTypeOptions: { value: RequestType; label: string; description: string; icon: string }[] = [

@@ -432,6 +432,41 @@ function assignmentsToRows(planId: string, assignments: DayAssignments) {
   return rows;
 }
 
+function hasLeftoverWithoutCook(assignments: DayAssignments): boolean {
+  const leftoverIds = new Set<string>();
+  const cookIds = new Set<string>();
+  for (const day of DAY_KEYS) {
+    const slots = normalizeDaySlots(assignments[day]);
+    for (const slot of DAY_SLOTS) {
+      const value = slots[slot];
+      const mealId = slotMealId(value);
+      if (!mealId) continue;
+      if (slotIsLeftover(value)) leftoverIds.add(mealId);
+      else cookIds.add(mealId);
+    }
+  }
+  for (const id of leftoverIds) {
+    if (!cookIds.has(id)) return true;
+  }
+  return false;
+}
+
+async function insertAssignmentRows(rows: ReturnType<typeof assignmentsToRows>) {
+  if (rows.length === 0) return { error: null };
+  let { error } = await supabaseServer.from('tools_mp_plan_assignments').insert(rows);
+  if (error && /is_leftover/.test(error.message ?? '')) {
+    const withoutLeftover = rows.map(({ is_leftover: _isLeftover, ...rest }) => rest);
+    const retry = await supabaseServer.from('tools_mp_plan_assignments').insert(withoutLeftover);
+    error = retry.error;
+  }
+  if (error && /slot_key/.test(error.message ?? '')) {
+    const withoutSlot = rows.map(({ slot_key: _slotKey, is_leftover: _isLeftover, ...rest }) => rest);
+    const retry = await supabaseServer.from('tools_mp_plan_assignments').insert(withoutSlot);
+    error = retry.error;
+  }
+  return { error };
+}
+
 export async function POST(request: NextRequest) {
   const user = await getSession();
   if (!user) {
@@ -775,6 +810,9 @@ export async function POST(request: NextRequest) {
       } else if (assignments) {
         for (const d of DAY_KEYS) assign[d] = normalizeDaySlots(assignments[d]);
       }
+      if (hasLeftoverWithoutCook(assign)) {
+        return NextResponse.json({ error: 'Mark another day as the cook day first.' }, { status: 400 });
+      }
       const { data: plan, error: planErr } = await supabaseServer
         .from('tools_mp_plans')
         .insert({
@@ -789,8 +827,9 @@ export async function POST(request: NextRequest) {
       if (planErr) return NextResponse.json({ error: planErr.message }, { status: 500 });
 
       const rows = assignmentsToRows(plan.id, assign);
-      if (rows.length > 0) {
-        await supabaseServer.from('tools_mp_plan_assignments').insert(rows);
+      const { error: insertErr } = await insertAssignmentRows(rows);
+      if (insertErr) {
+        return NextResponse.json({ error: insertErr.message }, { status: 500 });
       }
       return NextResponse.json({
         plan: {
@@ -827,10 +866,14 @@ export async function POST(request: NextRequest) {
         if (upErr) return NextResponse.json({ error: upErr.message }, { status: 500 });
       }
       if (assignments !== undefined) {
+        if (hasLeftoverWithoutCook(assignments)) {
+          return NextResponse.json({ error: 'Mark another day as the cook day first.' }, { status: 400 });
+        }
         await supabaseServer.from('tools_mp_plan_assignments').delete().eq('plan_id', planId);
         const rows = assignmentsToRows(planId, assignments);
-        if (rows.length > 0) {
-          await supabaseServer.from('tools_mp_plan_assignments').insert(rows);
+        const { error: insertErr } = await insertAssignmentRows(rows);
+        if (insertErr) {
+          return NextResponse.json({ error: insertErr.message }, { status: 500 });
         }
       }
       return NextResponse.json({ success: true });

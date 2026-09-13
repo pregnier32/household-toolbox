@@ -22,6 +22,110 @@ function lineItemsFromBody(itemIds?: string[], items?: LineItemWrite[]): LineIte
   return (itemIds ?? []).map((itemId) => ({ itemId }));
 }
 
+function isMissingColumnError(error: { code?: string; message?: string } | null) {
+  const msg = error?.message ?? '';
+  return (
+    error?.code === '42703' ||
+    error?.code === 'PGRST204' ||
+    msg.includes('schema cache') ||
+    msg.includes('does not exist') ||
+    msg.includes('Could not find')
+  );
+}
+
+type ListItemRow = {
+  item_id: string;
+  is_checked?: boolean;
+  quantity?: number | null;
+  unit?: string | null;
+  tools_sl_items: { name: string; category?: string } | { name: string; category?: string }[] | null;
+};
+
+type MappedListItem = {
+  itemId: string;
+  name: string;
+  category: string;
+  isChecked: boolean;
+  quantity: number | null;
+  unit: string | null;
+};
+
+function mapListItemRows(rows: ListItemRow[]): MappedListItem[] {
+  return rows.map((row) => {
+    const related = row.tools_sl_items;
+    const rel = related == null ? null : Array.isArray(related) ? related[0] : related;
+    return {
+      itemId: row.item_id,
+      name: rel?.name ?? '',
+      category: rel?.category ?? '',
+      isChecked: !!row.is_checked,
+      quantity: row.quantity == null ? null : Number(row.quantity),
+      unit: row.unit ?? null,
+    };
+  });
+}
+
+const LIST_ITEM_SELECTS = [
+  'item_id, is_checked, quantity, unit, tools_sl_items ( name, category )',
+  'item_id, quantity, unit, tools_sl_items ( name, category )',
+  'item_id, is_checked, tools_sl_items ( name, category )',
+  'item_id, tools_sl_items ( name, category )',
+];
+
+async function fetchListLineItems(listId: string): Promise<MappedListItem[]> {
+  for (const columns of LIST_ITEM_SELECTS) {
+    const { data, error } = await supabaseServer
+      .from('tools_sl_list_items')
+      .select(columns)
+      .eq('list_id', listId)
+      .order('display_order', { ascending: true });
+    if (!error) return mapListItemRows((data || []) as ListItemRow[]);
+    if (!isMissingColumnError(error)) {
+      console.error('Error fetching list items:', error);
+      return [];
+    }
+  }
+  return [];
+}
+
+type ListItemInsert = {
+  list_id: string;
+  item_id: string;
+  display_order: number;
+  is_checked: boolean;
+  quantity: number | null;
+  unit: string | null;
+};
+
+async function insertListLineItems(rows: ListItemInsert[]): Promise<string | null> {
+  if (rows.length === 0) return null;
+  const core = rows.map(({ list_id, item_id, display_order }) => ({ list_id, item_id, display_order }));
+  const withQtyUnit = rows.map(({ list_id, item_id, display_order, quantity, unit }) => ({
+    list_id,
+    item_id,
+    display_order,
+    quantity,
+    unit,
+  }));
+  const withChecked = rows.map(({ list_id, item_id, display_order, is_checked }) => ({
+    list_id,
+    item_id,
+    display_order,
+    is_checked,
+  }));
+  // Keep qty/unit on a path that does not depend on is_checked existing.
+  const attempts: Record<string, unknown>[][] = [rows, withQtyUnit, withChecked, core];
+  let lastMessage = 'Failed to save list items';
+  for (const payload of attempts) {
+    const { error } = await supabaseServer.from('tools_sl_list_items').insert(payload);
+    if (!error) return null;
+    lastMessage = error.message;
+    if (!isMissingColumnError(error)) break;
+  }
+  console.error('Error inserting list items:', lastMessage);
+  return lastMessage;
+}
+
 async function copyDefaultsToUser(userId: string, toolId: string) {
   const { data: existing } = await supabaseServer
     .from('tools_sl_items')
@@ -153,33 +257,11 @@ export async function GET(request: NextRequest) {
         date: string;
         isActive: boolean;
         showOnDashboard: boolean;
-        items: { itemId: string; name: string; isChecked: boolean; quantity: number | null; unit: string | null }[];
+        items: { itemId: string; name: string; category: string; isChecked: boolean; quantity: number | null; unit: string | null }[];
       }[] = [];
 
       for (const list of lists || []) {
-        const { data: listItemRows } = await supabaseServer
-          .from('tools_sl_list_items')
-          .select(`
-            item_id,
-            is_checked,
-            quantity,
-            unit,
-            tools_sl_items ( name )
-          `)
-          .eq('list_id', list.id)
-          .order('display_order', { ascending: true });
-
-        const items = (listItemRows || []).map((row: { item_id: string; is_checked?: boolean; quantity?: number | null; unit?: string | null; tools_sl_items: { name: string } | { name: string }[] | null }) => {
-          const related = row.tools_sl_items;
-          const name = related == null ? '' : Array.isArray(related) ? related[0]?.name ?? '' : related.name ?? '';
-          return {
-            itemId: row.item_id,
-            name,
-            isChecked: !!row.is_checked,
-            quantity: row.quantity == null ? null : Number(row.quantity),
-            unit: row.unit ?? null,
-          };
-        });
+        const items = await fetchListLineItems(list.id);
 
         result.push({
           id: list.id,
@@ -250,14 +332,19 @@ export async function POST(request: NextRequest) {
 
       const createItems = lineItemsFromBody(itemIds, itemWrites);
       if (createItems.length) {
-        const listItems = createItems.map((item, i: number) => ({
-          list_id: list.id,
-          item_id: item.itemId,
-          display_order: i,
-          quantity: normalizeQuantity(item.quantity),
-          unit: normalizeUnit(item.unit),
-        }));
-        await supabaseServer.from('tools_sl_list_items').insert(listItems);
+        const insertError = await insertListLineItems(
+          createItems.map((item, i: number) => ({
+            list_id: list.id,
+            item_id: item.itemId,
+            display_order: i,
+            is_checked: false,
+            quantity: normalizeQuantity(item.quantity),
+            unit: normalizeUnit(item.unit),
+          }))
+        );
+        if (insertError) {
+          return NextResponse.json({ error: insertError }, { status: 500 });
+        }
       }
 
       return NextResponse.json({
@@ -307,16 +394,26 @@ export async function POST(request: NextRequest) {
 
       if (itemIds !== undefined || itemWrites !== undefined) {
         const updateItems = lineItemsFromBody(itemIds, itemWrites);
-        const { data: existingRows } = await supabaseServer
+        let existingRows: { item_id: string; is_checked?: boolean }[] | null = null;
+        const existingFull = await supabaseServer
           .from('tools_sl_list_items')
           .select('item_id, is_checked')
           .eq('list_id', listId);
+        if (!existingFull.error) {
+          existingRows = existingFull.data;
+        } else if (isMissingColumnError(existingFull.error)) {
+          const existingCore = await supabaseServer
+            .from('tools_sl_list_items')
+            .select('item_id')
+            .eq('list_id', listId);
+          existingRows = existingCore.data;
+        }
         const checkedByItem = new Map(
-          (existingRows || []).map((row: { item_id: string; is_checked?: boolean }) => [row.item_id, !!row.is_checked])
+          (existingRows || []).map((row) => [row.item_id, !!row.is_checked])
         );
         await supabaseServer.from('tools_sl_list_items').delete().eq('list_id', listId);
         if (updateItems.length > 0) {
-          await supabaseServer.from('tools_sl_list_items').insert(
+          const insertError = await insertListLineItems(
             updateItems.map((item, i: number) => ({
               list_id: listId,
               item_id: item.itemId,
@@ -326,6 +423,9 @@ export async function POST(request: NextRequest) {
               unit: normalizeUnit(item.unit),
             }))
           );
+          if (insertError) {
+            return NextResponse.json({ error: insertError }, { status: 500 });
+          }
         }
       }
 

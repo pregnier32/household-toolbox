@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { useTheme } from './AppThemeProvider';
 
 type Category = {
@@ -65,6 +65,12 @@ function writeLastCategoryId(toolId: string, categoryId: string) {
   } catch {
     /* ignore quota / private mode */
   }
+}
+
+const TASK_NAME_REQUIRED = 'Task name is required.';
+
+function notifyTaskNameRequired() {
+  alert(TASK_NAME_REQUIRED);
 }
 
 function pickOpenCategoryId(list: Category[], prev: string | null, toolId?: string): string | null {
@@ -154,12 +160,13 @@ export function ToDoListTool({ toolId }: ToDoListToolProps) {
 
   // Sort: 'priority' | 'dueDate'
   const [sortBy, setSortBy] = useState<'priority' | 'dueDate'>('dueDate');
-  // Filter: set of statuses to include (empty = all)
+  // Filter: set of statuses to include (empty = match none)
   const [statusFilter, setStatusFilter] = useState<Set<TaskStatus>>(new Set(STATUSES));
 
   const [saveMessage, setSaveMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
   const [isSaving, setIsSaving] = useState(false);
   const [filterPopoverOpen, setFilterPopoverOpen] = useState(false);
+  const filterPopoverRef = useRef<HTMLDivElement>(null);
 
   const selectedCategory = categories.find((c) => c.id === selectedCategoryId);
   const tasksForCategory = tasks.filter((t) => t.categoryId === selectedCategoryId);
@@ -224,6 +231,16 @@ export function ToDoListTool({ toolId }: ToDoListToolProps) {
     setFilterPopoverOpen(false);
   }, [selectedCategoryId]);
 
+  useEffect(() => {
+    if (!filterPopoverOpen) return;
+    const onPointerDown = (event: PointerEvent) => {
+      if (filterPopoverRef.current?.contains(event.target as Node)) return;
+      setFilterPopoverOpen(false);
+    };
+    document.addEventListener('pointerdown', onPointerDown);
+    return () => document.removeEventListener('pointerdown', onPointerDown);
+  }, [filterPopoverOpen]);
+
   const toggleStatusFilter = (status: TaskStatus) => {
     setStatusFilter((prev) => {
       const next = new Set(prev);
@@ -254,9 +271,7 @@ export function ToDoListTool({ toolId }: ToDoListToolProps) {
   };
 
   const filteredAndSortedTasks = (() => {
-    let list = tasksForCategory.filter((t) =>
-      statusFilter.size === 0 ? true : statusFilter.has(t.status)
-    );
+    let list = tasksForCategory.filter((t) => statusFilter.has(t.status));
     const priorityOrder = { High: 0, Medium: 1, Low: 2 };
     if (sortBy === 'priority') {
       list = [...list].sort(
@@ -414,7 +429,7 @@ export function ToDoListTool({ toolId }: ToDoListToolProps) {
 
   const saveNewTask = async () => {
     if (!selectedCategoryId || !newTask.taskName.trim() || !toolId) {
-      if (!newTask.taskName.trim()) showMessage('error', 'Task name is required.');
+      if (!newTask.taskName.trim()) notifyTaskNameRequired();
       return;
     }
     setIsSaving(true);
@@ -463,7 +478,7 @@ export function ToDoListTool({ toolId }: ToDoListToolProps) {
   const saveTaskEdit = async () => {
     if (!editingTask || !toolId) return;
     if (!editingTask.taskName.trim()) {
-      showMessage('error', 'Task name is required.');
+      notifyTaskNameRequired();
       return;
     }
     setIsSaving(true);
@@ -920,7 +935,7 @@ export function ToDoListTool({ toolId }: ToDoListToolProps) {
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 17h2a2 2 0 002-2v-4a2 2 0 00-2-2H5a2 2 0 00-2 2v4a2 2 0 002 2h2m2 4h6a2 2 0 002-2v-4a2 2 0 00-2-2H9a2 2 0 00-2 2v4a2 2 0 002 2zm8-12V5a2 2 0 00-2-2H9a2 2 0 00-2 2v4h10z" />
                   </svg>
                 </button>
-                <div className="relative">
+                <div className="relative" ref={filterPopoverRef}>
                   <button
                     type="button"
                     onClick={() => setFilterPopoverOpen((v) => !v)}
@@ -933,7 +948,7 @@ export function ToDoListTool({ toolId }: ToDoListToolProps) {
                     </svg>
                   </button>
                   {filterPopoverOpen && (
-                      <div className={isLight ? 'absolute right-0 top-full z-50 mt-1 w-72 rounded-lg border border-slate-200 bg-white py-3 px-4 shadow-lg ring-1 ring-slate-900/5' : 'absolute right-0 top-full z-50 mt-1 w-72 rounded-lg border border-slate-700 bg-slate-800 py-3 px-4 shadow-lg'}>
+                      <div className={isLight ? 'absolute right-0 bottom-full z-50 mb-1 w-72 rounded-lg border border-slate-200 bg-white py-3 px-4 shadow-lg ring-1 ring-slate-900/5' : 'absolute right-0 bottom-full z-50 mb-1 w-72 rounded-lg border border-slate-700 bg-slate-800 py-3 px-4 shadow-lg'}>
                         <div className="space-y-4">
                           <div>
                             <label className={isLight ? 'block text-xs font-medium text-slate-700 mb-1.5' : 'block text-xs font-medium text-slate-300 mb-1.5'}>Sort by</label>

@@ -6,6 +6,7 @@ import { SideLogo } from '../../../components/SideLogo';
 import { AdminMenu } from '../../../components/AdminMenu';
 import { UserMenu } from '../../../components/UserMenu';
 import { useTheme } from '../../../components/AppThemeProvider';
+import { completeSignOut } from '@/lib/client-sign-out';
 
 export default function SiteMaintenancePage() {
   const { resolvedTheme } = useTheme();
@@ -54,8 +55,7 @@ export default function SiteMaintenancePage() {
   }, [router]);
 
   const handleSignOut = async () => {
-    await fetch('/api/auth/signout', { method: 'POST' });
-    router.push('/');
+    await completeSignOut();
   };
 
   const loadSettings = async () => {

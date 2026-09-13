@@ -652,11 +652,18 @@ export async function POST(request: NextRequest) {
                 ? careItem.priority 
                 : 'medium';
 
+              // Same calendar_event + scheduled_date path Appointments already use (dashboard Calendar tab)
+              const scheduledDateTime = (() => {
+                const dateTime = new Date(nextDueDate);
+                dateTime.setHours(9, 0, 0, 0);
+                return dateTime.toISOString();
+              })();
+
               const dashboardItemData = {
                 title: `${petName} - ${careItem.name}`,
                 description: `Frequency: ${careItem.frequency}`,
-                type: 'action_item' as const,
-                due_date: nextDueDate,
+                type: 'calendar_event' as const,
+                scheduled_date: scheduledDateTime,
                 priority,
                 metadata: {
                   referenceType: 'care_plan',

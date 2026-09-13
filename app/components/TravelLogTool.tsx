@@ -120,6 +120,36 @@ function mapsSearchHref(query: string): string {
   return `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(query)}`;
 }
 
+function tripDestinationText(trip: {
+  destination?: string | null;
+  primaryDestination?: string | null;
+  primary_destination?: string | null;
+}): string {
+  const raw = trip.destination || trip.primaryDestination || trip.primary_destination || '';
+  return String(raw).trim();
+}
+
+function DestinationMapsLink({
+  query,
+  className,
+}: {
+  query: string;
+  className?: string;
+}) {
+  const q = query.trim();
+  if (!q) return null;
+  return (
+    <a
+      href={mapsSearchHref(q)}
+      target="_blank"
+      rel="noopener noreferrer"
+      className={className}
+    >
+      {q}
+    </a>
+  );
+}
+
 function formatCurrencyDisplay(value: string): string {
   if (!value) return '';
   const numericValue = value.replace(/[^0-9.]/g, '');
@@ -132,6 +162,36 @@ function formatCurrencyDisplay(value: string): string {
     minimumFractionDigits: 2,
     maximumFractionDigits: 2,
   }).format(numValue);
+}
+
+function currencyFromUnknown(value: unknown): string {
+  if (value == null || value === '') return '';
+  if (typeof value === 'number') {
+    return Number.isFinite(value) ? formatCurrencyDisplay(String(value)) : '';
+  }
+  if (typeof value === 'string') return formatCurrencyDisplay(value);
+  return '';
+}
+
+function tripBudgetSummaryLine(trip: TripRecord): string {
+  const raw = trip as TripRecord & { planned_budget?: unknown; total_trip_cost?: unknown };
+  const planned = currencyFromUnknown(raw.plannedBudget ?? raw.planned_budget);
+  const cost = currencyFromUnknown(raw.totalTripCost ?? raw.total_trip_cost);
+  return [
+    planned ? `Planned ${planned}` : null,
+    cost ? `Cost ${cost}` : null,
+  ]
+    .filter(Boolean)
+    .join(' · ');
+}
+
+function normalizeTripRecord(trip: TripRecord): TripRecord {
+  const raw = trip as TripRecord & { planned_budget?: unknown; total_trip_cost?: unknown };
+  return {
+    ...trip,
+    plannedBudget: currencyFromUnknown(raw.plannedBudget ?? raw.planned_budget),
+    totalTripCost: currencyFromUnknown(raw.totalTripCost ?? raw.total_trip_cost),
+  };
 }
 
 function emptyLodgingDraft(): LodgingDraft {
@@ -368,8 +428,8 @@ function LodgingSection({ form, setForm }: LodgingSectionProps) {
     : 'w-full rounded-lg border border-slate-700 bg-slate-900/70 px-4 py-2 text-sm text-slate-100 focus:border-emerald-500/50 focus:outline-none focus:ring-1 focus:ring-emerald-500/50';
   const textareaClass = `${inputClass} resize-none`;
   const primaryButtonClass = isLight
-    ? 'px-4 py-2.5 rounded-lg bg-emerald-600 text-white font-semibold hover:bg-emerald-500 transition-colors focus:outline-none focus:ring-2 focus:ring-emerald-500/50 focus:ring-offset-2 focus:ring-offset-white disabled:cursor-not-allowed disabled:opacity-50'
-    : 'px-4 py-2.5 rounded-lg bg-emerald-500 text-slate-950 font-semibold hover:bg-emerald-400 transition-colors focus:outline-none focus:ring-2 focus:ring-emerald-500/50 focus:ring-offset-2 focus:ring-offset-slate-900 disabled:cursor-not-allowed disabled:opacity-50';
+    ? 'px-4 py-2.5 rounded-lg bg-emerald-600 text-white font-semibold hover:bg-emerald-500 transition-colors focus:outline-none focus:ring-2 focus:ring-emerald-500/50 focus:ring-offset-2 focus:ring-offset-white'
+    : 'px-4 py-2.5 rounded-lg bg-emerald-500 text-slate-950 font-semibold hover:bg-emerald-400 transition-colors focus:outline-none focus:ring-2 focus:ring-emerald-500/50 focus:ring-offset-2 focus:ring-offset-slate-900';
   const secondaryButtonClass = isLight
     ? 'px-4 py-2 rounded-lg border-2 border-slate-400 bg-slate-100 text-slate-800 hover:bg-slate-200 transition-colors'
     : 'px-4 py-2 rounded-lg border border-slate-700 bg-slate-800 text-slate-200 hover:bg-slate-700 transition-colors';
@@ -594,7 +654,13 @@ function LodgingSection({ form, setForm }: LodgingSectionProps) {
                 </svg>
               </button>
             </div>
-            <div className="space-y-4">
+            <form
+              className="space-y-4"
+              onSubmit={(e) => {
+                e.preventDefault();
+                saveLodging();
+              }}
+            >
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div>
                   <label className={labelClass}>Name</label>
@@ -659,18 +725,14 @@ function LodgingSection({ form, setForm }: LodgingSectionProps) {
                 />
               </div>
               <div className="flex gap-2 pt-2">
-                <button
-                  type="button"
-                  onClick={saveLodging}
-                  className={primaryButtonClass}
-                >
+                <button type="submit" className={primaryButtonClass}>
                   {editingId ? 'Save lodging' : 'Add lodging'}
                 </button>
                 <button type="button" onClick={closeModal} className={secondaryButtonClass}>
                   Cancel
                 </button>
               </div>
-            </div>
+            </form>
           </div>
         </div>
       )}
@@ -709,8 +771,8 @@ function JournalSection({ form, setForm }: JournalSectionProps) {
     : 'w-full rounded-lg border border-slate-700 bg-slate-900/70 px-3 py-2 text-sm text-slate-100 placeholder-slate-500 focus:border-emerald-500/50 focus:outline-none focus:ring-1 focus:ring-emerald-500/50';
   const textareaClass = `${inputClass} resize-none`;
   const primaryButtonClass = isLight
-    ? 'px-4 py-2.5 rounded-lg bg-emerald-600 text-white font-semibold hover:bg-emerald-500 transition-colors focus:outline-none focus:ring-2 focus:ring-emerald-500/50 focus:ring-offset-2 focus:ring-offset-white disabled:cursor-not-allowed disabled:opacity-50'
-    : 'px-4 py-2.5 rounded-lg bg-emerald-500 text-slate-950 font-semibold hover:bg-emerald-400 transition-colors focus:outline-none focus:ring-2 focus:ring-emerald-500/50 focus:ring-offset-2 focus:ring-offset-slate-900 disabled:cursor-not-allowed disabled:opacity-50';
+    ? 'px-4 py-2.5 rounded-lg bg-emerald-600 text-white font-semibold hover:bg-emerald-500 transition-colors focus:outline-none focus:ring-2 focus:ring-emerald-500/50 focus:ring-offset-2 focus:ring-offset-white'
+    : 'px-4 py-2.5 rounded-lg bg-emerald-500 text-slate-950 font-semibold hover:bg-emerald-400 transition-colors focus:outline-none focus:ring-2 focus:ring-emerald-500/50 focus:ring-offset-2 focus:ring-offset-slate-900';
   const secondaryButtonClass = isLight
     ? 'px-4 py-2 rounded-lg border-2 border-slate-400 bg-slate-100 text-slate-800 hover:bg-slate-200 transition-colors'
     : 'px-4 py-2 rounded-lg border border-slate-700 bg-slate-800 text-slate-200 hover:bg-slate-700 transition-colors';
@@ -910,7 +972,13 @@ function JournalSection({ form, setForm }: JournalSectionProps) {
                 </svg>
               </button>
             </div>
-            <div className="space-y-4">
+            <form
+              className="space-y-4"
+              onSubmit={(e) => {
+                e.preventDefault();
+                saveJournal();
+              }}
+            >
               <div>
                 <label className={labelClass}>Name</label>
                 <input
@@ -941,18 +1009,14 @@ function JournalSection({ form, setForm }: JournalSectionProps) {
                 />
               </div>
               <div className="flex gap-2 pt-2">
-                <button
-                  type="button"
-                  onClick={saveJournal}
-                  className={primaryButtonClass}
-                >
-                  {editingId ? 'Save note' : 'Add note'}
+                <button type="submit" className={primaryButtonClass}>
+                  {editingId ? 'Save journal note' : 'Add journal note'}
                 </button>
                 <button type="button" onClick={closeModal} className={secondaryButtonClass}>
                   Cancel
                 </button>
               </div>
-            </div>
+            </form>
           </div>
         </div>
       )}
@@ -1040,6 +1104,9 @@ export function TravelLogTool({ toolId }: TravelLogToolProps) {
   const checkboxClass = isLight
     ? 'rounded border-slate-400 bg-white text-emerald-600 focus:ring-emerald-500 focus:ring-offset-white'
     : 'rounded border-slate-600 bg-slate-700 text-emerald-500 focus:ring-emerald-500 focus:ring-offset-slate-800';
+  const calendarPinCheckboxClass = isLight
+    ? 'w-5 h-5 rounded border-slate-400 bg-white text-emerald-600 focus:ring-emerald-500 focus:ring-offset-white'
+    : 'w-5 h-5 rounded border-slate-600 bg-slate-700 text-emerald-500 focus:ring-emerald-500 focus:ring-offset-slate-800';
   const loadingClass = isLight ? 'text-sm text-slate-600' : 'text-sm text-slate-400';
 
   const [trips, setTrips] = useState<TripRecord[]>([]);
@@ -1064,7 +1131,7 @@ export function TravelLogTool({ toolId }: TravelLogToolProps) {
         return;
       }
       const data = await response.json();
-      setTrips(Array.isArray(data.trips) ? data.trips : []);
+      setTrips(Array.isArray(data.trips) ? data.trips.map((t: TripRecord) => normalizeTripRecord(t)) : []);
     } catch {
       setTrips([]);
     } finally {
@@ -1153,6 +1220,7 @@ export function TravelLogTool({ toolId }: TravelLogToolProps) {
     tripGoalOther: form.tripGoal === 'Other' ? form.tripGoalOther.trim() : '',
     plannedBudget: form.plannedBudget.trim() ? formatCurrencyDisplay(form.plannedBudget.trim()) : '',
     totalTripCost: form.totalTripCost.trim() ? formatCurrencyDisplay(form.totalTripCost.trim()) : '',
+    addToDashboard: form.addToDashboard === true,
     budgetNotes: form.budgetNotes.trim(),
     bestMemory: form.bestMemory.trim(),
     biggestSurprise: form.biggestSurprise.trim(),
@@ -1185,7 +1253,7 @@ export function TravelLogTool({ toolId }: TravelLogToolProps) {
         alert('Failed to update Calendar pin. Please try again.');
       }
       if (data.trip) {
-        setTrips((prev) => [...prev, data.trip as TripRecord]);
+        setTrips((prev) => [...prev, normalizeTripRecord(data.trip as TripRecord)]);
       } else {
         await loadTrips();
       }
@@ -1237,7 +1305,7 @@ export function TravelLogTool({ toolId }: TravelLogToolProps) {
       }
       if (data.trip) {
         setTrips((prev) =>
-          prev.map((t) => (t.id === editingId ? (data.trip as TripRecord) : t))
+          prev.map((t) => (t.id === editingId ? normalizeTripRecord(data.trip as TripRecord) : t))
         );
       } else {
         await loadTrips();
@@ -1354,9 +1422,11 @@ export function TravelLogTool({ toolId }: TravelLogToolProps) {
 
   const renderTripForm = (
     form: TripFormState,
-    setForm: React.Dispatch<React.SetStateAction<TripFormState>>
+    setForm: React.Dispatch<React.SetStateAction<TripFormState>>,
+    formKey: 'add' | 'edit'
   ) => {
     const dayCount = calculateTripDays(form.startDate, form.endDate);
+    const calendarPinId = `tl-add-to-calendar-${formKey}`;
 
     return (
       <div className="space-y-6">
@@ -1386,6 +1456,16 @@ export function TravelLogTool({ toolId }: TravelLogToolProps) {
                 className={inputClass}
                 placeholder="Rome, Italy"
               />
+              {form.destination.trim() ? (
+                <a
+                  href={mapsSearchHref(form.destination.trim())}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className={`mt-1 inline-block text-sm underline ${isLight ? 'text-emerald-700' : 'text-emerald-300'}`}
+                >
+                  {form.destination.trim()}
+                </a>
+              ) : null}
             </div>
             <div>
               <label className={labelClass}>
@@ -1418,6 +1498,21 @@ export function TravelLogTool({ toolId }: TravelLogToolProps) {
                 className={`${inputClass} ${isLight ? 'bg-slate-100' : 'bg-slate-800/50'} cursor-not-allowed`}
                 aria-readonly="true"
               />
+            </div>
+            <div className="md:col-span-2 flex items-center gap-3">
+              <input
+                type="checkbox"
+                id={calendarPinId}
+                checked={form.addToDashboard === true}
+                onChange={(e) => setForm((f) => ({ ...f, addToDashboard: e.target.checked }))}
+                className={calendarPinCheckboxClass}
+              />
+              <label
+                htmlFor={calendarPinId}
+                className={isLight ? 'text-sm text-slate-700 cursor-pointer' : 'text-sm text-slate-300 cursor-pointer'}
+              >
+                Add to calendar
+              </label>
             </div>
             <div>
               <label className={labelClass}>Trip rating</label>
@@ -1556,21 +1651,6 @@ export function TravelLogTool({ toolId }: TravelLogToolProps) {
               )}
             </div>
           </div>
-          <div className="flex items-center gap-3 mt-4">
-            <input
-              type="checkbox"
-              id="tl-add-to-calendar"
-              checked={form.addToDashboard}
-              onChange={(e) => setForm((f) => ({ ...f, addToDashboard: e.target.checked }))}
-              className={checkboxClass}
-            />
-            <label
-              htmlFor="tl-add-to-calendar"
-              className={isLight ? 'text-sm text-slate-700 cursor-pointer' : 'text-sm text-slate-300 cursor-pointer'}
-            >
-              Add to calendar
-            </label>
-          </div>
         </div>
 
         <LodgingSection form={form} setForm={setForm} />
@@ -1692,15 +1772,8 @@ export function TravelLogTool({ toolId }: TravelLogToolProps) {
     const days = calculateTripDays(trip.startDate, trip.endDate);
     const goalDisplay =
       trip.tripGoal === 'Other' && trip.tripGoalOther ? trip.tripGoalOther : trip.tripGoal;
-    const destinationText = (trip.destination || trip.primaryDestination).trim();
-    const plannedBudget = trip.plannedBudget.trim();
-    const totalTripCost = trip.totalTripCost.trim();
-    const budgetSummary = [
-      plannedBudget ? `Planned ${formatCurrencyDisplay(plannedBudget)}` : null,
-      totalTripCost ? `Cost ${formatCurrencyDisplay(totalTripCost)}` : null,
-    ]
-      .filter(Boolean)
-      .join(' · ');
+    const destinationText = tripDestinationText(trip);
+    const budgetSummary = tripBudgetSummaryLine(trip);
 
     return (
       <div className="flex-1 min-w-0">
@@ -1712,19 +1785,12 @@ export function TravelLogTool({ toolId }: TravelLogToolProps) {
           {goalDisplay && <span className={tagChipNeutralClass}>{goalDisplay}</span>}
         </div>
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2 text-sm mb-3">
-          {destinationText && (
+          {destinationText ? (
             <div>
               <span className={metaLabelClass}>Destination: </span>
-              <a
-                href={mapsSearchHref(destinationText)}
-                target="_blank"
-                rel="noopener noreferrer"
-                className={`${metaValueClass} underline`}
-              >
-                {destinationText}
-              </a>
+              <DestinationMapsLink query={destinationText} className={`${metaValueClass} underline`} />
             </div>
-          )}
+          ) : null}
           {trip.startDate && (
             <div>
               <span className={metaLabelClass}>Dates: </span>
@@ -1790,7 +1856,7 @@ export function TravelLogTool({ toolId }: TravelLogToolProps) {
         {isEditing ? (
           <div className="space-y-4">
             <h4 className={subsectionTitleClass}>Edit trip</h4>
-            {renderTripForm(editingTrip, setEditingTrip)}
+            {renderTripForm(editingTrip, setEditingTrip, 'edit')}
             <div className="flex gap-2">
               <button type="button" onClick={saveEdit} className={primaryButtonClass}>
                 Save
@@ -1894,7 +1960,7 @@ export function TravelLogTool({ toolId }: TravelLogToolProps) {
           {isAdding && (
             <div className={cardClass}>
               <h3 className={`${sectionTitleClass} mb-4`}>Add New Trip</h3>
-              {renderTripForm(newTrip, setNewTrip)}
+              {renderTripForm(newTrip, setNewTrip, 'add')}
               <div className="flex gap-2 mt-6">
                 <button type="button" onClick={addTrip} className={primaryButtonClass}>
                   Add Trip

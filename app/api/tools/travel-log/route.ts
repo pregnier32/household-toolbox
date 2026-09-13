@@ -92,6 +92,17 @@ type TripInput = {
   addToDashboard?: boolean;
 };
 
+function isMissingColumnError(error: { code?: string; message?: string } | null) {
+  const msg = error?.message ?? '';
+  return (
+    error?.code === '42703' ||
+    error?.code === 'PGRST204' ||
+    msg.includes('schema cache') ||
+    msg.includes('does not exist') ||
+    msg.includes('Could not find')
+  );
+}
+
 function parseCurrencyToNumber(value: string | undefined): number | null {
   if (!value?.trim()) return null;
   const numeric = value.replace(/[^0-9.]/g, '');
@@ -156,6 +167,11 @@ function buildTripRow(userId: string, toolId: string, trip: TripInput) {
     include_in_travel_counts: includeCountsToBoolean(trip.includeInTravelCounts),
     add_to_dashboard: trip.addToDashboard === true,
   };
+}
+
+function tripRowWithoutPinColumn(tripRow: ReturnType<typeof buildTripRow>) {
+  const { add_to_dashboard: _pin, ...rest } = tripRow;
+  return rest;
 }
 
 function buildLodgingInsertRows(tripId: string, lodging: LodgingInput[]) {
@@ -464,11 +480,19 @@ export async function POST(request: NextRequest) {
     if (action === 'create') {
       const tripRow = buildTripRow(user.id, toolId, trip);
 
-      const { data: created, error: createError } = await supabaseServer
+      let createdResult = await supabaseServer
         .from('tools_tl_trips')
         .insert(tripRow)
         .select('*')
         .single();
+      if (createdResult.error && isMissingColumnError(createdResult.error)) {
+        createdResult = await supabaseServer
+          .from('tools_tl_trips')
+          .insert(tripRowWithoutPinColumn(tripRow))
+          .select('*')
+          .single();
+      }
+      const { data: created, error: createError } = createdResult;
 
       if (createError || !created) {
         console.error('Error creating trip:', createError);
@@ -527,7 +551,7 @@ export async function POST(request: NextRequest) {
 
       const tripRow = buildTripRow(user.id, toolId, trip);
 
-      const { data: updated, error: updateError } = await supabaseServer
+      let updatedResult = await supabaseServer
         .from('tools_tl_trips')
         .update(tripRow)
         .eq('id', tripId)
@@ -535,6 +559,17 @@ export async function POST(request: NextRequest) {
         .eq('tool_id', toolId)
         .select('*')
         .single();
+      if (updatedResult.error && isMissingColumnError(updatedResult.error)) {
+        updatedResult = await supabaseServer
+          .from('tools_tl_trips')
+          .update(tripRowWithoutPinColumn(tripRow))
+          .eq('id', tripId)
+          .eq('user_id', user.id)
+          .eq('tool_id', toolId)
+          .select('*')
+          .single();
+      }
+      const { data: updated, error: updateError } = updatedResult;
 
       if (updateError || !updated) {
         console.error('Error updating trip:', updateError);

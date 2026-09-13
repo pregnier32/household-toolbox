@@ -1795,7 +1795,16 @@ export function HealthcareApptsHistoryTool({ toolId }: HealthcareApptsHistoryToo
                       </ul>
                     )}
                   </div>
-                  <div className="flex gap-3 justify-end">
+                  <div className="flex gap-3 justify-end flex-wrap">
+                    <button
+                      type="button"
+                      onClick={() => void addToHsa(editingRecord)}
+                      disabled={isSaving || addingToHsaRecordId === editingRecord.id}
+                      className={secondaryButtonClass}
+                      aria-label="Add to HSA"
+                    >
+                      {addingToHsaRecordId === editingRecord.id ? 'Adding…' : 'Add to HSA'}
+                    </button>
                     <button
                       onClick={cancelEditingRecord}
                       disabled={isSaving}
@@ -1864,16 +1873,12 @@ export function HealthcareApptsHistoryTool({ toolId }: HealthcareApptsHistoryToo
                               </div>
                             )}
                           </div>
-                          <div className="flex shrink-0 items-center gap-1.5 ml-4">
+                          <div className="flex shrink-0 flex-nowrap items-center gap-1.5 ml-4">
                             <button
                               type="button"
                               onClick={() => void addToHsa(record)}
                               disabled={addingToHsaRecordId === record.id}
-                              className={
-                                isLight
-                                  ? 'text-sm font-medium text-emerald-700 hover:text-emerald-900 disabled:opacity-50 disabled:cursor-not-allowed'
-                                  : 'text-sm font-medium text-emerald-300 hover:text-emerald-200 disabled:opacity-50 disabled:cursor-not-allowed'
-                              }
+                              className={`${rowIconEmeraldClass} gap-1.5 px-2.5 text-xs font-semibold whitespace-nowrap disabled:opacity-50 disabled:cursor-not-allowed`}
                               aria-label="Add to HSA"
                               title="Add to HSA"
                             >

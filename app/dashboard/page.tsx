@@ -27,6 +27,7 @@ import { EventBudgetPlannerTool } from '../components/EventBudgetPlannerTool';
 import { CleaningScheduleTool } from '../components/CleaningScheduleTool';
 import { HomeMaintenanceScheduleTool } from '../components/HomeMaintenanceScheduleTool';
 import { EndOfLifePlannerTool } from '../components/EndOfLifePlannerTool';
+import { completeSignOut } from '@/lib/client-sign-out';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, PieChart, Pie, Cell, Legend } from 'recharts';
 
 // Calendar Component
@@ -810,8 +811,7 @@ export default function Dashboard() {
   }, [loadCalendarEvents]);
 
   const handleSignOut = async () => {
-    await fetch('/api/auth/signout', { method: 'POST' });
-    router.push('/');
+    await completeSignOut();
   };
 
   const handleToolClick = (tool: Tool) => {

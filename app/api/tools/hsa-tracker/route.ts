@@ -141,12 +141,25 @@ export async function GET(request: NextRequest) {
   try {
     await copyDefaultAccountsToUser(user.id, toolId);
 
-    const { data: accountRows, error: accountsError } = await supabaseServer
+    let { data: accountRows, error: accountsError } = await supabaseServer
       .from('tools_hsa_accounts')
       .select('id, name, card_color, display_order, contribution_limits')
       .eq('user_id', user.id)
       .eq('tool_id', toolId)
       .order('display_order', { ascending: true });
+
+    if (accountsError) {
+      const retry = await supabaseServer
+        .from('tools_hsa_accounts')
+        .select('id, name, card_color, display_order')
+        .eq('user_id', user.id)
+        .eq('tool_id', toolId)
+        .order('display_order', { ascending: true });
+      if (!retry.error) {
+        accountRows = retry.data;
+        accountsError = null;
+      }
+    }
 
     if (accountsError) {
       console.error('HSA accounts fetch error:', accountsError);

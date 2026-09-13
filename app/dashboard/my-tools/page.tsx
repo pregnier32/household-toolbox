@@ -5,6 +5,7 @@ import { useRouter } from 'next/navigation';
 import { UserMenu } from '../../components/UserMenu';
 import { SideLogo } from '../../components/SideLogo';
 import { useTheme } from '../../components/AppThemeProvider';
+import { completeSignOut } from '@/lib/client-sign-out';
 
 type UserTool = {
   id: string;
@@ -135,8 +136,7 @@ export default function MyToolsPage() {
   }, [router]);
 
   const handleSignOut = async () => {
-    await fetch('/api/auth/signout', { method: 'POST' });
-    router.push('/');
+    await completeSignOut();
   };
 
   const loadTools = async () => {

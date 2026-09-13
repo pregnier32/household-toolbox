@@ -1,6 +1,6 @@
 'use client';
 
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useTheme } from './AppThemeProvider';
 
 function generateId(): string {
@@ -134,6 +134,10 @@ function lastAccountStorageKey(toolId: string) {
   return `hsa-last-account:${toolId}`;
 }
 
+function accountsCacheKey(toolId: string) {
+  return `hsa-accounts-cache:${toolId}`;
+}
+
 function readLastAccountId(toolId: string): string | null {
   try {
     return localStorage.getItem(lastAccountStorageKey(toolId));
@@ -145,6 +149,26 @@ function readLastAccountId(toolId: string): string | null {
 function writeLastAccountId(toolId: string, accountId: string) {
   try {
     localStorage.setItem(lastAccountStorageKey(toolId), accountId);
+  } catch {
+    /* ignore quota / private mode */
+  }
+}
+
+function readAccountsCache(toolId: string): HsaAccount[] {
+  try {
+    const raw = sessionStorage.getItem(accountsCacheKey(toolId));
+    if (!raw) return [];
+    const parsed = JSON.parse(raw) as HsaAccount[];
+    if (!Array.isArray(parsed)) return [];
+    return parsed.filter((a) => a && typeof a.id === 'string' && typeof a.name === 'string');
+  } catch {
+    return [];
+  }
+}
+
+function writeAccountsCache(toolId: string, list: HsaAccount[]) {
+  try {
+    sessionStorage.setItem(accountsCacheKey(toolId), JSON.stringify(list));
   } catch {
     /* ignore quota / private mode */
   }
@@ -255,8 +279,12 @@ export function HSATrackerTool({ toolId }: HSATrackerToolProps) {
 
   const [accounts, setAccounts] = useState<HsaAccount[]>([]);
   const [selectedAccountId, setSelectedAccountId] = useState<string | null>(null);
+  const [accountsLoadOk, setAccountsLoadOk] = useState(false);
   const [isLoadingData, setIsLoadingData] = useState(false);
   const [saveMessage, setSaveMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
+  const accountsRef = useRef<HsaAccount[]>([]);
+  const loadGenRef = useRef(0);
+  accountsRef.current = accounts;
 
   const showMessage = useCallback((type: 'success' | 'error', text: string) => {
     setSaveMessage({ type, text });
@@ -265,30 +293,51 @@ export function HSATrackerTool({ toolId }: HSATrackerToolProps) {
 
   const loadHsaData = useCallback(async () => {
     if (!toolId) return;
+    const gen = ++loadGenRef.current;
     setIsLoadingData(true);
     try {
       const res = await fetch(`/api/tools/hsa-tracker?toolId=${encodeURIComponent(toolId)}`);
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.error || 'Failed to load');
+      const data = await res.json().catch(() => ({}));
+      if (gen !== loadGenRef.current) return;
+      if (!res.ok) throw new Error((data as { error?: string }).error || 'Failed to load');
       const loaded = ((data.accounts ?? []) as HsaAccount[]).map((a) => ({
         ...a,
         contributionLimits: a.contributionLimits ?? {},
       }));
       setAccounts(loaded);
+      writeAccountsCache(toolId, loaded);
+      setAccountsLoadOk(true);
     } catch (e) {
+      if (gen !== loadGenRef.current) return;
+      const cached = readAccountsCache(toolId);
+      const keep = accountsRef.current.length > 0 ? accountsRef.current : cached;
+      if (keep.length > 0) {
+        if (keep !== accountsRef.current) setAccounts(keep);
+        setAccountsLoadOk(true);
+        return;
+      }
       showMessage('error', e instanceof Error ? e.message : 'Failed to load HSA data');
     } finally {
-      setIsLoadingData(false);
+      if (gen === loadGenRef.current) setIsLoadingData(false);
     }
   }, [toolId, showMessage]);
 
   useEffect(() => {
-    if (toolId) loadHsaData();
+    if (!toolId) return;
+    const cached = readAccountsCache(toolId);
+    if (cached.length > 0) {
+      setAccounts(cached);
+      const next = pickOpenAccountId(cached, readLastAccountId(toolId), toolId);
+      if (next) setSelectedAccountId(next);
+    }
+    loadHsaData();
+    return () => {
+      loadGenRef.current += 1;
+    };
   }, [toolId, loadHsaData]);
 
   useEffect(() => {
     if (accounts.length === 0) {
-      setSelectedAccountId(null);
       return;
     }
     if (!selectedAccountId || !accounts.some((a) => a.id === selectedAccountId)) {
@@ -297,6 +346,10 @@ export function HSATrackerTool({ toolId }: HSATrackerToolProps) {
       if (next && toolId) writeLastAccountId(toolId, next);
     }
   }, [accounts, selectedAccountId, toolId]);
+
+  useEffect(() => {
+    if (toolId && accountsLoadOk) writeAccountsCache(toolId, accounts);
+  }, [toolId, accounts, accountsLoadOk]);
 
   const apiPost = useCallback(
     async (resource: 'account' | 'deposit' | 'expense', action: string, payload: Record<string, unknown>) => {
@@ -455,10 +508,12 @@ export function HSATrackerTool({ toolId }: HSATrackerToolProps) {
 
   const [deleteDepositId, setDeleteDepositId] = useState<string | null>(null);
   const [deleteExpenseId, setDeleteExpenseId] = useState<string | null>(null);
+  const [expenseDeleteConfirmText, setExpenseDeleteConfirmText] = useState('');
 
   const [reportYear, setReportYear] = useState(currentYear);
   const [showReportModal, setShowReportModal] = useState(false);
   const [csvExportMessage, setCsvExportMessage] = useState<string | null>(null);
+  const expenseDeleteConfirmed = expenseDeleteConfirmText.trim().toLowerCase() === 'delete';
 
   const resetDepositForm = useCallback(() => {
     const y = summaryYear;
@@ -800,7 +855,7 @@ export function HSATrackerTool({ toolId }: HSATrackerToolProps) {
 
   const removeExpense = async () => {
     if (!deleteExpenseId || !selectedAccountId) return;
-    if (deleteConfirmText.trim().toLowerCase() !== 'delete') return;
+    if (!expenseDeleteConfirmed) return;
 
     if (toolId) {
       const data = await apiPost('expense', 'delete', { expenseId: deleteExpenseId });
@@ -813,7 +868,7 @@ export function HSATrackerTool({ toolId }: HSATrackerToolProps) {
         )
       );
       setDeleteExpenseId(null);
-      setDeleteConfirmText('');
+      setExpenseDeleteConfirmText('');
       showMessage('success', 'Expense deleted');
       return;
     }
@@ -826,7 +881,7 @@ export function HSATrackerTool({ toolId }: HSATrackerToolProps) {
       )
     );
     setDeleteExpenseId(null);
-    setDeleteConfirmText('');
+    setExpenseDeleteConfirmText('');
   };
 
   const generateReportPdf = useCallback(async () => {
@@ -1021,7 +1076,7 @@ export function HSATrackerTool({ toolId }: HSATrackerToolProps) {
         setDeleteConfirmAccountId(null);
         setDeleteDepositId(null);
         setDeleteExpenseId(null);
-        setDeleteConfirmText('');
+        setExpenseDeleteConfirmText('');
       }
     };
     window.addEventListener('keydown', onKeyDown);
@@ -1249,10 +1304,12 @@ export function HSATrackerTool({ toolId }: HSATrackerToolProps) {
         )}
       </div>
 
-      {!selectedAccountId || !selectedAccount ? (
+      {accountsLoadOk && accounts.length === 0 && !isCreatingAccount ? (
         <div className={cardClass}>
           <p className={`${mutedSmallClass} text-center py-6`}>Select or create an HSA account to continue.</p>
         </div>
+      ) : !selectedAccount ? (
+        null
       ) : (
         <>
           <div className={`border-b ${tabStripBorderClass}`}>
@@ -1316,11 +1373,19 @@ export function HSATrackerTool({ toolId }: HSATrackerToolProps) {
                     KPI amounts use calendar year {summaryYear}. Balance is as of 12/31/{summaryYear}.
                   </span>
                 </div>
-                <p className={`${mutedSmallClass} mt-3`}>
-                  Starting 1/1/{summaryYear}: {formatMoney(summaryMetrics.startingBalance)} — matches
-                  ending 12/31/{summaryYear - 1}.
+              </div>
+
+              <div className={cardClass} aria-label="Rollover balances">
+                <p className={isLight ? 'text-sm text-slate-800' : 'text-sm text-slate-200'}>
+                  Starting 1/1/{summaryYear}: {formatMoney(summaryMetrics.startingBalance)}
                 </p>
-                <div className="mt-4 max-w-xs">
+                <p className={`mt-1 ${isLight ? 'text-sm text-slate-800' : 'text-sm text-slate-200'}`}>
+                  Matches ending 12/31/{summaryYear - 1}: {formatMoney(summaryMetrics.startingBalance)}
+                </p>
+              </div>
+
+              <div className={cardClass} aria-label="Annual contribution limit">
+                <div className="max-w-xs">
                   <label htmlFor="hsa-contribution-limit" className={labelClassSm}>
                     Annual contribution limit (optional)
                   </label>
@@ -1345,7 +1410,7 @@ export function HSATrackerTool({ toolId }: HSATrackerToolProps) {
                     />
                   </div>
                   {storedContributionLimit != null ? (
-                    <p className={`${mutedSmallClass} mt-2`}>
+                    <p className={`mt-2 ${isLight ? 'text-sm text-slate-800' : 'text-sm text-slate-200'}`}>
                       Remaining: {formatMoney(storedContributionLimit - summaryMetrics.depositsYtd)}{' '}
                       (limit − Deposits YTD)
                     </p>
@@ -1923,7 +1988,7 @@ export function HSATrackerTool({ toolId }: HSATrackerToolProps) {
                               type="button"
                               onClick={() => {
                                 setDeleteExpenseId(ex.id);
-                                setDeleteConfirmText('');
+                                setExpenseDeleteConfirmText('');
                               }}
                               className={rowIconDangerClass}
                               aria-label="Delete expense"
@@ -1955,8 +2020,7 @@ export function HSATrackerTool({ toolId }: HSATrackerToolProps) {
                   Export HSA Tracker report
                 </h3>
                 <p className={`${mutedSmallClass} mb-4 max-w-prose`}>
-                  Generate a PDF with starting balance, all deposits and expenses in date order for the year you choose,
-                  running totals, and ending balance.
+                  Export CSV downloads deposits and expenses for the selected year. Generate PDF Report is unchanged.
                 </p>
                 <label className={labelClassSm} htmlFor="hsa-report-year">
                   Year
@@ -1976,15 +2040,22 @@ export function HSATrackerTool({ toolId }: HSATrackerToolProps) {
                     </option>
                   ))}
                 </select>
-                <div className="flex flex-wrap gap-2">
-                  <button type="button" onClick={exportReportCsv} className={secondaryButtonClass}>
+                <div className="flex flex-wrap items-center gap-2" role="group" aria-label="Reports export">
+                  <button type="button" onClick={exportReportCsv} className={primaryButtonClass}>
                     Export CSV
                   </button>
                   <button type="button" onClick={() => setShowReportModal(true)} className={primaryButtonClass}>
                     Generate PDF Report
                   </button>
                 </div>
-                {csvExportMessage ? <p className={`${mutedSmallClass} mt-3`}>{csvExportMessage}</p> : null}
+                {csvExportMessage ? (
+                  <p
+                    className={`mt-3 ${isLight ? 'text-sm text-slate-800' : 'text-sm text-slate-200'}`}
+                    role="status"
+                  >
+                    {csvExportMessage}
+                  </p>
+                ) : null}
               </div>
             </div>
           )}
@@ -2093,9 +2164,13 @@ export function HSATrackerTool({ toolId }: HSATrackerToolProps) {
               Type <span className="font-semibold">delete</span> to confirm.
             </p>
             <input
+              key={`hsa-expense-delete-${deleteExpenseId}`}
+              id={`hsa-expense-delete-confirm-${deleteExpenseId}`}
+              name={`hsa-expense-delete-confirm-${deleteExpenseId}`}
               type="text"
-              value={deleteConfirmText}
-              onChange={(e) => setDeleteConfirmText(e.target.value)}
+              autoComplete="off"
+              value={expenseDeleteConfirmText}
+              onChange={(e) => setExpenseDeleteConfirmText(e.target.value)}
               placeholder="Type 'delete' to confirm"
               className={deleteConfirmInputClass}
             />
@@ -2103,7 +2178,8 @@ export function HSATrackerTool({ toolId }: HSATrackerToolProps) {
               <button
                 type="button"
                 onClick={removeExpense}
-                disabled={deleteConfirmText.trim().toLowerCase() !== 'delete'}
+                disabled={!expenseDeleteConfirmed}
+                aria-disabled={!expenseDeleteConfirmed}
                 className="flex-1 rounded-lg bg-red-600 px-4 py-2.5 text-sm font-semibold text-white hover:bg-red-700 disabled:cursor-not-allowed disabled:opacity-50"
               >
                 Delete Permanently
@@ -2112,7 +2188,7 @@ export function HSATrackerTool({ toolId }: HSATrackerToolProps) {
                 type="button"
                 onClick={() => {
                   setDeleteExpenseId(null);
-                  setDeleteConfirmText('');
+                  setExpenseDeleteConfirmText('');
                 }}
                 className={secondaryButtonClass}
               >

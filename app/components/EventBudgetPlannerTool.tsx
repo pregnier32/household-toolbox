@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect, useMemo, useCallback } from 'react';
+import { useState, useEffect, useLayoutEffect, useMemo, useCallback, useRef } from 'react';
 import { useTheme } from './AppThemeProvider';
 
 const API_BASE = '/api/tools/event-budget-planner';
@@ -102,12 +102,20 @@ function emptyExpenseForm(vendorId = '') {
 }
 
 function expenseVendorSplits(expense: Expense): VendorSplit[] {
-  if (expense.vendorSplits?.length) return expense.vendorSplits;
+  if (Array.isArray(expense.vendorSplits) && expense.vendorSplits.length > 0) {
+    return expense.vendorSplits;
+  }
   return [{ vendorId: expense.vendorId, amount: expense.amount }];
 }
 
 function moneyCents(value: number) {
   return Math.round(value * 100);
+}
+
+function asMoney(value: unknown): number {
+  if (typeof value === 'number' && Number.isFinite(value)) return value;
+  const parsed = parseFloat(String(value ?? '').replace(/[^0-9.-]/g, ''));
+  return Number.isFinite(parsed) ? parsed : 0;
 }
 
 function sanitizeCurrencyInput(value: string): string {
@@ -195,12 +203,23 @@ function CurrencyInput({
 }
 
 function getEventTotals(event: EventRecord) {
-  const totalBudgeted = event.categoryBudgets.reduce((sum, cb) => sum + cb.budgetAmount, 0);
-  const totalActual = event.expenses.reduce((sum, e) => sum + e.amount, 0);
-  return { totalBudgeted, totalActual, remaining: totalBudgeted - totalActual };
+  const totalBudgeted = event.categoryBudgets.reduce((sum, cb) => sum + asMoney(cb.budgetAmount), 0);
+  const totalActual = event.expenses.reduce((sum, e) => sum + asMoney(e.amount), 0);
+  const remaining = (moneyCents(totalBudgeted) - moneyCents(totalActual)) / 100;
+  return {
+    totalBudgeted,
+    totalActual,
+    remaining,
+    isOverBudget: remaining < 0,
+  };
 }
 
 const BIRTHDAY_TYPE_NAME = 'Birthday';
+const EVENT_TYPE_PLACEHOLDER = '__select_a_type__';
+
+function emptyEventForm() {
+  return { name: '', date: todayIso(), typeId: '', notes: '' };
+}
 
 const BIRTHDAY_STARTER_BUDGETS: { name: string; amount: number }[] = [
   { name: 'Venue', amount: 200 },
@@ -383,7 +402,18 @@ export function EventBudgetPlannerTool({ toolId }: EventBudgetPlannerToolProps) 
     setCategories(data.categories ?? []);
     setTypes(data.types ?? []);
     setVendors(data.vendors ?? []);
-    setEvents(data.events ?? []);
+    setEvents(
+      (data.events ?? []).map((event) => ({
+        ...event,
+        expenses: (event.expenses ?? []).map((expense) => ({
+          ...expense,
+          vendorSplits:
+            Array.isArray(expense.vendorSplits) && expense.vendorSplits.length > 0
+              ? expense.vendorSplits
+              : [{ vendorId: expense.vendorId, amount: expense.amount }],
+        })),
+      }))
+    );
   }, []);
 
   const reloadData = useCallback(async () => {
@@ -486,8 +516,10 @@ export function EventBudgetPlannerTool({ toolId }: EventBudgetPlannerToolProps) 
   const [isAddingEvent, setIsAddingEvent] = useState(false);
   const [editingEventId, setEditingEventId] = useState<string | null>(null);
   const [applyBirthdayTemplateOnCreate, setApplyBirthdayTemplateOnCreate] = useState(false);
-  const [eventForm, setEventForm] = useState({ name: '', date: todayIso(), typeId: '', notes: '' });
-  const [isAddingEventCategory, setIsAddingEventCategory] = useState(false);
+  const [eventForm, setEventForm] = useState(emptyEventForm);
+  const [addEventTypeEpoch, setAddEventTypeEpoch] = useState(0);
+  const addEventTypeTouchedRef = useRef(false);
+  const [addingEventCategoryForId, setAddingEventCategoryForId] = useState<string | null>(null);
   const [newCategoryBudget, setNewCategoryBudget] = useState({ categoryId: '', budgetAmount: 0 });
   const [expenseModal, setExpenseModal] = useState<{ categoryId: string; expenseId?: string } | null>(null);
   const [expenseForm, setExpenseForm] = useState(emptyExpenseForm);
@@ -529,22 +561,39 @@ export function EventBudgetPlannerTool({ toolId }: EventBudgetPlannerToolProps) 
   const [editingVendorForm, setEditingVendorForm] = useState(vendorForm);
   const [deleteVendorConfirmId, setDeleteVendorConfirmId] = useState<string | null>(null);
   const [deleteVendorConfirmText, setDeleteVendorConfirmText] = useState('');
+  const isAddingEventCategory = Boolean(editingEventId && addingEventCategoryForId === editingEventId);
 
   const resetEventForm = () => {
-    setEventForm({ name: '', date: todayIso(), typeId: '', notes: '' });
+    addEventTypeTouchedRef.current = false;
+    setEventForm(emptyEventForm());
     setApplyBirthdayTemplateOnCreate(false);
   };
 
   const startAddingEvent = () => {
-    resetEventForm();
-    setIsAddingEvent(true);
+    addEventTypeTouchedRef.current = false;
+    setAddEventTypeEpoch((n) => n + 1);
+    setEventForm(emptyEventForm());
+    setApplyBirthdayTemplateOnCreate(false);
+    setAddingEventCategoryForId(null);
     setEditingEventId(null);
+    setIsAddingEvent(true);
   };
+
+  useLayoutEffect(() => {
+    if (!isAddingEvent || addEventTypeTouchedRef.current) return;
+    const el = document.getElementById(`ebp-new-event-type-${addEventTypeEpoch}`) as HTMLSelectElement | null;
+    if (el && el.value !== EVENT_TYPE_PLACEHOLDER) {
+      el.value = EVENT_TYPE_PLACEHOLDER;
+    }
+    if (eventForm.typeId) {
+      setEventForm((f) => (f.typeId ? { ...f, typeId: '' } : f));
+    }
+  }, [isAddingEvent, addEventTypeEpoch, activeTypes, eventForm.typeId]);
 
   const cancelEventForm = () => {
     setIsAddingEvent(false);
     setEditingEventId(null);
-    setIsAddingEventCategory(false);
+    setAddingEventCategoryForId(null);
     setNewCategoryBudget({ categoryId: '', budgetAmount: 0 });
     closeExpenseModal();
     closeCategoryBudgetModal();
@@ -563,6 +612,7 @@ export function EventBudgetPlannerTool({ toolId }: EventBudgetPlannerToolProps) 
         notes: eventForm.notes,
       });
       setIsAddingEvent(false);
+      setAddingEventCategoryForId(null);
       if (data.event?.id) {
         setEditingEventId(data.event.id);
         if (applyBirthdayTemplateOnCreate) {
@@ -585,7 +635,7 @@ export function EventBudgetPlannerTool({ toolId }: EventBudgetPlannerToolProps) 
     setEditingEventId(event.id);
     setIsAddingEvent(false);
     setApplyBirthdayTemplateOnCreate(false);
-    setIsAddingEventCategory(false);
+    setAddingEventCategoryForId(null);
     setNewCategoryBudget({ categoryId: '', budgetAmount: 0 });
     closeExpenseModal();
     closeCategoryBudgetModal();
@@ -778,15 +828,7 @@ export function EventBudgetPlannerTool({ toolId }: EventBudgetPlannerToolProps) 
   };
 
   const toggleBirthdayStarterOnCreate = () => {
-    setApplyBirthdayTemplateOnCreate((on) => {
-      if (!on) {
-        const birthdayType = activeTypes.find((t) => t.name === BIRTHDAY_TYPE_NAME);
-        if (birthdayType) {
-          setEventForm((f) => ({ ...f, typeId: birthdayType.id }));
-        }
-      }
-      return !on;
-    });
+    setApplyBirthdayTemplateOnCreate((on) => !on);
   };
 
   const addCategoryBudget = async () => {
@@ -802,7 +844,7 @@ export function EventBudgetPlannerTool({ toolId }: EventBudgetPlannerToolProps) 
         budgetAmount: amount,
       });
       setNewCategoryBudget({ categoryId: '', budgetAmount: 0 });
-      setIsAddingEventCategory(false);
+      setAddingEventCategoryForId(null);
     } catch (error: unknown) {
       alert(error instanceof Error ? error.message : 'Failed to add category budget.');
     } finally {
@@ -858,7 +900,10 @@ export function EventBudgetPlannerTool({ toolId }: EventBudgetPlannerToolProps) 
         expenseId: expenseModal.expenseId,
         categoryId: expenseModal.categoryId,
         vendorId: vendorSplits[0].vendorId,
-        vendorSplits,
+        vendorSplits: vendorSplits.map((part) => ({
+          vendorId: part.vendorId,
+          amount: Number(part.amount),
+        })),
         amount,
         expenseDate: expenseForm.date,
         note: expenseForm.note,
@@ -1535,11 +1580,32 @@ export function EventBudgetPlannerTool({ toolId }: EventBudgetPlannerToolProps) 
             Type <span className="text-red-400">*</span>
           </label>
           <select
-            value={eventForm.typeId}
-            onChange={(e) => setEventForm((f) => ({ ...f, typeId: e.target.value }))}
+            key={
+              isAddingEvent
+                ? `add-event-type-${addEventTypeEpoch}-${activeTypes.map((t) => t.id).join('.')}`
+                : `edit-event-type-${editingEventId ?? ''}`
+            }
+            id={isAddingEvent ? `ebp-new-event-type-${addEventTypeEpoch}` : 'ebp-edit-event-type'}
+            name={isAddingEvent ? `ebp-new-event-type-${addEventTypeEpoch}` : 'ebp-edit-event-type'}
+            autoComplete="off"
+            value={eventForm.typeId ? eventForm.typeId : EVENT_TYPE_PLACEHOLDER}
+            onPointerDown={() => {
+              if (isAddingEvent) addEventTypeTouchedRef.current = true;
+            }}
+            onKeyDown={() => {
+              if (isAddingEvent) addEventTypeTouchedRef.current = true;
+            }}
+            onChange={(e) => {
+              const nextTypeId = e.target.value === EVENT_TYPE_PLACEHOLDER ? '' : e.target.value;
+              if (isAddingEvent && !addEventTypeTouchedRef.current) {
+                setEventForm((f) => ({ ...f, typeId: '' }));
+                return;
+              }
+              setEventForm((f) => ({ ...f, typeId: nextTypeId }));
+            }}
             className={selectClass}
           >
-            <option value="">Select a type</option>
+            <option value={EVENT_TYPE_PLACEHOLDER}>Select a type</option>
             {activeTypes.map((t) => (
               <option key={t.id} value={t.id}>
                 {t.name}
@@ -1601,8 +1667,18 @@ export function EventBudgetPlannerTool({ toolId }: EventBudgetPlannerToolProps) 
               </button>
             </div>
           )}
-          {availableCategories.length > 0 && (
-            isAddingEventCategory ? (
+          {availableCategories.length > 0 && !isAddingEventCategory && (
+              <div className="flex justify-start mb-4">
+                <button
+                  type="button"
+                  onClick={() => setAddingEventCategoryForId(editingEventId)}
+                  className={primaryButtonClass}
+                >
+                  + Add category
+                </button>
+              </div>
+          )}
+          {availableCategories.length > 0 && isAddingEventCategory && (
             <div className={`${nestedCardClass} mb-4`}>
               <p className={`${labelClass} mb-3`}>Add category to this event</p>
               <div className="flex flex-wrap gap-3 items-end">
@@ -1643,7 +1719,7 @@ export function EventBudgetPlannerTool({ toolId }: EventBudgetPlannerToolProps) 
                 <button
                   type="button"
                   onClick={() => {
-                    setIsAddingEventCategory(false);
+                    setAddingEventCategoryForId(null);
                     setNewCategoryBudget({ categoryId: '', budgetAmount: 0 });
                   }}
                   className={secondaryButtonClass}
@@ -1652,17 +1728,6 @@ export function EventBudgetPlannerTool({ toolId }: EventBudgetPlannerToolProps) 
                 </button>
               </div>
             </div>
-            ) : (
-              <div className="flex justify-start mb-4">
-                <button
-                  type="button"
-                  onClick={() => setIsAddingEventCategory(true)}
-                  className={primaryButtonClass}
-                >
-                  + Add category
-                </button>
-              </div>
-            )
           )}
 
           {editingEvent.categoryBudgets.length === 0 ? (
@@ -1972,12 +2037,12 @@ export function EventBudgetPlannerTool({ toolId }: EventBudgetPlannerToolProps) 
                               <span>{getTypeName(event.typeId)}</span>
                               <span>Budgeted: {formatCurrency(totals.totalBudgeted)}</span>
                               <span>Actual: {formatCurrency(totals.totalActual)}</span>
-                              {totals.remaining < 0 && (
-                                <span className={overBudgetClass}>
-                                  Remaining: {formatCurrency(totals.remaining)}
-                                </span>
-                              )}
                             </div>
+                            {totals.isOverBudget && (
+                              <p className={`mt-1 text-sm ${overBudgetClass}`}>
+                                Remaining: {formatCurrency(totals.remaining)}
+                              </p>
+                            )}
                             {event.notes && (
                               <p className={`text-xs mt-1.5 italic ${mutedTextClass}`}>{event.notes}</p>
                             )}

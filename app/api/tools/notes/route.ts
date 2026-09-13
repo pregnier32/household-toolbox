@@ -212,8 +212,9 @@ export async function POST(request: NextRequest) {
       viewPasswordHash = await bcrypt.hash(viewPassword, SALT_ROUNDS);
     }
 
-    // Validate security questions if password protection is enabled
-    if (requiresPasswordForView && action === 'create') {
+    // Validate security questions on create, or on update when the client sends a questions payload (edit lock-on)
+    const isLockQuestionPayload = Array.isArray(securityQuestions);
+    if (requiresPasswordForView && (action === 'create' || isLockQuestionPayload)) {
       if (!securityQuestions || securityQuestions.length !== 2) {
         return NextResponse.json(
           { error: 'Exactly 2 security questions are required when password protection is enabled' },
