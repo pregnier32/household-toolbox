@@ -897,7 +897,7 @@ export async function POST(request: NextRequest) {
             .from('tools_mp_plan_assignments')
             .select('plan_id, day_key, meal_id, display_order, slot_key')
             .eq('plan_id', planId);
-          previous = retry.data;
+          previous = (retry.data ?? []).map((row) => ({ ...row, is_leftover: false }));
           prevErr = retry.error;
         }
         if (prevErr && /slot_key/.test(prevErr.message ?? '')) {
@@ -905,7 +905,7 @@ export async function POST(request: NextRequest) {
             .from('tools_mp_plan_assignments')
             .select('plan_id, day_key, meal_id, display_order')
             .eq('plan_id', planId);
-          previous = retry.data;
+          previous = (retry.data ?? []).map((row) => ({ ...row, slot_key: null, is_leftover: false }));
         }
         await supabaseServer.from('tools_mp_plan_assignments').delete().eq('plan_id', planId);
         const rows = assignmentsToRows(planId, assignments);
