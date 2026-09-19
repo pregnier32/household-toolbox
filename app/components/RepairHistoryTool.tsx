@@ -1,7 +1,16 @@
 'use client';
 
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect } from 'react';
 import { useTheme } from './AppThemeProvider';
+import { AttachmentButton } from './AttachmentButton';
+import { AttachmentModal } from './AttachmentModal';
+import {
+  canPreviewAttachment,
+  createPendingAttachment,
+  isImageAttachment,
+  isPdfAttachment,
+  type AttachmentItem,
+} from '@/lib/attachments';
 
 type HeaderRecord = {
   id: string;
@@ -20,12 +29,6 @@ type HistoryRecord = {
   description: string;
   cost: string;
   serviceProvider: string;
-  receiptFile: File | null;
-  receiptFileUrl?: string | null;
-  receiptFileName?: string | null;
-  warrantyFile: File | null;
-  warrantyFileUrl?: string | null;
-  warrantyFileName?: string | null;
   warrantyEndDate: string;
   addWarrantyToDashboard?: boolean;
   submittedToInsurance: boolean;
@@ -34,12 +37,13 @@ type HistoryRecord = {
   amountInsurancePaid: string;
   agentContactInfo: string;
   claimNotes: string;
-  repairPictures: File[];
-  repairPictureUrls?: string[];
   odometerReading: string;
   manualLink: string;
   notes: string;
+  attachments: Array<{ id: string; name: string; size: number; type: string }>;
 };
+
+type RepairFormState = Omit<HistoryRecord, 'id' | 'headerId' | 'attachments'>;
 
 type Item = {
   id: string;
@@ -69,12 +73,6 @@ function mapApiRecord(r: any): HistoryRecord {
     description: r.description || '',
     cost: r.cost || '',
     serviceProvider: r.service_provider || '',
-    receiptFile: null,
-    receiptFileUrl: r.receipt_file_url,
-    receiptFileName: r.receipt_file_name,
-    warrantyFile: null,
-    warrantyFileUrl: r.warranty_file_url,
-    warrantyFileName: r.warranty_file_name,
     warrantyEndDate: r.warranty_end_date || '',
     addWarrantyToDashboard: !!r.warranty_dashboard_item_id,
     submittedToInsurance: r.submitted_to_insurance || false,
@@ -83,11 +81,39 @@ function mapApiRecord(r: any): HistoryRecord {
     amountInsurancePaid: r.amount_insurance_paid || '',
     agentContactInfo: r.agent_contact_info || '',
     claimNotes: r.claim_notes || '',
-    repairPictures: [],
-    repairPictureUrls: r.repairPictures?.map((p: any) => p.fileUrl) || [],
     odometerReading: r.odometer_reading || '',
     manualLink: r.manual_link || '',
     notes: r.notes || '',
+    attachments: Array.isArray(r.attachments)
+      ? r.attachments.map((item: { id: string; name: string; size: number; type: string }) => ({
+          id: item.id,
+          name: item.name,
+          size: item.size ?? 0,
+          type: item.type || '',
+        }))
+      : [],
+  };
+}
+
+function emptyRepairForm(): RepairFormState {
+  return {
+    date: new Date().toISOString().split('T')[0],
+    itemName: '',
+    type: 'repair',
+    description: '',
+    cost: '',
+    serviceProvider: '',
+    warrantyEndDate: '',
+    addWarrantyToDashboard: false,
+    submittedToInsurance: false,
+    insuranceCarrier: '',
+    claimNumber: '',
+    amountInsurancePaid: '',
+    agentContactInfo: '',
+    claimNotes: '',
+    odometerReading: '',
+    manualLink: '',
+    notes: '',
   };
 }
 
@@ -341,9 +367,6 @@ export function RepairHistoryTool({ toolId }: RepairHistoryToolProps) {
   const insurancePanelClass = isLight
     ? 'space-y-4 mt-4 p-4 rounded-lg border border-slate-200 bg-slate-50'
     : 'space-y-4 mt-4 p-4 rounded-lg border border-slate-700 bg-slate-800/50';
-  const filePickerLabelClass = isLight
-    ? 'flex items-center gap-2 w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-slate-800 hover:bg-slate-50 transition-colors cursor-pointer'
-    : 'flex items-center gap-2 w-full rounded-lg border border-slate-700 bg-slate-900/70 px-3 py-2 text-sm text-slate-100 hover:bg-slate-800 transition-colors cursor-pointer';
   // Helper function to format currency
   const formatCurrency = (value: string): string => {
     // Remove all non-numeric characters except decimal point
@@ -402,28 +425,11 @@ export function RepairHistoryTool({ toolId }: RepairHistoryToolProps) {
   // History records
   const [historyRecords, setHistoryRecords] = useState<HistoryRecord[]>([]);
   const [isAddingRecord, setIsAddingRecord] = useState(false);
-  const [newRecord, setNewRecord] = useState<Omit<HistoryRecord, 'id' | 'headerId'>>({
-    date: new Date().toISOString().split('T')[0],
-    itemName: '',
-    type: 'repair',
-    description: '',
-    cost: '',
-    serviceProvider: '',
-    receiptFile: null,
-    warrantyFile: null,
-    warrantyEndDate: '',
-    addWarrantyToDashboard: false,
-    submittedToInsurance: false,
-    insuranceCarrier: '',
-    claimNumber: '',
-    amountInsurancePaid: '',
-    agentContactInfo: '',
-    claimNotes: '',
-    repairPictures: [],
-    odometerReading: '',
-    manualLink: '',
-    notes: '',
-  });
+  const [newRecord, setNewRecord] = useState<RepairFormState>(emptyRepairForm());
+  const [pendingAttachments, setPendingAttachments] = useState<AttachmentItem[]>([]);
+  const [attachmentModal, setAttachmentModal] = useState<null | 'add' | string>(null);
+  const [attachmentBusy, setAttachmentBusy] = useState(false);
+  const [viewPreview, setViewPreview] = useState<AttachmentItem | null>(null);
   
   // Edit record
   const [editingRecordId, setEditingRecordId] = useState<string | null>(null);
@@ -458,14 +464,6 @@ export function RepairHistoryTool({ toolId }: RepairHistoryToolProps) {
   // Export
   const [showExportPopup, setShowExportPopup] = useState(false);
   
-  // File input refs
-  const receiptFileInputRef = useRef<HTMLInputElement>(null);
-  const warrantyFileInputRef = useRef<HTMLInputElement>(null);
-  const repairPicturesInputRef = useRef<HTMLInputElement>(null);
-  const editReceiptFileInputRef = useRef<HTMLInputElement>(null);
-  const editWarrantyFileInputRef = useRef<HTMLInputElement>(null);
-  const editRepairPicturesInputRef = useRef<HTMLInputElement>(null);
-
   // Load items when selected header changes
   useEffect(() => {
     if (selectedHeaderId && headers.length > 0 && toolId) {
@@ -554,6 +552,137 @@ export function RepairHistoryTool({ toolId }: RepairHistoryToolProps) {
     } catch (error) {
       console.error('Error loading all history records:', error);
       setAllRecords([]);
+    }
+  };
+
+  const revokePending = (items: AttachmentItem[]) => {
+    items.forEach((item) => {
+      if (item.url) URL.revokeObjectURL(item.url);
+    });
+  };
+
+  const uploadRepairFile = async (file: File, recordId: string) => {
+    if (!toolId) throw new Error('Tool ID is required');
+    const formData = new FormData();
+    formData.append('toolId', toolId);
+    formData.append('recordId', recordId);
+    formData.append('file', file);
+    const response = await fetch('/api/tools/repair-history/attachments', { method: 'POST', body: formData });
+    const data = await response.json().catch(() => ({}));
+    if (!response.ok) throw new Error(data.error || 'Failed to add file');
+  };
+
+  const savedAttachmentRecord =
+    attachmentModal && attachmentModal !== 'add'
+      ? [...historyRecords, ...allRecords].find((record) => record.id === attachmentModal) || null
+      : null;
+
+  const modalFiles: AttachmentItem[] =
+    attachmentModal === 'add'
+      ? pendingAttachments
+      : savedAttachmentRecord
+        ? (savedAttachmentRecord.attachments || []).map((item) => ({
+            id: item.id,
+            name: item.name,
+            size: item.size,
+            type: item.type,
+          }))
+        : [];
+
+  const fetchRepairAttachmentBlob = async (attachmentId: string, inline = false) => {
+    const query = inline ? '?inline=1' : '';
+    const response = await fetch(`/api/tools/repair-history/attachments/${attachmentId}${query}`);
+    if (!response.ok) {
+      const errorData = await response.json().catch(() => ({ error: 'Failed to open file' }));
+      throw new Error(errorData.error || 'Failed to open file');
+    }
+    return response.blob();
+  };
+
+  const handleViewAttachment = async (item: AttachmentItem) => {
+    if (item.file && item.url) {
+      if (isImageAttachment(item.type)) {
+        setViewPreview(item);
+        return;
+      }
+      if (isPdfAttachment(item.type, item.name)) {
+        window.open(item.url, '_blank', 'noopener,noreferrer');
+        return;
+      }
+      alert('This file type can’t be previewed in the browser. Use Download to save it.');
+      return;
+    }
+    try {
+      const blob = await fetchRepairAttachmentBlob(item.id, true);
+      const type = blob.type || item.type || '';
+      if (!canPreviewAttachment(type, item.name)) {
+        alert('This file type can’t be previewed in the browser. Use Download to save it.');
+        return;
+      }
+      const url = window.URL.createObjectURL(blob);
+      if (isImageAttachment(type)) {
+        setViewPreview({ ...item, type, url, size: item.size || blob.size });
+        return;
+      }
+      if (isPdfAttachment(type, item.name)) {
+        window.open(url, '_blank', 'noopener,noreferrer');
+      }
+    } catch (error) {
+      alert(error instanceof Error ? error.message : 'Failed to open file');
+    }
+  };
+
+  const handleDownloadAttachment = async (item: AttachmentItem): Promise<boolean> => {
+    if (item.file) return false;
+    try {
+      const blob = await fetchRepairAttachmentBlob(item.id);
+      const url = window.URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = url;
+      link.download = item.name || 'attachment';
+      document.body.appendChild(link);
+      link.click();
+      window.URL.revokeObjectURL(url);
+      document.body.removeChild(link);
+      return true;
+    } catch (error) {
+      alert(error instanceof Error ? error.message : 'Failed to download file');
+      return false;
+    }
+  };
+
+  const addSavedRepairFiles = async (recordId: string, files: File[]) => {
+    setAttachmentBusy(true);
+    try {
+      for (const file of files) {
+        await uploadRepairFile(file, recordId);
+      }
+      if (selectedHeaderId) await loadHistoryRecords(selectedHeaderId);
+      await loadAllHistoryRecords();
+    } catch (error) {
+      alert(error instanceof Error ? error.message : 'Failed to add file');
+    } finally {
+      setAttachmentBusy(false);
+    }
+  };
+
+  const removeSavedRepairFile = async (attachmentId: string) => {
+    if (!toolId) return;
+    setAttachmentBusy(true);
+    try {
+      const response = await fetch('/api/tools/repair-history/attachments', {
+        method: 'DELETE',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ toolId, attachmentId }),
+      });
+      const data = await response.json().catch(() => ({}));
+      if (!response.ok) throw new Error(data.error || 'Failed to remove file');
+      if (selectedHeaderId) await loadHistoryRecords(selectedHeaderId);
+      await loadAllHistoryRecords();
+    } catch (error) {
+      alert(error instanceof Error ? error.message : 'Failed to remove file');
+    } finally {
+      setAttachmentBusy(false);
     }
   };
 
@@ -795,70 +924,35 @@ export function RepairHistoryTool({ toolId }: RepairHistoryToolProps) {
       setSaveMessage({ type: 'error', text: 'Please select a header first' });
       return;
     }
+    revokePending(pendingAttachments);
+    setPendingAttachments([]);
+    setAttachmentModal(null);
+    setViewPreview(null);
+    setEditingRecordId(null);
+    setEditingRecord(null);
     setIsAddingRecord(true);
-    setNewRecord({
-      date: new Date().toISOString().split('T')[0],
-      itemName: '',
-      type: 'repair',
-      description: '',
-      cost: '',
-      serviceProvider: '',
-      receiptFile: null,
-      warrantyFile: null,
-      warrantyEndDate: '',
-      addWarrantyToDashboard: false,
-      submittedToInsurance: false,
-      insuranceCarrier: '',
-      claimNumber: '',
-      amountInsurancePaid: '',
-      agentContactInfo: '',
-      claimNotes: '',
-      repairPictures: [],
-      odometerReading: '',
-      manualLink: '',
-      notes: '',
-    });
+    setNewRecord(emptyRepairForm());
   };
 
   const cancelAddingRecord = () => {
+    revokePending(pendingAttachments);
+    setPendingAttachments([]);
+    setAttachmentModal(null);
+    setViewPreview(null);
     setIsAddingRecord(false);
-    setNewRecord({
-      date: new Date().toISOString().split('T')[0],
-      itemName: '',
-      type: 'repair',
-      description: '',
-      cost: '',
-      serviceProvider: '',
-      receiptFile: null,
-      warrantyFile: null,
-      warrantyEndDate: '',
-      addWarrantyToDashboard: false,
-      submittedToInsurance: false,
-      insuranceCarrier: '',
-      claimNumber: '',
-      amountInsurancePaid: '',
-      agentContactInfo: '',
-      claimNotes: '',
-      repairPictures: [],
-      odometerReading: '',
-      manualLink: '',
-      notes: '',
-    });
-    if (receiptFileInputRef.current) receiptFileInputRef.current.value = '';
-    if (warrantyFileInputRef.current) warrantyFileInputRef.current.value = '';
-    if (repairPicturesInputRef.current) repairPicturesInputRef.current.value = '';
+    setNewRecord(emptyRepairForm());
   };
 
   useEffect(() => {
     if (!isAddingRecord) return;
     const onKeyDown = (e: KeyboardEvent) => {
       if (e.key !== 'Escape') return;
-      if (isCreatingNewHeader || deleteConfirmHeaderId || deleteConfirmRecordId || deleteConfirmItemId) return;
+      if (attachmentModal || isCreatingNewHeader || deleteConfirmHeaderId || deleteConfirmRecordId || deleteConfirmItemId) return;
       cancelAddingRecord();
     };
     window.addEventListener('keydown', onKeyDown);
     return () => window.removeEventListener('keydown', onKeyDown);
-  }, [isAddingRecord, isCreatingNewHeader, deleteConfirmHeaderId, deleteConfirmRecordId, deleteConfirmItemId]);
+  }, [isAddingRecord, attachmentModal, isCreatingNewHeader, deleteConfirmHeaderId, deleteConfirmRecordId, deleteConfirmItemId]);
 
   const saveNewRecord = async () => {
     if (!selectedHeaderId || !toolId) return;
@@ -893,18 +987,6 @@ export function RepairHistoryTool({ toolId }: RepairHistoryToolProps) {
       formData.append('manualLink', newRecord.manualLink || '');
       formData.append('notes', newRecord.notes || '');
 
-      if (newRecord.receiptFile) {
-        formData.append('receiptFile', newRecord.receiptFile);
-      }
-      if (newRecord.warrantyFile) {
-        formData.append('warrantyFile', newRecord.warrantyFile);
-      }
-      if (newRecord.repairPictures && newRecord.repairPictures.length > 0) {
-        newRecord.repairPictures.forEach(picture => {
-          formData.append('repairPictures', picture);
-        });
-      }
-
       const response = await fetch('/api/tools/repair-history', {
         method: 'POST',
         body: formData,
@@ -912,35 +994,37 @@ export function RepairHistoryTool({ toolId }: RepairHistoryToolProps) {
 
       if (response.ok) {
         const data = await response.json();
-        // Reload records to get the new one with all data
+        const createdId = typeof data.recordId === 'string' ? data.recordId : '';
+        if (createdId && pendingAttachments.length > 0) {
+          try {
+            for (const queued of pendingAttachments) {
+              if (!queued.file) continue;
+              await uploadRepairFile(queued.file, createdId);
+            }
+          } catch (uploadError) {
+            revokePending(pendingAttachments);
+            setPendingAttachments([]);
+            setAttachmentModal(null);
+            setViewPreview(null);
+            setNewRecord(emptyRepairForm());
+            setIsAddingRecord(false);
+            await loadHistoryRecords(selectedHeaderId);
+            await loadAllHistoryRecords();
+            setSaveMessage({
+              type: 'error',
+              text: uploadError instanceof Error ? uploadError.message : 'Repair saved, but a file failed to upload.',
+            });
+            return;
+          }
+        }
         await loadHistoryRecords(selectedHeaderId);
-        
+        await loadAllHistoryRecords();
+        revokePending(pendingAttachments);
+        setPendingAttachments([]);
+        setAttachmentModal(null);
+        setViewPreview(null);
         setIsAddingRecord(false);
-        setNewRecord({
-          date: new Date().toISOString().split('T')[0],
-          itemName: '',
-          type: 'repair',
-          description: '',
-          cost: '',
-          serviceProvider: '',
-          receiptFile: null,
-          warrantyFile: null,
-          warrantyEndDate: '',
-          addWarrantyToDashboard: false,
-          submittedToInsurance: false,
-          insuranceCarrier: '',
-          claimNumber: '',
-          amountInsurancePaid: '',
-          agentContactInfo: '',
-          claimNotes: '',
-          repairPictures: [],
-          odometerReading: '',
-          manualLink: '',
-          notes: '',
-        });
-        if (receiptFileInputRef.current) receiptFileInputRef.current.value = '';
-        if (warrantyFileInputRef.current) warrantyFileInputRef.current.value = '';
-        if (repairPicturesInputRef.current) repairPicturesInputRef.current.value = '';
+        setNewRecord(emptyRepairForm());
         setSaveMessage({ type: 'success', text: 'Record added successfully!' });
         setTimeout(() => setSaveMessage(null), 3000);
       } else {
@@ -956,17 +1040,21 @@ export function RepairHistoryTool({ toolId }: RepairHistoryToolProps) {
   };
 
   const startEditingRecord = (record: HistoryRecord) => {
+    revokePending(pendingAttachments);
+    setPendingAttachments([]);
+    setAttachmentModal(null);
+    setViewPreview(null);
+    setIsAddingRecord(false);
     setEditingRecordId(record.id);
     setEditingRecord({ ...record });
     setMenuOpenHeaderId(null);
   };
 
   const cancelEditingRecord = () => {
+    setAttachmentModal(null);
+    setViewPreview(null);
     setEditingRecordId(null);
     setEditingRecord(null);
-    if (editReceiptFileInputRef.current) editReceiptFileInputRef.current.value = '';
-    if (editWarrantyFileInputRef.current) editWarrantyFileInputRef.current.value = '';
-    if (editRepairPicturesInputRef.current) editRepairPicturesInputRef.current.value = '';
   };
 
   const saveRecordEdit = async () => {
@@ -1003,18 +1091,6 @@ export function RepairHistoryTool({ toolId }: RepairHistoryToolProps) {
       formData.append('manualLink', editingRecord.manualLink || '');
       formData.append('notes', editingRecord.notes || '');
 
-      if (editingRecord.receiptFile) {
-        formData.append('receiptFile', editingRecord.receiptFile);
-      }
-      if (editingRecord.warrantyFile) {
-        formData.append('warrantyFile', editingRecord.warrantyFile);
-      }
-      if (editingRecord.repairPictures && editingRecord.repairPictures.length > 0) {
-        editingRecord.repairPictures.forEach(picture => {
-          formData.append('repairPictures', picture);
-        });
-      }
-
       const response = await fetch('/api/tools/repair-history', {
         method: 'POST',
         body: formData,
@@ -1023,12 +1099,11 @@ export function RepairHistoryTool({ toolId }: RepairHistoryToolProps) {
       if (response.ok) {
         // Reload records to get updated data
         await loadHistoryRecords(editingRecord.headerId);
-        
+        await loadAllHistoryRecords();
+        setAttachmentModal(null);
+        setViewPreview(null);
         setEditingRecordId(null);
         setEditingRecord(null);
-        if (editReceiptFileInputRef.current) editReceiptFileInputRef.current.value = '';
-        if (editWarrantyFileInputRef.current) editWarrantyFileInputRef.current.value = '';
-        if (editRepairPicturesInputRef.current) editRepairPicturesInputRef.current.value = '';
         setSaveMessage({ type: 'success', text: 'Record updated successfully!' });
         setTimeout(() => setSaveMessage(null), 3000);
       } else {
@@ -1732,7 +1807,7 @@ export function RepairHistoryTool({ toolId }: RepairHistoryToolProps) {
               {/* Add Record Form */}
               {isAddingRecord && (
                 <div className={cardClass}>
-                  <div className="flex items-center justify-between mb-4">
+                  <div className="flex items-center justify-between mb-4 gap-3">
                     <h3 className={sectionTitleClass}>Add New Repair History Item</h3>
                     <div className="flex items-center gap-4">
                       <label className="flex items-center gap-2">
@@ -1757,6 +1832,10 @@ export function RepairHistoryTool({ toolId }: RepairHistoryToolProps) {
                         />
                         <span className="text-sm text-slate-200">Replace</span>
                       </label>
+                      <AttachmentButton
+                        count={pendingAttachments.length}
+                        onClick={() => setAttachmentModal('add')}
+                      />
                     </div>
                   </div>
                   <div className="space-y-4">
@@ -1967,58 +2046,6 @@ export function RepairHistoryTool({ toolId }: RepairHistoryToolProps) {
                     )}
                     <div>
                       <label className="block text-xs font-medium text-slate-300 mb-1.5">
-                        Receipt
-                      </label>
-                      <div className="relative">
-                        <input
-                          ref={receiptFileInputRef}
-                          type="file"
-                          id="receipt-file-input"
-                          onChange={(e) => setNewRecord({ ...newRecord, receiptFile: e.target.files?.[0] || null })}
-                          className="absolute inset-0 w-full h-full opacity-0 cursor-pointer"
-                          accept="image/*,.pdf"
-                        />
-                        <label
-                          htmlFor="receipt-file-input"
-                          className={filePickerLabelClass}
-                        >
-                          <svg className="w-5 h-5 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
-                          </svg>
-                          <span className={isLight ? 'text-slate-700' : 'text-slate-300'}>
-                            {newRecord.receiptFile ? newRecord.receiptFile.name : 'Select file'}
-                          </span>
-                        </label>
-                      </div>
-                    </div>
-                    <div>
-                      <label className="block text-xs font-medium text-slate-300 mb-1.5">
-                        Warranty
-                      </label>
-                      <div className="relative">
-                        <input
-                          ref={warrantyFileInputRef}
-                          type="file"
-                          id="warranty-file-input"
-                          onChange={(e) => setNewRecord({ ...newRecord, warrantyFile: e.target.files?.[0] || null })}
-                          className="absolute inset-0 w-full h-full opacity-0 cursor-pointer"
-                          accept="image/*,.pdf"
-                        />
-                        <label
-                          htmlFor="warranty-file-input"
-                          className={filePickerLabelClass}
-                        >
-                          <svg className="w-5 h-5 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
-                          </svg>
-                          <span className={isLight ? 'text-slate-700' : 'text-slate-300'}>
-                            {newRecord.warrantyFile ? newRecord.warrantyFile.name : 'Select file'}
-                          </span>
-                        </label>
-                      </div>
-                    </div>
-                    <div>
-                      <label className="block text-xs font-medium text-slate-300 mb-1.5">
                         Warranty End Date
                       </label>
                       <input
@@ -2046,62 +2073,6 @@ export function RepairHistoryTool({ toolId }: RepairHistoryToolProps) {
                         </label>
                       </div>
                     )}
-                    <div>
-                      <label className="block text-xs font-medium text-slate-300 mb-1.5">
-                        Repair Pictures
-                      </label>
-                      <div className="relative">
-                        <input
-                          ref={repairPicturesInputRef}
-                          type="file"
-                          id="repair-pictures-input"
-                          multiple
-                          accept="image/*"
-                          onChange={(e) => {
-                            const files = Array.from(e.target.files || []);
-                            setNewRecord({ ...newRecord, repairPictures: [...newRecord.repairPictures, ...files] });
-                          }}
-                          className="absolute inset-0 w-full h-full opacity-0 cursor-pointer"
-                        />
-                        <label
-                          htmlFor="repair-pictures-input"
-                          className={filePickerLabelClass}
-                        >
-                          <svg className="w-5 h-5 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
-                          </svg>
-                          <span className={isLight ? 'text-slate-700' : 'text-slate-300'}>
-                            {newRecord.repairPictures.length > 0 
-                              ? `${newRecord.repairPictures.length} image${newRecord.repairPictures.length > 1 ? 's' : ''} selected`
-                              : 'Select images'}
-                          </span>
-                        </label>
-                      </div>
-                      {newRecord.repairPictures.length > 0 && (
-                        <div className="mt-4 grid grid-cols-2 md:grid-cols-3 gap-4">
-                          {newRecord.repairPictures.map((file, index) => (
-                            <div key={index} className="relative group">
-                              <img
-                                src={URL.createObjectURL(file)}
-                                alt={`Repair picture ${index + 1}`}
-                                className="w-full h-32 object-cover rounded-lg border border-slate-700"
-                              />
-                              <button
-                                type="button"
-                                onClick={() => {
-                                  const newPictures = newRecord.repairPictures.filter((_, i) => i !== index);
-                                  setNewRecord({ ...newRecord, repairPictures: newPictures });
-                                }}
-                                className="absolute top-2 right-2 bg-red-500/80 hover:bg-red-500 text-white rounded-full w-6 h-6 flex items-center justify-center text-xs opacity-0 group-hover:opacity-100 transition-opacity"
-                                title="Remove picture"
-                              >
-                                ×
-                              </button>
-                            </div>
-                          ))}
-                        </div>
-                      )}
-                    </div>
                     {selectedHeader?.categoryType === 'Home' && (
                       <div>
                         <label className="block text-xs font-medium text-slate-300 mb-1.5">
@@ -2156,7 +2127,18 @@ export function RepairHistoryTool({ toolId }: RepairHistoryToolProps) {
                       editingRecordId === record.id && editingRecord ? (
                         // Edit mode
                         <div key={record.id} className={nestedCardClass}>
-                          <h3 className={`${sectionTitleClass} mb-4`}>Edit Record</h3>
+                          <div className="mb-4 flex items-center justify-between gap-3">
+                            <h3 className={`${sectionTitleClass} mb-0`}>Edit Record</h3>
+                            <AttachmentButton
+                              count={
+                                historyRecords.find((entry) => entry.id === record.id)?.attachments?.length
+                                || allRecords.find((entry) => entry.id === record.id)?.attachments?.length
+                                || record.attachments?.length
+                                || 0
+                              }
+                              onClick={() => setAttachmentModal(record.id)}
+                            />
+                          </div>
                           <div className="space-y-4">
                             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                               <div>
@@ -2351,68 +2333,6 @@ export function RepairHistoryTool({ toolId }: RepairHistoryToolProps) {
                             </div>
                             <div>
                               <label className="block text-xs font-medium text-slate-300 mb-1.5">
-                                Receipt
-                              </label>
-                              {editingRecord.receiptFileUrl && (
-                                <div className={isLight ? 'mb-2 text-sm text-slate-600' : 'mb-2 text-sm text-slate-400'}>
-                                  Current: {editingRecord.receiptFileName || 'Receipt file'}
-                                </div>
-                              )}
-                              <div className="relative">
-                                <input
-                                  ref={editReceiptFileInputRef}
-                                  type="file"
-                                  id="edit-receipt-file-input"
-                                  onChange={(e) => setEditingRecord({ ...editingRecord, receiptFile: e.target.files?.[0] || null })}
-                                  className="absolute inset-0 w-full h-full opacity-0 cursor-pointer"
-                                  accept="image/*,.pdf"
-                                />
-                                <label
-                                  htmlFor="edit-receipt-file-input"
-                                  className={filePickerLabelClass}
-                                >
-                                  <svg className="w-5 h-5 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15.172 7l-6.586 6.586a2 2 0 102.828 2.828l6.414-6.586a4 4 0 00-5.656-5.656l-6.415 6.585a6 6 0 108.486 8.486L20.5 13" />
-                                  </svg>
-                                  <span className="text-slate-300">
-                                    {editingRecord.receiptFile ? editingRecord.receiptFile.name : 'Select file'}
-                                  </span>
-                                </label>
-                              </div>
-                            </div>
-                            <div>
-                              <label className="block text-xs font-medium text-slate-300 mb-1.5">
-                                Warranty
-                              </label>
-                              {editingRecord.warrantyFileUrl && (
-                                <div className={isLight ? 'mb-2 text-sm text-slate-600' : 'mb-2 text-sm text-slate-400'}>
-                                  Current: {editingRecord.warrantyFileName || 'Warranty file'}
-                                </div>
-                              )}
-                              <div className="relative">
-                                <input
-                                  ref={editWarrantyFileInputRef}
-                                  type="file"
-                                  id="edit-warranty-file-input"
-                                  onChange={(e) => setEditingRecord({ ...editingRecord, warrantyFile: e.target.files?.[0] || null })}
-                                  className="absolute inset-0 w-full h-full opacity-0 cursor-pointer"
-                                  accept="image/*,.pdf"
-                                />
-                                <label
-                                  htmlFor="edit-warranty-file-input"
-                                  className={filePickerLabelClass}
-                                >
-                                  <svg className="w-5 h-5 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15.172 7l-6.586 6.586a2 2 0 102.828 2.828l6.414-6.586a4 4 0 00-5.656-5.656l-6.415 6.585a6 6 0 108.486 8.486L20.5 13" />
-                                  </svg>
-                                  <span className="text-slate-300">
-                                    {editingRecord.warrantyFile ? editingRecord.warrantyFile.name : 'Select file'}
-                                  </span>
-                                </label>
-                              </div>
-                            </div>
-                            <div>
-                              <label className="block text-xs font-medium text-slate-300 mb-1.5">
                                 Warranty End Date
                               </label>
                               <input
@@ -2440,85 +2360,6 @@ export function RepairHistoryTool({ toolId }: RepairHistoryToolProps) {
                                 </label>
                               </div>
                             )}
-                            <div>
-                              <label className="block text-xs font-medium text-slate-300 mb-1.5">
-                                Repair Pictures
-                              </label>
-                              <div className="relative">
-                                <input
-                                  ref={editRepairPicturesInputRef}
-                                  type="file"
-                                  id="edit-repair-pictures-input"
-                                  multiple
-                                  accept="image/*"
-                                  onChange={(e) => {
-                                    if (!editingRecord) return;
-                                    const files = Array.from(e.target.files || []);
-                                    setEditingRecord({ ...editingRecord, repairPictures: [...(editingRecord.repairPictures || []), ...files] });
-                                  }}
-                                  className="absolute inset-0 w-full h-full opacity-0 cursor-pointer"
-                                />
-                                <label
-                                  htmlFor="edit-repair-pictures-input"
-                                  className={filePickerLabelClass}
-                                >
-                                  <svg className="w-5 h-5 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
-                                  </svg>
-                                  <span className="text-slate-300">
-                                    {editingRecord && ((editingRecord.repairPictures?.length || 0) + (editingRecord.repairPictureUrls?.length || 0) > 0)
-                                      ? `${(editingRecord.repairPictures?.length || 0) + (editingRecord.repairPictureUrls?.length || 0)} image${((editingRecord.repairPictures?.length || 0) + (editingRecord.repairPictureUrls?.length || 0)) > 1 ? 's' : ''} selected`
-                                      : 'Select images'}
-                                  </span>
-                                </label>
-                              </div>
-                              {editingRecord && ((editingRecord.repairPictures?.length || 0) > 0 || (editingRecord.repairPictureUrls?.length || 0) > 0) && (
-                                <div className="mt-4 grid grid-cols-2 md:grid-cols-3 gap-4">
-                                  {editingRecord.repairPictureUrls?.map((url, index) => (
-                                    <div key={`url-${index}`} className="relative group">
-                                      <img
-                                        src={url}
-                                        alt={`Repair picture ${index + 1}`}
-                                        className="w-full h-32 object-cover rounded-lg border border-slate-700"
-                                      />
-                                      <button
-                                        type="button"
-                                        onClick={() => {
-                                          if (!editingRecord) return;
-                                          const newUrls = editingRecord.repairPictureUrls?.filter((_, i) => i !== index) || [];
-                                          setEditingRecord({ ...editingRecord, repairPictureUrls: newUrls });
-                                        }}
-                                        className="absolute top-2 right-2 bg-red-500/80 hover:bg-red-500 text-white rounded-full w-6 h-6 flex items-center justify-center text-xs opacity-0 group-hover:opacity-100 transition-opacity"
-                                        title="Remove picture"
-                                      >
-                                        ×
-                                      </button>
-                                    </div>
-                                  ))}
-                                  {editingRecord.repairPictures?.map((file, index) => (
-                                    <div key={`file-${index}`} className="relative group">
-                                      <img
-                                        src={URL.createObjectURL(file)}
-                                        alt={`Repair picture ${index + 1}`}
-                                        className="w-full h-32 object-cover rounded-lg border border-slate-700"
-                                      />
-                                      <button
-                                        type="button"
-                                        onClick={() => {
-                                          if (!editingRecord) return;
-                                          const newPictures = editingRecord.repairPictures?.filter((_, i) => i !== index) || [];
-                                          setEditingRecord({ ...editingRecord, repairPictures: newPictures });
-                                        }}
-                                        className="absolute top-2 right-2 bg-red-500/80 hover:bg-red-500 text-white rounded-full w-6 h-6 flex items-center justify-center text-xs opacity-0 group-hover:opacity-100 transition-opacity"
-                                        title="Remove picture"
-                                      >
-                                        ×
-                                      </button>
-                                    </div>
-                                  ))}
-                                </div>
-                              )}
-                            </div>
                             <div>
                               <label className="block text-xs font-medium text-slate-300 mb-1.5">
                                 Online User Manual
@@ -2613,7 +2454,11 @@ export function RepairHistoryTool({ toolId }: RepairHistoryToolProps) {
                                 </>
                               )}
                             </div>
-                            <div className="flex items-center gap-1.5">
+                            <div className="flex items-center gap-1.5" onClick={(e) => e.stopPropagation()}>
+                              <AttachmentButton
+                                count={record.attachments?.length || 0}
+                                onClick={() => setAttachmentModal(record.id)}
+                              />
                               <button
                                 type="button"
                                 onClick={(e) => {
@@ -2650,32 +2495,6 @@ export function RepairHistoryTool({ toolId }: RepairHistoryToolProps) {
                             </div>
                           )}
                           <div className="flex flex-wrap gap-4 text-sm">
-                            {record.receiptFileUrl && (
-                              <a
-                                href={record.receiptFileUrl}
-                                target="_blank"
-                                rel="noopener noreferrer"
-                                className="text-emerald-400 hover:text-emerald-300 flex items-center gap-1"
-                              >
-                                <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15.172 7l-6.586 6.586a2 2 0 102.828 2.828l6.414-6.586a4 4 0 00-5.656-5.656l-6.415 6.585a6 6 0 108.486 8.486L20.5 13" />
-                                </svg>
-                                Receipt
-                              </a>
-                            )}
-                            {record.warrantyFileUrl && (
-                              <a
-                                href={record.warrantyFileUrl}
-                                target="_blank"
-                                rel="noopener noreferrer"
-                                className="text-emerald-400 hover:text-emerald-300 flex items-center gap-1"
-                              >
-                                <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
-                                </svg>
-                                Warranty
-                              </a>
-                            )}
                             {record.manualLink && (
                               <a
                                 href={record.manualLink}
@@ -3065,6 +2884,45 @@ export function RepairHistoryTool({ toolId }: RepairHistoryToolProps) {
           </div>
         </div>
       )}
+
+      <AttachmentModal
+        open={attachmentModal !== null}
+        onClose={() => {
+          setAttachmentModal(null);
+          setViewPreview(null);
+        }}
+        previewItem={viewPreview}
+        title={
+          attachmentModal === 'add'
+            ? newRecord.itemName.trim() || 'New repair'
+            : savedAttachmentRecord?.itemName || 'Repair'
+        }
+        files={modalFiles}
+        busy={attachmentBusy}
+        onAdd={(incoming) => {
+          if (attachmentModal === 'add') {
+            setPendingAttachments((prev) => [...prev, ...incoming.map(createPendingAttachment)]);
+            return;
+          }
+          if (attachmentModal) {
+            void addSavedRepairFiles(attachmentModal, incoming);
+          }
+        }}
+        onRemove={(id) => {
+          if (attachmentModal === 'add') {
+            setPendingAttachments((prev) => {
+              const next = prev.filter((item) => item.id !== id);
+              const removed = prev.find((item) => item.id === id);
+              if (removed?.url) URL.revokeObjectURL(removed.url);
+              return next;
+            });
+            return;
+          }
+          void removeSavedRepairFile(id);
+        }}
+        onView={handleViewAttachment}
+        onDownload={attachmentModal === 'add' ? undefined : handleDownloadAttachment}
+      />
     </div>
   );
 }

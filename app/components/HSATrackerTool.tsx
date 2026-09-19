@@ -1026,8 +1026,8 @@ export function HSATrackerTool({ toolId }: HSATrackerToolProps) {
     }
   };
 
-  const handleDownloadAttachment = async (item: AttachmentItem) => {
-    if (item.file) return;
+  const handleDownloadAttachment = async (item: AttachmentItem): Promise<boolean> => {
+    if (item.file) return false;
     try {
       const blob = await fetchHsaAttachmentBlob(item.id);
       const url = window.URL.createObjectURL(blob);
@@ -1038,8 +1038,10 @@ export function HSATrackerTool({ toolId }: HSATrackerToolProps) {
       link.click();
       window.URL.revokeObjectURL(url);
       document.body.removeChild(link);
+      return true;
     } catch (error) {
       showMessage('error', error instanceof Error ? error.message : 'Failed to download file');
+      return false;
     }
   };
 

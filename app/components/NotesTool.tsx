@@ -1211,9 +1211,9 @@ export function NotesTool({ toolId }: NotesToolProps) {
     }
   };
 
-  const handleDownloadAttachment = async (item: AttachmentItem) => {
-    if (item.file) return;
-    if (!savedAttachmentNote) return;
+  const handleDownloadAttachment = async (item: AttachmentItem): Promise<boolean> => {
+    if (item.file) return false;
+    if (!savedAttachmentNote) return false;
     const password = noteUnlocks[savedAttachmentNote.id];
     try {
       const blob = await fetchNoteAttachmentBlob(item.id, password);
@@ -1225,8 +1225,10 @@ export function NotesTool({ toolId }: NotesToolProps) {
       link.click();
       window.URL.revokeObjectURL(url);
       document.body.removeChild(link);
+      return true;
     } catch (error) {
       alert(error instanceof Error ? error.message : 'Failed to download file');
+      return false;
     }
   };
 

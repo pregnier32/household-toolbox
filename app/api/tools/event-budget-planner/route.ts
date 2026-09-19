@@ -1,6 +1,12 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getSession } from '@/lib/session';
 import { supabaseServer } from '@/lib/supabaseServer';
+import {
+  attachmentsByEventIds,
+  attachmentsByExpenseIds,
+  deleteEventStorageFiles,
+  deleteExpenseStorageFiles,
+} from '@/lib/ebp-storage';
 
 type DbNamed = {
   id: string;
@@ -320,6 +326,10 @@ async function fetchAllData(userId: string, toolId: string) {
   }
 
   const splits = await fetchExpenseSplits(expenses.map((expense) => expense.id));
+  const [eventAttachmentMap, expenseAttachmentMap] = await Promise.all([
+    attachmentsByEventIds(eventIds, userId),
+    attachmentsByExpenseIds(expenses.map((expense) => expense.id), userId),
+  ]);
 
   const mappedEvents = events.map((event) => ({
     id: event.id,
@@ -330,6 +340,7 @@ async function fetchAllData(userId: string, toolId: string) {
     isActive: event.is_active !== false,
     dateAdded: event.date_added || event.created_at?.split('T')[0] || todayIso(),
     dateInactivated: event.date_inactivated || undefined,
+    attachments: eventAttachmentMap[event.id] || [],
     categoryBudgets: budgets
       .filter((b) => b.event_id === event.id)
       .map((b) => ({
@@ -338,7 +349,10 @@ async function fetchAllData(userId: string, toolId: string) {
       })),
     expenses: expenses
       .filter((e) => e.event_id === event.id)
-      .map((e) => mapExpense(e, splits.filter((split) => split.expense_id === e.id))),
+      .map((e) => ({
+        ...mapExpense(e, splits.filter((split) => split.expense_id === e.id)),
+        attachments: expenseAttachmentMap[e.id] || [],
+      })),
   }));
 
   return {
@@ -531,6 +545,8 @@ export async function POST(request: NextRequest) {
         return NextResponse.json({ error: 'Event ID is required' }, { status: 400 });
       }
 
+      await deleteEventStorageFiles(eventId, user.id);
+
       const { error } = await supabaseServer
         .from('tools_ebp_events')
         .delete()
@@ -708,6 +724,12 @@ export async function POST(request: NextRequest) {
             { status: 500 }
           );
         }
+
+        return NextResponse.json({
+          success: true,
+          expenseId: created.id,
+          ...(await fetchAllData(user.id, toolId)),
+        });
       } else {
         if (!expenseId) {
           return NextResponse.json({ error: 'Expense ID is required' }, { status: 400 });
@@ -752,6 +774,8 @@ export async function POST(request: NextRequest) {
       if (!(await verifyEventOwnership(eventId, user.id, toolId))) {
         return NextResponse.json({ error: 'Event not found' }, { status: 404 });
       }
+
+      await deleteExpenseStorageFiles(expenseId, user.id);
 
       const { error } = await supabaseServer
         .from('tools_ebp_expenses')

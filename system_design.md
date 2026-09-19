@@ -1228,7 +1228,7 @@ Use these; do not invent a per-tool upload UI.
 
 - `open`, `onClose`, `title` (shown as `Attachments · {title}`)
 - `files` (`AttachmentItem[]`), `onAdd`, `onRemove`
-- `onView` / `onDownload` when the tool owns those actions (signed URLs, password, inline vs attachment)
+- `onView` / `onDownload` when the tool owns those actions (signed URLs, password, inline vs attachment). `onDownload` must return `true` only after a file was actually saved, so the modal can show the in-modal download notice. Return `false` (or throw) if a password prompt opened or the download failed.
 - `previewItem` to open an in-modal image preview after a successful View
 - `maxFiles` — omit for unlimited; set `1` for a single-file record (Important Documents)
 - `busy` while an upload, replace, or remove is in flight
@@ -1250,6 +1250,7 @@ On add/edit forms, place the paperclip near the record title or the other header
 - **Empty state:** “No attachments yet.” plus the drop zone.
 - **List:** File name, size, and “queued until save” for files chosen before the parent record is created.
 - **Actions per file:** View (when previewable or the tool supplies `onView`), Download (saved files only), Remove.
+- **Download confirmation:** Stay inside the Attachment modal. After a successful download, show a green in-modal line: “File downloaded.” Never use `alert()`, `confirm()`, or another browser dialog for download success. Chrome’s download chip is the browser’s own UI and cannot be suppressed.
 - **Add / replace:** Dashed drop zone + Browse. Copy: “Images, PDFs, Word, and Excel up to 10 MB each.”
 - **Single-file tools (`maxFiles={1}`):** Drop/browse replaces the current file. Button label becomes “Replace file”.
 - **Footer:** “Storage used: {used} of {limit}” from `GET /api/account/storage`.
@@ -1277,6 +1278,8 @@ Do not treat View as a disguised download.
 | Word / Excel | Hide View or show that preview is unavailable | Force a file download |
 
 Pending (unsaved) files may preview from a local `URL.createObjectURL`. Saved files must go through the tool’s authenticated download/view route — never a raw public storage URL in the browser.
+
+A successful Download must not pop a site `alert` (“Document downloaded successfully.” or similar). The Attachment modal owns that confirmation (`File downloaded.`) when `onDownload` returns `true`.
 
 ### Create vs saved records
 
@@ -1334,7 +1337,7 @@ If an add would exceed the limit, reject it with a clear message (“would excee
 2. Add `AttachmentButton` on add, edit, active, and history surfaces.
 3. Open `AttachmentModal` with that record’s files. Set `maxFiles={1}` only when the data model is one file per record.
 4. Queue files on create; persist immediately on saved records.
-5. Wire View/Download through the tool’s authenticated route (inline vs attachment).
+5. Wire View/Download through the tool’s authenticated route (inline vs attachment). Download handlers return `true` on success so the shared modal can show “File downloaded.” Do not add a per-tool success `alert`.
 6. Call the shared quota check on upload and recount after add/delete.
 7. If the record can be password-protected, gate view/download/remove/replace in both UI and API, with the password overlay at `z-[70]`.
 8. Register the bucket in `STORAGE_TOOL_BUCKETS` and in account-deletion cleanup.
@@ -1343,6 +1346,7 @@ If an add would exceed the limit, reject it with a clear message (“would excee
 
 - Do not add a download or view icon beside the paperclip on cards or rows.
 - Do not use the older **File Input** pattern for files that belong to a tool record.
+- Do not call `alert()` (or any browser dialog) after a successful Download. Confirm inside the Attachment modal only.
 - Do not let a password or confirm dialog open behind the Attachment modal.
 - Do not allow Remove or Replace on a protected file without a verified password (client and server).
 - Do not preview Word/Excel in the browser; download them.
@@ -1373,6 +1377,38 @@ Trip files only. Do not attach files to lodging or journal notes until those chi
 - **Trip files** (`tools_tl_trip_attachments`, bucket `travel-log`, path `{userId}/{tripId}/...`): multiple optional tickets, boarding passes, photos, and receipts. Paperclip on Add trip, Edit trip, and trip cards.
 - The “Trip History” heading is the trip list, not an archive. Files stay editable.
 - No second “Upload receipts” control under Budget. No paperclip on lodging/journal modals or Export.
+
+### Repair History
+
+Repair-record files only. Flatten receipt, warranty, and pictures into one store. Do not attach files to Items or categories.
+
+- **Repair files** (`tools_rh_record_attachments`, bucket `repair-history`, path `{userId}/{recordId}/...`): multiple optional receipts, warranties, and photos. Paperclip on Add repair, Edit repair, and repair cards.
+- The **Repairs** tab is the live list, not Notes-style History. Files stay editable.
+- Keep warranty end date, dashboard pin, insurance fields, and the Home manual URL on the form. Remove Receipt / Warranty / Pictures file pickers and card-level Receipt/Warranty links.
+- Insurance uses the same repair file store. No second upload UI.
+- No paperclip on Items, categories, or Export.
+
+### Event Budget Planner
+
+Event files and expense files. Do not attach files to vendors, categories, types, category-budget rows, or vendor-split rows (splits are deleted and re-inserted on every expense save).
+
+- **Event files** (`tools_ebp_event_attachments`, bucket `event-budget-planner`, path `{userId}/events/{eventId}/...`): invitations, contracts, and other event-level docs. Paperclip on Add Event, Edit Event, active cards, and History cards.
+- **Expense files** (`tools_ebp_expense_attachments`, path `{userId}/expenses/{expenseId}/...`): receipts and invoices for one expense. Paperclip on Add Expense, Edit Expense, and expense rows inside Edit Event. Attach to the expense, not to a split.
+- History is real (`is_active = false`). History cards show the event paperclip as View/Download only. Expense files stay on the expense but are not reachable until Reactivate. The API must reject add/remove on inactive events.
+- Edit Event is the detail surface. There is no separate event page.
+- Queue files on create; persist immediately on saved records. `addExpense` returns `expenseId` so queued uploads can run after Save Expense.
+- Render `AttachmentModal` after the expense modal so it stacks on top (both use `z-50`).
+- No paperclip on Vendors, Categories, Types, category-budget rows, Calendar, or export.
+
+### Meal Planner
+
+Meal files only. Do not attach files to weekly plans, day-slot assignments, items, meal types, or the grocery modal.
+
+- **Meal files** (`tools_mp_meal_attachments`, bucket `meal-planner`, path `{userId}/{mealId}/...`): multiple optional recipe photos and PDFs. Paperclip on Add Meal, Edit Meal, and meal rows (active and Inactive).
+- Inactive is a hide-from-picker flag, not Notes-style History. Files stay editable. Plan History still has Edit and has no paperclip in this pass.
+- Plan assignments are deleted and re-inserted on every plan save, so do not attach files to a day slot.
+- Queue files on create; persist immediately on saved meals.
+- No paperclip on plans, day cards, meal picker, grocery/shopping modal, Items, Meal Types, or Print.
 
 ---
 
@@ -1613,6 +1649,8 @@ USING (
 - `important-documents` - Stores important documents (warranties, policies, records) (`supabase/archive/create-important-documents-storage-bucket.sql`)
 - `healthcare-appt-history` - Healthcare appointment documents (`supabase/archive/create-healthcare-appts-history-storage-bucket.sql`)
 - `hsa-tracker` - HSA expense receipts (`supabase/ADD_hsa_attachments.sql`)
+- `event-budget-planner` - Event and expense files (`supabase/ADD_event_budget_planner_attachments.sql`)
+- `meal-planner` - Meal recipe files (`supabase/ADD_meal_planner_attachments.sql`)
 
 **Why These Policies Matter**:
 - **Security**: Ensures users can only access files in their own folder (`{userId}/...`)

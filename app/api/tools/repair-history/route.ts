@@ -1,10 +1,12 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getSession } from '@/lib/session';
 import { supabaseServer } from '@/lib/supabaseServer';
-import { assertCanStoreBytes, isStorageLimitError, refreshUserStorageUsage } from '@/lib/user-storage';
-
-// Constants
-const MAX_FILE_SIZE = 10 * 1024 * 1024; // 10MB in bytes
+import {
+  attachmentsByRecordIds,
+  deleteHeaderRecordStorageFiles,
+  deleteRecordStorageFiles,
+  type RepairHistoryAttachment,
+} from '@/lib/repair-history-storage';
 
 function toStockHeaderName(name: string): string | null {
   if (name === 'Auto2') return null;
@@ -222,60 +224,15 @@ async function createDashboardItem(
   }
 }
 
-// Helper function to upload file to Supabase Storage
-async function uploadFile(
-  file: File,
-  userId: string,
-  bucketName: string,
-  folder: string
-): Promise<{ url: string; fileName: string; fileSize: number; fileType: string } | null> {
-  try {
-    if (file.size > MAX_FILE_SIZE) {
-      throw new Error(`File size cannot exceed ${MAX_FILE_SIZE / 1024 / 1024}MB`);
-    }
-
-    await assertCanStoreBytes(userId, file.size);
-
-    const sanitizedFileName = file.name.replace(/[^a-zA-Z0-9.-]/g, '_');
-    const storageFileName = `${folder}/${userId}/${Date.now()}-${sanitizedFileName}`;
-    
-    const arrayBuffer = await file.arrayBuffer();
-    const buffer = Buffer.from(arrayBuffer);
-    
-    const { data: uploadData, error: uploadError } = await supabaseServer
-      .storage
-      .from(bucketName)
-      .upload(storageFileName, buffer, {
-        contentType: file.type,
-        upsert: false
-      });
-    
-    if (uploadError) {
-      console.error('Error uploading file:', uploadError);
-      // Check if bucket doesn't exist
-      if (uploadError.message?.includes('Bucket not found') || uploadError.message?.includes('does not exist')) {
-        throw new Error(`Storage bucket '${bucketName}' does not exist. Please create it in Supabase Storage.`);
-      }
-      throw new Error(`Failed to upload file: ${uploadError.message}`);
-    }
-    
-    const { data: urlData } = supabaseServer
-      .storage
-      .from(bucketName)
-      .getPublicUrl(storageFileName);
-    
-    await refreshUserStorageUsage(userId);
-
-    return {
-      url: urlData.publicUrl,
-      fileName: file.name,
-      fileSize: file.size,
-      fileType: file.type
-    };
-  } catch (error: any) {
-    console.error('Error in uploadFile:', error);
-    throw error; // Re-throw to be caught by the caller
-  }
+async function withRecordAttachments<T extends { id: string }>(
+  records: T[],
+  userId: string
+): Promise<Array<T & { attachments: RepairHistoryAttachment[] }>> {
+  const map = await attachmentsByRecordIds(records.map((record) => record.id), userId);
+  return records.map((record) => ({
+    ...record,
+    attachments: map[record.id] || [],
+  }));
 }
 
 // GET - Fetch headers, records, and items
@@ -357,27 +314,10 @@ export async function GET(request: NextRequest) {
           return NextResponse.json({ error: 'Failed to fetch record' }, { status: 500 });
         }
 
-        // Fetch repair pictures for single record
-        const { data: pictures } = await supabaseServer
-          .from('tools_rh_repair_pictures')
-          .select('*')
-          .eq('record_id', recordId)
-          .order('display_order', { ascending: true });
-
-        const recordWithPictures = {
-          ...record,
-          repairPictures: pictures?.map(pic => ({
-            id: pic.id,
-            fileUrl: pic.file_url,
-            fileName: pic.file_name,
-            fileSize: pic.file_size,
-            fileType: pic.file_type,
-            displayOrder: pic.display_order
-          })) || []
-        };
+        const [recordWithAttachments] = await withRecordAttachments([record], user.id);
 
         if (resource === 'records') {
-          return NextResponse.json({ record: recordWithPictures });
+          return NextResponse.json({ record: recordWithAttachments });
         }
       } else {
         // Fetch multiple records
@@ -400,37 +340,11 @@ export async function GET(request: NextRequest) {
           return NextResponse.json({ error: 'Failed to fetch records' }, { status: 500 });
         }
 
-        // Fetch repair pictures for records
         if (records && Array.isArray(records)) {
-          const recordIds = records.map(r => r.id);
-          const { data: pictures } = await supabaseServer
-            .from('tools_rh_repair_pictures')
-            .select('*')
-            .in('record_id', recordIds)
-            .order('display_order', { ascending: true });
-
-          const picturesMap: Record<string, any[]> = {};
-          pictures?.forEach(pic => {
-            if (!picturesMap[pic.record_id]) {
-              picturesMap[pic.record_id] = [];
-            }
-            picturesMap[pic.record_id].push({
-              id: pic.id,
-              fileUrl: pic.file_url,
-              fileName: pic.file_name,
-              fileSize: pic.file_size,
-              fileType: pic.file_type,
-              displayOrder: pic.display_order
-            });
-          });
-
-          const recordsWithPictures = records.map(record => ({
-            ...record,
-            repairPictures: picturesMap[record.id] || []
-          }));
+          const recordsWithAttachments = await withRecordAttachments(records, user.id);
 
           if (resource === 'records') {
-            return NextResponse.json({ records: recordsWithPictures });
+            return NextResponse.json({ records: recordsWithAttachments });
           }
         }
       }
@@ -515,7 +429,7 @@ export async function GET(request: NextRequest) {
 
     return NextResponse.json({
       headers: headers || [],
-      records: records || [],
+      records: await withRecordAttachments(records || [], user.id),
       items: items || []
     });
   } catch (error: any) {
@@ -553,6 +467,7 @@ export async function POST(request: NextRequest) {
       const categoryType = formData.get('categoryType') as 'Home' | 'Auto';
 
       if (action === 'delete' && headerId) {
+        await deleteHeaderRecordStorageFiles(headerId, user.id);
         const { error } = await supabaseServer
           .from('tools_rh_headers')
           .delete()
@@ -655,45 +570,8 @@ export async function POST(request: NextRequest) {
       const manualLink = formData.get('manualLink') as string;
       const notes = formData.get('notes') as string;
 
-      // Handle file uploads
-      const receiptFile = formData.get('receiptFile') as File | null;
-      const warrantyFile = formData.get('warrantyFile') as File | null;
-      const repairPictures = formData.getAll('repairPictures') as File[];
-
-      let receiptFileUrl: string | null = null;
-      let receiptFileName: string | null = null;
-      let warrantyFileUrl: string | null = null;
-      let warrantyFileName: string | null = null;
-
-      // Upload receipt if provided
-      if (receiptFile && receiptFile.size > 0) {
-        try {
-          const uploadResult = await uploadFile(receiptFile, user.id, 'repair-history', 'receipts');
-          if (uploadResult) {
-            receiptFileUrl = uploadResult.url;
-            receiptFileName = uploadResult.fileName;
-          }
-        } catch (error: any) {
-          console.error('Failed to upload receipt file:', receiptFile.name, error);
-          return NextResponse.json({ error: error.message || 'Failed to upload receipt file. Please ensure the storage bucket exists.' }, { status: isStorageLimitError(error) ? 413 : 500 });
-        }
-      }
-
-      // Upload warranty if provided
-      if (warrantyFile && warrantyFile.size > 0) {
-        try {
-          const uploadResult = await uploadFile(warrantyFile, user.id, 'repair-history', 'warranties');
-          if (uploadResult) {
-            warrantyFileUrl = uploadResult.url;
-            warrantyFileName = uploadResult.fileName;
-          }
-        } catch (error: any) {
-          console.error('Failed to upload warranty file:', warrantyFile.name, error);
-          return NextResponse.json({ error: error.message || 'Failed to upload warranty file. Please ensure the storage bucket exists.' }, { status: isStorageLimitError(error) ? 413 : 500 });
-        }
-      }
-
       if (action === 'delete' && recordId) {
+        await deleteRecordStorageFiles(recordId, user.id);
         // Get record to check for warranty dashboard item
         const { data: record } = await supabaseServer
           .from('tools_rh_records')
@@ -745,16 +623,6 @@ export async function POST(request: NextRequest) {
         manual_link: manualLink?.trim() || null,
         notes: notes?.trim() || null,
       };
-
-      // Only update file URLs if new files were uploaded
-      if (receiptFileUrl) {
-        recordData.receipt_file_url = receiptFileUrl;
-        recordData.receipt_file_name = receiptFileName;
-      }
-      if (warrantyFileUrl) {
-        recordData.warranty_file_url = warrantyFileUrl;
-        recordData.warranty_file_name = warrantyFileName;
-      }
 
       let finalRecordId = recordId;
       let oldWarrantyDashboardItemId: string | null = null;
@@ -840,45 +708,6 @@ export async function POST(request: NextRequest) {
           .from('tools_rh_records')
           .update({ warranty_dashboard_item_id: null })
           .eq('id', finalRecordId);
-      }
-
-      // Handle repair pictures upload
-      if (repairPictures && repairPictures.length > 0 && finalRecordId) {
-        // Delete existing pictures if updating
-        if (action === 'update') {
-          await supabaseServer
-            .from('tools_rh_repair_pictures')
-            .delete()
-            .eq('record_id', finalRecordId);
-        }
-
-        // Upload new pictures
-        for (let i = 0; i < repairPictures.length; i++) {
-          const picture = repairPictures[i];
-          if (picture && picture.size > 0) {
-            try {
-              const uploadResult = await uploadFile(picture, user.id, 'repair-history', 'pictures');
-              if (uploadResult) {
-                await supabaseServer
-                  .from('tools_rh_repair_pictures')
-                  .insert({
-                    record_id: finalRecordId,
-                    file_url: uploadResult.url,
-                    file_name: uploadResult.fileName,
-                    file_size: uploadResult.fileSize,
-                    file_type: uploadResult.fileType,
-                    display_order: i
-                  });
-              }
-            } catch (error: any) {
-              console.error('Failed to upload repair picture:', picture.name, error);
-              if (isStorageLimitError(error)) {
-                return NextResponse.json({ error: error.message }, { status: 413 });
-              }
-              // Continue with other pictures even if one fails
-            }
-          }
-        }
       }
 
       return NextResponse.json({ success: true, recordId: finalRecordId });
@@ -983,6 +812,7 @@ export async function DELETE(request: NextRequest) {
     }
 
     if (resource === 'header') {
+      await deleteHeaderRecordStorageFiles(id, user.id);
       const { error } = await supabaseServer
         .from('tools_rh_headers')
         .delete()
@@ -999,6 +829,7 @@ export async function DELETE(request: NextRequest) {
     }
 
     if (resource === 'record') {
+      await deleteRecordStorageFiles(id, user.id);
       // Get record to check for warranty dashboard item
       const { data: record } = await supabaseServer
         .from('tools_rh_records')

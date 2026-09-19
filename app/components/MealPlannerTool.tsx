@@ -3,6 +3,15 @@
 import { useState, useMemo, useEffect } from 'react';
 import { createPortal } from 'react-dom';
 import { useTheme } from './AppThemeProvider';
+import { AttachmentButton } from './AttachmentButton';
+import { AttachmentModal } from './AttachmentModal';
+import {
+  canPreviewAttachment,
+  createPendingAttachment,
+  isImageAttachment,
+  isPdfAttachment,
+  type AttachmentItem,
+} from '@/lib/attachments';
 
 const DEFAULT_ITEM_CATEGORIES = [
   'Bakery & Bread',
@@ -40,6 +49,7 @@ type Meal = {
   difficulty: 'easy' | 'medium' | 'hard' | '';
   rating: number; // 0-5
   isActive?: boolean;
+  attachments: { id: string; name: string; size: number; type: string }[];
 };
 
 type DayKey = 'mon' | 'tue' | 'wed' | 'thu' | 'fri' | 'sat' | 'sun';
@@ -328,7 +338,7 @@ export function MealPlannerTool({ toolId }: MealPlannerToolProps) {
       const res = await fetch(`${API_BASE}?toolId=${encodeURIComponent(toolId)}&resource=meals`);
       if (!res.ok) throw new Error('Failed to fetch meals');
       const data = await res.json();
-      setMeals((data.meals ?? []).map((m: Meal) => ({ ...m, scale: mealScale(m) })));
+      setMeals((data.meals ?? []).map((m: Meal) => ({ ...m, scale: mealScale(m), attachments: m.attachments ?? [] })));
     } catch (e) {
       console.error('Fetch meals error:', e);
     } finally {
@@ -559,6 +569,27 @@ export function MealPlannerTool({ toolId }: MealPlannerToolProps) {
   const [inactiveMealsExpanded, setInactiveMealsExpanded] = useState(false);
   const [deleteConfirmMealId, setDeleteConfirmMealId] = useState<string | null>(null);
   const [deleteConfirmMealText, setDeleteConfirmMealText] = useState('');
+  const [pendingAttachments, setPendingAttachments] = useState<AttachmentItem[]>([]);
+  const [attachmentModal, setAttachmentModal] = useState<null | 'add' | string>(null);
+  const [attachmentBusy, setAttachmentBusy] = useState(false);
+  const [viewPreview, setViewPreview] = useState<AttachmentItem | null>(null);
+
+  const revokePending = (items: AttachmentItem[]) => {
+    items.forEach((item) => {
+      if (item.url) URL.revokeObjectURL(item.url);
+    });
+  };
+
+  const closeAttachmentModal = () => {
+    setAttachmentModal(null);
+    setViewPreview(null);
+  };
+
+  const clearPendingAttachments = () => {
+    revokePending(pendingAttachments);
+    setPendingAttachments([]);
+    closeAttachmentModal();
+  };
 
   const resetMealForm = () => {
     setMealForm({
@@ -632,7 +663,27 @@ export function MealPlannerTool({ toolId }: MealPlannerToolProps) {
           }),
         });
         if (!res.ok) throw new Error('Failed to create meal');
+        const created = await res.json().catch(() => ({}));
+        const createdMealId = created.meal?.id as string | undefined;
+        if (createdMealId && pendingAttachments.length > 0) {
+          try {
+            for (const queued of pendingAttachments) {
+              if (!queued.file) continue;
+              await uploadMealFile(queued.file, createdMealId);
+            }
+          } catch (uploadError) {
+            clearPendingAttachments();
+            await fetchMeals();
+            resetMealForm();
+            setEditingMealId(null);
+            setIsAddingMeal(false);
+            setIngredientSearch('');
+            alert(uploadError instanceof Error ? uploadError.message : 'Meal saved, but a file failed to upload.');
+            return;
+          }
+        }
       }
+      clearPendingAttachments();
       await fetchMeals();
       resetMealForm();
       setEditingMealId(null);
@@ -644,6 +695,7 @@ export function MealPlannerTool({ toolId }: MealPlannerToolProps) {
   };
 
   const startEditingMeal = (meal: Meal) => {
+    clearPendingAttachments();
     setEditingMealId(meal.id);
     setMealForm({
       name: meal.name,
@@ -668,6 +720,13 @@ export function MealPlannerTool({ toolId }: MealPlannerToolProps) {
         body: JSON.stringify({ action: 'deleteMeal', toolId, mealId: deleteConfirmMealId }),
       });
       if (!res.ok) throw new Error('Failed to delete meal');
+      if (attachmentModal === deleteConfirmMealId) closeAttachmentModal();
+      if (editingMealId === deleteConfirmMealId) {
+        clearPendingAttachments();
+        setEditingMealId(null);
+        setIsAddingMeal(false);
+        resetMealForm();
+      }
       await fetchMeals();
       setDeleteConfirmMealId(null);
       setDeleteConfirmMealText('');
@@ -690,6 +749,128 @@ export function MealPlannerTool({ toolId }: MealPlannerToolProps) {
       console.error('Set meal active error:', e);
     }
   };
+
+  const uploadMealFile = async (file: File, mealId: string) => {
+    if (!toolId) throw new Error('Tool ID is required');
+    const formData = new FormData();
+    formData.append('toolId', toolId);
+    formData.append('mealId', mealId);
+    formData.append('file', file);
+    const response = await fetch(`${API_BASE}/attachments`, { method: 'POST', body: formData });
+    const data = await response.json().catch(() => ({}));
+    if (!response.ok) throw new Error(data.error || 'Failed to add file');
+  };
+
+  const fetchMealAttachmentBlob = async (attachmentId: string, inline = false) => {
+    const query = inline ? '?inline=1' : '';
+    const response = await fetch(`${API_BASE}/attachments/${attachmentId}${query}`);
+    if (!response.ok) {
+      const errorData = await response.json().catch(() => ({ error: 'Failed to open file' }));
+      throw new Error(errorData.error || 'Failed to open file');
+    }
+    return response.blob();
+  };
+
+  const handleViewAttachment = async (item: AttachmentItem) => {
+    if (item.file && item.url) {
+      if (isImageAttachment(item.type)) {
+        setViewPreview(item);
+        return;
+      }
+      if (isPdfAttachment(item.type, item.name)) {
+        window.open(item.url, '_blank', 'noopener,noreferrer');
+        return;
+      }
+      alert('This file type can’t be previewed in the browser. Use Download to save it.');
+      return;
+    }
+    try {
+      const blob = await fetchMealAttachmentBlob(item.id, true);
+      const type = blob.type || item.type || '';
+      if (!canPreviewAttachment(type, item.name)) {
+        alert('This file type can’t be previewed in the browser. Use Download to save it.');
+        return;
+      }
+      const url = window.URL.createObjectURL(blob);
+      if (isImageAttachment(type)) {
+        setViewPreview({ ...item, type, url, size: item.size || blob.size });
+        return;
+      }
+      if (isPdfAttachment(type, item.name)) {
+        window.open(url, '_blank', 'noopener,noreferrer');
+      }
+    } catch (error) {
+      alert(error instanceof Error ? error.message : 'Failed to open file');
+    }
+  };
+
+  const handleDownloadAttachment = async (item: AttachmentItem): Promise<boolean> => {
+    if (item.file) return false;
+    try {
+      const blob = await fetchMealAttachmentBlob(item.id);
+      const url = window.URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = url;
+      link.download = item.name || 'attachment';
+      document.body.appendChild(link);
+      link.click();
+      window.URL.revokeObjectURL(url);
+      document.body.removeChild(link);
+      return true;
+    } catch (error) {
+      alert(error instanceof Error ? error.message : 'Failed to download file');
+      return false;
+    }
+  };
+
+  const addSavedMealFiles = async (mealId: string, files: File[]) => {
+    setAttachmentBusy(true);
+    try {
+      for (const file of files) {
+        await uploadMealFile(file, mealId);
+      }
+      await fetchMeals();
+    } catch (error) {
+      alert(error instanceof Error ? error.message : 'Failed to add file');
+    } finally {
+      setAttachmentBusy(false);
+    }
+  };
+
+  const removeSavedMealFile = async (attachmentId: string) => {
+    if (!toolId) return;
+    setAttachmentBusy(true);
+    try {
+      const response = await fetch(`${API_BASE}/attachments`, {
+        method: 'DELETE',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ toolId, attachmentId }),
+      });
+      const data = await response.json().catch(() => ({}));
+      if (!response.ok) throw new Error(data.error || 'Failed to remove file');
+      await fetchMeals();
+    } catch (error) {
+      alert(error instanceof Error ? error.message : 'Failed to remove file');
+    } finally {
+      setAttachmentBusy(false);
+    }
+  };
+
+  const savedAttachmentMeal =
+    attachmentModal && attachmentModal !== 'add'
+      ? meals.find((meal) => meal.id === attachmentModal) || null
+      : null;
+  const modalFiles: AttachmentItem[] =
+    attachmentModal === 'add'
+      ? pendingAttachments
+      : savedAttachmentMeal
+        ? (savedAttachmentMeal.attachments || []).map((item) => ({
+            id: item.id,
+            name: item.name,
+            size: item.size,
+            type: item.type,
+          }))
+        : [];
 
   const activeMealsList = useMemo(
     () => meals.filter((m) => m.isActive !== false),
@@ -762,6 +943,10 @@ export function MealPlannerTool({ toolId }: MealPlannerToolProps) {
         </td>
         <td className="px-3 py-2 text-right whitespace-nowrap">
           <div className="flex items-center justify-end gap-1">
+            <AttachmentButton
+              count={meal.attachments?.length || 0}
+              onClick={() => setAttachmentModal(meal.id)}
+            />
             <button
               type="button"
               onClick={() => startEditingMeal(meal)}
@@ -1748,6 +1933,7 @@ export function MealPlannerTool({ toolId }: MealPlannerToolProps) {
             <div className="flex justify-start">
               <button
                 onClick={() => {
+                  clearPendingAttachments();
                   resetMealForm();
                   setEditingMealId(null);
                   setIsAddingMeal(true);
@@ -1764,7 +1950,16 @@ export function MealPlannerTool({ toolId }: MealPlannerToolProps) {
                 <h3 className="text-lg font-semibold text-slate-50">
                   {editingMealId ? 'Edit Meal' : 'New Meal'}
                 </h3>
-                <div className="flex items-center gap-1 flex-shrink-0" role="group" aria-label="Rate this meal">
+                <div className="flex items-center gap-2 flex-shrink-0">
+                <AttachmentButton
+                  count={
+                    editingMealId
+                      ? meals.find((meal) => meal.id === editingMealId)?.attachments?.length || 0
+                      : pendingAttachments.length
+                  }
+                  onClick={() => setAttachmentModal(editingMealId || 'add')}
+                />
+                <div className="flex items-center gap-1" role="group" aria-label="Rate this meal">
                   {[1, 2, 3, 4, 5].map((star) => (
                     <button
                       key={star}
@@ -1784,6 +1979,7 @@ export function MealPlannerTool({ toolId }: MealPlannerToolProps) {
                       </svg>
                     </button>
                   ))}
+                </div>
                 </div>
               </div>
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -2035,6 +2231,7 @@ export function MealPlannerTool({ toolId }: MealPlannerToolProps) {
               <div className="flex gap-3 justify-end">
                 <button
                   onClick={() => {
+                    clearPendingAttachments();
                     setIsAddingMeal(false);
                     setEditingMealId(null);
                     resetMealForm();
@@ -3108,6 +3305,42 @@ export function MealPlannerTool({ toolId }: MealPlannerToolProps) {
           </div>
         </div>
       )}
+
+      <AttachmentModal
+        open={attachmentModal !== null}
+        onClose={closeAttachmentModal}
+        previewItem={viewPreview}
+        title={
+          attachmentModal === 'add'
+            ? mealForm.name.trim() || 'New meal'
+            : savedAttachmentMeal?.name || 'Meal'
+        }
+        files={modalFiles}
+        busy={attachmentBusy}
+        onAdd={(incoming) => {
+          if (attachmentModal === 'add') {
+            setPendingAttachments((prev) => [...prev, ...incoming.map(createPendingAttachment)]);
+            return;
+          }
+          if (attachmentModal) {
+            void addSavedMealFiles(attachmentModal, incoming);
+          }
+        }}
+        onRemove={(id) => {
+          if (attachmentModal === 'add') {
+            setPendingAttachments((prev) => {
+              const next = prev.filter((item) => item.id !== id);
+              const removed = prev.find((item) => item.id === id);
+              if (removed?.url) URL.revokeObjectURL(removed.url);
+              return next;
+            });
+            return;
+          }
+          void removeSavedMealFile(id);
+        }}
+        onView={handleViewAttachment}
+        onDownload={attachmentModal === 'add' ? undefined : handleDownloadAttachment}
+      />
     </div>
     </>
   );

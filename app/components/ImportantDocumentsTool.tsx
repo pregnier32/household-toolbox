@@ -1126,7 +1126,6 @@ export function ImportantDocumentsTool({ toolId }: ImportantDocumentsToolProps) 
     a.click();
     window.URL.revokeObjectURL(url);
     document.body.removeChild(a);
-    alert('Document downloaded successfully.');
   };
 
   const fetchDocumentBlob = async (doc: Document, password?: string, inline = false): Promise<Blob> => {
@@ -1164,23 +1163,25 @@ export function ImportantDocumentsTool({ toolId }: ImportantDocumentsToolProps) 
     }
   };
 
-  const handleDownload = async (doc: Document) => {
+  const handleDownload = async (doc: Document): Promise<boolean> => {
     if (!doc.fileUrl) {
       alert('No file available for download.');
-      return;
+      return false;
     }
 
     if (doc.requiresPasswordForDownload) {
       promptDocumentPassword(doc, 'download');
-      return;
+      return false;
     }
 
     try {
       const blob = await fetchDocumentBlob(doc);
       triggerDownload(blob, doc.fileName || 'document');
+      return true;
     } catch (error) {
       console.error('Error downloading file:', error);
       alert('Failed to download file. Please try again.');
+      return false;
     }
   };
 
@@ -3049,9 +3050,7 @@ export function ImportantDocumentsTool({ toolId }: ImportantDocumentsToolProps) 
         }
         onDownload={
           savedAttachmentDoc
-            ? () => {
-                void handleDownload(savedAttachmentDoc);
-              }
+            ? () => handleDownload(savedAttachmentDoc)
             : undefined
         }
       />

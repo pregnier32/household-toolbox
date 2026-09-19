@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getSession } from '@/lib/session';
 import { supabaseServer } from '@/lib/supabaseServer';
+import { attachmentsByMealIds, deleteMealStorageFiles } from '@/lib/meal-planner-storage';
 
 const DAY_KEYS = ['mon', 'tue', 'wed', 'thu', 'fri', 'sat', 'sun'] as const;
 const DAY_SLOTS = ['breakfast', 'lunch', 'dinner'] as const;
@@ -301,7 +302,11 @@ export async function GET(request: NextRequest) {
         difficulty: string;
         rating: number;
         isActive: boolean;
+        attachments: { id: string; name: string; size: number; type: string }[];
       }[] = [];
+
+      const mealIds = (meals || []).map((m) => m.id);
+      const attachmentMap = await attachmentsByMealIds(mealIds, user.id);
 
       for (const m of meals || []) {
         const { data: ingRows } = await supabaseServer
@@ -322,6 +327,7 @@ export async function GET(request: NextRequest) {
           difficulty: m.difficulty ?? '',
           rating: m.rating ?? 0,
           isActive: m.is_active !== false,
+          attachments: attachmentMap[m.id] || [],
         });
       }
       return NextResponse.json({ meals: result });
@@ -691,6 +697,7 @@ export async function POST(request: NextRequest) {
           scale: parseScale(meal.scale),
           difficulty: meal.difficulty ?? '',
           rating: meal.rating ?? 0,
+          attachments: [],
         },
       });
     }
@@ -776,6 +783,7 @@ export async function POST(request: NextRequest) {
       if (!mealId) {
         return NextResponse.json({ error: 'Meal ID is required' }, { status: 400 });
       }
+      await deleteMealStorageFiles(mealId, user.id);
       const { error } = await supabaseServer
         .from('tools_mp_meals')
         .delete()

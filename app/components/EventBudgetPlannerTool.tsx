@@ -2,6 +2,15 @@
 
 import { useState, useEffect, useLayoutEffect, useMemo, useCallback, useRef } from 'react';
 import { useTheme } from './AppThemeProvider';
+import { AttachmentButton } from './AttachmentButton';
+import { AttachmentModal } from './AttachmentModal';
+import {
+  canPreviewAttachment,
+  createPendingAttachment,
+  isImageAttachment,
+  isPdfAttachment,
+  type AttachmentItem,
+} from '@/lib/attachments';
 
 const API_BASE = '/api/tools/event-budget-planner';
 
@@ -26,6 +35,17 @@ type VendorSplit = {
   amount: number;
 };
 
+type ToolAttachment = {
+  id: string;
+  name: string;
+  size: number;
+  type: string;
+};
+
+type AttachmentTarget =
+  | { kind: 'event'; id: 'add' | string }
+  | { kind: 'expense'; id: 'add' | string };
+
 type Expense = {
   id: string;
   categoryId: string;
@@ -34,6 +54,7 @@ type Expense = {
   amount: number;
   note: string;
   vendorSplits: VendorSplit[];
+  attachments: ToolAttachment[];
 };
 
 type CategoryBudget = {
@@ -49,6 +70,7 @@ type EventRecord = {
   notes: string;
   categoryBudgets: CategoryBudget[];
   expenses: Expense[];
+  attachments: ToolAttachment[];
   isActive: boolean;
   dateAdded: string;
   dateInactivated?: string;
@@ -405,8 +427,10 @@ export function EventBudgetPlannerTool({ toolId }: EventBudgetPlannerToolProps) 
     setEvents(
       (data.events ?? []).map((event) => ({
         ...event,
+        attachments: event.attachments ?? [],
         expenses: (event.expenses ?? []).map((expense) => ({
           ...expense,
+          attachments: expense.attachments ?? [],
           vendorSplits:
             Array.isArray(expense.vendorSplits) && expense.vendorSplits.length > 0
               ? expense.vendorSplits
@@ -532,6 +556,22 @@ export function EventBudgetPlannerTool({ toolId }: EventBudgetPlannerToolProps) 
   const [removeCategoryBudgetConfirmText, setRemoveCategoryBudgetConfirmText] = useState('');
   const [removeExpenseConfirmId, setRemoveExpenseConfirmId] = useState<string | null>(null);
   const [removeExpenseConfirmText, setRemoveExpenseConfirmText] = useState('');
+  const [pendingEventAttachments, setPendingEventAttachments] = useState<AttachmentItem[]>([]);
+  const [pendingExpenseAttachments, setPendingExpenseAttachments] = useState<AttachmentItem[]>([]);
+  const [attachmentModal, setAttachmentModal] = useState<AttachmentTarget | null>(null);
+  const [attachmentBusy, setAttachmentBusy] = useState(false);
+  const [viewPreview, setViewPreview] = useState<AttachmentItem | null>(null);
+
+  const revokePending = (items: AttachmentItem[]) => {
+    items.forEach((item) => {
+      if (item.url) URL.revokeObjectURL(item.url);
+    });
+  };
+
+  const closeAttachmentModal = () => {
+    setAttachmentModal(null);
+    setViewPreview(null);
+  };
 
   // Named record tabs state
   const [isAddingCategory, setIsAddingCategory] = useState(false);
@@ -576,6 +616,9 @@ export function EventBudgetPlannerTool({ toolId }: EventBudgetPlannerToolProps) 
     setApplyBirthdayTemplateOnCreate(false);
     setAddingEventCategoryForId(null);
     setEditingEventId(null);
+    revokePending(pendingEventAttachments);
+    setPendingEventAttachments([]);
+    closeAttachmentModal();
     setIsAddingEvent(true);
   };
 
@@ -595,6 +638,9 @@ export function EventBudgetPlannerTool({ toolId }: EventBudgetPlannerToolProps) 
     setEditingEventId(null);
     setAddingEventCategoryForId(null);
     setNewCategoryBudget({ categoryId: '', budgetAmount: 0 });
+    revokePending(pendingEventAttachments);
+    setPendingEventAttachments([]);
+    closeAttachmentModal();
     closeExpenseModal();
     closeCategoryBudgetModal();
     resetEventForm();
@@ -611,13 +657,37 @@ export function EventBudgetPlannerTool({ toolId }: EventBudgetPlannerToolProps) 
         typeId: eventForm.typeId,
         notes: eventForm.notes,
       });
+      const createdEventId = data.event?.id as string | undefined;
+      if (createdEventId && pendingEventAttachments.length > 0) {
+        try {
+          for (const queued of pendingEventAttachments) {
+            if (!queued.file) continue;
+            await uploadEbpFile(queued.file, { eventId: createdEventId });
+          }
+        } catch (uploadError) {
+          revokePending(pendingEventAttachments);
+          setPendingEventAttachments([]);
+          closeAttachmentModal();
+          await reloadData();
+          alert(uploadError instanceof Error ? uploadError.message : 'Event saved, but a file failed to upload.');
+          setIsAddingEvent(false);
+          setAddingEventCategoryForId(null);
+          if (createdEventId) setEditingEventId(createdEventId);
+          resetEventForm();
+          return;
+        }
+        await reloadData();
+      }
+      revokePending(pendingEventAttachments);
+      setPendingEventAttachments([]);
+      closeAttachmentModal();
       setIsAddingEvent(false);
       setAddingEventCategoryForId(null);
-      if (data.event?.id) {
-        setEditingEventId(data.event.id);
+      if (createdEventId) {
+        setEditingEventId(createdEventId);
         if (applyBirthdayTemplateOnCreate) {
           try {
-            await applyBirthdayStarterBudgets(data.event.id, data.event);
+            await applyBirthdayStarterBudgets(createdEventId, data.event);
           } catch (templateError: unknown) {
             alert(templateError instanceof Error ? templateError.message : 'Failed to apply Birthday starter template.');
           }
@@ -637,6 +707,9 @@ export function EventBudgetPlannerTool({ toolId }: EventBudgetPlannerToolProps) 
     setApplyBirthdayTemplateOnCreate(false);
     setAddingEventCategoryForId(null);
     setNewCategoryBudget({ categoryId: '', budgetAmount: 0 });
+    revokePending(pendingEventAttachments);
+    setPendingEventAttachments([]);
+    closeAttachmentModal();
     closeExpenseModal();
     closeCategoryBudgetModal();
     setEventForm({
@@ -894,7 +967,7 @@ export function EventBudgetPlannerTool({ toolId }: EventBudgetPlannerToolProps) 
 
     setIsLoading(true);
     try {
-      await postMain({
+      const data = await postMain({
         action: expenseModal.expenseId ? 'updateExpense' : 'addExpense',
         eventId: editingEventId,
         expenseId: expenseModal.expenseId,
@@ -908,6 +981,27 @@ export function EventBudgetPlannerTool({ toolId }: EventBudgetPlannerToolProps) 
         expenseDate: expenseForm.date,
         note: expenseForm.note,
       });
+      const createdExpenseId = (expenseModal.expenseId || data.expenseId) as string | undefined;
+      if (!expenseModal.expenseId && createdExpenseId && pendingExpenseAttachments.length > 0) {
+        try {
+          for (const queued of pendingExpenseAttachments) {
+            if (!queued.file) continue;
+            await uploadEbpFile(queued.file, { expenseId: createdExpenseId });
+          }
+        } catch (uploadError) {
+          revokePending(pendingExpenseAttachments);
+          setPendingExpenseAttachments([]);
+          closeAttachmentModal();
+          closeExpenseModal();
+          await reloadData();
+          alert(uploadError instanceof Error ? uploadError.message : 'Expense saved, but a file failed to upload.');
+          return;
+        }
+        await reloadData();
+      }
+      revokePending(pendingExpenseAttachments);
+      setPendingExpenseAttachments([]);
+      closeAttachmentModal();
       closeExpenseModal();
     } catch (error: unknown) {
       alert(error instanceof Error ? error.message : 'Failed to save expense.');
@@ -928,18 +1022,27 @@ export function EventBudgetPlannerTool({ toolId }: EventBudgetPlannerToolProps) 
   };
 
   const closeExpenseModal = () => {
+    revokePending(pendingExpenseAttachments);
+    setPendingExpenseAttachments([]);
+    if (attachmentModal?.kind === 'expense') closeAttachmentModal();
     setExpenseModal(null);
     setExpenseForm(emptyExpenseForm());
     setExpenseHelper(emptyExpenseHelper());
   };
 
   const openExpenseModal = (categoryId: string) => {
+    revokePending(pendingExpenseAttachments);
+    setPendingExpenseAttachments([]);
+    closeAttachmentModal();
     setExpenseModal({ categoryId });
     setExpenseForm(emptyExpenseForm(activeVendors[0]?.id ?? ''));
     setExpenseHelper(emptyExpenseHelper());
   };
 
   const openEditExpenseModal = (expense: Expense) => {
+    revokePending(pendingExpenseAttachments);
+    setPendingExpenseAttachments([]);
+    closeAttachmentModal();
     setExpenseModal({ categoryId: expense.categoryId, expenseId: expense.id });
     setExpenseForm({
       date: expense.date,
@@ -949,6 +1052,152 @@ export function EventBudgetPlannerTool({ toolId }: EventBudgetPlannerToolProps) 
     });
     setExpenseHelper(emptyExpenseHelper());
   };
+
+  const uploadEbpFile = async (file: File, owner: { eventId?: string; expenseId?: string }) => {
+    if (!toolId) throw new Error('Tool ID is required');
+    const formData = new FormData();
+    formData.append('toolId', toolId);
+    if (owner.eventId) formData.append('eventId', owner.eventId);
+    if (owner.expenseId) formData.append('expenseId', owner.expenseId);
+    formData.append('file', file);
+    const response = await fetch(`${API_BASE}/attachments`, { method: 'POST', body: formData });
+    const data = await response.json().catch(() => ({}));
+    if (!response.ok) throw new Error(data.error || 'Failed to add file');
+  };
+
+  const fetchEbpAttachmentBlob = async (attachmentId: string, inline = false) => {
+    const query = inline ? '?inline=1' : '';
+    const response = await fetch(`${API_BASE}/attachments/${attachmentId}${query}`);
+    if (!response.ok) {
+      const errorData = await response.json().catch(() => ({ error: 'Failed to open file' }));
+      throw new Error(errorData.error || 'Failed to open file');
+    }
+    return response.blob();
+  };
+
+  const handleViewAttachment = async (item: AttachmentItem) => {
+    if (item.file && item.url) {
+      if (isImageAttachment(item.type)) {
+        setViewPreview(item);
+        return;
+      }
+      if (isPdfAttachment(item.type, item.name)) {
+        window.open(item.url, '_blank', 'noopener,noreferrer');
+        return;
+      }
+      alert('This file type can’t be previewed in the browser. Use Download to save it.');
+      return;
+    }
+    try {
+      const blob = await fetchEbpAttachmentBlob(item.id, true);
+      const type = blob.type || item.type || '';
+      if (!canPreviewAttachment(type, item.name)) {
+        alert('This file type can’t be previewed in the browser. Use Download to save it.');
+        return;
+      }
+      const url = window.URL.createObjectURL(blob);
+      if (isImageAttachment(type)) {
+        setViewPreview({ ...item, type, url, size: item.size || blob.size });
+        return;
+      }
+      if (isPdfAttachment(type, item.name)) {
+        window.open(url, '_blank', 'noopener,noreferrer');
+      }
+    } catch (error) {
+      alert(error instanceof Error ? error.message : 'Failed to open file');
+    }
+  };
+
+  const handleDownloadAttachment = async (item: AttachmentItem): Promise<boolean> => {
+    if (item.file) return false;
+    try {
+      const blob = await fetchEbpAttachmentBlob(item.id);
+      const url = window.URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = url;
+      link.download = item.name || 'attachment';
+      document.body.appendChild(link);
+      link.click();
+      window.URL.revokeObjectURL(url);
+      document.body.removeChild(link);
+      return true;
+    } catch (error) {
+      alert(error instanceof Error ? error.message : 'Failed to download file');
+      return false;
+    }
+  };
+
+  const addSavedFiles = async (owner: { eventId?: string; expenseId?: string }, files: File[]) => {
+    setAttachmentBusy(true);
+    try {
+      for (const file of files) {
+        await uploadEbpFile(file, owner);
+      }
+      await reloadData();
+    } catch (error) {
+      alert(error instanceof Error ? error.message : 'Failed to add file');
+    } finally {
+      setAttachmentBusy(false);
+    }
+  };
+
+  const removeSavedFile = async (attachmentId: string) => {
+    if (!toolId) return;
+    setAttachmentBusy(true);
+    try {
+      const response = await fetch(`${API_BASE}/attachments`, {
+        method: 'DELETE',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ toolId, attachmentId }),
+      });
+      const data = await response.json().catch(() => ({}));
+      if (!response.ok) throw new Error(data.error || 'Failed to remove file');
+      await reloadData();
+    } catch (error) {
+      alert(error instanceof Error ? error.message : 'Failed to remove file');
+    } finally {
+      setAttachmentBusy(false);
+    }
+  };
+
+  const savedEventForAttachments =
+    attachmentModal?.kind === 'event' && attachmentModal.id !== 'add'
+      ? events.find((event) => event.id === attachmentModal.id) || null
+      : null;
+  const savedExpenseForAttachments =
+    attachmentModal?.kind === 'expense' && attachmentModal.id !== 'add'
+      ? events.flatMap((event) => event.expenses).find((expense) => expense.id === attachmentModal.id) || null
+      : null;
+  const modalFiles: AttachmentItem[] =
+    attachmentModal?.kind === 'event' && attachmentModal.id === 'add'
+      ? pendingEventAttachments
+      : attachmentModal?.kind === 'expense' && attachmentModal.id === 'add'
+        ? pendingExpenseAttachments
+        : savedEventForAttachments
+          ? (savedEventForAttachments.attachments || []).map((item) => ({
+              id: item.id,
+              name: item.name,
+              size: item.size,
+              type: item.type,
+            }))
+          : savedExpenseForAttachments
+            ? (savedExpenseForAttachments.attachments || []).map((item) => ({
+                id: item.id,
+                name: item.name,
+                size: item.size,
+                type: item.type,
+              }))
+            : [];
+  const modalTitle =
+    attachmentModal?.kind === 'event' && attachmentModal.id === 'add'
+      ? eventForm.name.trim() || 'New event'
+      : attachmentModal?.kind === 'expense' && attachmentModal.id === 'add'
+        ? 'New expense'
+        : savedEventForAttachments?.name ||
+          (savedExpenseForAttachments
+            ? `${formatCurrency(savedExpenseForAttachments.amount)} · ${formatDisplayDate(savedExpenseForAttachments.date)}`
+            : 'Attachments');
+  const modalReadOnly = Boolean(savedEventForAttachments && !savedEventForAttachments.isActive);
 
   const openCategoryBudgetModal = (categoryId: string) => {
     const budget = editingEvent?.categoryBudgets.find((cb) => cb.categoryId === categoryId);
@@ -993,6 +1242,10 @@ export function EventBudgetPlannerTool({ toolId }: EventBudgetPlannerToolProps) 
         eventId: editingEventId,
         expenseId,
       });
+      if (attachmentModal?.kind === 'expense' && attachmentModal.id === expenseId) {
+        closeAttachmentModal();
+      }
+      if (expenseModal?.expenseId === expenseId) closeExpenseModal();
     } catch (error: unknown) {
       alert(error instanceof Error ? error.message : 'Failed to delete expense.');
     } finally {
@@ -1802,6 +2055,10 @@ export function EventBudgetPlannerTool({ toolId }: EventBudgetPlannerToolProps) 
                               )}
                             </div>
                             <div className="flex shrink-0 items-center gap-1.5">
+                              <AttachmentButton
+                                count={expense.attachments?.length || 0}
+                                onClick={() => setAttachmentModal({ kind: 'expense', id: expense.id })}
+                              />
                               <button
                                 type="button"
                                 onClick={() => openEditExpenseModal(expense)}
@@ -1961,7 +2218,13 @@ export function EventBudgetPlannerTool({ toolId }: EventBudgetPlannerToolProps) 
 
           {isAddingEvent && (
             <div className={cardClass}>
-              <h3 className={`${sectionTitleClass} mb-4`}>Add New Event</h3>
+              <div className="mb-4 flex items-center justify-between gap-3">
+                <h3 className={sectionTitleClass}>Add New Event</h3>
+                <AttachmentButton
+                  count={pendingEventAttachments.length}
+                  onClick={() => setAttachmentModal({ kind: 'event', id: 'add' })}
+                />
+              </div>
               {renderEventFormFields()}
               <div className="flex justify-start mt-4">
                 <button type="button" onClick={toggleBirthdayStarterOnCreate} className={secondaryButtonClass}>
@@ -1988,9 +2251,15 @@ export function EventBudgetPlannerTool({ toolId }: EventBudgetPlannerToolProps) 
             <div className={cardClass}>
               <div className="flex items-center justify-between mb-4 gap-3 flex-wrap">
                 <h3 className={sectionTitleClass}>Edit Event</h3>
-                <button type="button" onClick={cancelEventForm} className={secondaryButtonClass}>
-                  Close
-                </button>
+                <div className="flex items-center gap-1.5">
+                  <AttachmentButton
+                    count={editingEvent.attachments?.length || 0}
+                    onClick={() => setAttachmentModal({ kind: 'event', id: editingEvent.id })}
+                  />
+                  <button type="button" onClick={cancelEventForm} className={secondaryButtonClass}>
+                    Close
+                  </button>
+                </div>
               </div>
               {renderEventFormFields()}
               <div className="flex gap-3 mt-4 flex-wrap">
@@ -2048,6 +2317,10 @@ export function EventBudgetPlannerTool({ toolId }: EventBudgetPlannerToolProps) 
                             )}
                           </div>
                           <div className="flex shrink-0 items-center gap-1.5">
+                            <AttachmentButton
+                              count={event.attachments?.length || 0}
+                              onClick={() => setAttachmentModal({ kind: 'event', id: event.id })}
+                            />
                             <button
                               type="button"
                               onClick={() => startEditingEvent(event)}
@@ -2108,6 +2381,10 @@ export function EventBudgetPlannerTool({ toolId }: EventBudgetPlannerToolProps) 
                               </div>
                             </div>
                             <div className="flex shrink-0 items-center gap-1.5">
+                              <AttachmentButton
+                                count={event.attachments?.length || 0}
+                                onClick={() => setAttachmentModal({ kind: 'event', id: event.id })}
+                              />
                               <button
                                 type="button"
                                 onClick={() => reactivateEvent(event.id)}
@@ -2448,10 +2725,28 @@ export function EventBudgetPlannerTool({ toolId }: EventBudgetPlannerToolProps) 
       {expenseModal && (
         <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
           <div className={modalCardLgClass}>
-            <h3 className={`${sectionTitleClass} mb-1`}>
-              {expenseModal.expenseId ? 'Edit Expense' : 'Add Expense'}
-            </h3>
-            <p className={`${subTextClass} mb-6`}>{getCategoryName(expenseModal.categoryId)}</p>
+            <div className="mb-6 flex items-start justify-between gap-3">
+              <div>
+                <h3 className={sectionTitleClass}>
+                  {expenseModal.expenseId ? 'Edit Expense' : 'Add Expense'}
+                </h3>
+                <p className={`${subTextClass} mt-1`}>{getCategoryName(expenseModal.categoryId)}</p>
+              </div>
+              <AttachmentButton
+                count={
+                  expenseModal.expenseId
+                    ? editingEvent?.expenses.find((expense) => expense.id === expenseModal.expenseId)?.attachments
+                        ?.length || 0
+                    : pendingExpenseAttachments.length
+                }
+                onClick={() =>
+                  setAttachmentModal({
+                    kind: 'expense',
+                    id: expenseModal.expenseId || 'add',
+                  })
+                }
+              />
+            </div>
             <div className="space-y-4">
               <div>
                 <label className={labelClass}>
@@ -2769,6 +3064,62 @@ export function EventBudgetPlannerTool({ toolId }: EventBudgetPlannerToolProps) 
             setDeleteTypeConfirmText('');
           }
         )}
+
+      <AttachmentModal
+        open={attachmentModal !== null}
+        onClose={closeAttachmentModal}
+        previewItem={viewPreview}
+        title={modalTitle}
+        files={modalFiles}
+        busy={attachmentBusy}
+        readOnly={modalReadOnly}
+        onAdd={(incoming) => {
+          if (attachmentModal?.kind === 'event' && attachmentModal.id === 'add') {
+            setPendingEventAttachments((prev) => [...prev, ...incoming.map(createPendingAttachment)]);
+            return;
+          }
+          if (attachmentModal?.kind === 'expense' && attachmentModal.id === 'add') {
+            setPendingExpenseAttachments((prev) => [...prev, ...incoming.map(createPendingAttachment)]);
+            return;
+          }
+          if (attachmentModal?.kind === 'event' && attachmentModal.id !== 'add') {
+            void addSavedFiles({ eventId: attachmentModal.id }, incoming);
+            return;
+          }
+          if (attachmentModal?.kind === 'expense' && attachmentModal.id !== 'add') {
+            void addSavedFiles({ expenseId: attachmentModal.id }, incoming);
+          }
+        }}
+        onRemove={(id) => {
+          if (attachmentModal?.kind === 'event' && attachmentModal.id === 'add') {
+            setPendingEventAttachments((prev) => {
+              const next = prev.filter((item) => item.id !== id);
+              const removed = prev.find((item) => item.id === id);
+              if (removed?.url) URL.revokeObjectURL(removed.url);
+              return next;
+            });
+            return;
+          }
+          if (attachmentModal?.kind === 'expense' && attachmentModal.id === 'add') {
+            setPendingExpenseAttachments((prev) => {
+              const next = prev.filter((item) => item.id !== id);
+              const removed = prev.find((item) => item.id === id);
+              if (removed?.url) URL.revokeObjectURL(removed.url);
+              return next;
+            });
+            return;
+          }
+          void removeSavedFile(id);
+        }}
+        onView={handleViewAttachment}
+        onDownload={
+          attachmentModal &&
+          ((attachmentModal.kind === 'event' && attachmentModal.id === 'add') ||
+            (attachmentModal.kind === 'expense' && attachmentModal.id === 'add'))
+            ? undefined
+            : handleDownloadAttachment
+        }
+      />
     </div>
   );
 }

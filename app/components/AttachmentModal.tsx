@@ -26,7 +26,7 @@ type AttachmentModalProps = {
   onAdd: (files: File[]) => void;
   onRemove: (id: string) => void;
   onView?: (item: AttachmentItem) => void;
-  onDownload?: (item: AttachmentItem) => void;
+  onDownload?: (item: AttachmentItem) => void | boolean | Promise<void | boolean>;
   previewItem?: AttachmentItem | null;
   maxFiles?: number;
   busy?: boolean;
@@ -52,12 +52,14 @@ export function AttachmentModal({
   const inputRef = useRef<HTMLInputElement>(null);
   const [isDragging, setIsDragging] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [notice, setNotice] = useState<string | null>(null);
   const [preview, setPreview] = useState<AttachmentItem | null>(null);
   const [storage, setStorage] = useState<StorageSummary | null>(null);
 
   useEffect(() => {
     if (!open) {
       setError(null);
+      setNotice(null);
       setPreview(null);
       setIsDragging(false);
       return;
@@ -107,7 +109,21 @@ export function AttachmentModal({
       limitBytes: storage?.limitBytes,
     });
     setError(errors[0] || null);
+    setNotice(null);
     if (accepted.length > 0) onAdd(accepted);
+  };
+
+  const handleDownloadClick = async (item: AttachmentItem) => {
+    if (!onDownload) return;
+    try {
+      const downloaded = await onDownload(item);
+      if (downloaded !== true) return;
+      setError(null);
+      setNotice('File downloaded.');
+    } catch (downloadError) {
+      setNotice(null);
+      setError(downloadError instanceof Error ? downloadError.message : 'Failed to download file.');
+    }
   };
 
   const handleView = (item: AttachmentItem) => {
@@ -188,6 +204,18 @@ export function AttachmentModal({
             </div>
           )}
 
+          {notice && (
+            <div
+              className={
+                isLight
+                  ? 'mb-4 rounded-lg border border-emerald-200 bg-emerald-50 px-3 py-2 text-sm text-emerald-800'
+                  : 'mb-4 rounded-lg border border-emerald-500/40 bg-emerald-500/10 px-3 py-2 text-sm text-emerald-200'
+              }
+            >
+              {notice}
+            </div>
+          )}
+
           {preview && preview.url ? (
             <div className="mb-4">
               <img src={preview.url} alt={preview.name} className="max-h-64 w-full rounded-lg object-contain" />
@@ -217,7 +245,7 @@ export function AttachmentModal({
                       </button>
                     )}
                     {onDownload && !item.file && (
-                      <button type="button" onClick={() => onDownload(item)} className={actionClass} disabled={busy}>
+                      <button type="button" onClick={() => void handleDownloadClick(item)} className={actionClass} disabled={busy}>
                         Download
                       </button>
                     )}
