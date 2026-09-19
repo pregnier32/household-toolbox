@@ -57,6 +57,7 @@ export type HmsScheduledTask = {
   frequency: HmsFrequency;
   nextDueDate: string;
   lastCompletedDate: string | null;
+  reminderDays: number | null;
   location: string;
   notes: string;
   descriptionOverride: string;
@@ -141,6 +142,23 @@ export function todayIso(): string {
 export function asDateOnly(value: string | null | undefined): string {
   if (!value) return '';
   return value.split('T')[0];
+}
+
+export function parseReminderDays(value: unknown): number | null {
+  if (value == null || value === '') return null;
+  const count = typeof value === 'number' ? value : Number.parseInt(String(value), 10);
+  if (!Number.isInteger(count) || count < 1) return null;
+  return Math.min(count, 365);
+}
+
+export function isIsoDateOnly(value: unknown): value is string {
+  return typeof value === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(asDateOnly(value));
+}
+
+/** Prefer the client-local calendar day shown as Today; do not use server TZ. */
+export function completionDayForToday(clientDay?: string | null): string {
+  const day = asDateOnly(clientDay);
+  return isIsoDateOnly(day) ? day : todayIso();
 }
 
 export function parseLocalDate(iso: string): Date {

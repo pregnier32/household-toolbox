@@ -4,6 +4,7 @@ import { supabaseServer } from '@/lib/supabaseServer';
 import {
   advanceFrom,
   asDateOnly,
+  completionDayForToday,
   dbToFrequency,
   emptyServiceProvider,
   frequencyToDb,
@@ -12,6 +13,7 @@ import {
   HmsServiceProvider,
   isFrequencyValid,
   latenessFor,
+  parseReminderDays,
   todayIso,
 } from '@/lib/home-maintenance-schedule';
 
@@ -54,6 +56,7 @@ type DbTask = {
   is_active: boolean;
   date_added: string;
   date_inactivated: string | null;
+  reminder_days: number | null;
 };
 
 type DbCompletion = {
@@ -116,6 +119,7 @@ function mapData(
       isActive: row.is_active !== false,
       dateAdded: asDateOnly(row.date_added) || todayIso(),
       dateInactivated: row.date_inactivated ? asDateOnly(row.date_inactivated) : undefined,
+      reminderDays: parseReminderDays(row.reminder_days),
     })),
     completions: completions.map((row) => ({
       id: row.id,
@@ -394,8 +398,10 @@ export async function POST(request: NextRequest) {
       nextDueDate,
       scheduledDate,
       completeBasis,
+      completedDate: completedDateRaw,
       completionNotes,
       cost,
+      reminderDays,
       serviceProvider,
     } = body as {
       toolId?: string;
@@ -415,8 +421,10 @@ export async function POST(request: NextRequest) {
       nextDueDate?: string;
       scheduledDate?: string;
       completeBasis?: 'today' | 'scheduled';
+      completedDate?: string;
       completionNotes?: string;
       cost?: number | string | null;
+      reminderDays?: number | null;
       serviceProvider?: HmsServiceProvider;
     };
 
@@ -661,6 +669,7 @@ export async function POST(request: NextRequest) {
           next_due_date: nextDueDate,
           location: (location ?? '').trim(),
           notes: (scheduleNotes ?? '').trim(),
+          reminder_days: parseReminderDays(reminderDays),
           ...providerToDb(serviceProvider),
         };
         if (item.is_default) {
@@ -783,6 +792,7 @@ export async function POST(request: NextRequest) {
         next_due_date: nextDueDate,
         location: (location ?? '').trim(),
         notes: (scheduleNotes ?? notes ?? '').trim(),
+        reminder_days: parseReminderDays(reminderDays),
         ...providerToDb(serviceProvider),
         is_active: true,
         date_inactivated: null,
@@ -896,7 +906,8 @@ export async function POST(request: NextRequest) {
         return NextResponse.json({ error: 'Task not found' }, { status: 404 });
       }
 
-      const completedDate = completeBasis === 'scheduled' ? asDateOnly(scheduledDate) : todayIso();
+      const completedDate =
+        completeBasis === 'scheduled' ? asDateOnly(scheduledDate) : completionDayForToday(completedDateRaw);
       const scheduled = asDateOnly(scheduledDate);
       const frequency = dbToFrequency(task as DbTask);
       const nextDue = advanceFrom(completedDate, frequency);

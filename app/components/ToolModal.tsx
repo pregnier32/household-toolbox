@@ -117,18 +117,24 @@ export function ToolModal({ tool, isOpen, onClose, onBuy, isBuying = false, buyM
           {tool.name}
         </h2>
 
-        {/* Price */}
-        <p className="text-lg font-medium text-emerald-400 mb-4 text-center">
-          ${tool.price.toFixed(2)} / month
-        </p>
-
-        {/* Trial Notice - Not shown for coming_soon or custom tools */}
-        {tool.status !== 'coming_soon' && tool.status !== 'custom' && (
-          <div className={trialNoticeWrapClass}>
-            <p className={trialNoticeTextClass}>
-              <span className="font-semibold">7-day free trial</span> - Start your trial today, no charge until after 7 days
+        {/* Price / trial: $0 Home Maintenance is included — do not pair $0.00/month with a 7-day trial. */}
+        {tool.name === 'Home Maintenance Schedule' && Number(tool.price) <= 0 ? (
+          <p className="text-lg font-medium text-emerald-400 mb-4 text-center">
+            Included — no monthly charge
+          </p>
+        ) : (
+          <>
+            <p className="text-lg font-medium text-emerald-400 mb-4 text-center">
+              ${tool.price.toFixed(2)} / month
             </p>
-          </div>
+            {tool.status !== 'coming_soon' && tool.status !== 'custom' && (
+              <div className={trialNoticeWrapClass}>
+                <p className={trialNoticeTextClass}>
+                  <span className="font-semibold">7-day free trial</span> - Start your trial today, no charge until after 7 days
+                </p>
+              </div>
+            )}
+          </>
         )}
 
         {/* Buy Message */}

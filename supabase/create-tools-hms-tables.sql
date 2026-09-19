@@ -167,6 +167,8 @@ CREATE TABLE IF NOT EXISTS tools_hms_tasks (
   location TEXT NOT NULL DEFAULT '',
   notes TEXT NOT NULL DEFAULT '',
   description_override TEXT NOT NULL DEFAULT '',
+  -- Goals-style in-app reminder preference (days before due). No push infra.
+  reminder_days INTEGER CHECK (reminder_days IS NULL OR reminder_days >= 1),
 
   provider_name TEXT NOT NULL DEFAULT '',
   provider_phone TEXT NOT NULL DEFAULT '',

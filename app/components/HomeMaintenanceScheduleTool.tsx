@@ -692,6 +692,57 @@ function ProviderFields({
   );
 }
 
+function ReminderDaysFields({
+  id,
+  value,
+  onChange,
+  labelClass,
+  inputClass,
+  hintClass,
+}: {
+  id: string;
+  value: number | null;
+  onChange: (next: number | null) => void;
+  labelClass: string;
+  inputClass: string;
+  hintClass: string;
+}) {
+  return (
+    <div>
+      <label className={labelClass} htmlFor={id}>
+        Reminder
+      </label>
+      <div className="flex items-center gap-2 flex-wrap">
+        <span className={`text-sm ${hintClass}`}>Remind me</span>
+        <input
+          id={id}
+          type="number"
+          min={1}
+          max={365}
+          value={value ?? ''}
+          onChange={(e) => {
+            const raw = e.target.value;
+            if (raw === '') {
+              onChange(null);
+              return;
+            }
+            const next = Number.parseInt(raw, 10);
+            onChange(Number.isInteger(next) && next >= 1 ? Math.min(next, 365) : null);
+          }}
+          placeholder="Off"
+          className={`${inputClass} w-24`}
+        />
+        <span className={`text-sm ${hintClass}`}>days before due</span>
+      </div>
+    </div>
+  );
+}
+
+function reminderSummary(days: number | null | undefined): string {
+  if (days == null) return 'Off';
+  return `${days} day${days === 1 ? '' : 's'} before due`;
+}
+
 export function HomeMaintenanceScheduleTool({ toolId }: HomeMaintenanceScheduleToolProps) {
 
   const { resolvedTheme } = useTheme();
@@ -736,6 +787,7 @@ export function HomeMaintenanceScheduleTool({ toolId }: HomeMaintenanceScheduleT
     ? 'rounded-2xl border border-slate-200 bg-white p-6 max-w-2xl w-full mx-4 shadow-xl max-h-[90vh] overflow-y-auto'
     : 'rounded-2xl border border-slate-800 bg-slate-900 p-6 max-w-2xl w-full mx-4 max-h-[90vh] overflow-y-auto';
   const overlayClass = 'fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm';
+  const completeOverlayClass = `${overlayClass} overflow-y-auto p-4`;
   const deleteWarningBoxClass = isLight
     ? 'rounded-lg border border-red-300 bg-red-50 px-4 py-3 mb-4'
     : 'rounded-lg border border-red-500/50 bg-red-500/10 px-4 py-3 mb-4';
@@ -794,6 +846,7 @@ export function HomeMaintenanceScheduleTool({ toolId }: HomeMaintenanceScheduleT
   const [sortBy, setSortBy] = useState<SortId>('nextDue');
   const [showHistory, setShowHistory] = useState(false);
   const [libraryCategoryId, setLibraryCategoryId] = useState('');
+  const [librarySearch, setLibrarySearch] = useState('');
   const [libraryFilter, setLibraryFilter] = useState<LibraryFilter>('all');
 
   const [isAddingItem, setIsAddingItem] = useState(false);
@@ -812,6 +865,7 @@ export function HomeMaintenanceScheduleTool({ toolId }: HomeMaintenanceScheduleT
   const [activateLocation, setActivateLocation] = useState('');
   const [activateNotes, setActivateNotes] = useState('');
   const [activateProvider, setActivateProvider] = useState<HmsServiceProvider>(emptyServiceProvider);
+  const [activateReminderDays, setActivateReminderDays] = useState<number | null>(null);
   const [showActivateOptional, setShowActivateOptional] = useState(false);
 
   const [detailTaskId, setDetailTaskId] = useState<string | null>(null);
@@ -823,6 +877,7 @@ export function HomeMaintenanceScheduleTool({ toolId }: HomeMaintenanceScheduleT
   const [detailNotes, setDetailNotes] = useState('');
   const [detailDescription, setDetailDescription] = useState('');
   const [detailProvider, setDetailProvider] = useState<HmsServiceProvider>(emptyServiceProvider);
+  const [detailReminderDays, setDetailReminderDays] = useState<number | null>(null);
 
   const [completeOccurrence, setCompleteOccurrence] = useState<{ taskId: string; scheduledDate: string } | null>(null);
   const [completeBasis, setCompleteBasis] = useState<'today' | 'scheduled'>('today');
@@ -977,6 +1032,7 @@ export function HomeMaintenanceScheduleTool({ toolId }: HomeMaintenanceScheduleT
     setActivateLocation(existing?.location || item?.defaultLocation || '');
     setActivateNotes(existing?.notes || '');
     setActivateProvider(existing?.serviceProvider ? { ...existing.serviceProvider } : emptyServiceProvider());
+    setActivateReminderDays(existing?.reminderDays ?? null);
     setShowActivateOptional(false);
   };
 
@@ -993,6 +1049,7 @@ export function HomeMaintenanceScheduleTool({ toolId }: HomeMaintenanceScheduleT
         nextDueDate: activateNextDue,
         location: activateLocation.trim(),
         scheduleNotes: activateNotes.trim(),
+        reminderDays: activateReminderDays,
         serviceProvider: activateProvider,
       });
       setActivateItemId(null);
@@ -1016,6 +1073,7 @@ export function HomeMaintenanceScheduleTool({ toolId }: HomeMaintenanceScheduleT
     setDetailNotes(task.notes);
     setDetailDescription(item.isDefault ? task.descriptionOverride : item.description);
     setDetailProvider({ ...task.serviceProvider });
+    setDetailReminderDays(task.reminderDays);
     setDetailItemForm({
       name: item.name,
       categoryId: item.categoryId,
@@ -1049,6 +1107,7 @@ export function HomeMaintenanceScheduleTool({ toolId }: HomeMaintenanceScheduleT
         location: detailLocation.trim(),
         scheduleNotes: detailNotes.trim(),
         descriptionOverride: item.isDefault ? detailDescription.trim() : '',
+        reminderDays: detailReminderDays,
         serviceProvider: detailProvider,
       });
       setDetailEditing(false);
@@ -1429,13 +1488,32 @@ export function HomeMaintenanceScheduleTool({ toolId }: HomeMaintenanceScheduleT
   }, [completions, scheduledTasks, libraryItems, categories]);
   const historyCount = historyCompletionRows.length + historyTasks.length;
   const selectedLibraryCategory = categories.find((category) => category.id === libraryCategoryId) ?? sortedCategories[0];
-  const itemsInCategory = libraryItems
-    .filter((item) => item.categoryId === selectedLibraryCategory?.id)
+  const libraryQuery = librarySearch.trim().toLowerCase();
+  const libraryItemMatches = (item: HmsLibraryItem) => {
+    if (!libraryQuery) return true;
+    return (
+      item.name.toLowerCase().includes(libraryQuery) ||
+      item.description.toLowerCase().includes(libraryQuery) ||
+      item.notes.toLowerCase().includes(libraryQuery) ||
+      item.defaultLocation.toLowerCase().includes(libraryQuery) ||
+      categoryName(item.categoryId).toLowerCase().includes(libraryQuery)
+    );
+  };
+  const visibleLibraryCategories = libraryQuery
+    ? sortedCategories.filter(
+        (category) =>
+          category.name.toLowerCase().includes(libraryQuery) ||
+          libraryItems.some((item) => item.categoryId === category.id && libraryItemMatches(item))
+      )
+    : sortedCategories;
+  const visibleLibraryItems = libraryItems
+    .filter((item) => (libraryQuery ? libraryItemMatches(item) : item.categoryId === selectedLibraryCategory?.id))
     .sort((a, b) => a.name.localeCompare(b.name));
 
-  const availableItems = itemsInCategory.filter((item) => !item.isHidden && !activeScheduleByItem.has(item.id));
-  const scheduledItems = itemsInCategory.filter((item) => activeScheduleByItem.has(item.id));
-  const hiddenItems = itemsInCategory.filter((item) => item.isDefault && item.isHidden);
+  const availableItems = visibleLibraryItems.filter((item) => !item.isHidden && !activeScheduleByItem.has(item.id));
+  const scheduledItems = visibleLibraryItems.filter((item) => activeScheduleByItem.has(item.id));
+  const hiddenItems = visibleLibraryItems.filter((item) => item.isDefault && item.isHidden);
+  const libraryScopeHint = libraryQuery ? '.' : ' in this category.';
 
   const detailTask = scheduledTasks.find((task) => task.id === detailTaskId);
   const detailItem = detailTask ? libraryItems.find((item) => item.id === detailTask.libraryItemId) : undefined;
@@ -1560,7 +1638,7 @@ export function HomeMaintenanceScheduleTool({ toolId }: HomeMaintenanceScheduleT
         </div>
         <div>
           <label className={compactLabelClass} htmlFor={`hms-item-notes-${item?.id ?? 'new'}`}>
-            Notes
+            Item notes
           </label>
           <textarea
             id={`hms-item-notes-${item?.id ?? 'new'}`}
@@ -2000,6 +2078,20 @@ export function HomeMaintenanceScheduleTool({ toolId }: HomeMaintenanceScheduleT
             </div>
           )}
 
+          <div className="max-w-md">
+            <label className={compactLabelClass} htmlFor="hms-library-search">
+              Search
+            </label>
+            <input
+              id="hms-library-search"
+              type="text"
+              value={librarySearch}
+              onChange={(e) => setLibrarySearch(e.target.value)}
+              placeholder="Search library items..."
+              className={inputClass}
+            />
+          </div>
+
           <div
             className={`flex gap-4 rounded-2xl overflow-hidden ${
               isLight ? 'border border-slate-300 bg-white' : 'border border-slate-800 bg-slate-900/70'
@@ -2015,7 +2107,10 @@ export function HomeMaintenanceScheduleTool({ toolId }: HomeMaintenanceScheduleT
                   Categories
                 </h3>
                 <nav className="space-y-0.5" aria-label="Maintenance item categories">
-                  {sortedCategories.map((category) => (
+                  {visibleLibraryCategories.length === 0 ? (
+                    <p className={`px-3 py-2 text-sm ${mutedTextClass}`}>No matching categories.</p>
+                  ) : (
+                    visibleLibraryCategories.map((category) => (
                     <button
                       key={category.id}
                       type="button"
@@ -2032,14 +2127,15 @@ export function HomeMaintenanceScheduleTool({ toolId }: HomeMaintenanceScheduleT
                     >
                       {category.name}
                     </button>
-                  ))}
+                  ))
+                  )}
                 </nav>
               </div>
             </div>
             <div className="flex-1 min-w-0 p-6">
               <div className="flex flex-wrap items-center justify-between gap-3 mb-4">
                 <h3 className={isLight ? 'text-lg font-semibold text-emerald-700' : 'text-lg font-semibold text-emerald-300'}>
-                  {selectedLibraryCategory?.name ?? 'Category'}
+                  {libraryQuery ? 'Search results' : selectedLibraryCategory?.name ?? 'Category'}
                 </h3>
                 <div className="flex flex-wrap gap-2">
                   {(
@@ -2072,9 +2168,9 @@ export function HomeMaintenanceScheduleTool({ toolId }: HomeMaintenanceScheduleT
                   })}
                 </div>
               </div>
-              {renderLibrarySection('Available', availableItems, 'No available items in this category.', 'available')}
-              {renderLibrarySection('Scheduled', scheduledItems, 'No scheduled items in this category.', 'scheduled')}
-              {renderLibrarySection('Hidden defaults', hiddenItems, 'No hidden defaults in this category.', 'hidden')}
+              {renderLibrarySection('Available', availableItems, `No available items${libraryScopeHint}`, 'available')}
+              {renderLibrarySection('Scheduled', scheduledItems, `No scheduled items${libraryScopeHint}`, 'scheduled')}
+              {renderLibrarySection('Hidden defaults', hiddenItems, `No hidden defaults${libraryScopeHint}`, 'hidden')}
             </div>
           </div>
         </div>
@@ -2278,8 +2374,23 @@ export function HomeMaintenanceScheduleTool({ toolId }: HomeMaintenanceScheduleT
                   className={inputClass}
                 />
               </div>
-              <button type="button" onClick={() => setShowActivateOptional((open) => !open)} className={optionalToggleClass}>
-                {showActivateOptional ? 'Hide optional details' : 'Optional details'}
+              <ReminderDaysFields
+                id="hms-activate-reminder-days"
+                value={activateReminderDays}
+                onChange={setActivateReminderDays}
+                labelClass={labelClass}
+                inputClass={inputClass}
+                hintClass={mutedTextClass}
+              />
+              <button
+                type="button"
+                onClick={() => setShowActivateOptional((open) => !open)}
+                className={optionalToggleClass}
+                aria-expanded={showActivateOptional}
+              >
+                {showActivateOptional
+                  ? 'Hide optional schedule details'
+                  : 'Show optional schedule details (location, notes, provider)'}
               </button>
               {showActivateOptional && (
                 <div className="space-y-4">
@@ -2298,7 +2409,7 @@ export function HomeMaintenanceScheduleTool({ toolId }: HomeMaintenanceScheduleT
                   </div>
                   <div>
                     <label className={labelClass} htmlFor="hms-activate-notes">
-                      Notes
+                      Schedule notes
                     </label>
                     <textarea
                       id="hms-activate-notes"
@@ -2331,8 +2442,8 @@ export function HomeMaintenanceScheduleTool({ toolId }: HomeMaintenanceScheduleT
       )}
 
       {completeOccurrence && (
-        <div className={overlayClass}>
-          <div className={modalCardClass}>
+        <div className={completeOverlayClass}>
+          <div className={`${modalCardClass} min-h-0`}>
             <div className="flex items-center justify-between mb-4">
               <h3 className={sectionTitleClass}>Complete task</h3>
               <button
@@ -2470,6 +2581,14 @@ export function HomeMaintenanceScheduleTool({ toolId }: HomeMaintenanceScheduleT
                     className={inputClass}
                   />
                 </div>
+                <ReminderDaysFields
+                  id="hms-detail-reminder-days"
+                  value={detailReminderDays}
+                  onChange={setDetailReminderDays}
+                  labelClass={labelClass}
+                  inputClass={inputClass}
+                  hintClass={mutedTextClass}
+                />
                 <div>
                   <label className={labelClass} htmlFor="hms-detail-location">
                     Location
@@ -2485,7 +2604,7 @@ export function HomeMaintenanceScheduleTool({ toolId }: HomeMaintenanceScheduleT
                 </div>
                 <div>
                   <label className={labelClass} htmlFor="hms-detail-notes">
-                    Notes
+                    Schedule notes
                   </label>
                   <textarea
                     id="hms-detail-notes"
@@ -2531,6 +2650,10 @@ export function HomeMaintenanceScheduleTool({ toolId }: HomeMaintenanceScheduleT
                     <p className={bodyTextClass}>{formatDateForDisplay(detailTask.nextDueDate)}</p>
                   </div>
                   <div>
+                    <p className={compactLabelClass}>Reminder</p>
+                    <p className={bodyTextClass}>{reminderSummary(detailTask.reminderDays)}</p>
+                  </div>
+                  <div>
                     <p className={compactLabelClass}>Last completed</p>
                     <p className={bodyTextClass}>{detailTask.lastCompletedDate ? formatDateForDisplay(detailTask.lastCompletedDate) : '—'}</p>
                   </div>
@@ -2549,7 +2672,7 @@ export function HomeMaintenanceScheduleTool({ toolId }: HomeMaintenanceScheduleT
                 </div>
                 {detailTask.notes && (
                   <div>
-                    <p className={compactLabelClass}>Notes</p>
+                    <p className={compactLabelClass}>Schedule notes</p>
                     <p className={bodyTextClass}>{detailTask.notes}</p>
                   </div>
                 )}
