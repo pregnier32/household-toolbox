@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getSession } from '@/lib/session';
 import { supabaseServer } from '@/lib/supabaseServer';
+import { assertCanStoreBytes, refreshUserStorageUsage } from '@/lib/user-storage';
 
 // Constants
 const MAX_FILE_SIZE = 10 * 1024 * 1024; // 10MB in bytes
@@ -16,6 +17,8 @@ async function uploadFile(
     if (file.size > MAX_FILE_SIZE) {
       throw new Error(`File size cannot exceed ${MAX_FILE_SIZE / 1024 / 1024}MB`);
     }
+
+    await assertCanStoreBytes(userId, file.size);
 
     const sanitizedFileName = file.name.replace(/[^a-zA-Z0-9.-]/g, '_');
     const storageFileName = `${folder}/${userId}/${Date.now()}-${sanitizedFileName}`;
@@ -45,6 +48,8 @@ async function uploadFile(
       .from(bucketName)
       .getPublicUrl(storageFileName);
     
+    await refreshUserStorageUsage(userId);
+
     return {
       url: urlData.publicUrl,
       fileName: file.name,
@@ -865,6 +870,7 @@ export async function DELETE(request: NextRequest) {
       .filter((path: string | null): path is string => Boolean(path));
     if (storagePaths.length > 0) {
       await supabaseServer.storage.from('pet-care-schedule').remove(storagePaths);
+      await refreshUserStorageUsage(user.id);
     }
 
     if (finalToolId) {

@@ -2,7 +2,7 @@
 -- All tables prefixed with 'tools_hcah_'
 -- Matches UI: headers (family members), appointment records, documents per record.
 --
--- Storage: Bucket 'heathcare-appt-history' (10MB limit, image/*, application/pdf).
+-- Storage: Bucket 'healthcare-appt-history' (10MB limit, image/*, application/pdf).
 -- Apply RLS policies per system_design.md. See create-healthcare-appts-history-storage-bucket.sql.
 
 -- ============================================================================

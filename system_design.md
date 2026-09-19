@@ -12,6 +12,7 @@ This document defines design standards, UX patterns, database conventions, and p
 - [Record row actions (Active / History icons)](#record-row-actions-active-and-history)
 - [Components — forms](#components---forms)
 - [UX rules](#ux-rules)
+- [Attachments](#attachments)
 - [Accessibility](#accessibility)
 - [Database standards](#database-standards)
 - [Implementation notes](#implementation-notes)
@@ -372,6 +373,7 @@ Pick icons that match your domain; keep **stroke** weight and **viewBox** consis
 
 | Action | Typical icon |
 |--------|----------------|
+| Attachments | Paperclip (`AttachmentButton`) — the only entry point for files on a record |
 | Edit | Pencil / square-edit |
 | Move to history / Archive | Archive box |
 | Reactivate / Restore | Arrow U-turn / back |
@@ -545,7 +547,9 @@ Use this standard design for any "display on dashboard" or similar on/off toggle
 - Use `px-4` for better visual alignment with options
 
 ### File Input
-For file upload inputs, use a custom styled approach that replaces the default browser "Choose File" button with an icon and custom label:
+**Tool record attachments** (files kept with a document, appointment, receipt, note, etc.) must use the paperclip + Attachment modal — see **Attachments**. Do not add a standalone “Choose file” field on add/edit forms for those files.
+
+For rare non-attachment file pickers that are not tied to a record, a custom styled input may still replace the default browser control:
 ```tsx
 <div className="relative">
   <input
@@ -679,6 +683,7 @@ For dropdowns that need to display items organized by categories or areas (e.g.,
 - **Modal Container**: `w-full max-w-lg rounded-2xl border border-slate-800 bg-slate-900 p-6 shadow-2xl`
 - **Close Button**: Position in top-right with `aria-label="Close modal"`
 - **Keyboard**: Support Escape key to close (implement with `useEffect`)
+- **Stacking**: The Attachment modal uses `z-50`. Any password, forgot-password, or confirm overlay that can open *from* attachments must use `z-[70]` (or higher) so it is never hidden behind the Attachment modal.
 
 ### Tab Navigation
 - **Container**: `border-b border-slate-800` with `flex gap-2`
@@ -1193,6 +1198,158 @@ Use `shrink-0` on row icons (SVG) where layout needs it. Use `type="button"` on 
 - **Info Messages**: Blue or slate styling
 - **Position**: Display near the action that triggered them (form top, button area, etc.)
 
+## Attachments
+
+Every tool that stores files with a record must use the same paperclip + modal experience. Users should not have to relearn how to add, view, download, or remove files when they move from Important Documents to Healthcare, Repair History, or any later tool.
+
+**Reference implementation:** Important Documents (`app/components/ImportantDocumentsTool.tsx`) using `AttachmentButton` and `AttachmentModal`. Shared helpers live in `lib/attachments.ts`. Shared quota logic lives in `lib/user-storage.ts`.
+
+### Product rules
+
+- **One entry point.** A paperclip icon is the only control for attachments on add forms, edit forms, active cards, and history cards. Do not put a download, view, or “choose file” icon next to the paperclip.
+- **One modal.** Clicking the paperclip opens `AttachmentModal`. Add, view, download, replace, and remove all happen there.
+- **Train the habit.** If a record has a file, the paperclip shows a count badge. Users learn: paperclip = files.
+- **Same look, same limits.** Allowed types, 10 MB per file, drop zone, and storage footer stay the same across tools. Only `maxFiles` and password rules vary by tool.
+
+### Shared components
+
+Use these; do not invent a per-tool upload UI.
+
+| Piece | File | Role |
+|-------|------|------|
+| Paperclip trigger | `app/components/AttachmentButton.tsx` | Icon-only button; emerald + count badge when files exist |
+| Attachment modal | `app/components/AttachmentModal.tsx` | List files, preview, add/replace, download, remove, storage footer |
+| File helpers | `lib/attachments.ts` | Allowed types, 10 MB cap, `filterIncomingAttachments`, preview helpers |
+| Quota helpers | `lib/user-storage.ts` | Plan limits, pre-upload check, recount after add/delete |
+
+`AttachmentButton` props: `count`, `onClick`, optional `disabled` and `ariaLabel`. Default labels: “Add attachments” or “Attachments, N file(s)”.
+
+`AttachmentModal` props:
+
+- `open`, `onClose`, `title` (shown as `Attachments · {title}`)
+- `files` (`AttachmentItem[]`), `onAdd`, `onRemove`
+- `onView` / `onDownload` when the tool owns those actions (signed URLs, password, inline vs attachment)
+- `previewItem` to open an in-modal image preview after a successful View
+- `maxFiles` — omit for unlimited; set `1` for a single-file record (Important Documents)
+- `busy` while an upload, replace, or remove is in flight
+
+### Paperclip placement
+
+Put `AttachmentButton` in the record action toolbar with the other icon actions (see **Record row actions**). Typical left-to-right order:
+
+1. Paperclip
+2. Primary emerald (Edit / Reactivate)
+3. Secondary (Move to history)
+4. Danger (Delete), when supported
+
+On add/edit forms, place the paperclip near the record title or the other header actions — not as a full-width file field in the form body.
+
+### Modal behavior
+
+- **Empty state:** “No attachments yet.” plus the drop zone.
+- **List:** File name, size, and “queued until save” for files chosen before the parent record is created.
+- **Actions per file:** View (when previewable or the tool supplies `onView`), Download (saved files only), Remove.
+- **Add / replace:** Dashed drop zone + Browse. Copy: “Images, PDFs, Word, and Excel up to 10 MB each.”
+- **Single-file tools (`maxFiles={1}`):** Drop/browse replaces the current file. Button label becomes “Replace file”.
+- **Footer:** “Storage used: {used} of {limit}” from `GET /api/account/storage`.
+- **Escape:** Closes an open image preview first, then the modal.
+- **Overlay:** `z-50`. Do not raise the Attachment modal above password or confirm dialogs.
+
+### Allowed files
+
+Shared constants in `lib/attachments.ts`:
+
+- **Max size:** 10 MB per file (`ATTACHMENT_MAX_FILE_BYTES`)
+- **Types:** JPEG, PNG, GIF, WebP, HEIC/HEIF, BMP, TIFF, PDF, Word (`.doc` / `.docx`), Excel (`.xls` / `.xlsx`)
+- **Validation:** Always run `filterIncomingAttachments` on the client (count, type, size, remaining quota). The API must repeat size/type/quota checks.
+
+Word and Excel can be stored and downloaded. They are not previewable in the app.
+
+### View vs download
+
+Do not treat View as a disguised download.
+
+| Kind | View | Download |
+|------|------|----------|
+| Image | Show inside the Attachment modal (`previewItem` or local object URL) | Force a file download |
+| PDF | Open in a new tab with `Content-Disposition: inline` (download route `inline=1`) | Force a file download (`Content-Disposition: attachment`) |
+| Word / Excel | Hide View or show that preview is unavailable | Force a file download |
+
+Pending (unsaved) files may preview from a local `URL.createObjectURL`. Saved files must go through the tool’s authenticated download/view route — never a raw public storage URL in the browser.
+
+### Create vs saved records
+
+- **New record:** Files chosen in the modal stay queued on the client until the user saves the parent record. Removing a queued file only clears local state.
+- **Saved record:** Add/replace/remove call the tool API immediately, then refresh the record. Show `busy` on the modal while that request runs.
+- **History / inactive records:** Same paperclip and modal. If the tool treats history as read-only, disable add/replace/remove but still allow View/Download (and password prompts).
+
+### Password-protected files
+
+Important Documents (and any later tool that locks a file) must require the record password for **View, Download, Remove, and Replace**.
+
+- Prompt with the existing password modal. Do not add a second password field inside the Attachment modal.
+- Stacking: password and forgot-password overlays use `z-[70]` so they sit above the Attachment modal (`z-50`).
+- The client must not call remove/replace until a password is entered (or the record is not protected).
+- The API must also verify the password (bcrypt hash on the record). Never trust the UI alone — a request without a valid password must fail.
+- After a correct password, complete the original intent (view, download, remove, or replace). Cancel/Escape clears any queued replacement file.
+
+### Storage quota
+
+Attachments share one per-user limit across all tool buckets.
+
+| Plan | Included limit |
+|------|----------------|
+| Free | 200 MB |
+| Paid | 1 GB |
+| Add-on (later) | +1 GB per $1/month — UI may show disabled placeholder buttons; do not enable billing yet |
+
+**When to calculate:**
+
+- **Do not** scan every bucket when the user menu opens.
+- **Do** incrementally check remaining quota before an upload (`assertUserCanUpload` / equivalent).
+- **Do** recount after a successful upload or storage delete, and when the user opens **Storage** (`/dashboard/storage`).
+- Cache `storage_used_bytes`, `storage_plan`, `storage_addon_gb`, and `storage_usage_updated_at` on `users`. Recount via `get_user_storage_usage` / storage listing in `lib/user-storage.ts`.
+
+**Where users see usage:**
+
+- User menu (top right): percent used, fetched when the menu opens from `GET /api/account/storage`. Clicking it goes to `/dashboard/storage`.
+- Storage page: total used vs limit, plus a per-tool breakdown of buckets that hold files.
+- Attachment modal footer: compact used-of-limit line.
+
+If an add would exceed the limit, reject it with a clear message (“would exceed your storage limit”) and do not upload.
+
+### Server and storage rules
+
+- Store files in the tool’s private bucket under a user-scoped path (`{userId}/...` or `{folder}/{userId}/...`). First path segment used by RLS must be `auth.uid()`.
+- Prefer a storage-relative path in the database, not a public URL.
+- Uploads go through the tool API with the service-role server client. Check quota, MIME type, and size before writing.
+- After add or delete, recount the user’s used bytes.
+- Password-protected view/download routes must verify the password, then stream the object. Use `inline=1` only for View.
+- Account deletion must remove the user’s objects from every tool bucket (`lib/user-data-deletion.ts`). See **Storage Buckets and Policies**.
+
+### Rolling a tool onto this pattern
+
+1. Remove any inline file input, card download icon, or one-off upload modal.
+2. Add `AttachmentButton` on add, edit, active, and history surfaces.
+3. Open `AttachmentModal` with that record’s files. Set `maxFiles={1}` only when the data model is one file per record.
+4. Queue files on create; persist immediately on saved records.
+5. Wire View/Download through the tool’s authenticated route (inline vs attachment).
+6. Call the shared quota check on upload and recount after add/delete.
+7. If the record can be password-protected, gate view/download/remove/replace in both UI and API, with the password overlay at `z-[70]`.
+8. Register the bucket in `STORAGE_TOOL_BUCKETS` and in account-deletion cleanup.
+
+### What not to do
+
+- Do not add a download or view icon beside the paperclip on cards or rows.
+- Do not use the older **File Input** pattern for files that belong to a tool record.
+- Do not let a password or confirm dialog open behind the Attachment modal.
+- Do not allow Remove or Replace on a protected file without a verified password (client and server).
+- Do not preview Word/Excel in the browser; download them.
+- Do not scan all 18 buckets on every user-menu open.
+- Do not enable paid storage / add-on buttons until billing is actually wired.
+
+---
+
 ## Accessibility
 
 ### Semantic HTML
@@ -1428,7 +1585,7 @@ USING (
 - `repair-history` - Stores receipts, warranties, and repair pictures (`supabase/archive/create-repair-history-storage-bucket.sql`)
 - `pet-care-schedule` - Stores pet documents (`supabase/archive/create-pet-care-schedule-storage-bucket.sql`)
 - `important-documents` - Stores important documents (warranties, policies, records) (`supabase/archive/create-important-documents-storage-bucket.sql`)
-- `heathcare-appt-history` - Healthcare appointment documents (`supabase/archive/create-healthcare-appts-history-storage-bucket.sql`)
+- `healthcare-appt-history` - Healthcare appointment documents (`supabase/archive/create-healthcare-appts-history-storage-bucket.sql`)
 - `hsa-tracker` - Planned for HSA expense receipts (`supabase/create-tools-hsa-tables.sql`, phase 2)
 
 **Why These Policies Matter**:
@@ -1436,6 +1593,16 @@ USING (
 - **Defense in Depth**: Provides protection even if client-side access is added later
 - **Consistency**: All buckets follow the same security pattern
 - **Idempotent**: Scripts can be safely re-run (DROP IF EXISTS before CREATE)
+
+#### User storage quota
+
+All tool attachments share one per-user limit. See **Attachments** for the product rules.
+
+- Free plan: 200 MB. Paid plan: 1 GB. Extra 1 GB add-ons are designed but not billed yet.
+- Cache usage on `users` (`storage_used_bytes`, `storage_plan`, `storage_addon_gb`, `storage_usage_updated_at`).
+- Check remaining quota before each upload; recount after upload or storage delete, and when the user opens `/dashboard/storage`.
+- Surface percent used in the user menu (`GET /api/account/storage`) and a per-tool breakdown on the Storage page.
+- Helper: `lib/user-storage.ts`. SQL: `supabase/ADD_users_storage_quota.sql`.
 
 #### Account Data Deletion Architecture
 

@@ -1,9 +1,10 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getSession } from '@/lib/session';
 import { supabaseServer } from '@/lib/supabaseServer';
+import { assertCanStoreBytes, isStorageLimitError, refreshUserStorageUsage } from '@/lib/user-storage';
 
 const MAX_FILE_SIZE = 10 * 1024 * 1024; // 10MB
-const BUCKET_NAME = 'heathcare-appt-history';
+const BUCKET_NAME = 'healthcare-appt-history';
 
 async function findHealthcareDashboardItem(
   userId: string,
@@ -89,6 +90,7 @@ async function uploadFile(
   folder: string
 ): Promise<{ url: string; fileName: string; fileSize: number; fileType: string } | null> {
   if (file.size > MAX_FILE_SIZE) throw new Error(`File size cannot exceed ${MAX_FILE_SIZE / 1024 / 1024}MB`);
+  await assertCanStoreBytes(userId, file.size);
   const sanitized = file.name.replace(/[^a-zA-Z0-9.-]/g, '_');
   const path = `${folder}/${userId}/${Date.now()}-${sanitized}`;
   const buffer = Buffer.from(await file.arrayBuffer());
@@ -102,6 +104,7 @@ async function uploadFile(
     throw new Error(`Upload failed: ${uploadError.message}`);
   }
   const { data: urlData } = supabaseServer.storage.from(BUCKET_NAME).getPublicUrl(path);
+  await refreshUserStorageUsage(userId);
   return { url: urlData.publicUrl, fileName: file.name, fileSize: file.size, fileType: file.type };
 }
 
@@ -374,7 +377,7 @@ export async function POST(request: NextRequest) {
               console.error('Document upload failed:', err);
               return NextResponse.json(
                 { error: err instanceof Error ? err.message : 'Document upload failed' },
-                { status: 500 }
+                { status: isStorageLimitError(err) ? 413 : 500 }
               );
             }
           }

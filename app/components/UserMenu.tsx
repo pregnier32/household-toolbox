@@ -4,6 +4,12 @@ import { useState, useRef, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { useTheme, type ThemeMode } from './AppThemeProvider';
 
+type StorageSummary = {
+  percent: number;
+  usedLabel: string;
+  limitLabel: string;
+};
+
 type UserMenuProps = {
   userName: string;
   onSignOut: () => void | Promise<void>;
@@ -11,6 +17,8 @@ type UserMenuProps = {
 
 export function UserMenu({ userName, onSignOut }: UserMenuProps) {
   const [isOpen, setIsOpen] = useState(false);
+  const [storage, setStorage] = useState<StorageSummary | null>(null);
+  const [storageLoading, setStorageLoading] = useState(false);
   const menuRef = useRef<HTMLDivElement>(null);
   const router = useRouter();
   const { theme, setTheme, resolvedTheme } = useTheme();
@@ -26,8 +34,8 @@ export function UserMenu({ userName, onSignOut }: UserMenuProps) {
     : 'flex items-center gap-2 rounded-lg px-3 py-2 text-sm font-medium text-slate-300 transition-colors hover:bg-slate-800 hover:text-slate-100';
 
   const menuPanelClass = isLight
-    ? 'absolute right-0 z-50 mt-2 w-48 rounded-lg border border-slate-200 bg-white shadow-lg ring-1 ring-slate-900/5'
-    : 'absolute right-0 z-50 mt-2 w-48 rounded-lg border border-slate-700 bg-slate-800 shadow-lg';
+    ? 'absolute right-0 z-50 mt-2 w-72 rounded-lg border border-slate-200 bg-white shadow-lg ring-1 ring-slate-900/5'
+    : 'absolute right-0 z-50 mt-2 w-72 rounded-lg border border-slate-700 bg-slate-800 shadow-lg';
 
   const menuItemClass = isLight
     ? 'flex w-full items-center gap-3 px-4 py-2 text-sm text-slate-700 transition-colors hover:bg-slate-100'
@@ -61,6 +69,33 @@ export function UserMenu({ userName, onSignOut }: UserMenuProps) {
 
     return () => {
       document.removeEventListener('mousedown', handleClickOutside);
+    };
+  }, [isOpen]);
+
+  useEffect(() => {
+    if (!isOpen) return;
+
+    let cancelled = false;
+    setStorageLoading(true);
+    fetch('/api/account/storage')
+      .then((res) => (res.ok ? res.json() : null))
+      .then((data) => {
+        if (cancelled || !data?.storage) return;
+        setStorage({
+          percent: data.storage.percent,
+          usedLabel: data.storage.usedLabel,
+          limitLabel: data.storage.limitLabel,
+        });
+      })
+      .catch(() => {
+        if (!cancelled) setStorage(null);
+      })
+      .finally(() => {
+        if (!cancelled) setStorageLoading(false);
+      });
+
+    return () => {
+      cancelled = true;
     };
   }, [isOpen]);
 
@@ -179,6 +214,41 @@ export function UserMenu({ userName, onSignOut }: UserMenuProps) {
                 />
               </svg>
               <span>Support</span>
+            </button>
+            <div className={dividerClass} />
+            <button
+              type="button"
+              onClick={() => {
+                router.push('/dashboard/storage');
+                setIsOpen(false);
+              }}
+              className={
+                isLight
+                  ? 'flex w-full flex-col items-stretch gap-2 px-4 py-2 text-sm text-slate-700 transition-colors hover:bg-slate-100'
+                  : 'flex w-full flex-col items-stretch gap-2 px-4 py-2 text-sm text-slate-300 transition-colors hover:bg-slate-700'
+              }
+            >
+              <span className="flex w-full items-center justify-between">
+                <span>Storage</span>
+                <span className={isLight ? 'text-xs text-slate-500' : 'text-xs text-slate-400'}>
+                  {storageLoading && !storage ? '…' : `${storage?.percent ?? 0}%`}
+                </span>
+              </span>
+              <span className={`h-1.5 w-full overflow-hidden rounded-full ${isLight ? 'bg-slate-200' : 'bg-slate-700'}`}>
+                <span
+                  className={`block h-full rounded-full ${
+                    (storage?.percent ?? 0) >= 95
+                      ? 'bg-red-500'
+                      : (storage?.percent ?? 0) >= 80
+                        ? 'bg-amber-400'
+                        : 'bg-emerald-500'
+                  }`}
+                  style={{ width: `${Math.min(100, storage?.percent ?? 0)}%` }}
+                />
+              </span>
+              <span className={isLight ? 'text-xs text-slate-500' : 'text-xs text-slate-400'}>
+                {storage ? `${storage.usedLabel} of ${storage.limitLabel}` : 'View attachment usage'}
+              </span>
             </button>
             <div className={dividerClass} />
             <div className="px-4 py-2">

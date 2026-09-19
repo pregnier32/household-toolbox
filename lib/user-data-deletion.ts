@@ -51,7 +51,7 @@ async function removeStoragePaths(bucket: string, paths: string[]): Promise<void
  * |-------------------------|--------------------------------------------------------------------|------------------------|-------------------------|
  * | Important Documents     | tools_id_documents (file_url)                                      | important-documents    | supabase/archive/create-important-documents-tables.sql, create-important-documents-storage-bucket.sql |
  * | Repair History          | tools_rh_records (receipt_file_url, warranty_file_url), tools_rh_repair_pictures (file_url) | repair-history | supabase/archive/create-repair-history-tables.sql, create-repair-history-storage-bucket.sql |
- * | Healthcare Appts        | tools_hcah_documents (file_url) via headers → records              | heathcare-appt-history | supabase/archive/create-healthcare-appts-history-tables.sql, create-healthcare-appts-history-storage-bucket.sql |
+ * | Healthcare Appts        | tools_hcah_documents (file_url) via headers → records              | healthcare-appt-history | supabase/archive/create-healthcare-appts-history-tables.sql, create-healthcare-appts-history-storage-bucket.sql |
  * | Pet Care Schedule       | tools_pcs_documents (file_url) via pets                            | pet-care-schedule      | supabase/archive/create-pet-care-schedule-tables.sql, create-pet-care-schedule-storage-bucket.sql |
  * | HSA Tracker (receipts)  | tools_hsa_expense_receipts (file_url)* via expenses                | hsa-tracker*           | supabase/create-tools-hsa-tables.sql (*when receipts table + bucket are enabled) |
  *
@@ -160,8 +160,8 @@ export async function deleteUserAndAssociatedData(userId: string): Promise<void>
         .in('record_id', hcahRecordIds);
       if (hcahDocsError && !isMissingRelationError(hcahDocsError)) throw hcahDocsError;
       (hcahDocs || []).forEach((row: { file_url: string | null }) => {
-        const path = row.file_url ? extractStoragePath(row.file_url, 'heathcare-appt-history') : null;
-        if (path) storageDeletes.push({ bucket: 'heathcare-appt-history', path });
+        const path = row.file_url ? extractStoragePath(row.file_url, 'healthcare-appt-history') : null;
+        if (path) storageDeletes.push({ bucket: 'healthcare-appt-history', path });
       });
     }
   }

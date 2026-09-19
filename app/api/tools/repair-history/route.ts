@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getSession } from '@/lib/session';
 import { supabaseServer } from '@/lib/supabaseServer';
+import { assertCanStoreBytes, isStorageLimitError, refreshUserStorageUsage } from '@/lib/user-storage';
 
 // Constants
 const MAX_FILE_SIZE = 10 * 1024 * 1024; // 10MB in bytes
@@ -233,6 +234,8 @@ async function uploadFile(
       throw new Error(`File size cannot exceed ${MAX_FILE_SIZE / 1024 / 1024}MB`);
     }
 
+    await assertCanStoreBytes(userId, file.size);
+
     const sanitizedFileName = file.name.replace(/[^a-zA-Z0-9.-]/g, '_');
     const storageFileName = `${folder}/${userId}/${Date.now()}-${sanitizedFileName}`;
     
@@ -261,6 +264,8 @@ async function uploadFile(
       .from(bucketName)
       .getPublicUrl(storageFileName);
     
+    await refreshUserStorageUsage(userId);
+
     return {
       url: urlData.publicUrl,
       fileName: file.name,
@@ -670,7 +675,7 @@ export async function POST(request: NextRequest) {
           }
         } catch (error: any) {
           console.error('Failed to upload receipt file:', receiptFile.name, error);
-          return NextResponse.json({ error: error.message || 'Failed to upload receipt file. Please ensure the storage bucket exists.' }, { status: 500 });
+          return NextResponse.json({ error: error.message || 'Failed to upload receipt file. Please ensure the storage bucket exists.' }, { status: isStorageLimitError(error) ? 413 : 500 });
         }
       }
 
@@ -684,7 +689,7 @@ export async function POST(request: NextRequest) {
           }
         } catch (error: any) {
           console.error('Failed to upload warranty file:', warrantyFile.name, error);
-          return NextResponse.json({ error: error.message || 'Failed to upload warranty file. Please ensure the storage bucket exists.' }, { status: 500 });
+          return NextResponse.json({ error: error.message || 'Failed to upload warranty file. Please ensure the storage bucket exists.' }, { status: isStorageLimitError(error) ? 413 : 500 });
         }
       }
 
@@ -867,6 +872,9 @@ export async function POST(request: NextRequest) {
               }
             } catch (error: any) {
               console.error('Failed to upload repair picture:', picture.name, error);
+              if (isStorageLimitError(error)) {
+                return NextResponse.json({ error: error.message }, { status: 413 });
+              }
               // Continue with other pictures even if one fails
             }
           }

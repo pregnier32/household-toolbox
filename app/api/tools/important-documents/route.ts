@@ -2,10 +2,33 @@ import { NextRequest, NextResponse } from 'next/server';
 import { getSession } from '@/lib/session';
 import { supabaseServer } from '@/lib/supabaseServer';
 import bcrypt from 'bcryptjs';
+import { assertCanStoreBytes, isStorageLimitError, refreshUserStorageUsage } from '@/lib/user-storage';
 
 // Constants
 const MAX_FILE_SIZE = 10 * 1024 * 1024; // 10MB in bytes
 const SALT_ROUNDS = 10; // For password hashing
+const DOCUMENT_BUCKET = 'important-documents';
+
+function extractStoragePath(fileUrl: string | null | undefined): string | null {
+  if (!fileUrl) return null;
+  if (!fileUrl.startsWith('http://') && !fileUrl.startsWith('https://')) return fileUrl;
+  try {
+    const url = new URL(fileUrl);
+    const marker = `${DOCUMENT_BUCKET}/`;
+    const markerIndex = url.pathname.indexOf(marker);
+    if (markerIndex === -1) return null;
+    return decodeURIComponent(url.pathname.slice(markerIndex + marker.length));
+  } catch {
+    return null;
+  }
+}
+
+async function removeStoredDocumentFile(fileUrl: string | null | undefined, userId: string): Promise<void> {
+  const path = extractStoragePath(fileUrl);
+  if (!path) return;
+  await supabaseServer.storage.from(DOCUMENT_BUCKET).remove([path]);
+  await refreshUserStorageUsage(userId);
+}
 
 // GET - Fetch all documents and tags for the current user
 export async function GET(request: NextRequest) {
@@ -199,6 +222,109 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ success: true });
     }
 
+    if ((action === 'replaceFile' || action === 'removeFile') && documentId) {
+      const { data: existing, error: existingError } = await supabaseServer
+        .from('tools_id_documents')
+        .select('id, file_url, file_size, requires_password_for_download, download_password_hash')
+        .eq('id', documentId)
+        .eq('user_id', user.id)
+        .eq('tool_id', toolId)
+        .single();
+
+      if (existingError || !existing) {
+        return NextResponse.json({ error: 'Document not found' }, { status: 404 });
+      }
+
+      if (existing.requires_password_for_download) {
+        const password = (formData.get('password') as string | null)?.trim() || '';
+        if (!password) {
+          return NextResponse.json({ error: 'Password required' }, { status: 403 });
+        }
+        if (!existing.download_password_hash) {
+          return NextResponse.json({ error: 'Password not set for this document' }, { status: 500 });
+        }
+        const isValid = await bcrypt.compare(password, existing.download_password_hash);
+        if (!isValid) {
+          return NextResponse.json({ error: 'Incorrect password' }, { status: 403 });
+        }
+      }
+
+      if (action === 'removeFile') {
+        const { error } = await supabaseServer
+          .from('tools_id_documents')
+          .update({
+            file_url: null,
+            file_name: null,
+            file_size: null,
+            file_type: null,
+          })
+          .eq('id', documentId)
+          .eq('user_id', user.id)
+          .eq('tool_id', toolId);
+
+        if (error) {
+          console.error('Error removing document file:', error);
+          return NextResponse.json({ error: 'Failed to remove file' }, { status: 500 });
+        }
+
+        await removeStoredDocumentFile(existing.file_url, user.id);
+        return NextResponse.json({ success: true });
+      }
+
+      const file = formData.get('file') as File | null;
+      if (!file || file.size <= 0) {
+        return NextResponse.json({ error: 'A file is required' }, { status: 400 });
+      }
+      if (file.size > MAX_FILE_SIZE) {
+        return NextResponse.json({ error: `File size cannot exceed ${MAX_FILE_SIZE / 1024 / 1024}MB` }, { status: 400 });
+      }
+
+      try {
+        await assertCanStoreBytes(user.id, Math.max(0, file.size - (existing.file_size || 0)));
+      } catch (error) {
+        if (isStorageLimitError(error)) {
+          return NextResponse.json({ error: error.message, code: error.code }, { status: 413 });
+        }
+        throw error;
+      }
+
+      const sanitizedFileName = file.name.replace(/[^a-zA-Z0-9.-]/g, '_');
+      const storageFileName = `${user.id}/${Date.now()}-${sanitizedFileName}`;
+      const buffer = Buffer.from(await file.arrayBuffer());
+      const { error: uploadError } = await supabaseServer.storage.from(DOCUMENT_BUCKET).upload(storageFileName, buffer, {
+        contentType: file.type,
+        upsert: false,
+      });
+      if (uploadError) {
+        return NextResponse.json({ error: 'Failed to upload file: ' + uploadError.message }, { status: 500 });
+      }
+
+      const { data: urlData } = supabaseServer.storage.from(DOCUMENT_BUCKET).getPublicUrl(storageFileName);
+      const { error: updateError } = await supabaseServer
+        .from('tools_id_documents')
+        .update({
+          file_url: urlData.publicUrl,
+          file_name: file.name,
+          file_size: file.size,
+          file_type: file.type,
+        })
+        .eq('id', documentId)
+        .eq('user_id', user.id)
+        .eq('tool_id', toolId);
+
+      if (updateError) {
+        await supabaseServer.storage.from(DOCUMENT_BUCKET).remove([storageFileName]);
+        return NextResponse.json({ error: 'Failed to update document file' }, { status: 500 });
+      }
+
+      const oldPath = extractStoragePath(existing.file_url);
+      if (oldPath) {
+        await supabaseServer.storage.from(DOCUMENT_BUCKET).remove([oldPath]);
+      }
+      await refreshUserStorageUsage(user.id);
+      return NextResponse.json({ success: true });
+    }
+
     // Handle create or update
     const documentName = formData.get('documentName') as string;
     const uploadedDate = formData.get('uploadedDate') as string;
@@ -234,6 +360,15 @@ export async function POST(request: NextRequest) {
         );
       }
 
+      try {
+        await assertCanStoreBytes(user.id, file.size);
+      } catch (error) {
+        if (isStorageLimitError(error)) {
+          return NextResponse.json({ error: error.message, code: error.code }, { status: 413 });
+        }
+        throw error;
+      }
+
       // Upload file to Supabase Storage
       const sanitizedFileName = file.name.replace(/[^a-zA-Z0-9.-]/g, '_');
       const storageFileName = `${user.id}/${Date.now()}-${sanitizedFileName}`;
@@ -267,6 +402,7 @@ export async function POST(request: NextRequest) {
       fileName = file.name;
       fileSize = file.size;
       fileType = file.type;
+      await refreshUserStorageUsage(user.id);
     }
 
     // Hash password if provided
@@ -449,6 +585,9 @@ export async function POST(request: NextRequest) {
     }
   } catch (error: any) {
     console.error('Error in POST /api/tools/important-documents:', error);
+    if (isStorageLimitError(error)) {
+      return NextResponse.json({ error: error.message, code: error.code }, { status: 413 });
+    }
     return NextResponse.json(
       { error: 'Internal server error' },
       { status: 500 }
