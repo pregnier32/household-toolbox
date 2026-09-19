@@ -2,6 +2,17 @@
 
 import { useState, useMemo, useEffect } from 'react';
 import { useTheme } from './AppThemeProvider';
+import { AttachmentButton } from './AttachmentButton';
+import { AttachmentModal } from './AttachmentModal';
+import {
+  canPreviewAttachment,
+  createPendingAttachment,
+  isImageAttachment,
+  isPdfAttachment,
+  type AttachmentItem,
+} from '@/lib/attachments';
+
+const API_BASE = '/api/tools/shopping-list';
 
 type ShoppingListItemRef = {
   itemId: string;
@@ -19,6 +30,7 @@ type ShoppingListRecord = {
   items: ShoppingListItemRef[];
   isActive: boolean;
   showOnDashboard?: boolean;
+  attachments: { id: string; name: string; size: number; type: string }[];
 };
 
 type MasterItem = {
@@ -160,6 +172,10 @@ export function ShoppingListTool({ toolId }: ShoppingListToolProps) {
 
   // View full list modal
   const [viewListId, setViewListId] = useState<string | null>(null);
+  const [pendingAttachments, setPendingAttachments] = useState<AttachmentItem[]>([]);
+  const [attachmentModal, setAttachmentModal] = useState<null | 'add' | string>(null);
+  const [attachmentBusy, setAttachmentBusy] = useState(false);
+  const [viewPreview, setViewPreview] = useState<AttachmentItem | null>(null);
 
   // After Move to History: offer to start a new list from the moved list
   const [startFromHistoryOfferId, setStartFromHistoryOfferId] = useState<string | null>(null);
@@ -194,6 +210,7 @@ export function ShoppingListTool({ toolId }: ShoppingListToolProps) {
           isActive: boolean;
           showOnDashboard?: boolean;
           items: { itemId: string; name: string; category?: string; isChecked?: boolean; quantity?: number | null; unit?: string | null }[];
+          attachments?: { id: string; name: string; size: number; type: string }[];
         }) => ({
           id: l.id,
           name: l.name,
@@ -207,6 +224,7 @@ export function ShoppingListTool({ toolId }: ShoppingListToolProps) {
           })),
           isActive: l.isActive,
           showOnDashboard: l.showOnDashboard,
+          attachments: l.attachments ?? [],
         })
       );
       setShoppingLists(lists);
@@ -226,11 +244,150 @@ export function ShoppingListTool({ toolId }: ShoppingListToolProps) {
   useEffect(() => {
     if (!viewListId) return;
     const onKeyDown = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') setViewListId(null);
+      if (e.key === 'Escape' && attachmentModal === null) setViewListId(null);
     };
     window.addEventListener('keydown', onKeyDown);
     return () => window.removeEventListener('keydown', onKeyDown);
-  }, [viewListId]);
+  }, [viewListId, attachmentModal]);
+
+  const revokePending = (items: AttachmentItem[]) => {
+    items.forEach((item) => {
+      if (item.url) URL.revokeObjectURL(item.url);
+    });
+  };
+
+  const closeAttachmentModal = () => {
+    setAttachmentModal(null);
+    setViewPreview(null);
+  };
+
+  const clearPendingAttachments = () => {
+    revokePending(pendingAttachments);
+    setPendingAttachments([]);
+    closeAttachmentModal();
+  };
+
+  const uploadListFile = async (file: File, listId: string) => {
+    if (!toolId) throw new Error('Tool ID is required');
+    const formData = new FormData();
+    formData.append('toolId', toolId);
+    formData.append('listId', listId);
+    formData.append('file', file);
+    const response = await fetch(`${API_BASE}/attachments`, { method: 'POST', body: formData });
+    const data = await response.json().catch(() => ({}));
+    if (!response.ok) throw new Error(data.error || 'Failed to add file');
+  };
+
+  const fetchListAttachmentBlob = async (attachmentId: string, inline = false) => {
+    const query = inline ? '?inline=1' : '';
+    const response = await fetch(`${API_BASE}/attachments/${attachmentId}${query}`);
+    if (!response.ok) {
+      const errorData = await response.json().catch(() => ({ error: 'Failed to open file' }));
+      throw new Error(errorData.error || 'Failed to open file');
+    }
+    return response.blob();
+  };
+
+  const handleViewAttachment = async (item: AttachmentItem) => {
+    if (item.file && item.url) {
+      if (isImageAttachment(item.type)) {
+        setViewPreview(item);
+        return;
+      }
+      if (isPdfAttachment(item.type, item.name)) {
+        window.open(item.url, '_blank', 'noopener,noreferrer');
+        return;
+      }
+      alert('This file type can’t be previewed in the browser. Use Download to save it.');
+      return;
+    }
+    try {
+      const blob = await fetchListAttachmentBlob(item.id, true);
+      const type = blob.type || item.type || '';
+      if (!canPreviewAttachment(type, item.name)) {
+        alert('This file type can’t be previewed in the browser. Use Download to save it.');
+        return;
+      }
+      const url = window.URL.createObjectURL(blob);
+      if (isImageAttachment(type)) {
+        setViewPreview({ ...item, type, url, size: item.size || blob.size });
+        return;
+      }
+      if (isPdfAttachment(type, item.name)) {
+        window.open(url, '_blank', 'noopener,noreferrer');
+      }
+    } catch (error) {
+      alert(error instanceof Error ? error.message : 'Failed to open file');
+    }
+  };
+
+  const handleDownloadAttachment = async (item: AttachmentItem): Promise<boolean> => {
+    if (item.file) return false;
+    try {
+      const blob = await fetchListAttachmentBlob(item.id);
+      const url = window.URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = url;
+      link.download = item.name || 'attachment';
+      document.body.appendChild(link);
+      link.click();
+      window.URL.revokeObjectURL(url);
+      document.body.removeChild(link);
+      return true;
+    } catch (error) {
+      alert(error instanceof Error ? error.message : 'Failed to download file');
+      return false;
+    }
+  };
+
+  const addSavedListFiles = async (listId: string, files: File[]) => {
+    setAttachmentBusy(true);
+    try {
+      for (const file of files) {
+        await uploadListFile(file, listId);
+      }
+      await fetchLists({ silent: true });
+    } catch (error) {
+      alert(error instanceof Error ? error.message : 'Failed to add file');
+    } finally {
+      setAttachmentBusy(false);
+    }
+  };
+
+  const removeSavedListFile = async (attachmentId: string) => {
+    if (!toolId) return;
+    setAttachmentBusy(true);
+    try {
+      const response = await fetch(`${API_BASE}/attachments`, {
+        method: 'DELETE',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ toolId, attachmentId }),
+      });
+      const data = await response.json().catch(() => ({}));
+      if (!response.ok) throw new Error(data.error || 'Failed to remove file');
+      await fetchLists({ silent: true });
+    } catch (error) {
+      alert(error instanceof Error ? error.message : 'Failed to remove file');
+    } finally {
+      setAttachmentBusy(false);
+    }
+  };
+
+  const savedAttachmentList =
+    attachmentModal && attachmentModal !== 'add'
+      ? shoppingLists.find((list) => list.id === attachmentModal) || null
+      : null;
+  const modalFiles: AttachmentItem[] =
+    attachmentModal === 'add'
+      ? pendingAttachments
+      : savedAttachmentList
+        ? (savedAttachmentList.attachments || []).map((item) => ({
+            id: item.id,
+            name: item.name,
+            size: item.size,
+            type: item.type,
+          }))
+        : [];
 
   // Keep selected Items tab category valid when categories change (e.g. category removed)
   useEffect(() => {
@@ -360,7 +517,7 @@ export function ShoppingListTool({ toolId }: ShoppingListToolProps) {
   const createList = async () => {
     if (!newListName.trim() || !toolId) return;
     try {
-      const res = await fetch('/api/tools/shopping-list', {
+      const res = await fetch(API_BASE, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -373,6 +530,27 @@ export function ShoppingListTool({ toolId }: ShoppingListToolProps) {
         }),
       });
       if (!res.ok) throw new Error('Failed to create list');
+      const created = await res.json().catch(() => ({}));
+      const createdListId = created.list?.id as string | undefined;
+      if (createdListId && pendingAttachments.length > 0) {
+        try {
+          for (const queued of pendingAttachments) {
+            if (!queued.file) continue;
+            await uploadListFile(queued.file, createdListId);
+          }
+        } catch (uploadError) {
+          clearPendingAttachments();
+          setNewListName('');
+          setNewListDate(new Date().toISOString().split('T')[0]);
+          setNewListItems([]);
+          setBuildFromHistoryId('');
+          setIsCreatingList(false);
+          await fetchLists();
+          alert(uploadError instanceof Error ? uploadError.message : 'List saved, but a file failed to upload.');
+          return;
+        }
+      }
+      clearPendingAttachments();
       setNewListName('');
       setNewListDate(new Date().toISOString().split('T')[0]);
       setNewListItems([]);
@@ -411,6 +589,7 @@ export function ShoppingListTool({ toolId }: ShoppingListToolProps) {
     if (!startFromHistoryOfferId) return;
     const sourceId = startFromHistoryOfferId;
     setStartFromHistoryOfferId(null);
+    clearPendingAttachments();
     setIsCreatingList(true);
     setNewListName('');
     setNewListDate(new Date().toISOString().split('T')[0]);
@@ -463,6 +642,7 @@ export function ShoppingListTool({ toolId }: ShoppingListToolProps) {
   };
 
   const startEditingList = (list: ShoppingListRecord) => {
+    clearPendingAttachments();
     setEditingListId(list.id);
     setEditingListName(list.name);
     setEditingListDate(list.date);
@@ -515,6 +695,15 @@ export function ShoppingListTool({ toolId }: ShoppingListToolProps) {
         body: JSON.stringify({ action: 'deleteList', toolId, listId: deleteConfirmListId }),
       });
       if (!res.ok) throw new Error('Failed to delete list');
+      if (attachmentModal === deleteConfirmListId) closeAttachmentModal();
+      if (viewListId === deleteConfirmListId) setViewListId(null);
+      if (editingListId === deleteConfirmListId) {
+        clearPendingAttachments();
+        setEditingListId(null);
+        setEditingListName('');
+        setEditingListDate('');
+        setEditingListItems([]);
+      }
       setShoppingLists((prev) => prev.filter((l) => l.id !== deleteConfirmListId));
       setDeleteConfirmListId(null);
       setDeleteConfirmText('');
@@ -662,6 +851,7 @@ export function ShoppingListTool({ toolId }: ShoppingListToolProps) {
             <div className="flex justify-start">
               <button
                 onClick={() => {
+                  clearPendingAttachments();
                   setIsCreatingList(true);
                   setNewListItems([]);
                   setBuildFromHistoryId('');
@@ -676,7 +866,13 @@ export function ShoppingListTool({ toolId }: ShoppingListToolProps) {
           {/* Create new list form */}
           {isCreatingList && (
             <div className={`${cardClass} space-y-4`}>
-              <h3 className={isLight ? 'text-lg font-semibold text-slate-900' : 'text-lg font-semibold text-slate-50'}>New Shopping List</h3>
+              <div className="flex items-start justify-between gap-4">
+                <h3 className={isLight ? 'text-lg font-semibold text-slate-900' : 'text-lg font-semibold text-slate-50'}>New Shopping List</h3>
+                <AttachmentButton
+                  count={pendingAttachments.length}
+                  onClick={() => setAttachmentModal('add')}
+                />
+              </div>
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div>
                   <label className="block text-xs font-medium text-slate-300 mb-1.5">
@@ -819,6 +1015,7 @@ export function ShoppingListTool({ toolId }: ShoppingListToolProps) {
               <div className="flex gap-3 justify-end">
                 <button
                   onClick={() => {
+                    clearPendingAttachments();
                     setIsCreatingList(false);
                     setNewListName('');
                     setNewListDate(new Date().toISOString().split('T')[0]);
@@ -855,6 +1052,15 @@ export function ShoppingListTool({ toolId }: ShoppingListToolProps) {
                       key={list.id}
                       className={nestedPanelClass}
                     >
+                      <div className="flex items-start justify-between gap-4">
+                        <h4 className={isLight ? 'text-base font-semibold text-slate-900' : 'text-base font-semibold text-slate-50'}>
+                          Edit Shopping List
+                        </h4>
+                        <AttachmentButton
+                          count={list.attachments?.length || 0}
+                          onClick={() => setAttachmentModal(list.id)}
+                        />
+                      </div>
                       <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
                         <div>
                           <label className={isLight ? 'block text-xs font-medium text-slate-700 mb-1' : 'block text-xs font-medium text-slate-300 mb-1'}>
@@ -1016,6 +1222,10 @@ export function ShoppingListTool({ toolId }: ShoppingListToolProps) {
                         </div>
                         <div className="flex items-center gap-3 flex-shrink-0">
                           <div className="flex items-center gap-1">
+                            <AttachmentButton
+                              count={list.attachments?.length || 0}
+                              onClick={() => setAttachmentModal(list.id)}
+                            />
                             <button
                               type="button"
                               onClick={() => {
@@ -1092,6 +1302,15 @@ export function ShoppingListTool({ toolId }: ShoppingListToolProps) {
                       key={list.id}
                       className={nestedPanelClass}
                     >
+                      <div className="flex items-start justify-between gap-4">
+                        <h4 className={isLight ? 'text-base font-semibold text-slate-900' : 'text-base font-semibold text-slate-50'}>
+                          Edit Shopping List
+                        </h4>
+                        <AttachmentButton
+                          count={list.attachments?.length || 0}
+                          onClick={() => setAttachmentModal(list.id)}
+                        />
+                      </div>
                       <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
                         <div>
                           <label className={isLight ? 'block text-xs font-medium text-slate-700 mb-1' : 'block text-xs font-medium text-slate-300 mb-1'}>
@@ -1252,6 +1471,10 @@ export function ShoppingListTool({ toolId }: ShoppingListToolProps) {
                           )}
                         </div>
                         <div className="flex items-center gap-1 flex-shrink-0">
+                          <AttachmentButton
+                            count={list.attachments?.length || 0}
+                            onClick={() => setAttachmentModal(list.id)}
+                          />
                           <button
                             type="button"
                             onClick={() => {
@@ -1386,6 +1609,10 @@ export function ShoppingListTool({ toolId }: ShoppingListToolProps) {
                     <span className="text-slate-400 font-normal"> — {formatDateDisplay(list.date)}</span>
                   </h3>
                   <div className="flex items-center gap-1 flex-shrink-0">
+                    <AttachmentButton
+                      count={list.attachments?.length || 0}
+                      onClick={() => setAttachmentModal(list.id)}
+                    />
                     <button
                       type="button"
                       onClick={() => window.print()}
@@ -1837,6 +2064,42 @@ export function ShoppingListTool({ toolId }: ShoppingListToolProps) {
           </div>
         </div>
       )}
+
+      <AttachmentModal
+        open={attachmentModal !== null}
+        onClose={closeAttachmentModal}
+        previewItem={viewPreview}
+        title={
+          attachmentModal === 'add'
+            ? newListName.trim() || 'New shopping list'
+            : savedAttachmentList?.name || 'Shopping list'
+        }
+        files={modalFiles}
+        busy={attachmentBusy}
+        onAdd={(incoming) => {
+          if (attachmentModal === 'add') {
+            setPendingAttachments((prev) => [...prev, ...incoming.map(createPendingAttachment)]);
+            return;
+          }
+          if (attachmentModal) {
+            void addSavedListFiles(attachmentModal, incoming);
+          }
+        }}
+        onRemove={(id) => {
+          if (attachmentModal === 'add') {
+            setPendingAttachments((prev) => {
+              const next = prev.filter((item) => item.id !== id);
+              const removed = prev.find((item) => item.id === id);
+              if (removed?.url) URL.revokeObjectURL(removed.url);
+              return next;
+            });
+            return;
+          }
+          void removeSavedListFile(id);
+        }}
+        onView={handleViewAttachment}
+        onDownload={attachmentModal === 'add' ? undefined : handleDownloadAttachment}
+      />
     </div>
   );
 }

@@ -1,10 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getSession } from '@/lib/session';
 import { supabaseServer } from '@/lib/supabaseServer';
-import { assertCanStoreBytes, isStorageLimitError, refreshUserStorageUsage } from '@/lib/user-storage';
-
-const MAX_FILE_SIZE = 10 * 1024 * 1024; // 10MB
-const BUCKET_NAME = 'healthcare-appt-history';
+import { attachmentsByRecordIds, deleteHeaderRecordStorageFiles, deleteRecordStorageFiles, removeHealthcareStorageFiles } from '@/lib/healthcare-storage';
 
 async function findHealthcareDashboardItem(
   userId: string,
@@ -84,30 +81,6 @@ async function removeEmptyStockHeaders(userId: string, toolId: string): Promise<
   }
 }
 
-async function uploadFile(
-  file: File,
-  userId: string,
-  folder: string
-): Promise<{ url: string; fileName: string; fileSize: number; fileType: string } | null> {
-  if (file.size > MAX_FILE_SIZE) throw new Error(`File size cannot exceed ${MAX_FILE_SIZE / 1024 / 1024}MB`);
-  await assertCanStoreBytes(userId, file.size);
-  const sanitized = file.name.replace(/[^a-zA-Z0-9.-]/g, '_');
-  const path = `${folder}/${userId}/${Date.now()}-${sanitized}`;
-  const buffer = Buffer.from(await file.arrayBuffer());
-  const { error: uploadError } = await supabaseServer.storage.from(BUCKET_NAME).upload(path, buffer, {
-    contentType: file.type,
-    upsert: false,
-  });
-  if (uploadError) {
-    if (uploadError.message?.includes('Bucket not found') || uploadError.message?.includes('does not exist'))
-      throw new Error(`Storage bucket '${BUCKET_NAME}' does not exist. Create it in Supabase Storage.`);
-    throw new Error(`Upload failed: ${uploadError.message}`);
-  }
-  const { data: urlData } = supabaseServer.storage.from(BUCKET_NAME).getPublicUrl(path);
-  await refreshUserStorageUsage(userId);
-  return { url: urlData.publicUrl, fileName: file.name, fileSize: file.size, fileType: file.type };
-}
-
 export async function GET(request: NextRequest) {
   const user = await getSession();
   if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
@@ -155,20 +128,11 @@ export async function GET(request: NextRequest) {
           .eq('user_id', user.id)
           .single();
         if (recErr || !record) return NextResponse.json({ error: 'Record not found' }, { status: 404 });
-        const { data: docs } = await supabaseServer
-          .from('tools_hcah_documents')
-          .select('*')
-          .eq('record_id', recordId)
-          .order('display_order', { ascending: true });
+        const attachmentMap = await attachmentsByRecordIds([recordId]);
         return NextResponse.json({
           record: {
             ...record,
-            documents: (docs || []).map((d) => ({
-              id: d.id,
-              name: d.file_name ?? d.file_url,
-              fileUrl: d.file_url,
-              file_size: d.file_size,
-            })),
+            documents: attachmentMap[recordId] || [],
           },
         });
       }
@@ -183,27 +147,10 @@ export async function GET(request: NextRequest) {
       if (error) return NextResponse.json({ error: 'Failed to fetch records' }, { status: 500 });
 
       const list = records || [];
-      const ids = list.map((r) => r.id);
-      const documentsByRecord: Record<string, { id: string; name: string; fileUrl: string; file_size: number | null }[]> = {};
-      if (ids.length > 0) {
-        const { data: docs } = await supabaseServer
-          .from('tools_hcah_documents')
-          .select('*')
-          .in('record_id', ids)
-          .order('display_order', { ascending: true });
-        (docs || []).forEach((d) => {
-          if (!documentsByRecord[d.record_id]) documentsByRecord[d.record_id] = [];
-          documentsByRecord[d.record_id].push({
-            id: d.id,
-            name: d.file_name ?? d.file_url,
-            fileUrl: d.file_url,
-            file_size: d.file_size,
-          });
-        });
-      }
+      const attachmentMap = await attachmentsByRecordIds(list.map((r) => r.id));
       const recordsWithDocs = list.map((r) => ({
         ...r,
-        documents: documentsByRecord[r.id] || [],
+        documents: attachmentMap[r.id] || [],
       }));
       if (resource === 'records') return NextResponse.json({ records: recordsWithDocs });
     }
@@ -233,6 +180,7 @@ export async function POST(request: NextRequest) {
       const cardColor = (formData.get('cardColor') as string) || '#10b981';
 
       if (action === 'delete' && headerId) {
+        await deleteHeaderRecordStorageFiles(headerId, user.id);
         const { error } = await supabaseServer
           .from('tools_hcah_headers')
           .delete()
@@ -286,13 +234,13 @@ export async function POST(request: NextRequest) {
       const totalBilled = (formData.get('totalBilled') as string)?.trim() || null;
       const insurancePaid = (formData.get('insurancePaid') as string)?.trim() || null;
       const currentAmountDue = (formData.get('currentAmountDue') as string)?.trim() || null;
-      const documentFiles = formData.getAll('documents') as File[];
 
       if (action === 'delete' && recordId) {
         const dashboardItem = await findHealthcareDashboardItem(user.id, toolId, recordId);
         if (dashboardItem) {
           await supabaseServer.from('dashboard_items').delete().eq('id', dashboardItem.id);
         }
+        await deleteRecordStorageFiles(recordId, user.id);
         const { error } = await supabaseServer
           .from('tools_hcah_records')
           .delete()
@@ -350,39 +298,6 @@ export async function POST(request: NextRequest) {
         });
       }
 
-      if (finalRecordId && documentFiles?.length) {
-        let nextOrder = 0;
-        const { data: existingDocs } = await supabaseServer
-          .from('tools_hcah_documents')
-          .select('display_order')
-          .eq('record_id', finalRecordId)
-          .order('display_order', { ascending: false })
-          .limit(1);
-        if (existingDocs?.[0]?.display_order != null) nextOrder = (existingDocs[0].display_order ?? 0) + 1;
-        for (let i = 0; i < documentFiles.length; i++) {
-          const file = documentFiles[i];
-          if (file?.size > 0) {
-            try {
-              const up = await uploadFile(file, user.id, 'documents');
-              if (up)
-                await supabaseServer.from('tools_hcah_documents').insert({
-                  record_id: finalRecordId,
-                  file_url: up.url,
-                  file_name: up.fileName,
-                  file_size: up.fileSize,
-                  file_type: up.fileType,
-                  display_order: nextOrder + i,
-                });
-            } catch (err: unknown) {
-              console.error('Document upload failed:', err);
-              return NextResponse.json(
-                { error: err instanceof Error ? err.message : 'Document upload failed' },
-                { status: isStorageLimitError(err) ? 413 : 500 }
-              );
-            }
-          }
-        }
-      }
       return NextResponse.json({ success: true, recordId: finalRecordId });
     }
 
@@ -391,7 +306,7 @@ export async function POST(request: NextRequest) {
       if (!documentId) return NextResponse.json({ error: 'documentId required' }, { status: 400 });
       const { data: doc } = await supabaseServer
         .from('tools_hcah_documents')
-        .select('record_id')
+        .select('record_id, file_url')
         .eq('id', documentId)
         .single();
       if (!doc) return NextResponse.json({ error: 'Document not found' }, { status: 404 });
@@ -404,6 +319,7 @@ export async function POST(request: NextRequest) {
       if (!rec) return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
       const { error } = await supabaseServer.from('tools_hcah_documents').delete().eq('id', documentId);
       if (error) return NextResponse.json({ error: 'Failed to delete document' }, { status: 500 });
+      await removeHealthcareStorageFiles([doc.file_url], user.id);
       return NextResponse.json({ success: true });
     }
 
@@ -426,6 +342,7 @@ export async function DELETE(request: NextRequest) {
 
   try {
     if (resource === 'header') {
+      await deleteHeaderRecordStorageFiles(id, user.id);
       const { error } = await supabaseServer
         .from('tools_hcah_headers')
         .delete()
@@ -436,6 +353,7 @@ export async function DELETE(request: NextRequest) {
       return NextResponse.json({ success: true });
     }
     if (resource === 'record') {
+      await deleteRecordStorageFiles(id, user.id);
       const { error } = await supabaseServer
         .from('tools_hcah_records')
         .delete()
@@ -445,7 +363,7 @@ export async function DELETE(request: NextRequest) {
       return NextResponse.json({ success: true });
     }
     if (resource === 'document') {
-      const { data: doc } = await supabaseServer.from('tools_hcah_documents').select('record_id').eq('id', id).single();
+      const { data: doc } = await supabaseServer.from('tools_hcah_documents').select('record_id, file_url').eq('id', id).single();
       if (!doc) return NextResponse.json({ error: 'Document not found' }, { status: 404 });
       const { data: rec } = await supabaseServer
         .from('tools_hcah_records')
@@ -456,6 +374,7 @@ export async function DELETE(request: NextRequest) {
       if (!rec) return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
       const { error } = await supabaseServer.from('tools_hcah_documents').delete().eq('id', id);
       if (error) return NextResponse.json({ error: 'Failed to delete document' }, { status: 500 });
+      await removeHealthcareStorageFiles([doc.file_url], user.id);
       return NextResponse.json({ success: true });
     }
     return NextResponse.json({ error: 'Invalid resource' }, { status: 400 });

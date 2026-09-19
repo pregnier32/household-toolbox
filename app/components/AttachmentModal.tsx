@@ -6,9 +6,11 @@ import {
   ATTACHMENT_ACCEPT,
   ATTACHMENT_MAX_FILE_BYTES,
   type AttachmentItem,
+  canPreviewAttachment,
   filterIncomingAttachments,
   formatAttachmentBytes,
   isImageAttachment,
+  isPdfAttachment,
 } from '@/lib/attachments';
 
 type StorageSummary = {
@@ -127,6 +129,7 @@ export function AttachmentModal({
   };
 
   const handleView = (item: AttachmentItem) => {
+    if (!canPreviewAttachment(item.type, item.name)) return;
     if (onView) {
       onView(item);
       return;
@@ -135,7 +138,7 @@ export function AttachmentModal({
       setPreview(item);
       return;
     }
-    if (item.url) {
+    if (isPdfAttachment(item.type, item.name) && item.url) {
       window.open(item.url, '_blank', 'noopener,noreferrer');
     }
   };
@@ -239,7 +242,7 @@ export function AttachmentModal({
                     </p>
                   </div>
                   <div className="flex shrink-0 items-center gap-1">
-                    {(item.url || onView) && (
+                    {canPreviewAttachment(item.type, item.name) && (item.url || onView) && (
                       <button type="button" onClick={() => handleView(item)} className={actionClass}>
                         View
                       </button>

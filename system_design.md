@@ -1249,7 +1249,7 @@ On add/edit forms, place the paperclip near the record title or the other header
 
 - **Empty state:** “No attachments yet.” plus the drop zone.
 - **List:** File name, size, and “queued until save” for files chosen before the parent record is created.
-- **Actions per file:** View (when previewable or the tool supplies `onView`), Download (saved files only), Remove.
+- **Actions per file:** View (images and PDFs only), Download (saved files only), Remove. Word, Excel, and any other non-image/non-PDF type show Download only — do not show View, and do not pop an `alert` that preview is unavailable.
 - **Download confirmation:** Stay inside the Attachment modal. After a successful download, show a green in-modal line: “File downloaded.” Never use `alert()`, `confirm()`, or another browser dialog for download success. Chrome’s download chip is the browser’s own UI and cannot be suppressed.
 - **Add / replace:** Dashed drop zone + Browse. Copy: “Images, PDFs, Word, and Excel up to 10 MB each.”
 - **Single-file tools (`maxFiles={1}`):** Drop/browse replaces the current file. Button label becomes “Replace file”.
@@ -1275,7 +1275,7 @@ Do not treat View as a disguised download.
 |------|------|----------|
 | Image | Show inside the Attachment modal (`previewItem` or local object URL) | Force a file download |
 | PDF | Open in a new tab with `Content-Disposition: inline` (download route `inline=1`) | Force a file download (`Content-Disposition: attachment`) |
-| Word / Excel | Hide View or show that preview is unavailable | Force a file download |
+| Word / Excel | Hide View | Force a file download |
 
 Pending (unsaved) files may preview from a local `URL.createObjectURL`. Saved files must go through the tool’s authenticated download/view route — never a raw public storage URL in the browser.
 
@@ -1349,7 +1349,7 @@ If an add would exceed the limit, reject it with a clear message (“would excee
 - Do not call `alert()` (or any browser dialog) after a successful Download. Confirm inside the Attachment modal only.
 - Do not let a password or confirm dialog open behind the Attachment modal.
 - Do not allow Remove or Replace on a protected file without a verified password (client and server).
-- Do not preview Word/Excel in the browser; download them.
+- Do not preview Word/Excel in the browser; hide View and download them.
 - Do not scan all 18 buckets on every user-menu open.
 - Do not enable paid storage / add-on buttons until billing is actually wired.
 
@@ -1409,6 +1409,30 @@ Meal files only. Do not attach files to weekly plans, day-slot assignments, item
 - Plan assignments are deleted and re-inserted on every plan save, so do not attach files to a day slot.
 - Queue files on create; persist immediately on saved meals.
 - No paperclip on plans, day cards, meal picker, grocery/shopping modal, Items, Meal Types, or Print.
+
+### Shopping List
+
+List files only. Do not attach files to master items, line items, Print, the Items tab, or the dashboard pin.
+
+- **List files** (`tools_sl_list_attachments`, bucket `shopping-list`, path `{userId}/{listId}/...`): multiple optional receipts, store flyers, and photos of a handwritten list. Paperclip on Create list, Edit list, Active cards, History cards, and the View-detail modal header (beside Print).
+- History is real (`is_active = false`) and has Reactivate, but History still has Edit. Files stay editable. Do not make the paperclip read-only while Edit works.
+- Line items are deleted and re-inserted on every list save, so do not attach files to a line item.
+- Queue files on create; persist immediately on saved lists. Save does not require a file.
+- Building a new list from History or Meal Planner “Save as Shopping List” does not copy files.
+- The View modal owns add/view/download/remove. Do not embed a second Attachments section above Print. Render `AttachmentModal` after the View modal so it stacks on top (both use `z-50`).
+- No paperclip on master-item Add/Edit, line-item rows, Print, Items, or the dashboard pin.
+
+### Healthcare Appts & History
+
+Appointment files only. Wrap the existing `tools_hcah_documents` store. Do not attach files to family-member headers or the provider text field.
+
+- **Appointment files** (`tools_hcah_documents`, bucket `healthcare-appt-history`, path `{userId}/{recordId}/...`): multiple optional bills, EOBs, referrals, and visit photos. Paperclip on Add upcoming, Add history, Edit appointment, and appointment cards (Upcoming and History).
+- Upcoming vs History is `is_upcoming` on the same record, not Notes-style History. Files stay editable.
+- Remove the body “Documents” picker, “Add more files”, the in-form View/Delete list, and file-name chips on cards. Badge only.
+- Queue files on create; persist immediately on saved appointments. Save does not require a file.
+- Add to HSA creates an HSA expense only. Do not copy files and do not add a second upload shortcut.
+- View/Download go through the authenticated route (`inline=1` vs download). Existing objects may still live at `documents/{userId}/...`.
+- No paperclip on family-member chips, Report/Export, or the dashboard pin.
 
 ---
 
@@ -1647,10 +1671,11 @@ USING (
 - `repair-history` - Stores receipts, warranties, and repair pictures (`supabase/archive/create-repair-history-storage-bucket.sql`)
 - `pet-care-schedule` - Stores pet documents (`supabase/archive/create-pet-care-schedule-storage-bucket.sql`)
 - `important-documents` - Stores important documents (warranties, policies, records) (`supabase/archive/create-important-documents-storage-bucket.sql`)
-- `healthcare-appt-history` - Healthcare appointment documents (`supabase/archive/create-healthcare-appts-history-storage-bucket.sql`)
+- `healthcare-appt-history` - Healthcare appointment documents (`supabase/archive/create-healthcare-appts-history-storage-bucket.sql`, `supabase/ADD_healthcare_attachments.sql`)
 - `hsa-tracker` - HSA expense receipts (`supabase/ADD_hsa_attachments.sql`)
 - `event-budget-planner` - Event and expense files (`supabase/ADD_event_budget_planner_attachments.sql`)
 - `meal-planner` - Meal recipe files (`supabase/ADD_meal_planner_attachments.sql`)
+- `shopping-list` - Shopping list files (`supabase/ADD_shopping_list_attachments.sql`)
 
 **Why These Policies Matter**:
 - **Security**: Ensures users can only access files in their own folder (`{userId}/...`)

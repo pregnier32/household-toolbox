@@ -4189,6 +4189,7 @@ export type Database = {
           file_url: string
           id: string
           record_id: string
+          user_id: string | null
         }
         Insert: {
           created_at?: string | null
@@ -4199,6 +4200,7 @@ export type Database = {
           file_url: string
           id?: string
           record_id: string
+          user_id?: string | null
         }
         Update: {
           created_at?: string | null
@@ -4209,6 +4211,7 @@ export type Database = {
           file_url?: string
           id?: string
           record_id?: string
+          user_id?: string | null
         }
         Relationships: [
           {
@@ -4216,6 +4219,13 @@ export type Database = {
             columns: ["record_id"]
             isOneToOne: false
             referencedRelation: "tools_hcah_records"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "tools_hcah_documents_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "users"
             referencedColumns: ["id"]
           },
         ]
@@ -6606,6 +6616,54 @@ export type Database = {
           },
           {
             foreignKeyName: "tools_sl_items_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "users"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      tools_sl_list_attachments: {
+        Row: {
+          created_at: string
+          file_name: string
+          file_size: number
+          file_type: string
+          file_url: string
+          id: string
+          list_id: string
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          file_name: string
+          file_size: number
+          file_type: string
+          file_url: string
+          id?: string
+          list_id: string
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          file_name?: string
+          file_size?: number
+          file_type?: string
+          file_url?: string
+          id?: string
+          list_id?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "tools_sl_list_attachments_list_id_fkey"
+            columns: ["list_id"]
+            isOneToOne: false
+            referencedRelation: "tools_sl_lists"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "tools_sl_list_attachments_user_id_fkey"
             columns: ["user_id"]
             isOneToOne: false
             referencedRelation: "users"

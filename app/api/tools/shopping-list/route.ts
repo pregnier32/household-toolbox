@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getSession } from '@/lib/session';
 import { supabaseServer } from '@/lib/supabaseServer';
+import { attachmentsByListIds, deleteListStorageFiles } from '@/lib/shopping-list-storage';
 
 type LineItemWrite = { itemId: string; quantity?: unknown; unit?: unknown };
 
@@ -438,7 +439,10 @@ export async function GET(request: NextRequest) {
         isActive: boolean;
         showOnDashboard: boolean;
         items: { itemId: string; name: string; category: string; isChecked: boolean; quantity: number | null; unit: string | null }[];
+        attachments: { id: string; name: string; size: number; type: string }[];
       }[] = [];
+
+      const attachmentMap = await attachmentsByListIds((lists || []).map((list) => list.id), user.id);
 
       for (const list of lists || []) {
         const items = await fetchListLineItems(list.id);
@@ -450,6 +454,7 @@ export async function GET(request: NextRequest) {
           isActive: !!list.is_active,
           showOnDashboard: !!list.show_on_dashboard,
           items,
+          attachments: attachmentMap[list.id] || [],
         });
       }
 
@@ -566,6 +571,7 @@ export async function POST(request: NextRequest) {
           toolId: listToolId,
           showOnDashboard: false,
           items: savedItems,
+          attachments: [],
         },
       });
     }
@@ -643,6 +649,7 @@ export async function POST(request: NextRequest) {
       if (!listId) {
         return NextResponse.json({ error: 'List ID is required' }, { status: 400 });
       }
+      await deleteListStorageFiles(listId, user.id);
       const { error } = await supabaseServer
         .from('tools_sl_lists')
         .delete()

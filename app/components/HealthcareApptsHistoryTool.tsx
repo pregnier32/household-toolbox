@@ -2,8 +2,15 @@
 
 import { useState, useEffect, useRef } from 'react';
 import { useTheme } from './AppThemeProvider';
-
-const MAX_FILE_SIZE_BYTES = 10 * 1024 * 1024; // 10MB
+import { AttachmentButton } from './AttachmentButton';
+import { AttachmentModal } from './AttachmentModal';
+import {
+  canPreviewAttachment,
+  createPendingAttachment,
+  isImageAttachment,
+  isPdfAttachment,
+  type AttachmentItem,
+} from '@/lib/attachments';
 
 type HeaderRecord = {
   id: string;
@@ -14,9 +21,8 @@ type HeaderRecord = {
 type AppointmentDocument = {
   id: string;
   name: string;
-  file?: File | null;
-  fileUrl?: string | null;
-  file_size?: number | null;
+  size: number;
+  type: string;
 };
 
 type AppointmentRecord = {
@@ -62,12 +68,6 @@ function writeLastMemberId(toolId: string, headerId: string) {
   }
 }
 
-function generateId() {
-  return typeof crypto !== 'undefined' && crypto.randomUUID
-    ? crypto.randomUUID()
-    : `id-${Date.now()}-${Math.random().toString(36).slice(2, 9)}`;
-}
-
 function mapApiRecordToRecord(r: {
   id: string;
   header_id: string;
@@ -82,7 +82,7 @@ function mapApiRecordToRecord(r: {
   total_billed: string | null;
   insurance_paid: string | null;
   current_amount_due: string | null;
-  documents?: { id: string; name: string; fileUrl: string; file_size: number | null }[];
+  documents?: { id: string; name: string; size?: number; type?: string; file_size?: number | null }[];
 }): AppointmentRecord {
   return {
     id: r.id,
@@ -101,8 +101,8 @@ function mapApiRecordToRecord(r: {
     documents: (r.documents || []).map((d) => ({
       id: d.id,
       name: d.name,
-      fileUrl: d.fileUrl,
-      file_size: d.file_size,
+      size: d.size ?? d.file_size ?? 0,
+      type: d.type ?? '',
     })),
   };
 }
@@ -324,14 +324,16 @@ export function HealthcareApptsHistoryTool({ toolId }: HealthcareApptsHistoryToo
   const [isSaving, setIsSaving] = useState(false);
   const [addingToHsaRecordId, setAddingToHsaRecordId] = useState<string | null>(null);
   const [saveMessage, setSaveMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
+  const [pendingAttachments, setPendingAttachments] = useState<AttachmentItem[]>([]);
+  const [attachmentModal, setAttachmentModal] = useState<null | 'add' | string>(null);
+  const [attachmentBusy, setAttachmentBusy] = useState(false);
+  const [viewPreview, setViewPreview] = useState<AttachmentItem | null>(null);
 
   const showMessage = (type: 'success' | 'error', text: string) => {
     setSaveMessage({ type, text });
     setTimeout(() => setSaveMessage(null), 3000);
   };
 
-  const docFileInputRef = useRef<HTMLInputElement>(null);
-  const editDocFileInputRef = useRef<HTMLInputElement>(null);
   const fetchedHeaderIdsRef = useRef<Set<string>>(new Set());
   const selectedHeaderIdRef = useRef<string | null>(selectedHeaderId);
   selectedHeaderIdRef.current = selectedHeaderId;
@@ -440,6 +442,129 @@ export function HealthcareApptsHistoryTool({ toolId }: HealthcareApptsHistoryToo
     }
   };
 
+  const revokePending = (items: AttachmentItem[]) => {
+    items.forEach((item) => {
+      if (item.url) URL.revokeObjectURL(item.url);
+    });
+  };
+
+  const closeAttachmentModal = () => {
+    setAttachmentModal(null);
+    setViewPreview(null);
+  };
+
+  const clearPendingAttachments = () => {
+    revokePending(pendingAttachments);
+    setPendingAttachments([]);
+    closeAttachmentModal();
+  };
+
+  const uploadRecordFile = async (file: File, recordId: string) => {
+    if (!toolId) throw new Error('Tool ID is required');
+    const formData = new FormData();
+    formData.append('toolId', toolId);
+    formData.append('recordId', recordId);
+    formData.append('file', file);
+    const response = await fetch(`${API_BASE}/attachments`, { method: 'POST', body: formData });
+    const data = await response.json().catch(() => ({}));
+    if (!response.ok) throw new Error(data.error || 'Failed to add file');
+  };
+
+  const fetchRecordAttachmentBlob = async (attachmentId: string, inline = false) => {
+    const query = inline ? '?inline=1' : '';
+    const response = await fetch(`${API_BASE}/attachments/${attachmentId}${query}`);
+    if (!response.ok) {
+      const errorData = await response.json().catch(() => ({ error: 'Failed to open file' }));
+      throw new Error(errorData.error || 'Failed to open file');
+    }
+    return response.blob();
+  };
+
+  const handleViewAttachment = async (item: AttachmentItem) => {
+    if (item.file && item.url) {
+      if (isImageAttachment(item.type)) {
+        setViewPreview(item);
+        return;
+      }
+      if (isPdfAttachment(item.type, item.name)) {
+        window.open(item.url, '_blank', 'noopener,noreferrer');
+        return;
+      }
+      alert('This file type can’t be previewed in the browser. Use Download to save it.');
+      return;
+    }
+    try {
+      const blob = await fetchRecordAttachmentBlob(item.id, true);
+      const type = blob.type || item.type || '';
+      if (!canPreviewAttachment(type, item.name)) {
+        alert('This file type can’t be previewed in the browser. Use Download to save it.');
+        return;
+      }
+      const url = window.URL.createObjectURL(blob);
+      if (isImageAttachment(type)) {
+        setViewPreview({ ...item, type, url, size: item.size || blob.size });
+        return;
+      }
+      if (isPdfAttachment(type, item.name)) {
+        window.open(url, '_blank', 'noopener,noreferrer');
+      }
+    } catch (error) {
+      alert(error instanceof Error ? error.message : 'Failed to open file');
+    }
+  };
+
+  const handleDownloadAttachment = async (item: AttachmentItem): Promise<boolean> => {
+    if (item.file) return false;
+    try {
+      const blob = await fetchRecordAttachmentBlob(item.id);
+      const url = window.URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = url;
+      link.download = item.name || 'attachment';
+      document.body.appendChild(link);
+      link.click();
+      window.URL.revokeObjectURL(url);
+      document.body.removeChild(link);
+      return true;
+    } catch (error) {
+      alert(error instanceof Error ? error.message : 'Failed to download file');
+      return false;
+    }
+  };
+
+  const addSavedRecordFiles = async (recordId: string, files: File[]) => {
+    setAttachmentBusy(true);
+    try {
+      for (const file of files) {
+        await uploadRecordFile(file, recordId);
+      }
+      if (selectedHeaderId) await loadRecords(selectedHeaderId);
+    } catch (error) {
+      alert(error instanceof Error ? error.message : 'Failed to add file');
+    } finally {
+      setAttachmentBusy(false);
+    }
+  };
+
+  const removeSavedRecordFile = async (attachmentId: string) => {
+    if (!toolId) return;
+    setAttachmentBusy(true);
+    try {
+      const response = await fetch(`${API_BASE}/attachments`, {
+        method: 'DELETE',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ toolId, attachmentId }),
+      });
+      const data = await response.json().catch(() => ({}));
+      if (!response.ok) throw new Error(data.error || 'Failed to remove file');
+      if (selectedHeaderId) await loadRecords(selectedHeaderId);
+    } catch (error) {
+      alert(error instanceof Error ? error.message : 'Failed to remove file');
+    } finally {
+      setAttachmentBusy(false);
+    }
+  };
+
   useEffect(() => {
     if (toolId) loadHeaders();
   }, [toolId]);
@@ -454,6 +579,7 @@ export function HealthcareApptsHistoryTool({ toolId }: HealthcareApptsHistoryToo
 
   useEffect(() => {
     if (selectedHeaderId) {
+      clearPendingAttachments();
       setNewRecord(defaultRecord(selectedHeaderId));
       setRecordTypeStep('choose');
     }
@@ -582,6 +708,7 @@ export function HealthcareApptsHistoryTool({ toolId }: HealthcareApptsHistoryToo
   };
 
   const startAddingRecord = () => {
+    clearPendingAttachments();
     setNewRecord(defaultRecord(selectedHeaderId!));
     setRecordTypeStep('choose');
     setIsAddingRecord(true);
@@ -593,6 +720,7 @@ export function HealthcareApptsHistoryTool({ toolId }: HealthcareApptsHistoryToo
   };
 
   const cancelAddingRecord = () => {
+    clearPendingAttachments();
     setIsAddingRecord(false);
     setRecordTypeStep('choose');
   };
@@ -627,14 +755,33 @@ export function HealthcareApptsHistoryTool({ toolId }: HealthcareApptsHistoryToo
       formData.append('totalBilled', newRecord.totalBilled);
       formData.append('insurancePaid', newRecord.insurancePaid);
       formData.append('currentAmountDue', newRecord.currentAmountDue);
-      newRecord.documents.forEach((d) => {
-        if (d.file) formData.append('documents', d.file);
-      });
       const response = await fetch(API_BASE, { method: 'POST', body: formData });
       if (!response.ok) {
         const err = await response.json().catch(() => ({}));
         throw new Error((err as { error?: string }).error || 'Failed to add appointment');
       }
+      const created = await response.json().catch(() => ({}));
+      const createdRecordId = created.recordId as string | undefined;
+      if (createdRecordId && pendingAttachments.length > 0) {
+        try {
+          for (const queued of pendingAttachments) {
+            if (!queued.file) continue;
+            await uploadRecordFile(queued.file, createdRecordId);
+          }
+        } catch (uploadError) {
+          clearPendingAttachments();
+          setIsAddingRecord(false);
+          setRecordTypeStep('choose');
+          setNewRecord(defaultRecord(selectedHeaderId));
+          await loadRecords(selectedHeaderId);
+          setSaveMessage({
+            type: 'error',
+            text: uploadError instanceof Error ? uploadError.message : 'Appointment saved, but a file failed to upload.',
+          });
+          return;
+        }
+      }
+      clearPendingAttachments();
       setIsAddingRecord(false);
       setRecordTypeStep('choose');
       setNewRecord(defaultRecord(selectedHeaderId));
@@ -649,11 +796,13 @@ export function HealthcareApptsHistoryTool({ toolId }: HealthcareApptsHistoryToo
   };
 
   const startEditingRecord = (record: AppointmentRecord) => {
+    clearPendingAttachments();
     setEditingRecordId(record.id);
     setEditingRecord({ ...record });
   };
 
   const cancelEditingRecord = () => {
+    closeAttachmentModal();
     setEditingRecordId(null);
     setEditingRecord(null);
   };
@@ -680,9 +829,6 @@ export function HealthcareApptsHistoryTool({ toolId }: HealthcareApptsHistoryToo
       formData.append('totalBilled', editingRecord.totalBilled);
       formData.append('insurancePaid', editingRecord.insurancePaid);
       formData.append('currentAmountDue', editingRecord.currentAmountDue);
-      editingRecord.documents.forEach((d) => {
-        if (d.file) formData.append('documents', d.file);
-      });
       const response = await fetch(API_BASE, { method: 'POST', body: formData });
       if (!response.ok) {
         const err = await response.json().catch(() => ({}));
@@ -712,6 +858,7 @@ export function HealthcareApptsHistoryTool({ toolId }: HealthcareApptsHistoryToo
         const err = await response.json().catch(() => ({}));
         throw new Error((err as { error?: string }).error || 'Failed to delete');
       }
+      if (attachmentModal === deleteConfirmRecordId) closeAttachmentModal();
       setDeleteConfirmRecordId(null);
       setDeleteConfirmRecordText('');
       if (editingRecordId === deleteConfirmRecordId) cancelEditingRecord();
@@ -781,110 +928,6 @@ export function HealthcareApptsHistoryTool({ toolId }: HealthcareApptsHistoryToo
       showMessage('error', msg);
     } finally {
       setAddingToHsaRecordId(null);
-    }
-  };
-
-  const validateFileSize = (file: File): boolean => {
-    return file.size <= MAX_FILE_SIZE_BYTES;
-  };
-
-  const addDocumentToNewRecord = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const files = e.target.files ? Array.from(e.target.files) : [];
-    const valid = files.filter((f) => validateFileSize(f));
-    const invalidCount = files.length - valid.length;
-    if (invalidCount > 0) {
-      alert(`Some files exceed the 10MB limit and were not added.`);
-    }
-    const newDocs: AppointmentDocument[] = valid.map((f) => ({
-      id: generateId(),
-      name: f.name,
-      file: f,
-      fileUrl: URL.createObjectURL(f),
-      file_size: f.size,
-    }));
-    setNewRecord((prev) => ({
-      ...prev,
-      documents: [...prev.documents, ...newDocs],
-    }));
-    e.target.value = '';
-  };
-
-  const removeDocumentFromNewRecord = (docId: string) => {
-    setNewRecord((prev) => ({
-      ...prev,
-      documents: prev.documents.filter((d) => d.id !== docId),
-    }));
-  };
-
-  const addDocumentToEditingRecord = (e: React.ChangeEvent<HTMLInputElement>) => {
-    if (!editingRecord) return;
-    const files = e.target.files ? Array.from(e.target.files) : [];
-    const valid = files.filter((f) => validateFileSize(f));
-    const newDocs: AppointmentDocument[] = valid.map((f) => ({
-      id: generateId(),
-      name: f.name,
-      file: f,
-      fileUrl: URL.createObjectURL(f),
-      file_size: f.size,
-    }));
-    setEditingRecord({
-      ...editingRecord,
-      documents: [...editingRecord.documents, ...newDocs],
-    });
-    e.target.value = '';
-  };
-
-  const removeDocumentFromEditingRecord = async (docId: string) => {
-    if (!editingRecord) return;
-    const doc = editingRecord.documents.find((d) => d.id === docId);
-    if (doc?.file) {
-      setEditingRecord({
-        ...editingRecord,
-        documents: editingRecord.documents.filter((d) => d.id !== docId),
-      });
-      return;
-    }
-    if (!toolId) return;
-    setIsSaving(true);
-    try {
-      const formData = new FormData();
-      formData.append('toolId', toolId);
-      formData.append('resource', 'document');
-      formData.append('action', 'delete');
-      formData.append('documentId', docId);
-      const response = await fetch(API_BASE, { method: 'POST', body: formData });
-      if (response.ok) {
-        setEditingRecord({
-          ...editingRecord,
-          documents: editingRecord.documents.filter((d) => d.id !== docId),
-        });
-      }
-    } finally {
-      setIsSaving(false);
-    }
-  };
-
-  const viewDocument = (doc: AppointmentDocument) => {
-    if (doc.fileUrl) {
-      window.open(doc.fileUrl, '_blank');
-    } else if (doc.file) {
-      window.open(URL.createObjectURL(doc.file), '_blank');
-    }
-  };
-
-  const removeDocumentFromRecord = async (recordId: string, docId: string) => {
-    if (!toolId || !selectedHeaderId) return;
-    setIsSaving(true);
-    try {
-      const formData = new FormData();
-      formData.append('toolId', toolId);
-      formData.append('resource', 'document');
-      formData.append('action', 'delete');
-      formData.append('documentId', docId);
-      const response = await fetch(API_BASE, { method: 'POST', body: formData });
-      if (response.ok) await loadRecords(selectedHeaderId);
-    } finally {
-      setIsSaving(false);
     }
   };
 
@@ -1020,6 +1063,22 @@ export function HealthcareApptsHistoryTool({ toolId }: HealthcareApptsHistoryToo
       setIsExportingPdf(false);
     }
   };
+
+  const savedAttachmentRecord =
+    attachmentModal && attachmentModal !== 'add'
+      ? records.find((record) => record.id === attachmentModal) || null
+      : null;
+  const modalFiles: AttachmentItem[] =
+    attachmentModal === 'add'
+      ? pendingAttachments
+      : savedAttachmentRecord
+        ? (savedAttachmentRecord.documents || []).map((item) => ({
+            id: item.id,
+            name: item.name,
+            size: item.size,
+            type: item.type,
+          }))
+        : [];
 
   return (
     <div className="space-y-6">
@@ -1427,9 +1486,15 @@ export function HealthcareApptsHistoryTool({ toolId }: HealthcareApptsHistoryToo
               {/* Add record: step 2 form */}
               {isAddingRecord && recordTypeStep === 'form' && (
                 <div className={`${cardPad6Class} space-y-4`}>
-                  <h3 className="text-lg font-semibold text-slate-50">
-                    {newRecord.isUpcoming ? 'New upcoming appointment' : 'New history record'}
-                  </h3>
+                  <div className="flex items-start justify-between gap-4">
+                    <h3 className="text-lg font-semibold text-slate-50">
+                      {newRecord.isUpcoming ? 'New upcoming appointment' : 'New history record'}
+                    </h3>
+                    <AttachmentButton
+                      count={pendingAttachments.length}
+                      onClick={() => setAttachmentModal('add')}
+                    />
+                  </div>
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                     <div>
                       <label className="block text-xs font-medium text-slate-300 mb-1.5">Appointment date <span className="text-red-400">*</span></label>
@@ -1564,58 +1629,6 @@ export function HealthcareApptsHistoryTool({ toolId }: HealthcareApptsHistoryToo
                       </div>
                     </div>
                   </div>
-                  <div>
-                    <label className="block text-xs font-medium text-slate-300 mb-1.5">Documents (max 10MB per file)</label>
-                    <div className="relative">
-                      <input
-                        ref={docFileInputRef}
-                        type="file"
-                        id="new-record-docs"
-                        multiple
-                        accept="image/*,.pdf"
-                        onChange={addDocumentToNewRecord}
-                        className="absolute inset-0 w-full h-full opacity-0 cursor-pointer"
-                      />
-                      <label
-                        htmlFor="new-record-docs"
-                        className="flex items-center gap-2 w-full rounded-lg border border-slate-700 bg-slate-900/70 px-3 py-2 text-sm text-slate-100 hover:bg-slate-800 transition-colors cursor-pointer"
-                      >
-                        <svg className="w-5 h-5 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
-                        </svg>
-                        <span className="text-slate-300">
-                          {newRecord.documents.length > 0
-                            ? `${newRecord.documents.length} file(s) selected`
-                            : 'Select files'}
-                        </span>
-                      </label>
-                    </div>
-                    {newRecord.documents.length > 0 && (
-                      <ul className="mt-2 space-y-1">
-                        {newRecord.documents.map((d) => (
-                          <li key={d.id} className="flex items-center justify-between text-sm text-slate-300">
-                            <span>{d.name}</span>
-                            <div className="flex items-center gap-2">
-                              <button
-                                type="button"
-                                onClick={() => viewDocument(d)}
-                                className="text-emerald-400 hover:text-emerald-300"
-                              >
-                                View
-                              </button>
-                              <button
-                                type="button"
-                                onClick={() => removeDocumentFromNewRecord(d.id)}
-                                className="text-red-400 hover:text-red-300"
-                              >
-                                Delete
-                              </button>
-                            </div>
-                          </li>
-                        ))}
-                      </ul>
-                    )}
-                  </div>
                   <div className="flex gap-3 justify-end">
                     <button
                       onClick={cancelAddingRecord}
@@ -1638,7 +1651,17 @@ export function HealthcareApptsHistoryTool({ toolId }: HealthcareApptsHistoryToo
               {/* Edit record form */}
               {editingRecordId && editingRecord && (
                 <div className={`${cardPad6Class} space-y-4`}>
-                  <h3 className="text-lg font-semibold text-slate-50">Edit appointment</h3>
+                  <div className="flex items-start justify-between gap-4">
+                    <h3 className="text-lg font-semibold text-slate-50">Edit appointment</h3>
+                    <AttachmentButton
+                      count={
+                        records.find((record) => record.id === editingRecord.id)?.documents.length ||
+                        editingRecord.documents.length ||
+                        0
+                      }
+                      onClick={() => setAttachmentModal(editingRecord.id)}
+                    />
+                  </div>
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                     <div>
                       <label className="block text-xs font-medium text-slate-300 mb-1.5">Appointment date <span className="text-red-400">*</span></label>
@@ -1762,39 +1785,6 @@ export function HealthcareApptsHistoryTool({ toolId }: HealthcareApptsHistoryToo
                       />
                     </div>
                   </div>
-                  <div>
-                    <label className="block text-xs font-medium text-slate-300 mb-1.5">Documents (max 10MB per file)</label>
-                    <div className="relative">
-                      <input
-                        ref={editDocFileInputRef}
-                        type="file"
-                        id="edit-record-docs"
-                        multiple
-                        accept="image/*,.pdf"
-                        onChange={addDocumentToEditingRecord}
-                        className="absolute inset-0 w-full h-full opacity-0 cursor-pointer"
-                      />
-                      <label
-                        htmlFor="edit-record-docs"
-                        className="flex items-center gap-2 w-full rounded-lg border border-slate-700 bg-slate-900/70 px-3 py-2 text-sm text-slate-100 hover:bg-slate-800 transition-colors cursor-pointer"
-                      >
-                        <span className="text-slate-300">Add more files</span>
-                      </label>
-                    </div>
-                    {editingRecord.documents.length > 0 && (
-                      <ul className="mt-2 space-y-1">
-                        {editingRecord.documents.map((d) => (
-                          <li key={d.id} className="flex items-center justify-between text-sm text-slate-300">
-                            <span>{d.name}</span>
-                            <div className="flex items-center gap-2">
-                              <button type="button" onClick={() => viewDocument(d)} className="text-emerald-400 hover:text-emerald-300">View</button>
-                              <button type="button" onClick={() => removeDocumentFromEditingRecord(d.id)} className="text-red-400 hover:text-red-300">Delete</button>
-                            </div>
-                          </li>
-                        ))}
-                      </ul>
-                    )}
-                  </div>
                   <div className="flex gap-3 justify-end flex-wrap">
                     <button
                       type="button"
@@ -1863,17 +1853,12 @@ export function HealthcareApptsHistoryTool({ toolId }: HealthcareApptsHistoryToo
                             {!record.isUpcoming && formatHistoryBalanceLine(record) ? (
                               <p className="text-xs text-slate-400 mt-0.5">{formatHistoryBalanceLine(record)}</p>
                             ) : null}
-                            {record.documents.length > 0 && (
-                              <div className="mt-2 flex flex-wrap gap-2">
-                                {record.documents.map((d) => (
-                                  <span key={d.id} className="text-xs text-slate-400">
-                                    {d.name}
-                                  </span>
-                                ))}
-                              </div>
-                            )}
                           </div>
                           <div className="flex shrink-0 flex-nowrap items-center gap-1.5 ml-4">
+                            <AttachmentButton
+                              count={record.documents.length}
+                              onClick={() => setAttachmentModal(record.id)}
+                            />
                             <button
                               type="button"
                               onClick={() => void addToHsa(record)}
@@ -2106,6 +2091,46 @@ export function HealthcareApptsHistoryTool({ toolId }: HealthcareApptsHistoryToo
           </div>
         </div>
       )}
+
+      <AttachmentModal
+        open={attachmentModal !== null}
+        onClose={closeAttachmentModal}
+        previewItem={viewPreview}
+        title={
+          attachmentModal === 'add'
+            ? newRecord.reasonForVisit.trim() ||
+              (newRecord.isUpcoming ? 'New upcoming appointment' : 'New history record')
+            : savedAttachmentRecord
+              ? [savedAttachmentRecord.careFacility, savedAttachmentRecord.reasonForVisit].filter(Boolean).join(' · ') ||
+                'Appointment'
+              : 'Appointment'
+        }
+        files={modalFiles}
+        busy={attachmentBusy}
+        onAdd={(incoming) => {
+          if (attachmentModal === 'add') {
+            setPendingAttachments((prev) => [...prev, ...incoming.map(createPendingAttachment)]);
+            return;
+          }
+          if (attachmentModal) {
+            void addSavedRecordFiles(attachmentModal, incoming);
+          }
+        }}
+        onRemove={(id) => {
+          if (attachmentModal === 'add') {
+            setPendingAttachments((prev) => {
+              const next = prev.filter((item) => item.id !== id);
+              const removed = prev.find((item) => item.id === id);
+              if (removed?.url) URL.revokeObjectURL(removed.url);
+              return next;
+            });
+            return;
+          }
+          void removeSavedRecordFile(id);
+        }}
+        onView={handleViewAttachment}
+        onDownload={attachmentModal === 'add' ? undefined : handleDownloadAttachment}
+      />
     </div>
   );
 }
