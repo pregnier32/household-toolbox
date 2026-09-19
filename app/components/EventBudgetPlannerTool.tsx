@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useLayoutEffect, useMemo, useCallback, useRef } from 'react';
 import { useTheme } from './AppThemeProvider';
+import { useAppNotice } from './AppNotice';
 import { AttachmentButton } from './AttachmentButton';
 import { AttachmentModal } from './AttachmentModal';
 import {
@@ -262,22 +263,6 @@ function birthdayStarterRows(available: NamedRecord[], event?: Pick<EventRecord,
   });
 }
 
-function calendarDateKey(value: string): string {
-  return (value || '').split('T')[0];
-}
-
-function isSameCalendarEvent(
-  event: { title?: string; date?: string; is_active?: boolean },
-  title: string,
-  date: string
-) {
-  if (event.is_active === false) return false;
-  return (
-    (event.title || '').trim().toLowerCase() === title.trim().toLowerCase() &&
-    calendarDateKey(event.date || '') === calendarDateKey(date)
-  );
-}
-
 function EditIcon() {
   return (
     <svg className="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -329,6 +314,7 @@ function sortByActiveThenName<T extends NamedRecord>(records: T[]): T[] {
 
 export function EventBudgetPlannerTool({ toolId }: EventBudgetPlannerToolProps) {
   const { resolvedTheme } = useTheme();
+  const { showError } = useAppNotice();
   const isLight = resolvedTheme === 'light';
 
   const titleClass = isLight ? 'text-2xl font-semibold text-slate-900 mb-2' : 'text-2xl font-semibold text-slate-50 mb-2';
@@ -669,7 +655,7 @@ export function EventBudgetPlannerTool({ toolId }: EventBudgetPlannerToolProps) 
           setPendingEventAttachments([]);
           closeAttachmentModal();
           await reloadData();
-          alert(uploadError instanceof Error ? uploadError.message : 'Event saved, but a file failed to upload.');
+          showError(uploadError instanceof Error ? uploadError.message : 'Event saved, but a file failed to upload.');
           setIsAddingEvent(false);
           setAddingEventCategoryForId(null);
           if (createdEventId) setEditingEventId(createdEventId);
@@ -689,13 +675,13 @@ export function EventBudgetPlannerTool({ toolId }: EventBudgetPlannerToolProps) 
           try {
             await applyBirthdayStarterBudgets(createdEventId, data.event);
           } catch (templateError: unknown) {
-            alert(templateError instanceof Error ? templateError.message : 'Failed to apply Birthday starter template.');
+            showError(templateError instanceof Error ? templateError.message : 'Failed to apply Birthday starter template.');
           }
         }
       }
       resetEventForm();
     } catch (error: unknown) {
-      alert(error instanceof Error ? error.message : 'Failed to create event.');
+      showError(error instanceof Error ? error.message : 'Failed to create event.');
     } finally {
       setIsLoading(false);
     }
@@ -720,89 +706,6 @@ export function EventBudgetPlannerTool({ toolId }: EventBudgetPlannerToolProps) 
     });
   };
 
-  const addEventToCalendar = async () => {
-    const title = eventForm.name.trim();
-    const date = eventForm.date;
-    if (!title || !date) return;
-
-    setIsLoading(true);
-    try {
-      const toolsRes = await fetch('/api/tools');
-      const toolsData = await toolsRes.json().catch(() => ({ error: 'Unknown error' }));
-      if (!toolsRes.ok) {
-        throw new Error(toolsData.error || 'Failed to load tools');
-      }
-
-      const calendarTool = (toolsData.tools ?? []).find((tool: { name?: string }) => tool.name === 'Calendar Events');
-      if (!calendarTool?.id) {
-        throw new Error('Calendar Events tool was not found.');
-      }
-
-      const ceRes = await fetch(`/api/tools/calendar-events?toolId=${calendarTool.id}`);
-      const ceData = await ceRes.json().catch(() => ({ error: 'Unknown error' }));
-      if (!ceRes.ok) {
-        throw new Error(ceData.error || 'Failed to load Calendar Events');
-      }
-
-      const typeName = getTypeName(eventForm.typeId);
-      let category =
-        (ceData.categories ?? []).find((row: { name?: string }) => row.name === typeName) ||
-        (ceData.categories ?? [])[0];
-
-      if (!category) {
-        const createCatRes = await fetch('/api/tools/calendar-events', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            toolId: calendarTool.id,
-            action: 'create_category',
-            category: {
-              name: typeName !== 'Unknown' ? typeName : 'Holiday',
-              isDefault: true,
-              card_color: '#10b981',
-            },
-          }),
-        });
-        const createCatData = await createCatRes.json().catch(() => ({ error: 'Unknown error' }));
-        if (!createCatRes.ok || !createCatData.category) {
-          throw new Error(createCatData.error || 'Failed to create Calendar Events category');
-        }
-        category = createCatData.category;
-      }
-
-      const alreadyLinked = (ceData.events ?? []).some((row: { title?: string; date?: string; is_active?: boolean }) =>
-        isSameCalendarEvent(row, title, date)
-      );
-      if (alreadyLinked) return;
-
-      const createRes = await fetch('/api/tools/calendar-events', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          toolId: calendarTool.id,
-          action: 'create_event',
-          event: {
-            categoryId: category.id,
-            title,
-            date,
-            frequency: 'One Time',
-            notes: eventForm.notes.trim(),
-            isActive: true,
-            addToDashboard: true,
-          },
-        }),
-      });
-      const createData = await createRes.json().catch(() => ({ error: 'Unknown error' }));
-      if (!createRes.ok) {
-        throw new Error(createData.error || 'Failed to add event to Calendar Events');
-      }
-    } catch (error: unknown) {
-      alert(error instanceof Error ? error.message : 'Failed to add event to Calendar Events.');
-    } finally {
-      setIsLoading(false);
-    }
-  };
-
   const saveEventEdit = async () => {
     if (!editingEventId || !eventForm.name.trim() || !eventForm.typeId || !toolId) return;
     setIsLoading(true);
@@ -816,7 +719,7 @@ export function EventBudgetPlannerTool({ toolId }: EventBudgetPlannerToolProps) 
         notes: eventForm.notes,
       });
     } catch (error: unknown) {
-      alert(error instanceof Error ? error.message : 'Failed to save event.');
+      showError(error instanceof Error ? error.message : 'Failed to save event.');
     } finally {
       setIsLoading(false);
     }
@@ -829,7 +732,7 @@ export function EventBudgetPlannerTool({ toolId }: EventBudgetPlannerToolProps) 
       await postMain({ action: 'inactivateEvent', eventId: id });
       if (editingEventId === id) cancelEventForm();
     } catch (error: unknown) {
-      alert(error instanceof Error ? error.message : 'Failed to move event to history.');
+      showError(error instanceof Error ? error.message : 'Failed to move event to history.');
     } finally {
       setIsLoading(false);
     }
@@ -841,7 +744,7 @@ export function EventBudgetPlannerTool({ toolId }: EventBudgetPlannerToolProps) 
     try {
       await postMain({ action: 'activateEvent', eventId: id });
     } catch (error: unknown) {
-      alert(error instanceof Error ? error.message : 'Failed to reactivate event.');
+      showError(error instanceof Error ? error.message : 'Failed to reactivate event.');
     } finally {
       setIsLoading(false);
     }
@@ -856,7 +759,7 @@ export function EventBudgetPlannerTool({ toolId }: EventBudgetPlannerToolProps) 
       setDeleteEventConfirmText('');
       if (editingEventId === deleteEventConfirmId) cancelEventForm();
     } catch (error: unknown) {
-      alert(error instanceof Error ? error.message : 'Failed to delete event.');
+      showError(error instanceof Error ? error.message : 'Failed to delete event.');
     } finally {
       setIsLoading(false);
     }
@@ -894,7 +797,7 @@ export function EventBudgetPlannerTool({ toolId }: EventBudgetPlannerToolProps) 
     try {
       await applyBirthdayStarterBudgets(event.id, event);
     } catch (error: unknown) {
-      alert(error instanceof Error ? error.message : 'Failed to apply Birthday starter template.');
+      showError(error instanceof Error ? error.message : 'Failed to apply Birthday starter template.');
     } finally {
       setIsLoading(false);
     }
@@ -919,7 +822,7 @@ export function EventBudgetPlannerTool({ toolId }: EventBudgetPlannerToolProps) 
       setNewCategoryBudget({ categoryId: '', budgetAmount: 0 });
       setAddingEventCategoryForId(null);
     } catch (error: unknown) {
-      alert(error instanceof Error ? error.message : 'Failed to add category budget.');
+      showError(error instanceof Error ? error.message : 'Failed to add category budget.');
     } finally {
       setIsLoading(false);
     }
@@ -937,7 +840,7 @@ export function EventBudgetPlannerTool({ toolId }: EventBudgetPlannerToolProps) 
       if (categoryBudgetModalId === categoryId) closeCategoryBudgetModal();
       if (expenseModal?.categoryId === categoryId) closeExpenseModal();
     } catch (error: unknown) {
-      alert(error instanceof Error ? error.message : 'Failed to remove category.');
+      showError(error instanceof Error ? error.message : 'Failed to remove category.');
     } finally {
       setIsLoading(false);
     }
@@ -957,11 +860,11 @@ export function EventBudgetPlannerTool({ toolId }: EventBudgetPlannerToolProps) 
     const vendorSplits = expenseForm.vendorSplits;
     if (amount <= 0 || !vendorSplits[0]?.vendorId) return;
     if (vendorSplits.some((part) => !part.vendorId || part.amount <= 0)) {
-      alert('Each vendor split needs a vendor and an amount greater than zero.');
+      showError('Each vendor split needs a vendor and an amount greater than zero.');
       return;
     }
     if (vendorSplits.reduce((sum, part) => sum + moneyCents(part.amount), 0) !== moneyCents(amount)) {
-      alert('Vendor amounts must sum to the expense amount.');
+      showError('Vendor amounts must sum to the expense amount.');
       return;
     }
 
@@ -994,7 +897,7 @@ export function EventBudgetPlannerTool({ toolId }: EventBudgetPlannerToolProps) 
           closeAttachmentModal();
           closeExpenseModal();
           await reloadData();
-          alert(uploadError instanceof Error ? uploadError.message : 'Expense saved, but a file failed to upload.');
+          showError(uploadError instanceof Error ? uploadError.message : 'Expense saved, but a file failed to upload.');
           return;
         }
         await reloadData();
@@ -1004,7 +907,7 @@ export function EventBudgetPlannerTool({ toolId }: EventBudgetPlannerToolProps) 
       closeAttachmentModal();
       closeExpenseModal();
     } catch (error: unknown) {
-      alert(error instanceof Error ? error.message : 'Failed to save expense.');
+      showError(error instanceof Error ? error.message : 'Failed to save expense.');
     } finally {
       setIsLoading(false);
     }
@@ -1014,7 +917,7 @@ export function EventBudgetPlannerTool({ toolId }: EventBudgetPlannerToolProps) 
     const rawPercent = expenseHelper.percent.trim();
     const percent = parseFloat(rawPercent.replace(/[^0-9.-]/g, ''));
     if (rawPercent === '' || !Number.isFinite(percent) || percent < 0) {
-      alert('Enter a valid percentage.');
+      showError('Enter a valid percentage.');
       return;
     }
     const amount = Math.round(expenseHelper.baseAmount * (percent / 100) * 100) / 100;
@@ -1085,14 +988,14 @@ export function EventBudgetPlannerTool({ toolId }: EventBudgetPlannerToolProps) 
         window.open(item.url, '_blank', 'noopener,noreferrer');
         return;
       }
-      alert('This file type can’t be previewed in the browser. Use Download to save it.');
+      showError('This file type can’t be previewed in the browser. Use Download to save it.');
       return;
     }
     try {
       const blob = await fetchEbpAttachmentBlob(item.id, true);
       const type = blob.type || item.type || '';
       if (!canPreviewAttachment(type, item.name)) {
-        alert('This file type can’t be previewed in the browser. Use Download to save it.');
+        showError('This file type can’t be previewed in the browser. Use Download to save it.');
         return;
       }
       const url = window.URL.createObjectURL(blob);
@@ -1104,7 +1007,7 @@ export function EventBudgetPlannerTool({ toolId }: EventBudgetPlannerToolProps) 
         window.open(url, '_blank', 'noopener,noreferrer');
       }
     } catch (error) {
-      alert(error instanceof Error ? error.message : 'Failed to open file');
+      showError(error instanceof Error ? error.message : 'Failed to open file');
     }
   };
 
@@ -1122,7 +1025,7 @@ export function EventBudgetPlannerTool({ toolId }: EventBudgetPlannerToolProps) 
       document.body.removeChild(link);
       return true;
     } catch (error) {
-      alert(error instanceof Error ? error.message : 'Failed to download file');
+      showError(error instanceof Error ? error.message : 'Failed to download file');
       return false;
     }
   };
@@ -1135,7 +1038,7 @@ export function EventBudgetPlannerTool({ toolId }: EventBudgetPlannerToolProps) 
       }
       await reloadData();
     } catch (error) {
-      alert(error instanceof Error ? error.message : 'Failed to add file');
+      showError(error instanceof Error ? error.message : 'Failed to add file');
     } finally {
       setAttachmentBusy(false);
     }
@@ -1154,7 +1057,7 @@ export function EventBudgetPlannerTool({ toolId }: EventBudgetPlannerToolProps) 
       if (!response.ok) throw new Error(data.error || 'Failed to remove file');
       await reloadData();
     } catch (error) {
-      alert(error instanceof Error ? error.message : 'Failed to remove file');
+      showError(error instanceof Error ? error.message : 'Failed to remove file');
     } finally {
       setAttachmentBusy(false);
     }
@@ -1227,7 +1130,7 @@ export function EventBudgetPlannerTool({ toolId }: EventBudgetPlannerToolProps) 
       });
       closeCategoryBudgetModal();
     } catch (error: unknown) {
-      alert(error instanceof Error ? error.message : 'Failed to update category budget.');
+      showError(error instanceof Error ? error.message : 'Failed to update category budget.');
     } finally {
       setIsLoading(false);
     }
@@ -1247,7 +1150,7 @@ export function EventBudgetPlannerTool({ toolId }: EventBudgetPlannerToolProps) 
       }
       if (expenseModal?.expenseId === expenseId) closeExpenseModal();
     } catch (error: unknown) {
-      alert(error instanceof Error ? error.message : 'Failed to delete expense.');
+      showError(error instanceof Error ? error.message : 'Failed to delete expense.');
     } finally {
       setIsLoading(false);
     }
@@ -1274,7 +1177,7 @@ export function EventBudgetPlannerTool({ toolId }: EventBudgetPlannerToolProps) 
     if (!newCategoryName.trim() || !toolId) return;
     const trimmedName = newCategoryName.trim();
     if (categories.some((c) => c.name.toLowerCase() === trimmedName.toLowerCase())) {
-      alert('A category with this name already exists.');
+      showError('A category with this name already exists.');
       return;
     }
 
@@ -1293,7 +1196,7 @@ export function EventBudgetPlannerTool({ toolId }: EventBudgetPlannerToolProps) 
       setNewCategoryName('');
       setIsAddingCategory(false);
     } catch (error: unknown) {
-      alert(error instanceof Error ? error.message : 'Failed to add category.');
+      showError(error instanceof Error ? error.message : 'Failed to add category.');
     } finally {
       setIsLoading(false);
     }
@@ -1307,7 +1210,7 @@ export function EventBudgetPlannerTool({ toolId }: EventBudgetPlannerToolProps) 
         (c) => c.id !== editingCategoryId && c.name.toLowerCase() === trimmedName.toLowerCase()
       )
     ) {
-      alert('A category with this name already exists.');
+      showError('A category with this name already exists.');
       return;
     }
 
@@ -1326,7 +1229,7 @@ export function EventBudgetPlannerTool({ toolId }: EventBudgetPlannerToolProps) 
       setEditingCategoryId(null);
       setEditingCategoryName('');
     } catch (error: unknown) {
-      alert(error instanceof Error ? error.message : 'Failed to update category.');
+      showError(error instanceof Error ? error.message : 'Failed to update category.');
     } finally {
       setIsLoading(false);
     }
@@ -1347,7 +1250,7 @@ export function EventBudgetPlannerTool({ toolId }: EventBudgetPlannerToolProps) 
       }
       await reloadData();
     } catch (error: unknown) {
-      alert(error instanceof Error ? error.message : 'Failed to inactivate category.');
+      showError(error instanceof Error ? error.message : 'Failed to inactivate category.');
     } finally {
       setIsLoading(false);
     }
@@ -1368,7 +1271,7 @@ export function EventBudgetPlannerTool({ toolId }: EventBudgetPlannerToolProps) 
       }
       await reloadData();
     } catch (error: unknown) {
-      alert(error instanceof Error ? error.message : 'Failed to activate category.');
+      showError(error instanceof Error ? error.message : 'Failed to activate category.');
     } finally {
       setIsLoading(false);
     }
@@ -1390,7 +1293,7 @@ export function EventBudgetPlannerTool({ toolId }: EventBudgetPlannerToolProps) 
       setDeleteCategoryConfirmId(null);
       setDeleteCategoryConfirmText('');
     } catch (error: unknown) {
-      alert(error instanceof Error ? error.message : 'Failed to delete category.');
+      showError(error instanceof Error ? error.message : 'Failed to delete category.');
     } finally {
       setIsLoading(false);
     }
@@ -1401,7 +1304,7 @@ export function EventBudgetPlannerTool({ toolId }: EventBudgetPlannerToolProps) 
     if (!newTypeName.trim() || !toolId) return;
     const trimmedName = newTypeName.trim();
     if (types.some((t) => t.name.toLowerCase() === trimmedName.toLowerCase())) {
-      alert('A type with this name already exists.');
+      showError('A type with this name already exists.');
       return;
     }
 
@@ -1420,7 +1323,7 @@ export function EventBudgetPlannerTool({ toolId }: EventBudgetPlannerToolProps) 
       setNewTypeName('');
       setIsAddingType(false);
     } catch (error: unknown) {
-      alert(error instanceof Error ? error.message : 'Failed to add type.');
+      showError(error instanceof Error ? error.message : 'Failed to add type.');
     } finally {
       setIsLoading(false);
     }
@@ -1430,7 +1333,7 @@ export function EventBudgetPlannerTool({ toolId }: EventBudgetPlannerToolProps) 
     if (!editingTypeId || !editingTypeName.trim() || !toolId) return;
     const trimmedName = editingTypeName.trim();
     if (types.some((t) => t.id !== editingTypeId && t.name.toLowerCase() === trimmedName.toLowerCase())) {
-      alert('A type with this name already exists.');
+      showError('A type with this name already exists.');
       return;
     }
 
@@ -1449,7 +1352,7 @@ export function EventBudgetPlannerTool({ toolId }: EventBudgetPlannerToolProps) 
       setEditingTypeId(null);
       setEditingTypeName('');
     } catch (error: unknown) {
-      alert(error instanceof Error ? error.message : 'Failed to update type.');
+      showError(error instanceof Error ? error.message : 'Failed to update type.');
     } finally {
       setIsLoading(false);
     }
@@ -1470,7 +1373,7 @@ export function EventBudgetPlannerTool({ toolId }: EventBudgetPlannerToolProps) 
       }
       await reloadData();
     } catch (error: unknown) {
-      alert(error instanceof Error ? error.message : 'Failed to inactivate type.');
+      showError(error instanceof Error ? error.message : 'Failed to inactivate type.');
     } finally {
       setIsLoading(false);
     }
@@ -1491,7 +1394,7 @@ export function EventBudgetPlannerTool({ toolId }: EventBudgetPlannerToolProps) 
       }
       await reloadData();
     } catch (error: unknown) {
-      alert(error instanceof Error ? error.message : 'Failed to activate type.');
+      showError(error instanceof Error ? error.message : 'Failed to activate type.');
     } finally {
       setIsLoading(false);
     }
@@ -1513,7 +1416,7 @@ export function EventBudgetPlannerTool({ toolId }: EventBudgetPlannerToolProps) 
       setDeleteTypeConfirmId(null);
       setDeleteTypeConfirmText('');
     } catch (error: unknown) {
-      alert(error instanceof Error ? error.message : 'Failed to delete type.');
+      showError(error instanceof Error ? error.message : 'Failed to delete type.');
     } finally {
       setIsLoading(false);
     }
@@ -1533,7 +1436,7 @@ export function EventBudgetPlannerTool({ toolId }: EventBudgetPlannerToolProps) 
     if (!vendorForm.name.trim() || !toolId) return;
     const trimmedName = vendorForm.name.trim();
     if (vendors.some((v) => v.name.toLowerCase() === trimmedName.toLowerCase())) {
-      alert('A vendor with this name already exists.');
+      showError('A vendor with this name already exists.');
       return;
     }
 
@@ -1560,7 +1463,7 @@ export function EventBudgetPlannerTool({ toolId }: EventBudgetPlannerToolProps) 
       setVendorForm(emptyVendorForm());
       setIsAddingVendor(false);
     } catch (error: unknown) {
-      alert(error instanceof Error ? error.message : 'Failed to add vendor.');
+      showError(error instanceof Error ? error.message : 'Failed to add vendor.');
     } finally {
       setIsLoading(false);
     }
@@ -1586,7 +1489,7 @@ export function EventBudgetPlannerTool({ toolId }: EventBudgetPlannerToolProps) 
         (v) => v.id !== editingVendorId && v.name.toLowerCase() === trimmedName.toLowerCase()
       )
     ) {
-      alert('A vendor with this name already exists.');
+      showError('A vendor with this name already exists.');
       return;
     }
 
@@ -1614,7 +1517,7 @@ export function EventBudgetPlannerTool({ toolId }: EventBudgetPlannerToolProps) 
       setEditingVendorId(null);
       setEditingVendorForm(emptyVendorForm());
     } catch (error: unknown) {
-      alert(error instanceof Error ? error.message : 'Failed to update vendor.');
+      showError(error instanceof Error ? error.message : 'Failed to update vendor.');
     } finally {
       setIsLoading(false);
     }
@@ -1635,7 +1538,7 @@ export function EventBudgetPlannerTool({ toolId }: EventBudgetPlannerToolProps) 
       }
       await reloadData();
     } catch (error: unknown) {
-      alert(error instanceof Error ? error.message : 'Failed to inactivate vendor.');
+      showError(error instanceof Error ? error.message : 'Failed to inactivate vendor.');
     } finally {
       setIsLoading(false);
     }
@@ -1656,7 +1559,7 @@ export function EventBudgetPlannerTool({ toolId }: EventBudgetPlannerToolProps) 
       }
       await reloadData();
     } catch (error: unknown) {
-      alert(error instanceof Error ? error.message : 'Failed to activate vendor.');
+      showError(error instanceof Error ? error.message : 'Failed to activate vendor.');
     } finally {
       setIsLoading(false);
     }
@@ -1666,7 +1569,7 @@ export function EventBudgetPlannerTool({ toolId }: EventBudgetPlannerToolProps) 
     if (!deleteVendorConfirmId || deleteVendorConfirmText.toLowerCase() !== 'delete' || !toolId) return;
     const used = getVendorUsageCount(deleteVendorConfirmId);
     if (used > 0) {
-      alert(`Used in ${used} ${used === 1 ? 'expense' : 'expenses'}`);
+      showError(`Used in ${used} ${used === 1 ? 'expense' : 'expenses'}`);
       setDeleteVendorConfirmId(null);
       setDeleteVendorConfirmText('');
       return;
@@ -1685,7 +1588,7 @@ export function EventBudgetPlannerTool({ toolId }: EventBudgetPlannerToolProps) 
       setDeleteVendorConfirmId(null);
       setDeleteVendorConfirmText('');
     } catch (error: unknown) {
-      alert(error instanceof Error ? error.message : 'Failed to delete vendor.');
+      showError(error instanceof Error ? error.message : 'Failed to delete vendor.');
     } finally {
       setIsLoading(false);
     }
@@ -2271,14 +2174,6 @@ export function EventBudgetPlannerTool({ toolId }: EventBudgetPlannerToolProps) 
                 >
                   Save Event Details
                 </button>
-                <button
-                  type="button"
-                  onClick={addEventToCalendar}
-                  disabled={!eventForm.name.trim() || !eventForm.date || isLoading}
-                  className={secondaryButtonClass}
-                >
-                  Add to Calendar
-                </button>
               </div>
               {renderEventBudgetSection()}
             </div>
@@ -2619,7 +2514,7 @@ export function EventBudgetPlannerTool({ toolId }: EventBudgetPlannerToolProps) 
                                 onClick={() => {
                                   const used = getVendorUsageCount(vendor.id);
                                   if (used > 0) {
-                                    alert(`Used in ${used} ${used === 1 ? 'expense' : 'expenses'}`);
+                                    showError(`Used in ${used} ${used === 1 ? 'expense' : 'expenses'}`);
                                     return;
                                   }
                                   setDeleteVendorConfirmId(vendor.id);

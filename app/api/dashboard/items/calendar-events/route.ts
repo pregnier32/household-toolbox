@@ -1,6 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getSession } from '@/lib/session';
 import { supabaseServer } from '@/lib/supabaseServer';
+import { CALENDAR_SOURCE_CALENDAR_EVENT } from '@/lib/calendarPins';
+import { getPinnedSourceIds } from '@/lib/calendarPinsServer';
 
 /**
  * Expand a calendar event into individual occurrences for a given month
@@ -209,7 +211,6 @@ export async function GET(request: NextRequest) {
         time,
         frequency,
         notes,
-        add_to_dashboard,
         is_active,
         end_date,
         days_of_week,
@@ -229,6 +230,18 @@ export async function GET(request: NextRequest) {
     if (toolId) {
       query = query.eq('tool_id', toolId);
     }
+
+    const { ids: pinnedIds } = await getPinnedSourceIds({
+      userId: user.id,
+      sourceType: CALENDAR_SOURCE_CALENDAR_EVENT,
+      toolId: toolId || undefined,
+    });
+
+    if (pinnedIds.size === 0) {
+      return NextResponse.json({ items: [] });
+    }
+
+    query = query.in('id', Array.from(pinnedIds));
 
     const { data: events, error } = await query;
 
@@ -250,7 +263,7 @@ export async function GET(request: NextRequest) {
     }
 
     console.log(`Found ${events.length} calendar events for month ${monthParam}:`, 
-      events.map(e => ({ id: e.id, title: e.title, date: e.date, frequency: e.frequency, add_to_dashboard: e.add_to_dashboard, is_active: e.is_active }))
+      events.map(e => ({ id: e.id, title: e.title, date: e.date, frequency: e.frequency, is_active: e.is_active }))
     );
 
     // Expand all events into occurrences for the requested month

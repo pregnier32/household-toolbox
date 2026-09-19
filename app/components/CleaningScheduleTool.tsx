@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useTheme } from './AppThemeProvider';
+import { useAppNotice } from './AppNotice';
 import { AttachmentButton } from './AttachmentButton';
 import { AttachmentModal } from './AttachmentModal';
 import {
@@ -564,6 +565,7 @@ function FrequencyFields({
 
 export function CleaningScheduleTool({ toolId }: CleaningScheduleToolProps) {
   const { resolvedTheme } = useTheme();
+  const { showError } = useAppNotice();
   const isLight = resolvedTheme === 'light';
 
   const titleClass = isLight ? 'text-2xl font-semibold text-slate-900 mb-2' : 'text-2xl font-semibold text-slate-50 mb-2';
@@ -898,14 +900,14 @@ export function CleaningScheduleTool({ toolId }: CleaningScheduleToolProps) {
         window.open(item.url, '_blank', 'noopener,noreferrer');
         return;
       }
-      alert('This file type can’t be previewed in the browser. Use Download to save it.');
+      showError('This file type can’t be previewed in the browser. Use Download to save it.');
       return;
     }
     try {
       const blob = await fetchCleaningAttachmentBlob(item.id, true);
       const type = blob.type || item.type || '';
       if (!canPreviewAttachment(type, item.name)) {
-        alert('This file type can’t be previewed in the browser. Use Download to save it.');
+        showError('This file type can’t be previewed in the browser. Use Download to save it.');
         return;
       }
       const url = window.URL.createObjectURL(blob);

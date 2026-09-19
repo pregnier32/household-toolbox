@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useCallback } from 'react';
 import { useTheme } from './AppThemeProvider';
+import { useAppNotice } from './AppNotice';
 
 const DEFAULT_TAGS = ['Family', 'Friends', 'Services', 'School'];
 
@@ -135,6 +136,7 @@ type AddressBookToolProps = {
 
 export function AddressBookTool({ toolId }: AddressBookToolProps) {
   const { resolvedTheme } = useTheme();
+  const { showError } = useAppNotice();
   const isLight = resolvedTheme === 'light';
 
   const titleClass = isLight ? 'text-2xl font-semibold text-slate-900 mb-2' : 'text-2xl font-semibold text-slate-50 mb-2';
@@ -313,11 +315,11 @@ export function AddressBookTool({ toolId }: AddressBookToolProps) {
 
   const validateForm = (form: AddressFormState, requireTag = true): boolean => {
     if (!form.mailingName.trim()) {
-      alert('Please enter a mailing name.');
+      showError('Please enter a mailing name.');
       return false;
     }
     if (requireTag && form.selectedTags.length === 0) {
-      alert('Please select at least one tag.');
+      showError('Please select at least one tag.');
       return false;
     }
     return true;
@@ -409,10 +411,10 @@ export function AddressBookTool({ toolId }: AddressBookToolProps) {
         setIsAdding(false);
       } else {
         const errorData = await response.json().catch(() => ({ error: 'Unknown error' }));
-        alert(errorData.error || 'Failed to add address.');
+        showError(errorData.error || 'Failed to add address.');
       }
     } catch {
-      alert('Error adding address. Please try again.');
+      showError('Error adding address. Please try again.');
     } finally {
       setIsLoading(false);
     }
@@ -449,10 +451,10 @@ export function AddressBookTool({ toolId }: AddressBookToolProps) {
         cancelEditing();
       } else {
         const errorData = await response.json().catch(() => ({ error: 'Unknown error' }));
-        alert(errorData.error || 'Failed to update address.');
+        showError(errorData.error || 'Failed to update address.');
       }
     } catch {
-      alert('Error updating address. Please try again.');
+      showError('Error updating address. Please try again.');
     } finally {
       setIsLoading(false);
     }
@@ -473,10 +475,10 @@ export function AddressBookTool({ toolId }: AddressBookToolProps) {
         await reloadAddresses();
       } else {
         const errorData = await response.json().catch(() => ({ error: 'Unknown error' }));
-        alert(errorData.error || 'Failed to move address to history.');
+        showError(errorData.error || 'Failed to move address to history.');
       }
     } catch {
-      alert('Error inactivating address. Please try again.');
+      showError('Error inactivating address. Please try again.');
     } finally {
       setIsLoading(false);
     }
@@ -497,10 +499,10 @@ export function AddressBookTool({ toolId }: AddressBookToolProps) {
         await reloadAddresses();
       } else {
         const errorData = await response.json().catch(() => ({ error: 'Unknown error' }));
-        alert(errorData.error || 'Failed to restore address.');
+        showError(errorData.error || 'Failed to restore address.');
       }
     } catch {
-      alert('Error activating address. Please try again.');
+      showError('Error activating address. Please try again.');
     } finally {
       setIsLoading(false);
     }
@@ -522,10 +524,10 @@ export function AddressBookTool({ toolId }: AddressBookToolProps) {
         setDeleteConfirmText('');
       } else {
         const errorData = await response.json().catch(() => ({ error: 'Unknown error' }));
-        alert(errorData.error || 'Failed to delete address.');
+        showError(errorData.error || 'Failed to delete address.');
       }
     } catch {
-      alert('Error deleting address. Please try again.');
+      showError('Error deleting address. Please try again.');
     } finally {
       setIsLoading(false);
     }
@@ -536,7 +538,7 @@ export function AddressBookTool({ toolId }: AddressBookToolProps) {
 
     const trimmedName = newTagName.trim();
     if (tags.some((t) => t.name.toLowerCase() === trimmedName.toLowerCase())) {
-      alert('A tag with this name already exists.');
+      showError('A tag with this name already exists.');
       return;
     }
 
@@ -554,10 +556,10 @@ export function AddressBookTool({ toolId }: AddressBookToolProps) {
         setIsAddingTag(false);
       } else {
         const errorData = await response.json().catch(() => ({ error: 'Unknown error' }));
-        alert(errorData.error || 'Failed to add tag.');
+        showError(errorData.error || 'Failed to add tag.');
       }
     } catch {
-      alert('Error adding tag. Please try again.');
+      showError('Error adding tag. Please try again.');
     } finally {
       setIsLoading(false);
     }
@@ -582,7 +584,7 @@ export function AddressBookTool({ toolId }: AddressBookToolProps) {
         (t) => t.id !== editingTagId && t.name.toLowerCase() === trimmedName.toLowerCase()
       )
     ) {
-      alert('A tag with this name already exists.');
+      showError('A tag with this name already exists.');
       return;
     }
 
@@ -599,10 +601,10 @@ export function AddressBookTool({ toolId }: AddressBookToolProps) {
         cancelEditingTag();
       } else {
         const errorData = await response.json().catch(() => ({ error: 'Unknown error' }));
-        alert(errorData.error || 'Failed to update tag.');
+        showError(errorData.error || 'Failed to update tag.');
       }
     } catch {
-      alert('Error updating tag. Please try again.');
+      showError('Error updating tag. Please try again.');
     } finally {
       setIsLoading(false);
     }
@@ -623,10 +625,10 @@ export function AddressBookTool({ toolId }: AddressBookToolProps) {
         await reloadTags();
       } else {
         const errorData = await response.json().catch(() => ({ error: 'Unknown error' }));
-        alert(errorData.error || 'Failed to inactivate tag.');
+        showError(errorData.error || 'Failed to inactivate tag.');
       }
     } catch {
-      alert('Error inactivating tag. Please try again.');
+      showError('Error inactivating tag. Please try again.');
     } finally {
       setIsLoading(false);
     }
@@ -647,10 +649,10 @@ export function AddressBookTool({ toolId }: AddressBookToolProps) {
         await reloadTags();
       } else {
         const errorData = await response.json().catch(() => ({ error: 'Unknown error' }));
-        alert(errorData.error || 'Failed to activate tag.');
+        showError(errorData.error || 'Failed to activate tag.');
       }
     } catch {
-      alert('Error activating tag. Please try again.');
+      showError('Error activating tag. Please try again.');
     } finally {
       setIsLoading(false);
     }
@@ -660,7 +662,7 @@ export function AddressBookTool({ toolId }: AddressBookToolProps) {
     if (!deleteTagConfirmId || deleteTagConfirmText.toLowerCase() !== 'delete' || !toolId) return;
 
     if (getTagUsageCount(deleteTagConfirmId) > 0) {
-      alert('This tag is still in use and cannot be deleted.');
+      showError('This tag is still in use and cannot be deleted.');
       return;
     }
 
@@ -677,10 +679,10 @@ export function AddressBookTool({ toolId }: AddressBookToolProps) {
         setDeleteTagConfirmText('');
       } else {
         const errorData = await response.json().catch(() => ({ error: 'Unknown error' }));
-        alert(errorData.error || 'Failed to delete tag.');
+        showError(errorData.error || 'Failed to delete tag.');
       }
     } catch {
-      alert('Error deleting tag. Please try again.');
+      showError('Error deleting tag. Please try again.');
     } finally {
       setIsLoading(false);
     }

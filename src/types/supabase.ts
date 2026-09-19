@@ -14,62 +14,44 @@ export type Database = {
   }
   public: {
     Tables: {
-      dashboard_items: {
+      calendar_pins: {
         Row: {
           created_at: string
-          description: string | null
-          due_date: string | null
           id: string
-          metadata: Json | null
-          priority: string | null
-          scheduled_date: string | null
-          status: string
-          title: string
+          pin_kind: string
+          source_id: string
+          source_type: string
           tool_id: string
-          type: string
-          updated_at: string
           user_id: string
         }
         Insert: {
           created_at?: string
-          description?: string | null
-          due_date?: string | null
           id?: string
-          metadata?: Json | null
-          priority?: string | null
-          scheduled_date?: string | null
-          status?: string
-          title: string
+          pin_kind?: string
+          source_id: string
+          source_type: string
           tool_id: string
-          type: string
-          updated_at?: string
           user_id: string
         }
         Update: {
           created_at?: string
-          description?: string | null
-          due_date?: string | null
           id?: string
-          metadata?: Json | null
-          priority?: string | null
-          scheduled_date?: string | null
-          status?: string
-          title?: string
+          pin_kind?: string
+          source_id?: string
+          source_type?: string
           tool_id?: string
-          type?: string
-          updated_at?: string
           user_id?: string
         }
         Relationships: [
           {
-            foreignKeyName: "dashboard_items_tool_id_fkey"
+            foreignKeyName: "calendar_pins_tool_id_fkey"
             columns: ["tool_id"]
             isOneToOne: false
             referencedRelation: "tools"
             referencedColumns: ["id"]
           },
           {
-            foreignKeyName: "dashboard_items_user_id_fkey"
+            foreignKeyName: "calendar_pins_user_id_fkey"
             columns: ["user_id"]
             isOneToOne: false
             referencedRelation: "users"
@@ -422,7 +404,6 @@ export type Database = {
       }
       tools_ce_events: {
         Row: {
-          add_to_dashboard: boolean | null
           category_id: string
           created_at: string | null
           date: string
@@ -441,7 +422,6 @@ export type Database = {
           user_id: string
         }
         Insert: {
-          add_to_dashboard?: boolean | null
           category_id: string
           created_at?: string | null
           date: string
@@ -460,7 +440,6 @@ export type Database = {
           user_id: string
         }
         Update: {
-          add_to_dashboard?: boolean | null
           category_id?: string
           created_at?: string | null
           date?: string
@@ -4037,6 +4016,54 @@ export type Database = {
           },
         ]
       }
+      tools_gt_goal_attachments: {
+        Row: {
+          created_at: string
+          file_name: string
+          file_size: number
+          file_type: string
+          file_url: string
+          goal_id: string
+          id: string
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          file_name: string
+          file_size: number
+          file_type: string
+          file_url: string
+          goal_id: string
+          id?: string
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          file_name?: string
+          file_size?: number
+          file_type?: string
+          file_url?: string
+          goal_id?: string
+          id?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "tools_gt_goal_attachments_goal_id_fkey"
+            columns: ["goal_id"]
+            isOneToOne: false
+            referencedRelation: "tools_gt_goals"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "tools_gt_goal_attachments_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "users"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       tools_gt_phases: {
         Row: {
           created_at: string | null
@@ -4148,6 +4175,54 @@ export type Database = {
             columns: ["goal_id"]
             isOneToOne: false
             referencedRelation: "tools_gt_goals"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      tools_gt_update_attachments: {
+        Row: {
+          created_at: string
+          file_name: string
+          file_size: number
+          file_type: string
+          file_url: string
+          id: string
+          note_id: string
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          file_name: string
+          file_size: number
+          file_type: string
+          file_url: string
+          id?: string
+          note_id: string
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          file_name?: string
+          file_size?: number
+          file_type?: string
+          file_url?: string
+          id?: string
+          note_id?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "tools_gt_update_attachments_note_id_fkey"
+            columns: ["note_id"]
+            isOneToOne: false
+            referencedRelation: "tools_gt_update_notes"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "tools_gt_update_attachments_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "users"
             referencedColumns: ["id"]
           },
         ]
@@ -4289,7 +4364,6 @@ export type Database = {
           pre_visit_notes: string | null
           provider_info: string | null
           reason_for_visit: string | null
-          show_on_dashboard_calendar: boolean | null
           tool_id: string
           total_billed: string | null
           updated_at: string | null
@@ -4308,7 +4382,6 @@ export type Database = {
           pre_visit_notes?: string | null
           provider_info?: string | null
           reason_for_visit?: string | null
-          show_on_dashboard_calendar?: boolean | null
           tool_id: string
           total_billed?: string | null
           updated_at?: string | null
@@ -4327,7 +4400,6 @@ export type Database = {
           pre_visit_notes?: string | null
           provider_info?: string | null
           reason_for_visit?: string | null
-          show_on_dashboard_calendar?: boolean | null
           tool_id?: string
           total_billed?: string | null
           updated_at?: string | null
@@ -5779,7 +5851,6 @@ export type Database = {
       }
       tools_pcs_appointments: {
         Row: {
-          add_to_dashboard: boolean | null
           created_at: string | null
           date: string
           id: string
@@ -5792,7 +5863,6 @@ export type Database = {
           veterinarian: string | null
         }
         Insert: {
-          add_to_dashboard?: boolean | null
           created_at?: string | null
           date: string
           id?: string
@@ -5805,7 +5875,6 @@ export type Database = {
           veterinarian?: string | null
         }
         Update: {
-          add_to_dashboard?: boolean | null
           created_at?: string | null
           date?: string
           id?: string
@@ -5829,7 +5898,6 @@ export type Database = {
       }
       tools_pcs_care_plan_items: {
         Row: {
-          add_to_dashboard: boolean | null
           created_at: string | null
           end_date: string | null
           frequency: string
@@ -5843,7 +5911,6 @@ export type Database = {
           updated_at: string | null
         }
         Insert: {
-          add_to_dashboard?: boolean | null
           created_at?: string | null
           end_date?: string | null
           frequency: string
@@ -5857,7 +5924,6 @@ export type Database = {
           updated_at?: string | null
         }
         Update: {
-          add_to_dashboard?: boolean | null
           created_at?: string | null
           end_date?: string | null
           frequency?: string
@@ -6413,7 +6479,6 @@ export type Database = {
           type: string
           updated_at: string | null
           user_id: string
-          warranty_dashboard_item_id: string | null
           warranty_end_date: string | null
           warranty_file_name: string | null
           warranty_file_url: string | null
@@ -6442,7 +6507,6 @@ export type Database = {
           type: string
           updated_at?: string | null
           user_id: string
-          warranty_dashboard_item_id?: string | null
           warranty_end_date?: string | null
           warranty_file_name?: string | null
           warranty_file_url?: string | null
@@ -6471,7 +6535,6 @@ export type Database = {
           type?: string
           updated_at?: string | null
           user_id?: string
-          warranty_dashboard_item_id?: string | null
           warranty_end_date?: string | null
           warranty_file_name?: string | null
           warranty_file_url?: string | null
@@ -6496,13 +6559,6 @@ export type Database = {
             columns: ["user_id"]
             isOneToOne: false
             referencedRelation: "users"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "tools_rh_records_warranty_dashboard_item_id_fkey"
-            columns: ["warranty_dashboard_item_id"]
-            isOneToOne: false
-            referencedRelation: "dashboard_items"
             referencedColumns: ["id"]
           },
         ]
@@ -6772,10 +6828,8 @@ export type Database = {
       }
       tools_st_subscriptions: {
         Row: {
-          add_reminder_to_calendar: boolean | null
           amount: number
           billed_date: string | null
-          calendar_reminder_id: string | null
           category: string
           created_at: string | null
           date_added: string
@@ -6792,10 +6846,8 @@ export type Database = {
           user_id: string
         }
         Insert: {
-          add_reminder_to_calendar?: boolean | null
           amount: number
           billed_date?: string | null
-          calendar_reminder_id?: string | null
           category: string
           created_at?: string | null
           date_added?: string
@@ -6812,10 +6864,8 @@ export type Database = {
           user_id: string
         }
         Update: {
-          add_reminder_to_calendar?: boolean | null
           amount?: number
           billed_date?: string | null
-          calendar_reminder_id?: string | null
           category?: string
           created_at?: string | null
           date_added?: string
@@ -6832,13 +6882,6 @@ export type Database = {
           user_id?: string
         }
         Relationships: [
-          {
-            foreignKeyName: "tools_st_subscriptions_calendar_reminder_id_fkey"
-            columns: ["calendar_reminder_id"]
-            isOneToOne: false
-            referencedRelation: "dashboard_items"
-            referencedColumns: ["id"]
-          },
           {
             foreignKeyName: "tools_st_subscriptions_tool_id_fkey"
             columns: ["tool_id"]
@@ -7177,7 +7220,6 @@ export type Database = {
       }
       tools_tl_trips: {
         Row: {
-          add_to_dashboard: boolean
           best_memory: string
           biggest_surprise: string
           budget_notes: string
@@ -7207,7 +7249,6 @@ export type Database = {
           would_return: string | null
         }
         Insert: {
-          add_to_dashboard?: boolean
           best_memory?: string
           biggest_surprise?: string
           budget_notes?: string
@@ -7237,7 +7278,6 @@ export type Database = {
           would_return?: string | null
         }
         Update: {
-          add_to_dashboard?: boolean
           best_memory?: string
           biggest_surprise?: string
           budget_notes?: string

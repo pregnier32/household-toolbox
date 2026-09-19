@@ -30,7 +30,6 @@ type DbTrip = {
   would_return: string | null;
   would_recommend: string | null;
   include_in_travel_counts: boolean | null;
-  add_to_dashboard?: boolean | null;
   created_at: string;
 };
 
@@ -94,19 +93,7 @@ type TripInput = {
   wouldReturn?: string;
   wouldRecommend?: string;
   includeInTravelCounts?: string;
-  addToDashboard?: boolean;
 };
-
-function isMissingColumnError(error: { code?: string; message?: string } | null) {
-  const msg = error?.message ?? '';
-  return (
-    error?.code === '42703' ||
-    error?.code === 'PGRST204' ||
-    msg.includes('schema cache') ||
-    msg.includes('does not exist') ||
-    msg.includes('Could not find')
-  );
-}
 
 function parseCurrencyToNumber(value: string | undefined): number | null {
   if (!value?.trim()) return null;
@@ -170,13 +157,7 @@ function buildTripRow(userId: string, toolId: string, trip: TripInput) {
     would_return: emptyToNull(trip.wouldReturn),
     would_recommend: emptyToNull(trip.wouldRecommend),
     include_in_travel_counts: includeCountsToBoolean(trip.includeInTravelCounts),
-    add_to_dashboard: trip.addToDashboard === true,
   };
-}
-
-function tripRowWithoutPinColumn(tripRow: ReturnType<typeof buildTripRow>) {
-  const { add_to_dashboard: _pin, ...rest } = tripRow;
-  return rest;
 }
 
 function buildLodgingInsertRows(tripId: string, lodging: LodgingInput[]) {
@@ -248,82 +229,9 @@ function mapTripToUi(
     wouldReturn: trip.would_return ?? '',
     wouldRecommend: trip.would_recommend ?? '',
     includeInTravelCounts: booleanToIncludeCounts(trip.include_in_travel_counts),
-    addToDashboard: trip.add_to_dashboard === true,
     dateAdded: trip.created_at,
     attachments,
   };
-}
-
-type DashboardPinRow = {
-  id: string;
-  metadata?: { source?: string; trip_id?: string };
-};
-
-async function deleteTripCalendarPins(userId: string, toolId: string, tripId: string) {
-  const { data: items, error: fetchError } = await supabaseServer
-    .from('dashboard_items')
-    .select('id, metadata')
-    .eq('user_id', userId)
-    .eq('tool_id', toolId);
-
-  if (fetchError) {
-    throw fetchError;
-  }
-
-  const ids = ((items ?? []) as DashboardPinRow[])
-    .filter((item) => item.metadata?.source === 'travel_log' && item.metadata?.trip_id === tripId)
-    .map((item) => item.id);
-
-  if (ids.length === 0) return;
-
-  const { error: deleteError } = await supabaseServer.from('dashboard_items').delete().in('id', ids);
-  if (deleteError) {
-    throw deleteError;
-  }
-}
-
-async function syncTripToDashboard(
-  userId: string,
-  toolId: string,
-  tripId: string,
-  addToDashboard: boolean,
-  tripName: string,
-  startDate: string,
-  endDate: string
-) {
-  await deleteTripCalendarPins(userId, toolId, tripId);
-  if (!addToDashboard || !startDate) return;
-
-  const rows = [
-    {
-      user_id: userId,
-      tool_id: toolId,
-      title: `Travel: ${tripName}`,
-      description: endDate && endDate !== startDate ? `${startDate} – ${endDate}` : startDate,
-      type: 'calendar_event',
-      scheduled_date: `${startDate}T12:00:00.000Z`,
-      status: 'pending',
-      metadata: { source: 'travel_log', trip_id: tripId, pinKind: 'start' },
-    },
-  ];
-
-  if (endDate && endDate !== startDate) {
-    rows.push({
-      user_id: userId,
-      tool_id: toolId,
-      title: `Travel ends: ${tripName}`,
-      description: `${startDate} – ${endDate}`,
-      type: 'calendar_event',
-      scheduled_date: `${endDate}T12:00:00.000Z`,
-      status: 'pending',
-      metadata: { source: 'travel_log', trip_id: tripId, pinKind: 'end' },
-    });
-  }
-
-  const { error: insertError } = await supabaseServer.from('dashboard_items').insert(rows);
-  if (insertError) {
-    throw insertError;
-  }
 }
 
 async function replaceLodging(tripId: string, lodging: LodgingInput[]) {
@@ -456,12 +364,6 @@ export async function POST(request: NextRequest) {
         return NextResponse.json({ error: 'Trip ID is required' }, { status: 400 });
       }
 
-      try {
-        await deleteTripCalendarPins(user.id, toolId, tripId);
-      } catch (pinError) {
-        console.error('Error removing travel log calendar pins:', pinError);
-      }
-
       await deleteTripStorageFiles(tripId, user.id);
 
       const { error } = await supabaseServer
@@ -490,19 +392,11 @@ export async function POST(request: NextRequest) {
     if (action === 'create') {
       const tripRow = buildTripRow(user.id, toolId, trip);
 
-      let createdResult = await supabaseServer
+      const { data: created, error: createError } = await supabaseServer
         .from('tools_tl_trips')
         .insert(tripRow)
         .select('*')
         .single();
-      if (createdResult.error && isMissingColumnError(createdResult.error)) {
-        createdResult = await supabaseServer
-          .from('tools_tl_trips')
-          .insert(tripRowWithoutPinColumn(tripRow))
-          .select('*')
-          .single();
-      }
-      const { data: created, error: createError } = createdResult;
 
       if (createError || !created) {
         console.error('Error creating trip:', createError);
@@ -518,22 +412,6 @@ export async function POST(request: NextRequest) {
         return NextResponse.json({ error: 'Failed to save trip details' }, { status: 500 });
       }
 
-      let pinFailed = false;
-      try {
-        await syncTripToDashboard(
-          user.id,
-          toolId,
-          created.id,
-          trip.addToDashboard === true,
-          created.trip_name,
-          created.start_date,
-          created.end_date
-        );
-      } catch (pinError) {
-        console.error('Error pinning travel log trip to calendar:', pinError);
-        pinFailed = true;
-      }
-
       const { data: lodgingRows } = await supabaseServer
         .from('tools_tl_lodging')
         .select('*')
@@ -545,7 +423,6 @@ export async function POST(request: NextRequest) {
 
       return NextResponse.json({
         success: true,
-        pinFailed,
         trip: mapTripToUi(
           created as DbTrip,
           (lodgingRows ?? []) as DbLodging[],
@@ -562,7 +439,7 @@ export async function POST(request: NextRequest) {
 
       const tripRow = buildTripRow(user.id, toolId, trip);
 
-      let updatedResult = await supabaseServer
+      const { data: updated, error: updateError } = await supabaseServer
         .from('tools_tl_trips')
         .update(tripRow)
         .eq('id', tripId)
@@ -570,17 +447,6 @@ export async function POST(request: NextRequest) {
         .eq('tool_id', toolId)
         .select('*')
         .single();
-      if (updatedResult.error && isMissingColumnError(updatedResult.error)) {
-        updatedResult = await supabaseServer
-          .from('tools_tl_trips')
-          .update(tripRowWithoutPinColumn(tripRow))
-          .eq('id', tripId)
-          .eq('user_id', user.id)
-          .eq('tool_id', toolId)
-          .select('*')
-          .single();
-      }
-      const { data: updated, error: updateError } = updatedResult;
 
       if (updateError || !updated) {
         console.error('Error updating trip:', updateError);
@@ -595,22 +461,6 @@ export async function POST(request: NextRequest) {
         return NextResponse.json({ error: 'Failed to save trip details' }, { status: 500 });
       }
 
-      let pinFailed = false;
-      try {
-        await syncTripToDashboard(
-          user.id,
-          toolId,
-          tripId,
-          trip.addToDashboard === true,
-          updated.trip_name,
-          updated.start_date,
-          updated.end_date
-        );
-      } catch (pinError) {
-        console.error('Error pinning travel log trip to calendar:', pinError);
-        pinFailed = true;
-      }
-
       const { data: lodgingRows } = await supabaseServer
         .from('tools_tl_lodging')
         .select('*')
@@ -623,7 +473,6 @@ export async function POST(request: NextRequest) {
       const updateAttachments = await attachmentsByTripIds([tripId], user.id);
       return NextResponse.json({
         success: true,
-        pinFailed,
         trip: mapTripToUi(
           updated as DbTrip,
           (lodgingRows ?? []) as DbLodging[],

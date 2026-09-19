@@ -770,28 +770,17 @@ export default function Dashboard() {
     const monthParam = month || new Date().toISOString().slice(0, 7); // YYYY-MM format
     
     try {
-      // Fetch calendar events from Calendar Events tool (with expansion)
       const calendarEventsResponse = await fetch(`/api/dashboard/items/calendar-events?month=${monthParam}`);
       const calendarEventsData = await calendarEventsResponse.json();
       const calendarEventsItems = calendarEventsData.items || [];
 
-      // Also fetch calendar events from dashboard_items (for other tools like Pet Care Schedule)
-      const dashboardItemsResponse = await fetch(`/api/dashboard/items?type=calendar_event&month=${monthParam}`);
-      const dashboardItemsData = await dashboardItemsResponse.json();
-      const dashboardItems = dashboardItemsData.items || [];
-
-      // Combine both sources
-      const allEvents = [...calendarEventsItems, ...dashboardItems];
-
-      // Sort by scheduled_date
-      allEvents.sort((a, b) => {
+      calendarEventsItems.sort((a: { scheduled_date?: string; due_date?: string }, b: { scheduled_date?: string; due_date?: string }) => {
         const dateA = new Date(a.scheduled_date || a.due_date || 0).getTime();
         const dateB = new Date(b.scheduled_date || b.due_date || 0).getTime();
         return dateA - dateB;
       });
 
-      console.log(`Loaded ${allEvents.length} calendar events for ${monthParam} (${calendarEventsItems.length} from Calendar Events tool, ${dashboardItems.length} from other tools)`);
-      setCalendarEvents(allEvents);
+      setCalendarEvents(calendarEventsItems);
     } catch (error) {
       console.error('Error fetching calendar events:', error);
       setCalendarEvents([]);

@@ -3,57 +3,6 @@ import { getSession } from '@/lib/session';
 import { supabaseServer } from '@/lib/supabaseServer';
 import { attachmentsByRecordIds, deleteHeaderRecordStorageFiles, deleteRecordStorageFiles, removeHealthcareStorageFiles } from '@/lib/healthcare-storage';
 
-async function findHealthcareDashboardItem(
-  userId: string,
-  toolId: string,
-  recordId: string
-): Promise<{ id: string } | null> {
-  const { data: items } = await supabaseServer
-    .from('dashboard_items')
-    .select('id, metadata')
-    .eq('user_id', userId)
-    .eq('tool_id', toolId);
-  const row = (items || []).find(
-    (item: { metadata?: { source?: string; record_id?: string } }) =>
-      item.metadata?.source === 'healthcare_appt' && item.metadata?.record_id === recordId
-  );
-  return row ? { id: row.id } : null;
-}
-
-async function syncHealthcareRecordToDashboard(
-  userId: string,
-  toolId: string,
-  recordId: string,
-  showOnDashboard: boolean,
-  payload: {
-    appointment_date: string;
-    care_facility: string | null;
-    provider_info: string | null;
-    reason_for_visit: string | null;
-  }
-): Promise<void> {
-  const existing = await findHealthcareDashboardItem(userId, toolId, recordId);
-  if (existing) {
-    await supabaseServer.from('dashboard_items').delete().eq('id', existing.id);
-  }
-  if (!showOnDashboard) return;
-  const title =
-    payload.care_facility?.trim() || payload.reason_for_visit?.trim()
-      ? `Healthcare: ${[payload.care_facility?.trim(), payload.reason_for_visit?.trim()].filter(Boolean).join(' – ')}`
-      : 'Healthcare appointment';
-  const scheduledDate = `${payload.appointment_date}T12:00:00.000Z`;
-  await supabaseServer.from('dashboard_items').insert({
-    user_id: userId,
-    tool_id: toolId,
-    title,
-    description: payload.provider_info || null,
-    type: 'calendar_event',
-    scheduled_date: scheduledDate,
-    status: 'pending',
-    metadata: { source: 'healthcare_appt', record_id: recordId },
-  });
-}
-
 const STOCK_MEMBER_NAMES = ['Family1', 'Family2'];
 
 async function removeEmptyStockHeaders(userId: string, toolId: string): Promise<void> {
@@ -230,16 +179,11 @@ export async function POST(request: NextRequest) {
       const reasonForVisit = (formData.get('reasonForVisit') as string)?.trim() || null;
       const preVisitNotes = (formData.get('preVisitNotes') as string)?.trim() || null;
       const postVisitNotes = (formData.get('postVisitNotes') as string)?.trim() || null;
-      const showOnDashboardCalendar = formData.get('showOnDashboardCalendar') === 'true';
       const totalBilled = (formData.get('totalBilled') as string)?.trim() || null;
       const insurancePaid = (formData.get('insurancePaid') as string)?.trim() || null;
       const currentAmountDue = (formData.get('currentAmountDue') as string)?.trim() || null;
 
       if (action === 'delete' && recordId) {
-        const dashboardItem = await findHealthcareDashboardItem(user.id, toolId, recordId);
-        if (dashboardItem) {
-          await supabaseServer.from('dashboard_items').delete().eq('id', dashboardItem.id);
-        }
         await deleteRecordStorageFiles(recordId, user.id);
         const { error } = await supabaseServer
           .from('tools_hcah_records')
@@ -261,7 +205,6 @@ export async function POST(request: NextRequest) {
         reason_for_visit: reasonForVisit,
         pre_visit_notes: preVisitNotes,
         post_visit_notes: postVisitNotes,
-        show_on_dashboard_calendar: showOnDashboardCalendar,
         total_billed: totalBilled,
         insurance_paid: insurancePaid,
         current_amount_due: currentAmountDue,
@@ -287,15 +230,6 @@ export async function POST(request: NextRequest) {
           .single();
         if (error) return NextResponse.json({ error: 'Failed to create record' }, { status: 500 });
         finalRecordId = data.id;
-      }
-
-      if (finalRecordId) {
-        await syncHealthcareRecordToDashboard(user.id, toolId, finalRecordId, showOnDashboardCalendar, {
-          appointment_date: appointmentDate,
-          care_facility: careFacility,
-          provider_info: providerInfo,
-          reason_for_visit: reasonForVisit,
-        });
       }
 
       return NextResponse.json({ success: true, recordId: finalRecordId });

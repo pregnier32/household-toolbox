@@ -1,6 +1,13 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getSession } from '@/lib/session';
 import { supabaseServer } from '@/lib/supabaseServer';
+import {
+  attachmentsByGoalIds,
+  attachmentsByUpdateIds,
+  deleteCategoryStorageFiles,
+  deleteGoalStorageFiles,
+  deleteUpdateStorageFiles,
+} from '@/lib/goals-tracking-storage';
 
 const FALLBACK_STOCK_CATEGORY_NAMES = ['Home', 'Finance', 'Health', 'Career', 'Personal'];
 
@@ -103,8 +110,27 @@ function mapGoalRow(
         goalId: n.goal_id,
         noteDate: n.note_date,
         note: n.note ?? '',
+        attachments: [] as { id: string; name: string; size: number; type: string }[],
       })),
+    attachments: [] as { id: string; name: string; size: number; type: string }[],
   };
+}
+
+async function hydrateGoalAttachments<T extends ReturnType<typeof mapGoalRow>>(goals: T[], userId: string) {
+  const goalIds = goals.map((goal) => goal.id);
+  const noteIds = goals.flatMap((goal) => goal.updateNotes.map((note) => note.id));
+  const [goalMap, noteMap] = await Promise.all([
+    attachmentsByGoalIds(goalIds, userId),
+    attachmentsByUpdateIds(noteIds, userId),
+  ]);
+  return goals.map((goal) => ({
+    ...goal,
+    attachments: goalMap[goal.id] || [],
+    updateNotes: goal.updateNotes.map((note) => ({
+      ...note,
+      attachments: noteMap[note.id] || [],
+    })),
+  }));
 }
 
 export async function GET(request: NextRequest) {
@@ -165,13 +191,16 @@ export async function GET(request: NextRequest) {
       notes = (notesRes.data ?? []) as typeof notes;
     }
 
-    const goals = (goalsRows ?? []).map((g: Record<string, unknown>) =>
-      mapGoalRow(
-        g as Parameters<typeof mapGoalRow>[0],
-        phases,
-        tasks,
-        notes
-      )
+    const goals = await hydrateGoalAttachments(
+      (goalsRows ?? []).map((g: Record<string, unknown>) =>
+        mapGoalRow(
+          g as Parameters<typeof mapGoalRow>[0],
+          phases,
+          tasks,
+          notes
+        )
+      ),
+      user.id
     );
 
     const { data: defaultRows } = await supabaseServer.from('tools_gt_default_categories').select('name');
@@ -280,6 +309,7 @@ export async function POST(request: NextRequest) {
         if (isStockCategoryName(existing.name, defaults)) {
           return NextResponse.json({ error: 'Default categories cannot be deleted' }, { status: 400 });
         }
+        await deleteCategoryStorageFiles(categoryId, user.id);
         const { error } = await supabaseServer
           .from('tools_gt_categories')
           .delete()
@@ -393,20 +423,25 @@ export async function POST(request: NextRequest) {
         const { data: phases } = await supabaseServer.from('tools_gt_phases').select('*').eq('goal_id', goalId);
         const { data: tasks } = await supabaseServer.from('tools_gt_tasks').select('*').eq('goal_id', goalId);
         const { data: notes } = await supabaseServer.from('tools_gt_update_notes').select('*').eq('goal_id', goalId);
-        return NextResponse.json({
-          goal: mapGoalRow(
-            data as Parameters<typeof mapGoalRow>[0],
-            (phases ?? []) as Parameters<typeof mapGoalRow>[1],
-            (tasks ?? []) as Parameters<typeof mapGoalRow>[2],
-            (notes ?? []) as Parameters<typeof mapGoalRow>[3]
-          ),
-        });
+        const [goal] = await hydrateGoalAttachments(
+          [
+            mapGoalRow(
+              data as Parameters<typeof mapGoalRow>[0],
+              (phases ?? []) as Parameters<typeof mapGoalRow>[1],
+              (tasks ?? []) as Parameters<typeof mapGoalRow>[2],
+              (notes ?? []) as Parameters<typeof mapGoalRow>[3]
+            ),
+          ],
+          user.id
+        );
+        return NextResponse.json({ goal });
       }
       if (action === 'delete') {
         const { goalId } = body as { goalId: string };
         if (!goalId) {
           return NextResponse.json({ error: 'Goal ID is required' }, { status: 400 });
         }
+        await deleteGoalStorageFiles(goalId, user.id);
         const { error } = await supabaseServer
           .from('tools_gt_goals')
           .delete()
@@ -590,6 +625,7 @@ export async function POST(request: NextRequest) {
             goalId: data.goal_id,
             noteDate: data.note_date,
             note: data.note ?? '',
+            attachments: [],
           },
         });
       }
@@ -637,6 +673,7 @@ export async function POST(request: NextRequest) {
         if (!noteId) {
           return NextResponse.json({ error: 'Note ID is required' }, { status: 400 });
         }
+        await deleteUpdateStorageFiles(noteId, user.id);
         const { error } = await supabaseServer.from('tools_gt_update_notes').delete().eq('id', noteId);
         if (error) {
           console.error('Error deleting update note:', error);

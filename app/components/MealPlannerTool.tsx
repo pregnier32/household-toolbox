@@ -3,6 +3,7 @@
 import { useState, useMemo, useEffect } from 'react';
 import { createPortal } from 'react-dom';
 import { useTheme } from './AppThemeProvider';
+import { useAppNotice } from './AppNotice';
 import { AttachmentButton } from './AttachmentButton';
 import { AttachmentModal } from './AttachmentModal';
 import {
@@ -244,6 +245,7 @@ const API_BASE = '/api/tools/meal-planner';
 
 export function MealPlannerTool({ toolId }: MealPlannerToolProps) {
   const { resolvedTheme } = useTheme();
+  const { showError, showSuccess } = useAppNotice();
   const isLight = resolvedTheme === 'light';
   const titleClass = isLight ? 'text-2xl font-semibold text-slate-900 mb-2' : 'text-2xl font-semibold text-slate-50 mb-2';
   const descClass = isLight ? 'text-slate-600 text-sm' : 'text-slate-400 text-sm';
@@ -620,7 +622,7 @@ export function MealPlannerTool({ toolId }: MealPlannerToolProps) {
     const prepVal = prep === null || isNaN(prep) ? null : prep;
     const scaleVal = mealForm.scale === '' ? 1 : Number(mealForm.scale);
     if (!Number.isFinite(scaleVal) || scaleVal <= 0) {
-      alert('Scale must be a number greater than 0.');
+      showError('Scale must be a number greater than 0.');
       return;
     }
     try {
@@ -678,7 +680,7 @@ export function MealPlannerTool({ toolId }: MealPlannerToolProps) {
             setEditingMealId(null);
             setIsAddingMeal(false);
             setIngredientSearch('');
-            alert(uploadError instanceof Error ? uploadError.message : 'Meal saved, but a file failed to upload.');
+            showError(uploadError instanceof Error ? uploadError.message : 'Meal saved, but a file failed to upload.');
             return;
           }
         }
@@ -781,14 +783,14 @@ export function MealPlannerTool({ toolId }: MealPlannerToolProps) {
         window.open(item.url, '_blank', 'noopener,noreferrer');
         return;
       }
-      alert('This file type can’t be previewed in the browser. Use Download to save it.');
+      showError('This file type can’t be previewed in the browser. Use Download to save it.');
       return;
     }
     try {
       const blob = await fetchMealAttachmentBlob(item.id, true);
       const type = blob.type || item.type || '';
       if (!canPreviewAttachment(type, item.name)) {
-        alert('This file type can’t be previewed in the browser. Use Download to save it.');
+        showError('This file type can’t be previewed in the browser. Use Download to save it.');
         return;
       }
       const url = window.URL.createObjectURL(blob);
@@ -800,7 +802,7 @@ export function MealPlannerTool({ toolId }: MealPlannerToolProps) {
         window.open(url, '_blank', 'noopener,noreferrer');
       }
     } catch (error) {
-      alert(error instanceof Error ? error.message : 'Failed to open file');
+      showError(error instanceof Error ? error.message : 'Failed to open file');
     }
   };
 
@@ -818,7 +820,7 @@ export function MealPlannerTool({ toolId }: MealPlannerToolProps) {
       document.body.removeChild(link);
       return true;
     } catch (error) {
-      alert(error instanceof Error ? error.message : 'Failed to download file');
+      showError(error instanceof Error ? error.message : 'Failed to download file');
       return false;
     }
   };
@@ -831,7 +833,7 @@ export function MealPlannerTool({ toolId }: MealPlannerToolProps) {
       }
       await fetchMeals();
     } catch (error) {
-      alert(error instanceof Error ? error.message : 'Failed to add file');
+      showError(error instanceof Error ? error.message : 'Failed to add file');
     } finally {
       setAttachmentBusy(false);
     }
@@ -850,7 +852,7 @@ export function MealPlannerTool({ toolId }: MealPlannerToolProps) {
       if (!response.ok) throw new Error(data.error || 'Failed to remove file');
       await fetchMeals();
     } catch (error) {
-      alert(error instanceof Error ? error.message : 'Failed to remove file');
+      showError(error instanceof Error ? error.message : 'Failed to remove file');
     } finally {
       setAttachmentBusy(false);
     }
@@ -1011,6 +1013,7 @@ export function MealPlannerTool({ toolId }: MealPlannerToolProps) {
   const [deleteConfirmPlanId, setDeleteConfirmPlanId] = useState<string | null>(null);
   const [deleteConfirmPlanText, setDeleteConfirmPlanText] = useState('');
   const [cartOpenPlanId, setCartOpenPlanId] = useState<string | null>(null);
+  const [groceryConfirmPlan, setGroceryConfirmPlan] = useState<MealPlanRecord | null>(null);
   const [isPushingGrocery, setIsPushingGrocery] = useState(false);
   const [printingPlanId, setPrintingPlanId] = useState<string | null>(null);
 
@@ -1084,7 +1087,7 @@ export function MealPlannerTool({ toolId }: MealPlannerToolProps) {
       : plan?.assignments ?? newPlanAssignments;
     const nextWeek = { ...(week ? normalizeWeekAssignments(week) : emptyDayAssignments()), [day]: next };
     if (hasLeftoverWithoutCook(nextWeek)) {
-      alert(LEFTOVER_ONLY_ALERT);
+      showError(LEFTOVER_ONLY_ALERT);
       return;
     }
     if (isEditing) {
@@ -1118,7 +1121,7 @@ export function MealPlannerTool({ toolId }: MealPlannerToolProps) {
     const makingLeftover = !slotIsLeftover(current[slot]);
     const allAssignments = (week ? normalizeWeekAssignments(week) : emptyDayAssignments());
     if (makingLeftover && !hasCookOccurrence(allAssignments, mealId, day, slot)) {
-      alert(LEFTOVER_ONLY_ALERT);
+      showError(LEFTOVER_ONLY_ALERT);
       return;
     }
     const next = { ...current, [slot]: toSlotAssignment(mealId, makingLeftover) };
@@ -1134,7 +1137,7 @@ export function MealPlannerTool({ toolId }: MealPlannerToolProps) {
         });
         if (!res.ok) {
           const err = await res.json().catch(() => ({}));
-          alert((err as { error?: string }).error || 'Failed to update leftover');
+          showError((err as { error?: string }).error || 'Failed to update leftover');
           return;
         }
         await fetchPlans();
@@ -1155,7 +1158,7 @@ export function MealPlannerTool({ toolId }: MealPlannerToolProps) {
         })()
       : cloneAssignments(newPlanAssignments);
     if (hasLeftoverWithoutCook(assignments)) {
-      alert(LEFTOVER_ONLY_ALERT);
+      showError(LEFTOVER_ONLY_ALERT);
       return;
     }
     try {
@@ -1173,7 +1176,7 @@ export function MealPlannerTool({ toolId }: MealPlannerToolProps) {
       });
       if (!res.ok) {
         const err = await res.json().catch(() => ({}));
-        alert((err as { error?: string }).error || 'Failed to create plan');
+        showError((err as { error?: string }).error || 'Failed to create plan');
         return;
       }
       await fetchPlans();
@@ -1197,7 +1200,7 @@ export function MealPlannerTool({ toolId }: MealPlannerToolProps) {
   const saveEditingPlan = async () => {
     if (!editingPlanId || !editingPlanAssignments || !toolId) return;
     if (hasLeftoverWithoutCook(editingPlanAssignments)) {
-      alert(LEFTOVER_ONLY_ALERT);
+      showError(LEFTOVER_ONLY_ALERT);
       return;
     }
     try {
@@ -1215,7 +1218,7 @@ export function MealPlannerTool({ toolId }: MealPlannerToolProps) {
       });
       if (!res.ok) {
         const err = await res.json().catch(() => ({}));
-        alert((err as { error?: string }).error || 'Failed to update plan');
+        showError((err as { error?: string }).error || 'Failed to update plan');
         return;
       }
       await fetchPlans();
@@ -1305,11 +1308,11 @@ export function MealPlannerTool({ toolId }: MealPlannerToolProps) {
   const saveGroceryAsShoppingList = async (plan: MealPlanRecord) => {
     const groceryItems = getConsolidatedItems(plan);
     if (groceryItems.length === 0) {
-      alert('No grocery lines to save. Assign meals to days first.');
+      showError('No grocery lines to save. Assign meals to days first.');
       return;
     }
     if (!toolId) {
-      alert('Meal Planner tool was not found.');
+      showError('Meal Planner tool was not found.');
       return;
     }
     const groceryLines = groceryItems.map((row) => ({
@@ -1318,13 +1321,23 @@ export function MealPlannerTool({ toolId }: MealPlannerToolProps) {
       quantity: Number.isFinite(row.count) && row.count > 0 ? row.count : null,
     }));
     if (groceryLines.every((row) => !row.name.trim() || row.name === 'Unknown')) {
-      alert('Grocery lines need item names before saving to Shopping List.');
+      showError('Grocery lines need item names before saving to Shopping List.');
       return;
     }
-    if (!window.confirm(`Create an Active Shopping List named "${plan.name}" from these grocery lines?`)) {
-      return;
-    }
-    // Start the write in the same turn as confirm, before React re-renders. keepalive
+    setGroceryConfirmPlan(plan);
+  };
+
+  const confirmGroceryAsShoppingList = async () => {
+    const plan = groceryConfirmPlan;
+    if (!plan || !toolId) return;
+    const groceryItems = getConsolidatedItems(plan);
+    const groceryLines = groceryItems.map((row) => ({
+      name: row.name,
+      category: row.category || 'Other',
+      quantity: Number.isFinite(row.count) && row.count > 0 ? row.count : null,
+    }));
+    if (isPushingGrocery) return;
+    // Start the write in the same turn as the in-app confirm click. keepalive
     // lets Chrome finish the POST if the tab is discarded (Terri QA: tab died, no list row).
     const createListPromise = fetch('/api/tools/shopping-list', {
       method: 'POST',
@@ -1340,6 +1353,7 @@ export function MealPlannerTool({ toolId }: MealPlannerToolProps) {
         groceryLines,
       }),
     });
+    setGroceryConfirmPlan(null);
     setIsPushingGrocery(true);
     try {
       const createListRes = await createListPromise;
@@ -1348,9 +1362,9 @@ export function MealPlannerTool({ toolId }: MealPlannerToolProps) {
       if (!createListRes.ok || !list?.id) {
         throw new Error((created as { error?: string }).error || 'Failed to create Shopping List');
       }
-      alert('Active Shopping List created.');
+      showSuccess('Active Shopping List created.');
     } catch (e) {
-      alert(e instanceof Error ? e.message : 'Failed to save as Shopping List.');
+      showError(e instanceof Error ? e.message : 'Failed to save as Shopping List.');
     } finally {
       setIsPushingGrocery(false);
     }
@@ -3341,6 +3355,37 @@ export function MealPlannerTool({ toolId }: MealPlannerToolProps) {
         onView={handleViewAttachment}
         onDownload={attachmentModal === 'add' ? undefined : handleDownloadAttachment}
       />
+
+      {groceryConfirmPlan && (
+        <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/50">
+          <div className={modalCardClass} role="dialog" aria-modal="true" aria-labelledby="mp-grocery-confirm-title">
+            <h3 id="mp-grocery-confirm-title" className={deleteModalTitleClass}>
+              Create Shopping List
+            </h3>
+            <p className={deleteInstructionTextClass}>
+              Create an Active Shopping List named <strong className={deleteInstructionKeywordClass}>{groceryConfirmPlan.name}</strong> from these grocery lines?
+            </p>
+            <div className="flex gap-3">
+              <button
+                type="button"
+                onClick={() => void confirmGroceryAsShoppingList()}
+                disabled={isPushingGrocery}
+                className={`flex-1 ${primaryButtonClass}`}
+              >
+                Create list
+              </button>
+              <button
+                type="button"
+                onClick={() => setGroceryConfirmPlan(null)}
+                disabled={isPushingGrocery}
+                className={secondaryButtonClass}
+              >
+                Cancel
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
     </>
   );

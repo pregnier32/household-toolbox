@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from 'react';
 import { useTheme } from './AppThemeProvider';
+import { useAppNotice } from './AppNotice';
 import { AttachmentButton } from './AttachmentButton';
 import { AttachmentModal } from './AttachmentModal';
 import {
@@ -141,6 +142,7 @@ type NotesToolProps = {
 
 export function NotesTool({ toolId }: NotesToolProps) {
   const { resolvedTheme } = useTheme();
+  const { showError, showSuccess } = useAppNotice();
   const isLight = resolvedTheme === 'light';
   const titleClass = isLight ? 'text-2xl font-semibold text-slate-900 mb-2' : 'text-2xl font-semibold text-slate-50 mb-2';
   const descClass = isLight ? 'text-slate-600 text-sm' : 'text-slate-400 text-sm';
@@ -402,35 +404,35 @@ export function NotesTool({ toolId }: NotesToolProps) {
 
   const addNote = async () => {
     if (!newNote.noteName.trim() || !newNote.createdDate || !newNote.note.trim()) {
-      alert('Please fill in all required fields (Note Name, Created Date, and Note content).');
+      showError('Please fill in all required fields (Note Name, Created Date, and Note content).');
       return;
     }
 
     if (newNote.requiresPasswordForView) {
       if (!newNote.viewPassword.trim()) {
-        alert('Please enter a password for view protection.');
+        showError('Please enter a password for view protection.');
         return;
       }
       if (newNote.viewPassword !== newNote.confirmPassword) {
-        alert('Passwords do not match. Please confirm your password.');
+        showError('Passwords do not match. Please confirm your password.');
         return;
       }
       // Validate security questions
       const validQuestions = newNote.securityQuestions.filter(q => q.questionId && q.answer.trim());
       if (validQuestions.length !== NEW_LOCK_QUESTION_COUNT) {
-        alert(`Please select and answer ${NEW_LOCK_QUESTION_COUNT} security questions for password recovery.`);
+        showError(`Please select and answer ${NEW_LOCK_QUESTION_COUNT} security questions for password recovery.`);
         return;
       }
       // Check for duplicate questions
       const questionIds = validQuestions.map(q => q.questionId);
       if (new Set(questionIds).size !== questionIds.length) {
-        alert(`Please select ${NEW_LOCK_QUESTION_COUNT} different security questions.`);
+        showError(`Please select ${NEW_LOCK_QUESTION_COUNT} different security questions.`);
         return;
       }
     }
 
     if (!toolId) {
-      alert('Tool ID is required.');
+      showError('Tool ID is required.');
       return;
     }
 
@@ -506,10 +508,10 @@ export function NotesTool({ toolId }: NotesToolProps) {
       } else {
         const errorData = await response.json().catch(() => ({ error: 'Unknown error' }));
         const errorMessage = errorData.error || 'Unknown error';
-        alert(errorMessage);
+        showError(errorMessage);
       }
     } catch (error) {
-      alert(error instanceof Error ? error.message : 'Error adding note. Please try again.');
+      showError(error instanceof Error ? error.message : 'Error adding note. Please try again.');
     } finally {
       setIsLoading(false);
     }
@@ -561,7 +563,7 @@ export function NotesTool({ toolId }: NotesToolProps) {
     }
 
     if (editingNote.selectedTags.length === 0) {
-      alert('Please select at least one tag.');
+      showError('Please select at least one tag.');
       return;
     }
 
@@ -570,12 +572,12 @@ export function NotesTool({ toolId }: NotesToolProps) {
       // If password protection is newly enabled or password is being changed
       if (editingNote.viewPassword.trim()) {
         if (editingNote.viewPassword !== editingNote.confirmPassword) {
-          alert('Passwords do not match. Please confirm your password.');
+          showError('Passwords do not match. Please confirm your password.');
           return;
         }
       } else if (!existingNote?.requiresPasswordForView || !existingNote?.viewPassword) {
         // Only require password if it's newly enabled
-        alert('Please enter a password for view protection.');
+        showError('Please enter a password for view protection.');
         return;
       }
 
@@ -583,19 +585,19 @@ export function NotesTool({ toolId }: NotesToolProps) {
       if (!existingNote?.requiresPasswordForView) {
         const validQuestions = editingNote.securityQuestions.filter(q => q.questionId && q.answer.trim());
         if (validQuestions.length !== NEW_LOCK_QUESTION_COUNT) {
-          alert(`Please select and answer ${NEW_LOCK_QUESTION_COUNT} security questions for password recovery.`);
+          showError(`Please select and answer ${NEW_LOCK_QUESTION_COUNT} security questions for password recovery.`);
           return;
         }
         const questionIds = validQuestions.map(q => q.questionId);
         if (new Set(questionIds).size !== questionIds.length) {
-          alert(`Please select ${NEW_LOCK_QUESTION_COUNT} different security questions.`);
+          showError(`Please select ${NEW_LOCK_QUESTION_COUNT} different security questions.`);
           return;
         }
       }
     }
 
     if (!toolId) {
-      alert('Tool ID is required.');
+      showError('Tool ID is required.');
       return;
     }
 
@@ -636,10 +638,10 @@ export function NotesTool({ toolId }: NotesToolProps) {
       } else {
         const errorData = await response.json().catch(() => ({ error: 'Unknown error' }));
         const errorMessage = errorData.error || 'Unknown error';
-        alert(errorMessage);
+        showError(errorMessage);
       }
     } catch (error) {
-      alert('Error updating note. Please try again.');
+      showError('Error updating note. Please try again.');
     } finally {
       setIsLoading(false);
     }
@@ -647,7 +649,7 @@ export function NotesTool({ toolId }: NotesToolProps) {
 
   const inactivateNote = async (id: string) => {
     if (!toolId) {
-      alert('Tool ID is required.');
+      showError('Tool ID is required.');
       return;
     }
 
@@ -695,10 +697,10 @@ export function NotesTool({ toolId }: NotesToolProps) {
       } else {
         const errorData = await response.json().catch(() => ({ error: 'Unknown error' }));
         const errorMessage = errorData.error || 'Unknown error';
-        alert(errorMessage);
+        showError(errorMessage);
       }
     } catch (error) {
-      alert('Error inactivating note. Please try again.');
+      showError('Error inactivating note. Please try again.');
     } finally {
       setIsLoading(false);
     }
@@ -735,10 +737,10 @@ export function NotesTool({ toolId }: NotesToolProps) {
       } else {
         const errorData = await response.json().catch(() => ({ error: 'Unknown error' }));
         const errorMessage = errorData.error || 'Unknown error';
-        alert(errorMessage);
+        showError(errorMessage);
       }
     } catch (error) {
-      alert('Error activating note. Please try again.');
+      showError('Error activating note. Please try again.');
     } finally {
       setIsLoading(false);
     }
@@ -775,10 +777,10 @@ export function NotesTool({ toolId }: NotesToolProps) {
       } else {
         const errorData = await response.json().catch(() => ({ error: 'Unknown error' }));
         const errorMessage = errorData.error || 'Unknown error';
-        alert(errorMessage);
+        showError(errorMessage);
       }
     } catch (error) {
-      alert('Error deleting note. Please try again.');
+      showError('Error deleting note. Please try again.');
     } finally {
       setIsLoading(false);
     }
@@ -786,12 +788,12 @@ export function NotesTool({ toolId }: NotesToolProps) {
 
   const addTag = async () => {
     if (!newTagName.trim()) {
-      alert('Please enter a tag name.');
+      showError('Please enter a tag name.');
       return;
     }
 
     if (!toolId) {
-      alert('Tool ID is required.');
+      showError('Tool ID is required.');
       return;
     }
 
@@ -799,7 +801,7 @@ export function NotesTool({ toolId }: NotesToolProps) {
     const trimmedName = newTagName.trim();
     const existingTag = tags.find(tag => tag.name.toLowerCase() === trimmedName.toLowerCase());
     if (existingTag) {
-      alert('A tag with this name already exists.');
+      showError('A tag with this name already exists.');
       return;
     }
 
@@ -836,10 +838,10 @@ export function NotesTool({ toolId }: NotesToolProps) {
         const errorData = await response.json().catch(() => ({ error: 'Unknown error' }));
         // Show user-friendly error message without triggering error page
         const errorMessage = errorData.error || 'Unknown error';
-        alert(errorMessage);
+        showError(errorMessage);
       }
     } catch (error) {
-      alert('Error adding tag. Please try again.');
+      showError('Error adding tag. Please try again.');
     } finally {
       setIsLoading(false);
     }
@@ -861,7 +863,7 @@ export function NotesTool({ toolId }: NotesToolProps) {
     }
 
     if (!toolId) {
-      alert('Tool ID is required.');
+      showError('Tool ID is required.');
       return;
     }
 
@@ -872,7 +874,7 @@ export function NotesTool({ toolId }: NotesToolProps) {
       tag.name.toLowerCase() === trimmedName.toLowerCase()
     );
     if (existingTag) {
-      alert('A tag with this name already exists.');
+      showError('A tag with this name already exists.');
       return;
     }
 
@@ -908,10 +910,10 @@ export function NotesTool({ toolId }: NotesToolProps) {
       } else {
         const errorData = await response.json().catch(() => ({ error: 'Unknown error' }));
         const errorMessage = errorData.error || 'Unknown error';
-        alert(errorMessage);
+        showError(errorMessage);
       }
     } catch (error) {
-      alert('Error updating tag. Please try again.');
+      showError('Error updating tag. Please try again.');
     } finally {
       setIsLoading(false);
     }
@@ -954,10 +956,10 @@ export function NotesTool({ toolId }: NotesToolProps) {
       } else {
         const errorData = await response.json().catch(() => ({ error: 'Unknown error' }));
         const errorMessage = errorData.error || 'Unknown error';
-        alert(errorMessage);
+        showError(errorMessage);
       }
     } catch (error) {
-      alert('Error inactivating tag. Please try again.');
+      showError('Error inactivating tag. Please try again.');
     } finally {
       setIsLoading(false);
     }
@@ -1000,10 +1002,10 @@ export function NotesTool({ toolId }: NotesToolProps) {
       } else {
         const errorData = await response.json().catch(() => ({ error: 'Unknown error' }));
         const errorMessage = errorData.error || 'Unknown error';
-        alert(errorMessage);
+        showError(errorMessage);
       }
     } catch (error) {
-      alert('Error activating tag. Please try again.');
+      showError('Error activating tag. Please try again.');
     } finally {
       setIsLoading(false);
     }
@@ -1046,10 +1048,10 @@ export function NotesTool({ toolId }: NotesToolProps) {
       } else {
         const errorData = await response.json().catch(() => ({ error: 'Unknown error' }));
         const errorMessage = errorData.error || 'Unknown error';
-        alert(errorMessage);
+        showError(errorMessage);
       }
     } catch (error) {
-      alert('Error deleting tag. Please try again.');
+      showError('Error deleting tag. Please try again.');
     } finally {
       setIsLoading(false);
     }
@@ -1186,7 +1188,7 @@ export function NotesTool({ toolId }: NotesToolProps) {
         window.open(item.url, '_blank', 'noopener,noreferrer');
         return;
       }
-      alert('This file type can’t be previewed in the browser. Use Download to save it.');
+      showError('This file type can’t be previewed in the browser. Use Download to save it.');
       return;
     }
     if (!savedAttachmentNote) return;
@@ -1195,7 +1197,7 @@ export function NotesTool({ toolId }: NotesToolProps) {
       const blob = await fetchNoteAttachmentBlob(item.id, password, true);
       const type = blob.type || item.type || '';
       if (!canPreviewAttachment(type, item.name)) {
-        alert('This file type can’t be previewed in the browser. Use Download to save it.');
+        showError('This file type can’t be previewed in the browser. Use Download to save it.');
         return;
       }
       const url = window.URL.createObjectURL(blob);
@@ -1207,7 +1209,7 @@ export function NotesTool({ toolId }: NotesToolProps) {
         window.open(url, '_blank', 'noopener,noreferrer');
       }
     } catch (error) {
-      alert(error instanceof Error ? error.message : 'Failed to open file');
+      showError(error instanceof Error ? error.message : 'Failed to open file');
     }
   };
 
@@ -1227,7 +1229,7 @@ export function NotesTool({ toolId }: NotesToolProps) {
       document.body.removeChild(link);
       return true;
     } catch (error) {
-      alert(error instanceof Error ? error.message : 'Failed to download file');
+      showError(error instanceof Error ? error.message : 'Failed to download file');
       return false;
     }
   };
@@ -1236,7 +1238,7 @@ export function NotesTool({ toolId }: NotesToolProps) {
     if (!toolId) return;
     const note = notes.find((item) => item.id === noteId);
     if (note && !note.isActive) {
-      alert('Restore this item to add or change files.');
+      showError('Restore this item to add or change files.');
       return;
     }
     setAttachmentBusy(true);
@@ -1256,7 +1258,7 @@ export function NotesTool({ toolId }: NotesToolProps) {
       }
       await reloadNotes();
     } catch (error) {
-      alert(error instanceof Error ? error.message : 'Failed to add file');
+      showError(error instanceof Error ? error.message : 'Failed to add file');
     } finally {
       setAttachmentBusy(false);
     }
@@ -1266,7 +1268,7 @@ export function NotesTool({ toolId }: NotesToolProps) {
     if (!toolId) return;
     const note = notes.find((item) => item.id === noteId);
     if (note && !note.isActive) {
-      alert('Restore this item to add or change files.');
+      showError('Restore this item to add or change files.');
       return;
     }
     setAttachmentBusy(true);
@@ -1286,7 +1288,7 @@ export function NotesTool({ toolId }: NotesToolProps) {
       }
       await reloadNotes();
     } catch (error) {
-      alert(error instanceof Error ? error.message : 'Failed to remove file');
+      showError(error instanceof Error ? error.message : 'Failed to remove file');
     } finally {
       setAttachmentBusy(false);
     }
@@ -1312,7 +1314,7 @@ export function NotesTool({ toolId }: NotesToolProps) {
       const response = await fetch(`/api/tools/notes/reset-password?noteId=${viewPasswordModalId}`);
       if (!response.ok) {
         const errorData = await response.json();
-        alert('Failed to load security questions: ' + (errorData.error || 'Unknown error'));
+        showError('Failed to load security questions: ' + (errorData.error || 'Unknown error'));
         setIsLoading(false);
         return;
       }
@@ -1323,7 +1325,7 @@ export function NotesTool({ toolId }: NotesToolProps) {
       setPasswordResetStep('questions');
     } catch (error) {
       console.error('Error loading security questions:', error);
-      alert('Error loading security questions. Please try again.');
+      showError('Error loading security questions. Please try again.');
     } finally {
       setIsLoading(false);
     }
@@ -1334,7 +1336,7 @@ export function NotesTool({ toolId }: NotesToolProps) {
 
     // Check all answers are filled
     if (securityAnswers.some(a => !a.answer.trim())) {
-      alert('Please answer all security questions.');
+      showError('Please answer all security questions.');
       return;
     }
 
@@ -1362,12 +1364,12 @@ export function NotesTool({ toolId }: NotesToolProps) {
         }
       } else {
         const errorData = await response.json();
-        alert('One or more answers are incorrect. Please try again.');
+        showError('One or more answers are incorrect. Please try again.');
         setSecurityAnswers(securityAnswers.map(a => ({ ...a, answer: '' })));
       }
     } catch (error) {
       console.error('Error verifying answers:', error);
-      alert('Error verifying answers. Please try again.');
+      showError('Error verifying answers. Please try again.');
     } finally {
       setIsLoading(false);
     }
@@ -1377,17 +1379,17 @@ export function NotesTool({ toolId }: NotesToolProps) {
     if (!viewPasswordModalId) return;
 
     if (!newPassword.trim()) {
-      alert('Please enter a new password.');
+      showError('Please enter a new password.');
       return;
     }
 
     if (newPassword !== confirmNewPassword) {
-      alert('Passwords do not match. Please try again.');
+      showError('Passwords do not match. Please try again.');
       return;
     }
 
     if (newPassword.trim().length < 4) {
-      alert('Password must be at least 4 characters long.');
+      showError('Password must be at least 4 characters long.');
       return;
     }
 
@@ -1406,7 +1408,7 @@ export function NotesTool({ toolId }: NotesToolProps) {
       });
 
       if (response.ok) {
-        alert('Password reset successfully! You can now view the note.');
+        showSuccess('Password reset successfully! You can now view the note.');
         setShowForgotPasswordModal(false);
       setViewPasswordModalId(null);
       setViewPasswordInput('');
@@ -1420,11 +1422,11 @@ export function NotesTool({ toolId }: NotesToolProps) {
       setPasswordResetStep('questions');
       } else {
         const errorData = await response.json();
-        alert('Failed to reset password: ' + (errorData.error || 'Unknown error'));
+        showError('Failed to reset password: ' + (errorData.error || 'Unknown error'));
       }
     } catch (error) {
       console.error('Error resetting password:', error);
-      alert('Error resetting password. Please try again.');
+      showError('Error resetting password. Please try again.');
     } finally {
       setIsLoading(false);
     }
@@ -1437,7 +1439,7 @@ export function NotesTool({ toolId }: NotesToolProps) {
 
     const note = notes.find(n => n.id === viewPasswordModalId);
     if (!note) {
-      alert('Note not found.');
+      showError('Note not found.');
       setViewPasswordModalId(null);
       setViewPasswordInput('');
       setViewPasswordError('');
@@ -1500,10 +1502,10 @@ export function NotesTool({ toolId }: NotesToolProps) {
         }
       } else {
         const errorData = await response.json().catch(() => ({ error: 'Unknown error' }));
-        alert('Failed to verify password: ' + (errorData.error || 'Unknown error'));
+        showError('Failed to verify password: ' + (errorData.error || 'Unknown error'));
       }
     } catch (error) {
-      alert('Error verifying password. Please try again.');
+      showError('Error verifying password. Please try again.');
     } finally {
       setIsLoading(false);
     }

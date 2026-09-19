@@ -61,6 +61,7 @@ async function removeStoragePaths(bucket: string, paths: string[]): Promise<void
  * | Event Budget Planner    | tools_ebp_event_attachments, tools_ebp_expense_attachments (file_url) | event-budget-planner | supabase/ADD_event_budget_planner_attachments.sql |
  * | Meal Planner            | tools_mp_meal_attachments (file_url)                               | meal-planner           | supabase/ADD_meal_planner_attachments.sql |
  * | Shopping List           | tools_sl_list_attachments (file_url)                               | shopping-list          | supabase/ADD_shopping_list_attachments.sql |
+ * | Goals Tracking          | tools_gt_goal_attachments, tools_gt_update_attachments (file_url)  | goals-tracking         | supabase/ADD_goals_tracking_attachments.sql |
  *
  * DB-only cascade (user_id → users ON DELETE CASCADE; no storage block required here):
  * | Tool                 | Tables                                                                 | Schema script |
@@ -73,13 +74,13 @@ async function removeStoragePaths(bucket: string, paths: string[]): Promise<void
  * | Home Maintenance     | tools_hms_categories, tools_hms_items → tools_hms_tasks → tools_hms_completions | supabase/create-tools-hms-tables.sql |
  * | End of Life Planner  | tools_eolp_plans → sections, subsections, personal/home/wishes 1:1 rows, list tables, tools_eolp_other_custom_fields | supabase/create-tools-eolp-tables.sql |
  * | Notes                | tools_note_notes, tools_note_tags, tools_note_note_tags, tools_note_security_questions, tools_note_attachments | supabase/archive/create-notes-tables.sql, supabase/ADD_notes_attachments.sql |
- * | Goals Tracking       | tools_gt_categories, tools_gt_goals, tools_gt_phases, tools_gt_tasks, tools_gt_update_notes | supabase/archive/create-tools-gt-tables.sql |
+ * | Goals Tracking       | tools_gt_categories, tools_gt_goals, tools_gt_phases, tools_gt_tasks, tools_gt_update_notes, tools_gt_goal_attachments, tools_gt_update_attachments | supabase/archive/create-tools-gt-tables.sql, supabase/ADD_goals_tracking_attachments.sql |
  * | Meal Planner         | tools_mp_items, tools_mp_meal_types, tools_mp_meals, tools_mp_meal_ingredients, tools_mp_meal_attachments, tools_mp_plans, tools_mp_plan_assignments | supabase/archive/create-tools-mp-tables.sql, supabase/ADD_meal_planner_attachments.sql |
  * | Shopping List        | tools_sl_lists, tools_sl_items, tools_sl_list_items, tools_sl_list_attachments | supabase/archive/create-tools-sl-tables.sql, supabase/ADD_shopping_list_attachments.sql |
  * | To-Do List           | tools_tdl_categories, tools_tdl_tasks, tools_tdl_attachments           | supabase/archive/create-tools-tdl-tables.sql, supabase/ADD_todo_attachments.sql |
  * | Subscription Tracker | tools_st_subscriptions                                                 | supabase/archive/create-subscription-tracker-tables.sql |
  * | Calendar Events      | tools_ce_categories, tools_ce_events                                   | supabase/archive/create-calendar-events-tables.sql |
- * | Dashboard Items      | dashboard_items                                                        | supabase/archive/create-dashboard-items-table.sql |
+ * | Calendar Pins        | calendar_pins                                                          | supabase/create-calendar-pins-table.sql |
  * | Repair History (DB)  | tools_rh_headers, tools_rh_records, tools_rh_items, tools_rh_record_attachments | supabase/archive/create-repair-history-tables.sql, supabase/ADD_repair_history_attachments.sql |
  * | Healthcare (DB)      | tools_hcah_headers, tools_hcah_records (+ document rows cascade)     | supabase/archive/create-healthcare-appts-history-tables.sql |
  * | Pet Care (DB)        | tools_pcs_pets and related child tables                                | supabase/archive/create-pet-care-schedule-tables.sql |
@@ -306,6 +307,28 @@ export async function deleteUserAndAssociatedData(userId: string): Promise<void>
     if (path) storageDeletes.push({ bucket: 'shopping-list', path });
   });
   // tools_sl_lists / items / list_items: removed via users ON DELETE CASCADE
+
+  // Goals Tracking attachments — supabase/ADD_goals_tracking_attachments.sql
+  const { data: gtGoalFiles, error: gtGoalFilesError } = await supabaseServer
+    .from('tools_gt_goal_attachments')
+    .select('file_url')
+    .eq('user_id', userId);
+  if (gtGoalFilesError && !isMissingRelationError(gtGoalFilesError)) throw gtGoalFilesError;
+  (gtGoalFiles || []).forEach((row: { file_url: string | null }) => {
+    const path = row.file_url ? extractStoragePath(row.file_url, 'goals-tracking') : null;
+    if (path) storageDeletes.push({ bucket: 'goals-tracking', path });
+  });
+
+  const { data: gtUpdateFiles, error: gtUpdateFilesError } = await supabaseServer
+    .from('tools_gt_update_attachments')
+    .select('file_url')
+    .eq('user_id', userId);
+  if (gtUpdateFilesError && !isMissingRelationError(gtUpdateFilesError)) throw gtUpdateFilesError;
+  (gtUpdateFiles || []).forEach((row: { file_url: string | null }) => {
+    const path = row.file_url ? extractStoragePath(row.file_url, 'goals-tracking') : null;
+    if (path) storageDeletes.push({ bucket: 'goals-tracking', path });
+  });
+  // tools_gt_categories / goals / phases / tasks / update_notes: removed via users + goal CASCADE
 
   // Event Budget Planner — supabase/create-tools-ebp-tables.sql
   // Delete events first (CASCADE → budgets/expenses/attachments → splits); categories/types/vendors then cascade from users.

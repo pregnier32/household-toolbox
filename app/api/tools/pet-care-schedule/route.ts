@@ -62,174 +62,6 @@ async function uploadFile(
   }
 }
 
-// Helper function to create dashboard item
-async function createDashboardItem(
-  userId: string,
-  toolId: string,
-  item: {
-    title: string;
-    description?: string;
-    type: 'calendar_event' | 'action_item' | 'both';
-    due_date?: string;
-    scheduled_date?: string;
-    priority?: 'low' | 'medium' | 'high';
-    metadata?: Record<string, any>;
-  }
-) {
-  try {
-    // First verify the tool exists
-    const { data: toolData, error: toolError } = await supabaseServer
-      .from('tools')
-      .select('id')
-      .eq('id', toolId)
-      .single();
-    
-    if (toolError || !toolData) {
-      console.error('Tool validation failed:', toolError);
-      console.error(`Tool ID ${toolId} does not exist or cannot be accessed`);
-      return null;
-    }
-    
-    const insertData = {
-      user_id: userId,
-      tool_id: toolId,
-      title: item.title,
-      description: item.description || null,
-      type: item.type,
-      due_date: item.due_date || null,
-      scheduled_date: item.scheduled_date || null,
-      priority: item.priority || 'medium',
-      status: 'pending',
-      metadata: item.metadata || {},
-    };
-    
-    console.log('createDashboardItem - Insert data:', JSON.stringify(insertData, null, 2));
-    
-    // Try without .single() first to see if that's the issue
-    const { data, error } = await supabaseServer
-      .from('dashboard_items')
-      .insert(insertData)
-      .select();
-
-    if (error) {
-      console.error('Error creating dashboard item:', error);
-      console.error('Error code:', error.code);
-      console.error('Error message:', error.message);
-      console.error('Error details:', error.details);
-      console.error('Error hint:', error.hint);
-      console.error('Item data:', JSON.stringify(item, null, 2));
-      console.error('Insert data:', JSON.stringify(insertData, null, 2));
-      // Don't throw - dashboard items are optional
-      return null;
-    }
-    
-    if (!data || data.length === 0) {
-      console.error('No data returned from dashboard_items insert');
-      return null;
-    }
-    
-    const createdItem = data[0];
-    console.log('Successfully created dashboard item:', createdItem?.id);
-    console.log('Created dashboard item data:', JSON.stringify(createdItem, null, 2));
-    return createdItem;
-  } catch (error: any) {
-    console.error('Exception creating dashboard item:', error);
-    console.error('Exception type:', error?.constructor?.name);
-    console.error('Exception message:', error?.message);
-    console.error('Exception stack:', error?.stack);
-    console.error('Item data:', JSON.stringify(item, null, 2));
-    // Don't throw - dashboard items are optional
-    return null;
-  }
-}
-
-// Helper function to delete dashboard items by metadata reference
-async function deleteDashboardItemsByReference(
-  userId: string,
-  toolId: string,
-  referenceType: 'appointment' | 'care_plan',
-  referenceId: string
-) {
-  try {
-    // First, get all dashboard items for this user and tool
-    const { data: items, error: fetchError } = await supabaseServer
-      .from('dashboard_items')
-      .select('id, metadata')
-      .eq('user_id', userId)
-      .eq('tool_id', toolId);
-
-    if (fetchError) {
-      console.error('Error fetching dashboard items:', fetchError);
-      return;
-    }
-
-    // Filter items by metadata and delete
-    if (items) {
-      const itemsToDelete = items.filter((item: any) => {
-        const metadata = item.metadata || {};
-        return metadata.referenceType === referenceType && metadata.referenceId === referenceId;
-      });
-
-      if (itemsToDelete.length > 0) {
-        const idsToDelete = itemsToDelete.map((item: any) => item.id);
-        const { error: deleteError } = await supabaseServer
-          .from('dashboard_items')
-          .delete()
-          .in('id', idsToDelete);
-
-        if (deleteError) {
-          console.error('Error deleting dashboard items:', deleteError);
-        }
-      }
-    }
-  } catch (error) {
-    console.error('Error deleting dashboard items:', error);
-  }
-}
-
-// Helper function to delete all dashboard items for a pet
-async function deleteDashboardItemsForPet(
-  userId: string,
-  toolId: string,
-  petId: string
-) {
-  try {
-    // Get all dashboard items for this user and tool
-    const { data: items, error: fetchError } = await supabaseServer
-      .from('dashboard_items')
-      .select('id, metadata')
-      .eq('user_id', userId)
-      .eq('tool_id', toolId);
-
-    if (fetchError) {
-      console.error('Error fetching dashboard items:', fetchError);
-      return;
-    }
-
-    // Filter items by petId in metadata and delete
-    if (items) {
-      const itemsToDelete = items.filter((item: any) => {
-        const metadata = item.metadata || {};
-        return metadata.petId === petId;
-      });
-
-      if (itemsToDelete.length > 0) {
-        const idsToDelete = itemsToDelete.map((item: any) => item.id);
-        const { error: deleteError } = await supabaseServer
-          .from('dashboard_items')
-          .delete()
-          .in('id', idsToDelete);
-
-        if (deleteError) {
-          console.error('Error deleting dashboard items:', deleteError);
-        }
-      }
-    }
-  } catch (error) {
-    console.error('Error deleting dashboard items:', error);
-  }
-}
-
 // GET - Fetch all pets for the current user
 export async function GET(request: NextRequest) {
   const user = await getSession();
@@ -372,7 +204,6 @@ export async function POST(request: NextRequest) {
     }
 
     let finalPetId = petId;
-    let petName = petData.name;
 
     // Create or update pet
     if (petId) {
@@ -407,7 +238,6 @@ export async function POST(request: NextRequest) {
         return NextResponse.json({ error: 'Failed to update pet' }, { status: 500 });
       }
       finalPetId = updatedPet.id;
-      petName = updatedPet.name;
     } else {
       // Create new pet
       const insertData: any = {
@@ -440,7 +270,6 @@ export async function POST(request: NextRequest) {
         return NextResponse.json({ error: 'Failed to create pet' }, { status: 500 });
       }
       finalPetId = newPet.id;
-      petName = newPet.name;
     }
 
     // Save related data (foods, vet records, etc.)
@@ -483,37 +312,6 @@ export async function POST(request: NextRequest) {
     }
 
     if (carePlanItems && Array.isArray(carePlanItems)) {
-      // Delete ALL old dashboard items for this pet's care plan items (to prevent duplicates)
-      // First, get all dashboard items for this user and tool
-      const { data: allDashboardItems, error: fetchError } = await supabaseServer
-        .from('dashboard_items')
-        .select('id, metadata')
-        .eq('user_id', user.id)
-        .eq('tool_id', toolId);
-      
-      if (!fetchError && allDashboardItems) {
-        // Filter items by petId and referenceType='care_plan' in metadata
-        const itemsToDelete = allDashboardItems.filter((item: any) => {
-          const metadata = item.metadata || {};
-          return metadata.referenceType === 'care_plan' && metadata.petId === finalPetId;
-        });
-
-        if (itemsToDelete.length > 0) {
-          const idsToDelete = itemsToDelete.map((item: any) => item.id);
-          const { error: deleteError } = await supabaseServer
-            .from('dashboard_items')
-            .delete()
-            .in('id', idsToDelete);
-
-          if (deleteError) {
-            console.error('Error deleting dashboard items:', deleteError);
-          } else {
-            console.log(`Deleted ${idsToDelete.length} old dashboard items for pet ${finalPetId} care plan items`);
-          }
-        }
-      }
-
-      // Delete all care plan items for this pet first, and wait for it to complete
       console.log(`[API] Deleting all care plan items for pet ${finalPetId} before inserting ${carePlanItems.length} items`);
       const { error: deleteError } = await supabaseServer.from('tools_pcs_care_plan_items').delete().eq('pet_id', finalPetId);
       if (deleteError) {
@@ -525,7 +323,6 @@ export async function POST(request: NextRequest) {
       if (carePlanItems.length > 0) {
         const carePlanData = carePlanItems.map((c: any) => {
           const isActive = c.isActive !== undefined ? c.isActive : true;
-          const addToDashboard = c.addToDashboard !== undefined ? c.addToDashboard : true;
           // Handle notes: preserve non-empty strings, convert empty strings to null
           let notesValue = null;
           if (c.notes !== undefined && c.notes !== null) {
@@ -536,7 +333,7 @@ export async function POST(request: NextRequest) {
               notesValue = c.notes;
             }
           }
-          console.log(`Mapping care plan item: ${c.name}, frequency: ${c.frequency}, isActive: ${isActive}, addToDashboard: ${addToDashboard}`);
+          console.log(`Mapping care plan item: ${c.name}, frequency: ${c.frequency}, isActive: ${isActive}`);
           console.log(`  - Raw notes value: ${JSON.stringify(c.notes)}, type: ${typeof c.notes}`);
           console.log(`  - Processed notes value: ${JSON.stringify(notesValue)}`);
           
@@ -550,7 +347,6 @@ export async function POST(request: NextRequest) {
             start_date: c.startDate || new Date().toISOString().split('T')[0],
             end_date: c.endDate || null,
             notes: notesValue,
-            add_to_dashboard: addToDashboard,
             priority: priorityValue,
           };
         });
@@ -579,64 +375,6 @@ export async function POST(request: NextRequest) {
         } else {
           console.log(`Successfully inserted ${insertedCareItems.data?.length || 0} care plan items`);
         }
-
-        // Create dashboard items for active care plan items
-        if (insertedCareItems.data && insertedCareItems.data.length > 0) {
-          console.log(`Processing ${insertedCareItems.data.length} care plan items for dashboard items`);
-          for (const careItem of insertedCareItems.data) {
-            const isActive = careItem.is_active;
-            const addToDashboard = careItem.add_to_dashboard !== undefined ? careItem.add_to_dashboard : true;
-            const hasEndDate = careItem.end_date;
-            const endDateValid = !hasEndDate || new Date(careItem.end_date) >= new Date();
-            
-            console.log(`Care Item: ${careItem.name}, is_active: ${isActive}, add_to_dashboard: ${addToDashboard}, end_date: ${careItem.end_date}, endDateValid: ${endDateValid}`);
-            
-            if (isActive && endDateValid && addToDashboard) {
-              const careDate = careItem.start_date || new Date().toISOString().split('T')[0];
-              const priority: 'low' | 'medium' | 'high' = (careItem.priority && ['low', 'medium', 'high'].includes(careItem.priority))
-                ? careItem.priority
-                : 'medium';
-
-              // Same calendar_event + scheduled_date path Appointments use (care date, not a computed next-due)
-              const scheduledDateTime = (() => {
-                const dateTime = new Date(careDate);
-                dateTime.setHours(9, 0, 0, 0);
-                return dateTime.toISOString();
-              })();
-
-              const dashboardItemData = {
-                title: `${petName} - ${careItem.name}`,
-                description: `Frequency: ${careItem.frequency}`,
-                type: 'calendar_event' as const,
-                scheduled_date: scheduledDateTime,
-                priority,
-                metadata: {
-                  referenceType: 'care_plan',
-                  referenceId: careItem.id,
-                  petId: finalPetId,
-                  petName,
-                  frequency: careItem.frequency,
-                  startDate: careItem.start_date,
-                  notes: careItem.notes || null,
-                },
-              };
-              
-              console.log(`Care item notes value: ${JSON.stringify(careItem.notes)}`);
-              console.log(`Attempting to create dashboard item for care plan item ${careItem.id}:`, JSON.stringify(dashboardItemData, null, 2));
-              console.log(`User ID: ${user.id}, Tool ID: ${toolId}`);
-              
-              const result = await createDashboardItem(user.id, toolId, dashboardItemData);
-              
-              if (!result) {
-                console.error(`Failed to create dashboard item for care plan item ${careItem.id} (${careItem.name})`);
-              } else {
-                console.log(`Successfully created dashboard item ${result.id} for care plan item ${careItem.id}`);
-              }
-            }
-          }
-        } else {
-          console.log('No care plan items data returned from insert');
-        }
       }
     }
 
@@ -656,36 +394,6 @@ export async function POST(request: NextRequest) {
     }
 
     if (appointments && Array.isArray(appointments)) {
-      // Delete ALL old dashboard items for this pet's appointments (to prevent duplicates)
-      // First, get all dashboard items for this user and tool
-      const { data: allDashboardItems, error: fetchError } = await supabaseServer
-        .from('dashboard_items')
-        .select('id, metadata')
-        .eq('user_id', user.id)
-        .eq('tool_id', toolId);
-      
-      if (!fetchError && allDashboardItems) {
-        // Filter items by petId and referenceType='appointment' in metadata
-        const itemsToDelete = allDashboardItems.filter((item: any) => {
-          const metadata = item.metadata || {};
-          return metadata.referenceType === 'appointment' && metadata.petId === finalPetId;
-        });
-
-        if (itemsToDelete.length > 0) {
-          const idsToDelete = itemsToDelete.map((item: any) => item.id);
-          const { error: deleteError } = await supabaseServer
-            .from('dashboard_items')
-            .delete()
-            .in('id', idsToDelete);
-
-          if (deleteError) {
-            console.error('Error deleting dashboard items:', deleteError);
-          } else {
-            console.log(`Deleted ${idsToDelete.length} old dashboard items for pet ${finalPetId} appointments`);
-          }
-        }
-      }
-
       await supabaseServer.from('tools_pcs_appointments').delete().eq('pet_id', finalPetId);
       if (appointments.length > 0) {
         const appointmentData = appointments.map((a: any) => {
@@ -694,10 +402,7 @@ export async function POST(request: NextRequest) {
           today.setHours(0, 0, 0, 0);
           appointmentDate.setHours(0, 0, 0, 0);
           const isUpcoming = a.isUpcoming !== undefined ? a.isUpcoming : (appointmentDate >= today);
-          const addToDashboard = a.addToDashboard !== undefined ? a.addToDashboard : true;
-          
-          console.log(`Mapping appointment: ${a.type}, date: ${a.date}, isUpcoming: ${isUpcoming}, addToDashboard: ${addToDashboard}`);
-          
+
           return {
             pet_id: finalPetId,
             date: a.date,
@@ -706,81 +411,13 @@ export async function POST(request: NextRequest) {
             veterinarian: a.veterinarian || null,
             notes: a.notes || null,
             is_upcoming: isUpcoming,
-            add_to_dashboard: addToDashboard,
           };
         });
-        
-        console.log('Inserting appointments:', JSON.stringify(appointmentData, null, 2));
-        
+
         const insertedAppointments = await supabaseServer.from('tools_pcs_appointments').insert(appointmentData).select();
-        
+
         if (insertedAppointments.error) {
           console.error('Error inserting appointments:', insertedAppointments.error);
-        } else {
-          console.log(`Successfully inserted ${insertedAppointments.data?.length || 0} appointments`);
-        }
-
-        // Create dashboard items for upcoming appointments
-        if (insertedAppointments.data && insertedAppointments.data.length > 0) {
-          console.log(`Processing ${insertedAppointments.data.length} appointments for dashboard items`);
-          for (const appointment of insertedAppointments.data) {
-            const appointmentDate = new Date(appointment.date + 'T00:00:00');
-            const today = new Date();
-            today.setHours(0, 0, 0, 0);
-            appointmentDate.setHours(0, 0, 0, 0);
-            const addToDashboard = appointment.add_to_dashboard !== undefined ? appointment.add_to_dashboard : true;
-            
-            console.log(`Appointment: ${appointment.type}, Date: ${appointment.date}, is_upcoming: ${appointment.is_upcoming}, add_to_dashboard: ${addToDashboard}, Date >= Today: ${appointmentDate >= today}`);
-            
-            // Create calendar event if it's marked as upcoming OR if the date is today or in the future, AND addToDashboard is true
-            if ((appointment.is_upcoming || appointmentDate >= today) && addToDashboard) {
-              // Combine date and time for scheduled_date
-              let scheduledDateTime: string;
-              if (appointment.time) {
-                const [hours, minutes] = appointment.time.split(':');
-                const dateTime = new Date(appointment.date);
-                dateTime.setHours(parseInt(hours), parseInt(minutes), 0, 0);
-                scheduledDateTime = dateTime.toISOString();
-              } else {
-                // Default to 9 AM if no time specified
-                const dateTime = new Date(appointment.date);
-                dateTime.setHours(9, 0, 0, 0);
-                scheduledDateTime = dateTime.toISOString();
-              }
-
-              const description = [
-                appointment.veterinarian ? `Vet: ${appointment.veterinarian}` : null,
-                appointment.notes || null,
-              ].filter(Boolean).join(' | ') || undefined;
-
-              const dashboardItemData = {
-                title: `${petName} - ${appointment.type}`,
-                description,
-                type: 'calendar_event' as const,
-                scheduled_date: scheduledDateTime,
-                priority: 'high' as const,
-                metadata: {
-                  referenceType: 'appointment',
-                  referenceId: appointment.id,
-                  petId: finalPetId,
-                  petName,
-                },
-              };
-              
-              console.log(`Attempting to create dashboard item for appointment ${appointment.id}:`, JSON.stringify(dashboardItemData, null, 2));
-              console.log(`User ID: ${user.id}, Tool ID: ${toolId}`);
-              
-              const result = await createDashboardItem(user.id, toolId, dashboardItemData);
-              
-              if (!result) {
-                console.error(`Failed to create dashboard item for appointment ${appointment.id} (${appointment.type})`);
-              } else {
-                console.log(`Successfully created dashboard item ${result.id} for appointment ${appointment.id}`);
-              }
-            }
-          }
-        } else {
-          console.log('No appointments data returned from insert');
         }
       }
     }
@@ -871,10 +508,6 @@ export async function DELETE(request: NextRequest) {
     if (storagePaths.length > 0) {
       await supabaseServer.storage.from('pet-care-schedule').remove(storagePaths);
       await refreshUserStorageUsage(user.id);
-    }
-
-    if (finalToolId) {
-      await deleteDashboardItemsForPet(user.id, finalToolId, petId);
     }
 
     const childTables = [

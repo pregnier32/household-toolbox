@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from 'react';
 import { useTheme } from './AppThemeProvider';
+import { useAppNotice } from './AppNotice';
 import { AttachmentButton } from './AttachmentButton';
 import { AttachmentModal } from './AttachmentModal';
 import {
@@ -30,7 +31,6 @@ type HistoryRecord = {
   cost: string;
   serviceProvider: string;
   warrantyEndDate: string;
-  addWarrantyToDashboard?: boolean;
   submittedToInsurance: boolean;
   insuranceCarrier: string;
   claimNumber: string;
@@ -74,7 +74,6 @@ function mapApiRecord(r: any): HistoryRecord {
     cost: r.cost || '',
     serviceProvider: r.service_provider || '',
     warrantyEndDate: r.warranty_end_date || '',
-    addWarrantyToDashboard: !!r.warranty_dashboard_item_id,
     submittedToInsurance: r.submitted_to_insurance || false,
     insuranceCarrier: r.insurance_carrier || '',
     claimNumber: r.claim_number || '',
@@ -104,7 +103,6 @@ function emptyRepairForm(): RepairFormState {
     cost: '',
     serviceProvider: '',
     warrantyEndDate: '',
-    addWarrantyToDashboard: false,
     submittedToInsurance: false,
     insuranceCarrier: '',
     claimNumber: '',
@@ -313,6 +311,7 @@ const DEFAULT_AUTO_ITEMS: Omit<Item, 'id'>[] = [
 
 export function RepairHistoryTool({ toolId }: RepairHistoryToolProps) {
   const { resolvedTheme } = useTheme();
+  const { showError } = useAppNotice();
   const isLight = resolvedTheme === 'light';
   const titleClass = isLight ? 'text-2xl font-semibold text-slate-900 mb-2' : 'text-2xl font-semibold text-slate-50 mb-2';
   const descClass = isLight ? 'text-slate-600 text-sm' : 'text-slate-400 text-sm';
@@ -609,14 +608,14 @@ export function RepairHistoryTool({ toolId }: RepairHistoryToolProps) {
         window.open(item.url, '_blank', 'noopener,noreferrer');
         return;
       }
-      alert('This file type can’t be previewed in the browser. Use Download to save it.');
+      showError('This file type can’t be previewed in the browser. Use Download to save it.');
       return;
     }
     try {
       const blob = await fetchRepairAttachmentBlob(item.id, true);
       const type = blob.type || item.type || '';
       if (!canPreviewAttachment(type, item.name)) {
-        alert('This file type can’t be previewed in the browser. Use Download to save it.');
+        showError('This file type can’t be previewed in the browser. Use Download to save it.');
         return;
       }
       const url = window.URL.createObjectURL(blob);
@@ -628,7 +627,7 @@ export function RepairHistoryTool({ toolId }: RepairHistoryToolProps) {
         window.open(url, '_blank', 'noopener,noreferrer');
       }
     } catch (error) {
-      alert(error instanceof Error ? error.message : 'Failed to open file');
+      showError(error instanceof Error ? error.message : 'Failed to open file');
     }
   };
 
@@ -646,7 +645,7 @@ export function RepairHistoryTool({ toolId }: RepairHistoryToolProps) {
       document.body.removeChild(link);
       return true;
     } catch (error) {
-      alert(error instanceof Error ? error.message : 'Failed to download file');
+      showError(error instanceof Error ? error.message : 'Failed to download file');
       return false;
     }
   };
@@ -660,7 +659,7 @@ export function RepairHistoryTool({ toolId }: RepairHistoryToolProps) {
       if (selectedHeaderId) await loadHistoryRecords(selectedHeaderId);
       await loadAllHistoryRecords();
     } catch (error) {
-      alert(error instanceof Error ? error.message : 'Failed to add file');
+      showError(error instanceof Error ? error.message : 'Failed to add file');
     } finally {
       setAttachmentBusy(false);
     }
@@ -680,7 +679,7 @@ export function RepairHistoryTool({ toolId }: RepairHistoryToolProps) {
       if (selectedHeaderId) await loadHistoryRecords(selectedHeaderId);
       await loadAllHistoryRecords();
     } catch (error) {
-      alert(error instanceof Error ? error.message : 'Failed to remove file');
+      showError(error instanceof Error ? error.message : 'Failed to remove file');
     } finally {
       setAttachmentBusy(false);
     }
@@ -976,7 +975,6 @@ export function RepairHistoryTool({ toolId }: RepairHistoryToolProps) {
       formData.append('cost', newRecord.cost || '');
       formData.append('serviceProvider', newRecord.serviceProvider || '');
       formData.append('warrantyEndDate', newRecord.warrantyEndDate || '');
-      formData.append('addWarrantyToDashboard', newRecord.warrantyEndDate && newRecord.addWarrantyToDashboard ? 'true' : 'false');
       formData.append('submittedToInsurance', newRecord.submittedToInsurance ? 'true' : 'false');
       formData.append('insuranceCarrier', newRecord.insuranceCarrier || '');
       formData.append('claimNumber', newRecord.claimNumber || '');
@@ -1080,7 +1078,6 @@ export function RepairHistoryTool({ toolId }: RepairHistoryToolProps) {
       formData.append('cost', editingRecord.cost || '');
       formData.append('serviceProvider', editingRecord.serviceProvider || '');
       formData.append('warrantyEndDate', editingRecord.warrantyEndDate || '');
-      formData.append('addWarrantyToDashboard', editingRecord.warrantyEndDate && editingRecord.addWarrantyToDashboard ? 'true' : 'false');
       formData.append('submittedToInsurance', editingRecord.submittedToInsurance ? 'true' : 'false');
       formData.append('insuranceCarrier', editingRecord.insuranceCarrier || '');
       formData.append('claimNumber', editingRecord.claimNumber || '');
@@ -2054,25 +2051,10 @@ export function RepairHistoryTool({ toolId }: RepairHistoryToolProps) {
                         onChange={(e) => setNewRecord({
                           ...newRecord,
                           warrantyEndDate: e.target.value,
-                          addWarrantyToDashboard: e.target.value ? newRecord.addWarrantyToDashboard : false,
                         })}
                         className="w-full rounded-lg border border-slate-700 bg-slate-900/70 px-3 py-2 text-sm text-slate-100 focus:border-emerald-500/50 focus:outline-none focus:ring-1 focus:ring-emerald-500/50"
                       />
                     </div>
-                    {newRecord.warrantyEndDate && (
-                      <div className="flex items-center gap-3">
-                        <input
-                          type="checkbox"
-                          id="addWarrantyToDashboard"
-                          checked={newRecord.addWarrantyToDashboard || false}
-                          onChange={(e) => setNewRecord({ ...newRecord, addWarrantyToDashboard: e.target.checked })}
-                          className={checkboxClass}
-                        />
-                        <label htmlFor="addWarrantyToDashboard" className={isLight ? 'text-sm text-slate-700 cursor-pointer' : 'text-sm text-slate-300 cursor-pointer'}>
-                          Add warranty expiry to calendar
-                        </label>
-                      </div>
-                    )}
                     {selectedHeader?.categoryType === 'Home' && (
                       <div>
                         <label className="block text-xs font-medium text-slate-300 mb-1.5">
@@ -2341,25 +2323,10 @@ export function RepairHistoryTool({ toolId }: RepairHistoryToolProps) {
                                 onChange={(e) => setEditingRecord({
                                   ...editingRecord,
                                   warrantyEndDate: e.target.value,
-                                  addWarrantyToDashboard: e.target.value ? editingRecord.addWarrantyToDashboard : false,
                                 })}
                                 className="w-full rounded-lg border border-slate-700 bg-slate-900/70 px-3 py-2 text-sm text-slate-100 focus:border-emerald-500/50 focus:outline-none focus:ring-1 focus:ring-emerald-500/50"
                               />
                             </div>
-                            {editingRecord.warrantyEndDate && (
-                              <div className="flex items-center gap-3">
-                                <input
-                                  type="checkbox"
-                                  id="editAddWarrantyToDashboard"
-                                  checked={editingRecord.addWarrantyToDashboard || false}
-                                  onChange={(e) => setEditingRecord({ ...editingRecord, addWarrantyToDashboard: e.target.checked })}
-                                  className={checkboxClass}
-                                />
-                                <label htmlFor="editAddWarrantyToDashboard" className={isLight ? 'text-sm text-slate-700 cursor-pointer' : 'text-sm text-slate-300 cursor-pointer'}>
-                                  Add warranty expiry to calendar
-                                </label>
-                              </div>
-                            )}
                             <div>
                               <label className="block text-xs font-medium text-slate-300 mb-1.5">
                                 Online User Manual

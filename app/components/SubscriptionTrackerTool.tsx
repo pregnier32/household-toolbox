@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from 'react';
 import { useTheme } from './AppThemeProvider';
+import { useAppNotice } from './AppNotice';
 
 type SubscriptionFrequency = 'monthly' | 'quarterly' | 'annual';
 
@@ -14,8 +15,6 @@ type Subscription = {
   dayOfMonth: number | null; // null for annual subscriptions
   billedDate: string | null; // only for annual subscriptions
   renewalDate: string | null; // only for annual subscriptions
-  addReminderToCalendar: boolean; // only for annual subscriptions
-  calendarReminderId: string | null; // ID of the dashboard item if created
   notes: string;
   isActive: boolean;
   dateAdded: string;
@@ -54,6 +53,7 @@ type SubscriptionTrackerToolProps = {
 
 export function SubscriptionTrackerTool({ toolId }: SubscriptionTrackerToolProps) {
   const { resolvedTheme } = useTheme();
+  const { showError } = useAppNotice();
   const isLight = resolvedTheme === 'light';
   const titleClass = isLight ? 'text-2xl font-semibold text-slate-900 mb-2' : 'text-2xl font-semibold text-slate-50 mb-2';
   const descClass = isLight ? 'text-slate-600 text-sm' : 'text-slate-400 text-sm';
@@ -107,7 +107,6 @@ export function SubscriptionTrackerTool({ toolId }: SubscriptionTrackerToolProps
     dayOfMonth: '',
     billedDate: '',
     renewalDate: '',
-    addReminderToCalendar: false,
     notes: ''
   });
   const [showCustomCategory, setShowCustomCategory] = useState(false);
@@ -125,7 +124,6 @@ export function SubscriptionTrackerTool({ toolId }: SubscriptionTrackerToolProps
     dayOfMonth: '',
     billedDate: '',
     renewalDate: '',
-    addReminderToCalendar: false,
     notes: ''
   });
   const [showCustomCategoryEdit, setShowCustomCategoryEdit] = useState(false);
@@ -158,8 +156,6 @@ export function SubscriptionTrackerTool({ toolId }: SubscriptionTrackerToolProps
             dayOfMonth: sub.day_of_month,
             billedDate: sub.billed_date,
             renewalDate: sub.renewal_date,
-            addReminderToCalendar: sub.add_reminder_to_calendar || false,
-            calendarReminderId: sub.calendar_reminder_id,
             notes: sub.notes || '',
             isActive: sub.is_active !== false,
             dateAdded: sub.date_added,
@@ -300,7 +296,6 @@ export function SubscriptionTrackerTool({ toolId }: SubscriptionTrackerToolProps
         day_of_month: newSubscription.frequency === 'annual' ? null : parseInt(newSubscription.dayOfMonth),
         billed_date: newSubscription.frequency === 'annual' ? newSubscription.billedDate : null,
         renewal_date: newSubscription.frequency === 'annual' ? newSubscription.renewalDate : null,
-        add_reminder_to_calendar: newSubscription.frequency === 'annual' ? (newSubscription.addReminderToCalendar || false) : false,
         notes: newSubscription.notes.trim() || null,
         is_active: true
       };
@@ -330,8 +325,6 @@ export function SubscriptionTrackerTool({ toolId }: SubscriptionTrackerToolProps
             dayOfMonth: sub.day_of_month,
             billedDate: sub.billed_date,
             renewalDate: sub.renewal_date,
-            addReminderToCalendar: sub.add_reminder_to_calendar || false,
-            calendarReminderId: sub.calendar_reminder_id,
             notes: sub.notes || '',
             isActive: sub.is_active !== false,
             dateAdded: sub.date_added,
@@ -350,7 +343,6 @@ export function SubscriptionTrackerTool({ toolId }: SubscriptionTrackerToolProps
           dayOfMonth: '',
           billedDate: '',
           renewalDate: '',
-          addReminderToCalendar: false,
           notes: ''
         });
         setShowCustomCategory(false);
@@ -358,11 +350,11 @@ export function SubscriptionTrackerTool({ toolId }: SubscriptionTrackerToolProps
       } else {
         const errorData = await response.json();
         console.error('Failed to add subscription:', errorData.error);
-        alert('Failed to add subscription: ' + (errorData.error || 'Unknown error'));
+        showError('Failed to add subscription: ' + (errorData.error || 'Unknown error'));
       }
     } catch (error) {
       console.error('Error adding subscription:', error);
-      alert('Error adding subscription. Please try again.');
+      showError('Error adding subscription. Please try again.');
     } finally {
       setIsLoading(false);
     }
@@ -387,7 +379,6 @@ export function SubscriptionTrackerTool({ toolId }: SubscriptionTrackerToolProps
       dayOfMonth: subscription.dayOfMonth?.toString() || '',
       billedDate: subscription.billedDate || '',
       renewalDate: subscription.renewalDate || '',
-      addReminderToCalendar: subscription.addReminderToCalendar || false,
       notes: subscription.notes
     });
     setShowCustomCategoryEdit(false);
@@ -404,7 +395,6 @@ export function SubscriptionTrackerTool({ toolId }: SubscriptionTrackerToolProps
       dayOfMonth: '',
       billedDate: '',
       renewalDate: '',
-      addReminderToCalendar: false,
       notes: ''
     });
     setShowCustomCategoryEdit(false);
@@ -449,7 +439,6 @@ export function SubscriptionTrackerTool({ toolId }: SubscriptionTrackerToolProps
         day_of_month: editingSubscription.frequency === 'annual' ? null : parseInt(editingSubscription.dayOfMonth),
         billed_date: editingSubscription.frequency === 'annual' ? editingSubscription.billedDate : null,
         renewal_date: editingSubscription.frequency === 'annual' ? editingSubscription.renewalDate : null,
-        add_reminder_to_calendar: editingSubscription.frequency === 'annual' ? (editingSubscription.addReminderToCalendar || false) : false,
         notes: editingSubscription.notes.trim() || null,
         is_active: subscriptions.find(sub => sub.id === editingId)?.isActive !== false
       };
@@ -480,8 +469,6 @@ export function SubscriptionTrackerTool({ toolId }: SubscriptionTrackerToolProps
             dayOfMonth: sub.day_of_month,
             billedDate: sub.billed_date,
             renewalDate: sub.renewal_date,
-            addReminderToCalendar: sub.add_reminder_to_calendar || false,
-            calendarReminderId: sub.calendar_reminder_id,
             notes: sub.notes || '',
             isActive: sub.is_active !== false,
             dateAdded: sub.date_added,
@@ -493,11 +480,11 @@ export function SubscriptionTrackerTool({ toolId }: SubscriptionTrackerToolProps
       } else {
         const errorData = await response.json();
         console.error('Failed to update subscription:', errorData.error);
-        alert('Failed to update subscription: ' + (errorData.error || 'Unknown error'));
+        showError('Failed to update subscription: ' + (errorData.error || 'Unknown error'));
       }
     } catch (error) {
       console.error('Error updating subscription:', error);
-      alert('Error updating subscription. Please try again.');
+      showError('Error updating subscription. Please try again.');
     } finally {
       setIsLoading(false);
     }
@@ -525,7 +512,6 @@ export function SubscriptionTrackerTool({ toolId }: SubscriptionTrackerToolProps
         day_of_month: subscription.dayOfMonth,
         billed_date: subscription.billedDate,
         renewal_date: subscription.renewalDate,
-        add_reminder_to_calendar: subscription.addReminderToCalendar || false,
         notes: subscription.notes || null,
         is_active: false,
         date_inactivated: new Date().toISOString().split('T')[0]
@@ -557,8 +543,6 @@ export function SubscriptionTrackerTool({ toolId }: SubscriptionTrackerToolProps
             dayOfMonth: sub.day_of_month,
             billedDate: sub.billed_date,
             renewalDate: sub.renewal_date,
-            addReminderToCalendar: sub.add_reminder_to_calendar || false,
-            calendarReminderId: sub.calendar_reminder_id,
             notes: sub.notes || '',
             isActive: sub.is_active !== false,
             dateAdded: sub.date_added,
@@ -569,11 +553,11 @@ export function SubscriptionTrackerTool({ toolId }: SubscriptionTrackerToolProps
       } else {
         const errorData = await response.json();
         console.error('Failed to inactivate subscription:', errorData.error);
-        alert('Failed to inactivate subscription: ' + (errorData.error || 'Unknown error'));
+        showError('Failed to inactivate subscription: ' + (errorData.error || 'Unknown error'));
       }
     } catch (error) {
       console.error('Error inactivating subscription:', error);
-      alert('Error inactivating subscription. Please try again.');
+      showError('Error inactivating subscription. Please try again.');
     } finally {
       setIsLoading(false);
     }
@@ -601,7 +585,6 @@ export function SubscriptionTrackerTool({ toolId }: SubscriptionTrackerToolProps
         day_of_month: subscription.dayOfMonth,
         billed_date: subscription.billedDate,
         renewal_date: subscription.renewalDate,
-        add_reminder_to_calendar: subscription.addReminderToCalendar || false,
         notes: subscription.notes || null,
         is_active: true,
         date_inactivated: null
@@ -633,8 +616,6 @@ export function SubscriptionTrackerTool({ toolId }: SubscriptionTrackerToolProps
             dayOfMonth: sub.day_of_month,
             billedDate: sub.billed_date,
             renewalDate: sub.renewal_date,
-            addReminderToCalendar: sub.add_reminder_to_calendar || false,
-            calendarReminderId: sub.calendar_reminder_id,
             notes: sub.notes || '',
             isActive: sub.is_active !== false,
             dateAdded: sub.date_added,
@@ -645,11 +626,11 @@ export function SubscriptionTrackerTool({ toolId }: SubscriptionTrackerToolProps
       } else {
         const errorData = await response.json();
         console.error('Failed to reactivate subscription:', errorData.error);
-        alert('Failed to reactivate subscription: ' + (errorData.error || 'Unknown error'));
+        showError('Failed to reactivate subscription: ' + (errorData.error || 'Unknown error'));
       }
     } catch (error) {
       console.error('Error reactivating subscription:', error);
-      alert('Error reactivating subscription. Please try again.');
+      showError('Error reactivating subscription. Please try again.');
     } finally {
       setIsLoading(false);
     }
@@ -687,8 +668,6 @@ export function SubscriptionTrackerTool({ toolId }: SubscriptionTrackerToolProps
             dayOfMonth: sub.day_of_month,
             billedDate: sub.billed_date,
             renewalDate: sub.renewal_date,
-            addReminderToCalendar: sub.add_reminder_to_calendar || false,
-            calendarReminderId: sub.calendar_reminder_id,
             notes: sub.notes || '',
             isActive: sub.is_active !== false,
             dateAdded: sub.date_added,
@@ -701,11 +680,11 @@ export function SubscriptionTrackerTool({ toolId }: SubscriptionTrackerToolProps
       } else {
         const errorData = await response.json();
         console.error('Failed to delete subscription:', errorData.error);
-        alert('Failed to delete subscription: ' + (errorData.error || 'Unknown error'));
+        showError('Failed to delete subscription: ' + (errorData.error || 'Unknown error'));
       }
     } catch (error) {
       console.error('Error deleting subscription:', error);
-      alert('Error deleting subscription. Please try again.');
+      showError('Error deleting subscription. Please try again.');
     } finally {
       setIsLoading(false);
     }
@@ -1121,20 +1100,6 @@ export function SubscriptionTrackerTool({ toolId }: SubscriptionTrackerToolProps
                           className={selectClass}
                         />
                       </div>
-                      <div className="md:col-span-2">
-                        <div className="flex items-center gap-3">
-                          <input
-                            type="checkbox"
-                            id="addReminderToCalendar"
-                            checked={newSubscription.addReminderToCalendar}
-                            onChange={(e) => setNewSubscription({ ...newSubscription, addReminderToCalendar: e.target.checked })}
-                            className={isLight ? 'w-5 h-5 rounded border-slate-400 bg-white text-emerald-600 focus:ring-emerald-500 focus:ring-offset-white' : 'w-5 h-5 rounded border-slate-600 bg-slate-700 text-emerald-500 focus:ring-emerald-500 focus:ring-offset-slate-800'}
-                          />
-                          <label htmlFor="addReminderToCalendar" className={isLight ? 'text-sm text-slate-700 cursor-pointer' : 'text-sm text-slate-300 cursor-pointer'}>
-                            Add reminder to calendar 30 days before renewal
-                          </label>
-                        </div>
-                      </div>
                     </>
                   ) : (
                     <div>
@@ -1191,7 +1156,6 @@ export function SubscriptionTrackerTool({ toolId }: SubscriptionTrackerToolProps
                         dayOfMonth: '',
                         billedDate: '',
                         renewalDate: '',
-                        addReminderToCalendar: false,
                         notes: ''
                       });
                       setShowCustomCategory(false);
@@ -1403,20 +1367,6 @@ export function SubscriptionTrackerTool({ toolId }: SubscriptionTrackerToolProps
                                   onChange={(e) => setEditingSubscription({ ...editingSubscription, renewalDate: e.target.value })}
                                   className="w-full px-4 py-2 rounded-lg border border-slate-700 bg-slate-900/70 text-slate-100 focus:border-emerald-500/50 focus:outline-none focus:ring-1 focus:ring-emerald-500/50"
                                 />
-                              </div>
-                              <div className="md:col-span-2">
-                                <div className="flex items-center gap-3">
-                                  <input
-                                    type="checkbox"
-                                    id="editAddReminderToCalendar"
-                                    checked={editingSubscription.addReminderToCalendar}
-                                    onChange={(e) => setEditingSubscription({ ...editingSubscription, addReminderToCalendar: e.target.checked })}
-                                    className="w-5 h-5 rounded border-slate-600 bg-slate-700 text-emerald-500 focus:ring-emerald-500 focus:ring-offset-slate-800"
-                                  />
-                                  <label htmlFor="editAddReminderToCalendar" className="text-sm text-slate-300 cursor-pointer">
-                                    Add reminder to calendar 30 days before renewal
-                                  </label>
-                                </div>
                               </div>
                             </>
                           ) : (

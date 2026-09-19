@@ -43,6 +43,8 @@ export default function Profile() {
   const [isSaving, setIsSaving] = useState(false);
   const [isChangingPasswordLoading, setIsChangingPasswordLoading] = useState(false);
   const [isDeletingAccount, setIsDeletingAccount] = useState(false);
+  const [showDeleteAccountConfirm, setShowDeleteAccountConfirm] = useState(false);
+  const [deleteAccountConfirmText, setDeleteAccountConfirmText] = useState('');
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
   const [passwordError, setPasswordError] = useState<string | null>(null);
@@ -188,14 +190,18 @@ export default function Profile() {
     }
   };
 
+  const openDeleteAccountConfirm = () => {
+    setDeleteAccountConfirmText('');
+    setShowDeleteAccountConfirm(true);
+  };
+
   const handleDeleteAccount = async () => {
-    const confirmed = window.confirm(
-      'Delete your account and all associated data/documents permanently? This cannot be undone.'
-    );
-    if (!confirmed) return;
+    if (deleteAccountConfirmText.toLowerCase() !== 'delete') return;
 
     setError(null);
     setSuccess(null);
+    setShowDeleteAccountConfirm(false);
+    setDeleteAccountConfirmText('');
     setIsDeletingAccount(true);
 
     try {
@@ -435,7 +441,7 @@ export default function Profile() {
                   {user.userStatus !== 'superadmin' && (
                     <button
                       type="button"
-                      onClick={handleDeleteAccount}
+                      onClick={openDeleteAccountConfirm}
                       disabled={isDeletingAccount}
                       className="w-full rounded-lg border border-red-500/50 bg-red-500/10 px-4 py-2.5 text-sm font-medium text-red-300 transition-colors hover:bg-red-500/20 disabled:cursor-not-allowed disabled:opacity-50"
                     >
@@ -533,6 +539,84 @@ export default function Profile() {
           )}
         </div>
       </div>
+
+      {showDeleteAccountConfirm && (
+        <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/60">
+          <div
+            className={
+              isLight
+                ? 'w-full max-w-md rounded-lg border border-slate-200 bg-white p-6 shadow-xl'
+                : 'w-full max-w-md rounded-lg border border-slate-700 bg-slate-900 p-6 shadow-xl'
+            }
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="profile-delete-account-title"
+          >
+            <h3
+              id="profile-delete-account-title"
+              className={isLight ? 'mb-2 text-xl font-semibold text-slate-900' : 'mb-2 text-xl font-semibold text-slate-50'}
+            >
+              Delete Account
+            </h3>
+            <div
+              className={
+                isLight
+                  ? 'mb-4 rounded-lg border border-red-300 bg-red-50 px-4 py-3'
+                  : 'mb-4 rounded-lg border border-red-500/50 bg-red-500/10 px-4 py-3'
+              }
+            >
+              <p className={isLight ? 'mb-2 font-semibold text-red-700' : 'mb-2 font-semibold text-red-300'}>
+                Warning: This action cannot be undone.
+              </p>
+              <p className={isLight ? 'text-sm text-red-600' : 'text-sm text-red-200'}>
+                This will permanently delete your account and all associated data and documents.
+              </p>
+            </div>
+            <p className={isLight ? 'mb-4 text-slate-700' : 'mb-4 text-slate-300'}>
+              Type <strong className={isLight ? 'text-slate-900' : 'text-slate-200'}>delete</strong> to confirm:
+            </p>
+            <input
+              type="text"
+              value={deleteAccountConfirmText}
+              onChange={(e) => setDeleteAccountConfirmText(e.target.value)}
+              placeholder="Type 'delete' to confirm"
+              autoFocus
+              onKeyDown={(e) => {
+                if (e.key === 'Escape') {
+                  setShowDeleteAccountConfirm(false);
+                  setDeleteAccountConfirmText('');
+                }
+              }}
+              className={
+                isLight
+                  ? 'mb-4 w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900 placeholder-slate-500 focus:border-red-500/50 focus:outline-none focus:ring-1 focus:ring-red-500/50'
+                  : 'mb-4 w-full rounded-lg border border-slate-700 bg-slate-900/70 px-3 py-2 text-sm text-slate-100 placeholder-slate-500 focus:border-red-500/50 focus:outline-none focus:ring-1 focus:ring-red-500/50'
+              }
+            />
+            <div className="flex gap-3">
+              <button
+                type="button"
+                onClick={() => void handleDeleteAccount()}
+                disabled={deleteAccountConfirmText.toLowerCase() !== 'delete' || isDeletingAccount}
+                className="flex-1 rounded-lg bg-red-600 px-4 py-2 font-medium text-white transition-colors hover:bg-red-700 disabled:cursor-not-allowed disabled:opacity-50"
+              >
+                {isDeletingAccount ? 'Deleting...' : 'Delete account'}
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  setShowDeleteAccountConfirm(false);
+                  setDeleteAccountConfirmText('');
+                }}
+                disabled={isDeletingAccount}
+                className={secondaryOutlineButtonClass}
+              >
+                Cancel
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </main>
   );
 }

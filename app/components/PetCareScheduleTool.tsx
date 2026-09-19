@@ -27,7 +27,6 @@ type CarePlanItem = {
   startDate: string;
   endDate: string | null;
   notes: string;
-  addToDashboard: boolean;
   priority: 'low' | 'medium' | 'high';
 };
 
@@ -47,7 +46,6 @@ type Appointment = {
   veterinarian: string;
   notes: string;
   isUpcoming: boolean;
-  addToDashboard: boolean;
 };
 
 type Document = {
@@ -265,9 +263,9 @@ export function PetCareScheduleTool({ toolId }: PetCareScheduleToolProps) {
   
   // Care Plan
   const [carePlanItems, setCarePlanItems] = useState<CarePlanItem[]>([]);
-  const [newCareItem, setNewCareItem] = useState({ name: '', frequency: 'Daily', notes: '', addToDashboard: false, priority: 'medium' as 'low' | 'medium' | 'high' });
+  const [newCareItem, setNewCareItem] = useState({ name: '', frequency: 'Daily', notes: '', priority: 'medium' as 'low' | 'medium' | 'high' });
   const [editingCareItemId, setEditingCareItemId] = useState<string | null>(null);
-  const [editingCareItem, setEditingCareItem] = useState({ name: '', frequency: 'Daily', notes: '', addToDashboard: false, priority: 'medium' as 'low' | 'medium' | 'high' });
+  const [editingCareItem, setEditingCareItem] = useState({ name: '', frequency: 'Daily', notes: '', priority: 'medium' as 'low' | 'medium' | 'high' });
   
   // Vaccinations
   const [vaccinations, setVaccinations] = useState<Vaccination[]>([]);
@@ -277,9 +275,9 @@ export function PetCareScheduleTool({ toolId }: PetCareScheduleToolProps) {
   
   // Appointments
   const [appointments, setAppointments] = useState<Appointment[]>([]);
-  const [newAppointment, setNewAppointment] = useState({ date: '', time: '', type: '', veterinarian: '', notes: '', addToDashboard: false });
+  const [newAppointment, setNewAppointment] = useState({ date: '', time: '', type: '', veterinarian: '', notes: '' });
   const [editingAppointmentId, setEditingAppointmentId] = useState<string | null>(null);
-  const [editingAppointment, setEditingAppointment] = useState({ date: '', time: '', type: '', veterinarian: '', notes: '', addToDashboard: false });
+  const [editingAppointment, setEditingAppointment] = useState({ date: '', time: '', type: '', veterinarian: '', notes: '' });
   
   // Documents
   const [documents, setDocuments] = useState<Document[]>([]);
@@ -350,7 +348,6 @@ export function PetCareScheduleTool({ toolId }: PetCareScheduleToolProps) {
         startDate: c.startDate,
         endDate: c.endDate,
         notes: c.notes || '',
-        addToDashboard: Boolean(c.addToDashboard),
       })).sort((a, b) => a.name.localeCompare(b.name)),
       vaccinations: vaccinations.map(v => ({
         name: v.name.trim(),
@@ -365,7 +362,6 @@ export function PetCareScheduleTool({ toolId }: PetCareScheduleToolProps) {
         veterinarian: (a.veterinarian || '').trim(),
         notes: (a.notes || '').trim(),
         isUpcoming: a.isUpcoming,
-        addToDashboard: Boolean(a.addToDashboard),
       })).sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime()),
       documents: documents.map(d => {
         const doc: any = {
@@ -478,7 +474,6 @@ export function PetCareScheduleTool({ toolId }: PetCareScheduleToolProps) {
             startDate: c.start_date,
             endDate: c.end_date,
             notes: (c.notes && c.notes.trim()) ? c.notes.trim() : '',
-            addToDashboard: Boolean(c.add_to_dashboard),
             priority: (c.priority && ['low', 'medium', 'high'].includes(c.priority)) ? c.priority : 'medium' as 'low' | 'medium' | 'high',
           };
           console.log(`Loading care plan item: ${mappedItem.name}, notes: "${mappedItem.notes}"`);
@@ -501,7 +496,6 @@ export function PetCareScheduleTool({ toolId }: PetCareScheduleToolProps) {
           veterinarian: a.veterinarian || '',
           notes: a.notes || '',
           isUpcoming: a.is_upcoming,
-          addToDashboard: Boolean(a.add_to_dashboard),
         })));
         
         setDocuments((pet.documents || []).map((d: any) => ({
@@ -623,7 +617,6 @@ export function PetCareScheduleTool({ toolId }: PetCareScheduleToolProps) {
               startDate: c.startDate,
               endDate: c.endDate,
               notes: notesValue,
-              addToDashboard: Boolean(c.addToDashboard),
               priority: (c.priority && ['low', 'medium', 'high'].includes(c.priority)) ? c.priority : 'medium',
             };
           }),
@@ -640,7 +633,6 @@ export function PetCareScheduleTool({ toolId }: PetCareScheduleToolProps) {
             veterinarian: a.veterinarian,
             notes: a.notes || '',
             isUpcoming: a.isUpcoming,
-            addToDashboard: Boolean(a.addToDashboard),
           })),
           documents: documents.map(d => {
             const doc: any = {
@@ -841,7 +833,6 @@ export function PetCareScheduleTool({ toolId }: PetCareScheduleToolProps) {
             startDate: c.start_date,
             endDate: c.end_date,
             notes: c.notes || '',
-            addToDashboard: Boolean(c.add_to_dashboard),
           })),
           vaccinations: (currentPet.vaccinations || []).map((v: any) => ({
             name: v.name,
@@ -856,7 +847,6 @@ export function PetCareScheduleTool({ toolId }: PetCareScheduleToolProps) {
             veterinarian: a.veterinarian || '',
             notes: a.notes || '',
             isUpcoming: a.is_upcoming,
-            addToDashboard: Boolean(a.add_to_dashboard),
           })),
           documents: (currentPet.documents || []).map((d: any) => ({
             name: d.name,
@@ -967,7 +957,6 @@ export function PetCareScheduleTool({ toolId }: PetCareScheduleToolProps) {
             startDate: c.start_date,
             endDate: c.end_date,
             notes: c.notes || '',
-            addToDashboard: Boolean(c.add_to_dashboard),
           })),
           vaccinations: (currentPet.vaccinations || []).map((v: any) => ({
             name: v.name,
@@ -982,7 +971,6 @@ export function PetCareScheduleTool({ toolId }: PetCareScheduleToolProps) {
             veterinarian: a.veterinarian || '',
             notes: a.notes || '',
             isUpcoming: a.is_upcoming,
-            addToDashboard: Boolean(a.add_to_dashboard),
           })),
           documents: (currentPet.documents || []).map((d: any) => ({
             name: d.name,
@@ -1203,12 +1191,11 @@ export function PetCareScheduleTool({ toolId }: PetCareScheduleToolProps) {
         startDate: localToday(),
         endDate: null,
         notes: newCareItem.notes || '',
-        addToDashboard: Boolean(newCareItem.addToDashboard),
         priority: newCareItem.priority || 'medium'
       };
       const updatedItems = [...carePlanItems, newItem];
       setCarePlanItems(updatedItems);
-      setNewCareItem({ name: '', frequency: 'Daily', notes: '', addToDashboard: false, priority: 'medium' });
+      setNewCareItem({ name: '', frequency: 'Daily', notes: '', priority: 'medium' });
       setAddingSection(null);
       setTimeout(() => savePetData(updatedItems), 100);
     }
@@ -1235,14 +1222,13 @@ export function PetCareScheduleTool({ toolId }: PetCareScheduleToolProps) {
       name: item.name, 
       frequency: item.frequency, 
       notes: item.notes || '',
-      addToDashboard: Boolean(item.addToDashboard),
       priority: item.priority || 'medium'
     });
   };
 
   const cancelEditingCareItem = () => {
     setEditingCareItemId(null);
-    setEditingCareItem({ name: '', frequency: 'Daily', notes: '', addToDashboard: false, priority: 'medium' });
+    setEditingCareItem({ name: '', frequency: 'Daily', notes: '', priority: 'medium' });
   };
 
   const saveCareItemEdit = async () => {
@@ -1259,7 +1245,6 @@ export function PetCareScheduleTool({ toolId }: PetCareScheduleToolProps) {
             name: editingCareItem.name.trim(),
             frequency: editingCareItem.frequency,
             notes: notesValue,
-            addToDashboard: Boolean(editingCareItem.addToDashboard),
             priority: editingCareItem.priority || 'medium'
           }
         : item
@@ -1273,7 +1258,7 @@ export function PetCareScheduleTool({ toolId }: PetCareScheduleToolProps) {
     setCarePlanItems(updatedItems);
     
     setEditingCareItemId(null);
-    setEditingCareItem({ name: '', frequency: 'Daily', notes: '', addToDashboard: false, priority: 'medium' });
+    setEditingCareItem({ name: '', frequency: 'Daily', notes: '', priority: 'medium' });
     
     // Save to database using the updated items (after state update)
     setTimeout(() => {
@@ -1347,10 +1332,9 @@ export function PetCareScheduleTool({ toolId }: PetCareScheduleToolProps) {
         id: Date.now().toString(),
         ...newAppointment,
         isUpcoming: newAppointment.date >= todayKey,
-        addToDashboard: Boolean(newAppointment.addToDashboard)
       };
       setAppointments(prev => [...prev, appointment]);
-      setNewAppointment({ date: '', time: '', type: '', veterinarian: '', notes: '', addToDashboard: false });
+      setNewAppointment({ date: '', time: '', type: '', veterinarian: '', notes: '' });
       setAddingSection(null);
       // Save to database immediately
       setTimeout(() => savePetData(), 100);
@@ -1365,13 +1349,12 @@ export function PetCareScheduleTool({ toolId }: PetCareScheduleToolProps) {
       type: appointment.type,
       veterinarian: appointment.veterinarian || '',
       notes: appointment.notes || '',
-      addToDashboard: Boolean(appointment.addToDashboard)
     });
   };
 
   const cancelEditingAppointment = () => {
     setEditingAppointmentId(null);
-    setEditingAppointment({ date: '', time: '', type: '', veterinarian: '', notes: '', addToDashboard: false });
+    setEditingAppointment({ date: '', time: '', type: '', veterinarian: '', notes: '' });
   };
 
   const saveAppointmentEdit = async () => {
@@ -1387,14 +1370,13 @@ export function PetCareScheduleTool({ toolId }: PetCareScheduleToolProps) {
             veterinarian: editingAppointment.veterinarian || '',
             notes: editingAppointment.notes || '',
             isUpcoming: editingAppointment.date >= todayKey,
-            addToDashboard: Boolean(editingAppointment.addToDashboard)
           }
         : appointment
     );
 
     setAppointments(updatedAppointments);
     setEditingAppointmentId(null);
-    setEditingAppointment({ date: '', time: '', type: '', veterinarian: '', notes: '', addToDashboard: false });
+    setEditingAppointment({ date: '', time: '', type: '', veterinarian: '', notes: '' });
 
     setTimeout(() => {
       savePetData(undefined, undefined, undefined, undefined, updatedAppointments);
@@ -3293,18 +3275,6 @@ export function PetCareScheduleTool({ toolId }: PetCareScheduleToolProps) {
                 className={`${selectClass} placeholder-slate-500 resize-none`}
               />
             </div>
-            <div className="flex items-center gap-3 mt-4">
-              <input
-                type="checkbox"
-                id="pcs-care-add-dashboard"
-                checked={newCareItem.addToDashboard}
-                onChange={(e) => setNewCareItem({ ...newCareItem, addToDashboard: e.target.checked })}
-                className={isLight ? 'w-5 h-5 rounded border-slate-400 bg-white text-emerald-600 focus:ring-emerald-500 focus:ring-offset-white' : 'w-5 h-5 rounded border-slate-600 bg-slate-700 text-emerald-500 focus:ring-emerald-500 focus:ring-offset-slate-800'}
-              />
-              <label htmlFor="pcs-care-add-dashboard" className={isLight ? 'text-sm text-slate-700 cursor-pointer' : 'text-sm text-slate-300 cursor-pointer'}>
-                Add to calendar
-              </label>
-            </div>
             <div className="flex gap-2 mt-4">
               <button
                 onClick={addCarePlanItem}
@@ -3316,7 +3286,7 @@ export function PetCareScheduleTool({ toolId }: PetCareScheduleToolProps) {
                 type="button"
                 onClick={() => {
                   setAddingSection(null);
-                  setNewCareItem({ name: '', frequency: 'Daily', notes: '', addToDashboard: false, priority: 'medium' });
+                  setNewCareItem({ name: '', frequency: 'Daily', notes: '', priority: 'medium' });
                 }}
                 className={secondaryButtonClass}
               >
@@ -3379,18 +3349,6 @@ export function PetCareScheduleTool({ toolId }: PetCareScheduleToolProps) {
                             rows={3}
                             className="w-full px-3 py-2 rounded-lg border border-slate-700 bg-slate-900/70 text-slate-100 placeholder-slate-500 focus:border-emerald-500/50 focus:outline-none focus:ring-1 focus:ring-emerald-500/50 resize-none"
                           />
-                        </div>
-                        <div className="flex items-center gap-3">
-                          <input
-                            type="checkbox"
-                            id="pcs-care-edit-dashboard"
-                            checked={editingCareItem.addToDashboard}
-                            onChange={(e) => setEditingCareItem({ ...editingCareItem, addToDashboard: e.target.checked })}
-                            className={isLight ? 'w-5 h-5 rounded border-slate-400 bg-white text-emerald-600 focus:ring-emerald-500 focus:ring-offset-white' : 'w-5 h-5 rounded border-slate-600 bg-slate-700 text-emerald-500 focus:ring-emerald-500 focus:ring-offset-slate-800'}
-                          />
-                          <label htmlFor="pcs-care-edit-dashboard" className={isLight ? 'text-sm text-slate-700 cursor-pointer' : 'text-sm text-slate-300 cursor-pointer'}>
-                            Add to calendar
-                          </label>
                         </div>
                         <div className="flex gap-2">
                           <button
@@ -3517,18 +3475,6 @@ export function PetCareScheduleTool({ toolId }: PetCareScheduleToolProps) {
                             rows={3}
                             className="w-full px-3 py-2 rounded-lg border border-slate-700 bg-slate-900/70 text-slate-100 placeholder-slate-500 focus:border-emerald-500/50 focus:outline-none focus:ring-1 focus:ring-emerald-500/50 resize-none"
                           />
-                        </div>
-                        <div className="flex items-center gap-3">
-                          <input
-                            type="checkbox"
-                            id="pcs-care-edit-dashboard"
-                            checked={editingCareItem.addToDashboard}
-                            onChange={(e) => setEditingCareItem({ ...editingCareItem, addToDashboard: e.target.checked })}
-                            className={isLight ? 'w-5 h-5 rounded border-slate-400 bg-white text-emerald-600 focus:ring-emerald-500 focus:ring-offset-white' : 'w-5 h-5 rounded border-slate-600 bg-slate-700 text-emerald-500 focus:ring-emerald-500 focus:ring-offset-slate-800'}
-                          />
-                          <label htmlFor="pcs-care-edit-dashboard" className={isLight ? 'text-sm text-slate-700 cursor-pointer' : 'text-sm text-slate-300 cursor-pointer'}>
-                            Add to calendar
-                          </label>
                         </div>
                         <div className="flex gap-2">
                           <button
@@ -3866,20 +3812,6 @@ export function PetCareScheduleTool({ toolId }: PetCareScheduleToolProps) {
                   className="w-full px-3 py-2 rounded-lg border border-slate-700 bg-slate-900/70 text-slate-100 placeholder-slate-500 focus:border-emerald-500/50 focus:outline-none focus:ring-1 focus:ring-emerald-500/50"
                 />
               </div>
-              <div className="md:col-span-2">
-                <div className="flex items-center gap-3">
-                  <input
-                    type="checkbox"
-                    id="pcs-appt-add-dashboard"
-                    checked={newAppointment.addToDashboard}
-                    onChange={(e) => setNewAppointment({ ...newAppointment, addToDashboard: e.target.checked })}
-                    className={isLight ? 'w-5 h-5 rounded border-slate-400 bg-white text-emerald-600 focus:ring-emerald-500 focus:ring-offset-white' : 'w-5 h-5 rounded border-slate-600 bg-slate-700 text-emerald-500 focus:ring-emerald-500 focus:ring-offset-slate-800'}
-                  />
-                  <label htmlFor="pcs-appt-add-dashboard" className={isLight ? 'text-sm text-slate-700 cursor-pointer' : 'text-sm text-slate-300 cursor-pointer'}>
-                    Add to calendar
-                  </label>
-                </div>
-              </div>
             </div>
             <div className="flex gap-2 mt-4">
               <button
@@ -3892,7 +3824,7 @@ export function PetCareScheduleTool({ toolId }: PetCareScheduleToolProps) {
                 type="button"
                 onClick={() => {
                   setAddingSection(null);
-                  setNewAppointment({ date: '', time: '', type: '', veterinarian: '', notes: '', addToDashboard: false });
+                  setNewAppointment({ date: '', time: '', type: '', veterinarian: '', notes: '' });
                 }}
                 className={secondaryButtonClass}
               >
@@ -3966,20 +3898,6 @@ export function PetCareScheduleTool({ toolId }: PetCareScheduleToolProps) {
                                 onChange={(e) => setEditingAppointment({ ...editingAppointment, notes: e.target.value })}
                                 className={`${inputClass} resize-none`}
                               />
-                            </div>
-                            <div className="md:col-span-2">
-                              <div className="flex items-center gap-3">
-                                <input
-                                  type="checkbox"
-                                  id="pcs-appt-edit-dashboard"
-                                  checked={editingAppointment.addToDashboard}
-                                  onChange={(e) => setEditingAppointment({ ...editingAppointment, addToDashboard: e.target.checked })}
-                                  className={isLight ? 'w-5 h-5 rounded border-slate-400 bg-white text-emerald-600 focus:ring-emerald-500 focus:ring-offset-white' : 'w-5 h-5 rounded border-slate-600 bg-slate-700 text-emerald-500 focus:ring-emerald-500 focus:ring-offset-slate-800'}
-                                />
-                                <label htmlFor="pcs-appt-edit-dashboard" className={isLight ? 'text-sm text-slate-700 cursor-pointer' : 'text-sm text-slate-300 cursor-pointer'}>
-                                  Add to calendar
-                                </label>
-                              </div>
                             </div>
                           </div>
                           <div className="flex gap-2">
@@ -4091,20 +4009,6 @@ export function PetCareScheduleTool({ toolId }: PetCareScheduleToolProps) {
                                 onChange={(e) => setEditingAppointment({ ...editingAppointment, notes: e.target.value })}
                                 className={`${inputClass} resize-none`}
                               />
-                            </div>
-                            <div className="md:col-span-2">
-                              <div className="flex items-center gap-3">
-                                <input
-                                  type="checkbox"
-                                  id="pcs-appt-edit-dashboard"
-                                  checked={editingAppointment.addToDashboard}
-                                  onChange={(e) => setEditingAppointment({ ...editingAppointment, addToDashboard: e.target.checked })}
-                                  className={isLight ? 'w-5 h-5 rounded border-slate-400 bg-white text-emerald-600 focus:ring-emerald-500 focus:ring-offset-white' : 'w-5 h-5 rounded border-slate-600 bg-slate-700 text-emerald-500 focus:ring-emerald-500 focus:ring-offset-slate-800'}
-                                />
-                                <label htmlFor="pcs-appt-edit-dashboard" className={isLight ? 'text-sm text-slate-700 cursor-pointer' : 'text-sm text-slate-300 cursor-pointer'}>
-                                  Add to calendar
-                                </label>
-                              </div>
                             </div>
                           </div>
                           <div className="flex gap-2">

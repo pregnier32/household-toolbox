@@ -976,6 +976,7 @@ export function EndOfLifePlannerTool({ toolId }: EndOfLifePlannerToolProps) {
   const [revealedLetters, setRevealedLetters] = useState<Record<string, boolean>>({});
   const [deleteTarget, setDeleteTarget] = useState<DeleteTarget | null>(null);
   const [deleteConfirmText, setDeleteConfirmText] = useState('');
+  const [archiveConfirmPlanId, setArchiveConfirmPlanId] = useState<string | null>(null);
   const [showExportPopup, setShowExportPopup] = useState(false);
   const [renamingSectionId, setRenamingSectionId] = useState<string | null>(null);
   const [renameValue, setRenameValue] = useState('');
@@ -1098,6 +1099,10 @@ export function EndOfLifePlannerTool({ toolId }: EndOfLifePlannerToolProps) {
         setDeleteConfirmText('');
         return;
       }
+      if (archiveConfirmPlanId) {
+        setArchiveConfirmPlanId(null);
+        return;
+      }
       if (showExportPopup) {
         setShowExportPopup(false);
         return;
@@ -1112,7 +1117,7 @@ export function EndOfLifePlannerTool({ toolId }: EndOfLifePlannerToolProps) {
     };
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
-  }, [deleteTarget, showExportPopup, renamingSectionId, menuOpenPlanId, menuOpenTabId, menuOpenSubsectionId]);
+  }, [archiveConfirmPlanId, deleteTarget, showExportPopup, renamingSectionId, menuOpenPlanId, menuOpenTabId, menuOpenSubsectionId]);
 
   const visiblePlans = useMemo(() => {
     const query = planSearchQuery.trim().toLowerCase();
@@ -1272,12 +1277,14 @@ export function EndOfLifePlannerTool({ toolId }: EndOfLifePlannerToolProps) {
 
   const archivePlan = (id: string, archived: boolean) => {
     if (archived) {
-      const plan = plans.find((item) => item.id === id);
-      if (!window.confirm(`Archive “${plan?.name || 'this plan'}”? The plan and its data stay available under Show archived plans.`)) {
-        setMenuOpenPlanId(null);
-        return;
-      }
+      setMenuOpenPlanId(null);
+      setArchiveConfirmPlanId(id);
+      return;
     }
+    applyArchivePlan(id, false);
+  };
+
+  const applyArchivePlan = (id: string, archived: boolean) => {
     const next = plans.map((plan) =>
       plan.id === id
         ? appendPlanHistory(
@@ -4614,6 +4621,38 @@ export function EndOfLifePlannerTool({ toolId }: EndOfLifePlannerToolProps) {
             </div>
           ) : null}
         </>
+      ) : null}
+
+      {archiveConfirmPlanId ? (
+        <div className={overlayClass}>
+          <div className={modalCardClass} role="dialog" aria-modal="true" aria-labelledby="eolp-archive-title">
+            <h3 id="eolp-archive-title" className={isLight ? 'text-xl font-semibold text-slate-900 mb-2' : 'text-xl font-semibold text-slate-50 mb-2'}>
+              Archive Plan
+            </h3>
+            <p className={isLight ? 'text-slate-700 mb-4' : 'text-slate-300 mb-4'}>
+              Archive “{plans.find((item) => item.id === archiveConfirmPlanId)?.name || 'this plan'}”? The plan and its data stay available under Show archived plans.
+            </p>
+            <div className="flex gap-3">
+              <button
+                type="button"
+                onClick={() => {
+                  applyArchivePlan(archiveConfirmPlanId, true);
+                  setArchiveConfirmPlanId(null);
+                }}
+                className={`flex-1 ${primaryButtonClass}`}
+              >
+                Archive
+              </button>
+              <button
+                type="button"
+                onClick={() => setArchiveConfirmPlanId(null)}
+                className={secondaryButtonClass}
+              >
+                Cancel
+              </button>
+            </div>
+          </div>
+        </div>
       ) : null}
 
       {deleteTarget ? (

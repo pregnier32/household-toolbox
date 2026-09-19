@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from 'react';
 import { useTheme } from './AppThemeProvider';
+import { useAppNotice } from './AppNotice';
 import { AttachmentButton } from './AttachmentButton';
 import { AttachmentModal } from './AttachmentModal';
 import { canPreviewAttachment, formatAttachmentBytes, isImageAttachment, isPdfAttachment, type AttachmentItem } from '@/lib/attachments';
@@ -108,6 +109,7 @@ type ImportantDocumentsToolProps = {
 
 export function ImportantDocumentsTool({ toolId }: ImportantDocumentsToolProps) {
   const { resolvedTheme } = useTheme();
+  const { showError, showSuccess } = useAppNotice();
   const isLight = resolvedTheme === 'light';
   const titleClass = isLight ? 'text-2xl font-semibold text-slate-900 mb-2' : 'text-2xl font-semibold text-slate-50 mb-2';
   const descClass = isLight ? 'text-slate-600 text-sm' : 'text-slate-400 text-sm';
@@ -165,6 +167,9 @@ export function ImportantDocumentsTool({ toolId }: ImportantDocumentsToolProps) 
   const deleteWarningDetailClass = isLight ? 'text-red-600 text-sm' : 'text-red-200 text-sm';
   const deleteInstructionClass = isLight ? 'text-slate-700 mb-4' : 'text-slate-300 mb-4';
   const deleteKeywordClass = isLight ? 'text-slate-900' : 'text-slate-200';
+  const passwordModalErrorClass = isLight
+    ? 'rounded-lg border border-red-300 bg-red-50 px-3 py-2 text-sm text-red-800'
+    : 'rounded-lg border border-red-500/50 bg-red-500/10 px-3 py-2 text-sm text-red-200';
   const deleteInputClass = isLight
     ? 'w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900 placeholder-slate-500 focus:border-red-500/50 focus:outline-none focus:ring-1 focus:ring-red-500/50 mb-4'
     : 'w-full rounded-lg border border-slate-700 bg-slate-900/70 px-3 py-2 text-sm text-slate-100 placeholder-slate-500 focus:border-red-500/50 focus:outline-none focus:ring-1 focus:ring-red-500/50 mb-4';
@@ -249,6 +254,7 @@ export function ImportantDocumentsTool({ toolId }: ImportantDocumentsToolProps) 
   const [pendingReplaceFile, setPendingReplaceFile] = useState<File | null>(null);
   const [viewPreview, setViewPreview] = useState<AttachmentItem | null>(null);
   const [downloadPasswordInput, setDownloadPasswordInput] = useState('');
+  const [downloadPasswordError, setDownloadPasswordError] = useState('');
   const [showDownloadPassword, setShowDownloadPassword] = useState(false);
   const [showForgotPasswordModal, setShowForgotPasswordModal] = useState(false);
   const [securityQuestions, setSecurityQuestions] = useState<Array<{ questionId: string; question: string }>>([]);
@@ -391,45 +397,45 @@ export function ImportantDocumentsTool({ toolId }: ImportantDocumentsToolProps) 
 
   const addDocument = async () => {
     if (!newDocument.documentName.trim() || !newDocument.uploadedDate) {
-      alert('Please fill in all required fields.');
+      showError('Please fill in all required fields.');
       return;
     }
 
     if (newDocument.selectedTags.length === 0) {
-      alert('Please select at least one tag.');
+      showError('Please select at least one tag.');
       return;
     }
 
     if (!newDocument.file) {
-      alert('Please upload a document file.');
+      showError('Please upload a document file.');
       return;
     }
 
     if (newDocument.requiresPasswordForDownload) {
       if (!newDocument.downloadPassword.trim()) {
-        alert('Please enter a password for download protection.');
+        showError('Please enter a password for download protection.');
         return;
       }
       if (newDocument.downloadPassword !== newDocument.confirmPassword) {
-        alert('Passwords do not match. Please confirm your password.');
+        showError('Passwords do not match. Please confirm your password.');
         return;
       }
       // Validate security questions
       const validQuestions = newDocument.securityQuestions.filter(q => q.questionId && q.answer.trim());
       if (validQuestions.length !== 3) {
-        alert('Please select and answer 3 security questions for password recovery.');
+        showError('Please select and answer 3 security questions for password recovery.');
         return;
       }
       // Check for duplicate questions
       const questionIds = validQuestions.map(q => q.questionId);
       if (new Set(questionIds).size !== questionIds.length) {
-        alert('Please select 3 different security questions.');
+        showError('Please select 3 different security questions.');
         return;
       }
     }
 
     if (!toolId) {
-      alert('Tool ID is required.');
+      showError('Tool ID is required.');
       return;
     }
 
@@ -508,11 +514,11 @@ export function ImportantDocumentsTool({ toolId }: ImportantDocumentsToolProps) 
       } else {
         const errorData = await response.json();
         console.error('Failed to add document:', errorData.error);
-        alert('Failed to add document: ' + (errorData.error || 'Unknown error'));
+        showError('Failed to add document: ' + (errorData.error || 'Unknown error'));
       }
     } catch (error) {
       console.error('Error adding document:', error);
-      alert('Error adding document. Please try again.');
+      showError('Error adding document. Please try again.');
     } finally {
       setIsLoading(false);
     }
@@ -558,7 +564,7 @@ export function ImportantDocumentsTool({ toolId }: ImportantDocumentsToolProps) 
     }
 
     if (editingDocument.selectedTags.length === 0) {
-      alert('Please select at least one tag.');
+      showError('Please select at least one tag.');
       return;
     }
 
@@ -568,17 +574,17 @@ export function ImportantDocumentsTool({ toolId }: ImportantDocumentsToolProps) 
     if (editingDocument.requiresPasswordForDownload) {
       if (isChangingPassword) {
         if (editingDocument.downloadPassword !== editingDocument.confirmPassword) {
-          alert('Passwords do not match. Please confirm your password.');
+          showError('Passwords do not match. Please confirm your password.');
           return;
         }
       } else if (!existingDoc?.requiresPasswordForDownload) {
-        alert('Please enter a password for download protection.');
+        showError('Please enter a password for download protection.');
         return;
       }
     }
 
     if (!toolId) {
-      alert('Tool ID is required.');
+      showError('Tool ID is required.');
       return;
     }
 
@@ -633,11 +639,11 @@ export function ImportantDocumentsTool({ toolId }: ImportantDocumentsToolProps) 
       } else {
         const errorData = await response.json();
         console.error('Failed to update document:', errorData.error);
-        alert('Failed to update document: ' + (errorData.error || 'Unknown error'));
+        showError('Failed to update document: ' + (errorData.error || 'Unknown error'));
       }
     } catch (error) {
       console.error('Error updating document:', error);
-      alert('Error updating document. Please try again.');
+      showError('Error updating document. Please try again.');
     } finally {
       setIsLoading(false);
     }
@@ -689,11 +695,11 @@ export function ImportantDocumentsTool({ toolId }: ImportantDocumentsToolProps) 
       } else {
         const errorData = await response.json();
         console.error('Failed to inactivate document:', errorData.error);
-        alert('Failed to inactivate document: ' + (errorData.error || 'Unknown error'));
+        showError('Failed to inactivate document: ' + (errorData.error || 'Unknown error'));
       }
     } catch (error) {
       console.error('Error inactivating document:', error);
-      alert('Error inactivating document. Please try again.');
+      showError('Error inactivating document. Please try again.');
     } finally {
       setIsLoading(false);
     }
@@ -745,11 +751,11 @@ export function ImportantDocumentsTool({ toolId }: ImportantDocumentsToolProps) 
       } else {
         const errorData = await response.json();
         console.error('Failed to activate document:', errorData.error);
-        alert('Failed to activate document: ' + (errorData.error || 'Unknown error'));
+        showError('Failed to activate document: ' + (errorData.error || 'Unknown error'));
       }
     } catch (error) {
       console.error('Error activating document:', error);
-      alert('Error activating document. Please try again.');
+      showError('Error activating document. Please try again.');
     } finally {
       setIsLoading(false);
     }
@@ -803,11 +809,11 @@ export function ImportantDocumentsTool({ toolId }: ImportantDocumentsToolProps) 
       } else {
         const errorData = await response.json();
         console.error('Failed to delete document:', errorData.error);
-        alert('Failed to delete document: ' + (errorData.error || 'Unknown error'));
+        showError('Failed to delete document: ' + (errorData.error || 'Unknown error'));
       }
     } catch (error) {
       console.error('Error deleting document:', error);
-      alert('Error deleting document. Please try again.');
+      showError('Error deleting document. Please try again.');
     } finally {
       setIsLoading(false);
     }
@@ -815,12 +821,12 @@ export function ImportantDocumentsTool({ toolId }: ImportantDocumentsToolProps) 
 
   const addTag = async () => {
     if (!newTagName.trim()) {
-      alert('Please enter a tag name.');
+      showError('Please enter a tag name.');
       return;
     }
 
     if (!toolId) {
-      alert('Tool ID is required.');
+      showError('Tool ID is required.');
       return;
     }
 
@@ -856,11 +862,11 @@ export function ImportantDocumentsTool({ toolId }: ImportantDocumentsToolProps) 
       } else {
         const errorData = await response.json();
         console.error('Failed to add tag:', errorData.error);
-        alert('Failed to add tag: ' + (errorData.error || 'Unknown error'));
+        showError('Failed to add tag: ' + (errorData.error || 'Unknown error'));
       }
     } catch (error) {
       console.error('Error adding tag:', error);
-      alert('Error adding tag. Please try again.');
+      showError('Error adding tag. Please try again.');
     } finally {
       setIsLoading(false);
     }
@@ -882,7 +888,7 @@ export function ImportantDocumentsTool({ toolId }: ImportantDocumentsToolProps) 
     }
 
     if (!toolId) {
-      alert('Tool ID is required.');
+      showError('Tool ID is required.');
       return;
     }
 
@@ -918,11 +924,11 @@ export function ImportantDocumentsTool({ toolId }: ImportantDocumentsToolProps) 
       } else {
         const errorData = await response.json();
         console.error('Failed to update tag:', errorData.error);
-        alert('Failed to update tag: ' + (errorData.error || 'Unknown error'));
+        showError('Failed to update tag: ' + (errorData.error || 'Unknown error'));
       }
     } catch (error) {
       console.error('Error updating tag:', error);
-      alert('Error updating tag. Please try again.');
+      showError('Error updating tag. Please try again.');
     } finally {
       setIsLoading(false);
     }
@@ -965,11 +971,11 @@ export function ImportantDocumentsTool({ toolId }: ImportantDocumentsToolProps) 
       } else {
         const errorData = await response.json();
         console.error('Failed to inactivate tag:', errorData.error);
-        alert('Failed to inactivate tag: ' + (errorData.error || 'Unknown error'));
+        showError('Failed to inactivate tag: ' + (errorData.error || 'Unknown error'));
       }
     } catch (error) {
       console.error('Error inactivating tag:', error);
-      alert('Error inactivating tag. Please try again.');
+      showError('Error inactivating tag. Please try again.');
     } finally {
       setIsLoading(false);
     }
@@ -1012,11 +1018,11 @@ export function ImportantDocumentsTool({ toolId }: ImportantDocumentsToolProps) 
       } else {
         const errorData = await response.json();
         console.error('Failed to activate tag:', errorData.error);
-        alert('Failed to activate tag: ' + (errorData.error || 'Unknown error'));
+        showError('Failed to activate tag: ' + (errorData.error || 'Unknown error'));
       }
     } catch (error) {
       console.error('Error activating tag:', error);
-      alert('Error activating tag. Please try again.');
+      showError('Error activating tag. Please try again.');
     } finally {
       setIsLoading(false);
     }
@@ -1059,11 +1065,11 @@ export function ImportantDocumentsTool({ toolId }: ImportantDocumentsToolProps) 
       } else {
         const errorData = await response.json();
         console.error('Failed to delete tag:', errorData.error);
-        alert('Failed to delete tag: ' + (errorData.error || 'Unknown error'));
+        showError('Failed to delete tag: ' + (errorData.error || 'Unknown error'));
       }
     } catch (error) {
       console.error('Error deleting tag:', error);
-      alert('Error deleting tag. Please try again.');
+      showError('Error deleting tag. Please try again.');
     } finally {
       setIsLoading(false);
     }
@@ -1144,7 +1150,7 @@ export function ImportantDocumentsTool({ toolId }: ImportantDocumentsToolProps) 
   const openDocumentForView = async (doc: Document, blob: Blob) => {
     const type = blob.type || doc.fileType || '';
     if (!canPreviewAttachment(type, doc.fileName)) {
-      alert('This file type can’t be previewed in the browser. Use Download to save it.');
+      showError('This file type can’t be previewed in the browser. Use Download to save it.');
       return;
     }
     const url = window.URL.createObjectURL(blob);
@@ -1165,7 +1171,7 @@ export function ImportantDocumentsTool({ toolId }: ImportantDocumentsToolProps) 
 
   const handleDownload = async (doc: Document): Promise<boolean> => {
     if (!doc.fileUrl) {
-      alert('No file available for download.');
+      showError('No file available for download.');
       return false;
     }
 
@@ -1180,14 +1186,14 @@ export function ImportantDocumentsTool({ toolId }: ImportantDocumentsToolProps) 
       return true;
     } catch (error) {
       console.error('Error downloading file:', error);
-      alert('Failed to download file. Please try again.');
+      showError('Failed to download file. Please try again.');
       return false;
     }
   };
 
   const handleViewDocument = async (doc: Document) => {
     if (!doc.fileUrl) {
-      alert('No file available to view.');
+      showError('No file available to view.');
       return;
     }
 
@@ -1201,7 +1207,7 @@ export function ImportantDocumentsTool({ toolId }: ImportantDocumentsToolProps) 
       await openDocumentForView(doc, blob);
     } catch (error) {
       console.error('Error viewing file:', error);
-      alert('Failed to open file. Please try again.');
+      showError('Failed to open file. Please try again.');
     }
   };
 
@@ -1255,13 +1261,14 @@ export function ImportantDocumentsTool({ toolId }: ImportantDocumentsToolProps) 
     setPendingReplaceFile(file ?? null);
     setDownloadPasswordModalId(doc.id);
     setDownloadPasswordInput('');
+    setDownloadPasswordError('');
   };
 
   const replaceSavedDocumentFile = async (documentId: string, file: File, password?: string) => {
     if (!toolId) return;
     const doc = documents.find((item) => item.id === documentId);
     if (doc && !doc.isActive) {
-      alert('Restore this document to add or change files.');
+      showError('Restore this document to add or change files.');
       return;
     }
     if (doc?.requiresPasswordForDownload && !password) {
@@ -1283,7 +1290,7 @@ export function ImportantDocumentsTool({ toolId }: ImportantDocumentsToolProps) 
       }
       await reloadDocuments();
     } catch (error) {
-      alert(error instanceof Error ? error.message : 'Failed to replace file');
+      showError(error instanceof Error ? error.message : 'Failed to replace file');
     } finally {
       setAttachmentBusy(false);
     }
@@ -1293,7 +1300,7 @@ export function ImportantDocumentsTool({ toolId }: ImportantDocumentsToolProps) 
     if (!toolId) return;
     const doc = documents.find((item) => item.id === documentId);
     if (doc && !doc.isActive) {
-      alert('Restore this document to add or change files.');
+      showError('Restore this document to add or change files.');
       return;
     }
     if (doc?.requiresPasswordForDownload && !password) {
@@ -1314,7 +1321,7 @@ export function ImportantDocumentsTool({ toolId }: ImportantDocumentsToolProps) 
       }
       await reloadDocuments();
     } catch (error) {
-      alert(error instanceof Error ? error.message : 'Failed to remove file');
+      showError(error instanceof Error ? error.message : 'Failed to remove file');
     } finally {
       setAttachmentBusy(false);
     }
@@ -1328,7 +1335,7 @@ export function ImportantDocumentsTool({ toolId }: ImportantDocumentsToolProps) 
       const response = await fetch(`/api/tools/important-documents/reset-password?documentId=${downloadPasswordModalId}`);
       if (!response.ok) {
         const errorData = await response.json();
-        alert('Failed to load security questions: ' + (errorData.error || 'Unknown error'));
+        showError('Failed to load security questions: ' + (errorData.error || 'Unknown error'));
         setIsLoading(false);
         return;
       }
@@ -1340,7 +1347,7 @@ export function ImportantDocumentsTool({ toolId }: ImportantDocumentsToolProps) 
       setShowForgotPasswordModal(true);
     } catch (error) {
       console.error('Error loading security questions:', error);
-      alert('Error loading security questions. Please try again.');
+      showError('Error loading security questions. Please try again.');
     } finally {
       setIsLoading(false);
     }
@@ -1351,7 +1358,7 @@ export function ImportantDocumentsTool({ toolId }: ImportantDocumentsToolProps) 
 
     // Check all answers are filled
     if (securityAnswers.some(a => !a.answer.trim())) {
-      alert('Please answer all security questions.');
+      showError('Please answer all security questions.');
       return;
     }
 
@@ -1379,12 +1386,12 @@ export function ImportantDocumentsTool({ toolId }: ImportantDocumentsToolProps) 
         }
       } else {
         const errorData = await response.json();
-        alert('One or more answers are incorrect. Please try again.');
+        showError('One or more answers are incorrect. Please try again.');
         setSecurityAnswers(securityAnswers.map(a => ({ ...a, answer: '' })));
       }
     } catch (error) {
       console.error('Error verifying answers:', error);
-      alert('Error verifying answers. Please try again.');
+      showError('Error verifying answers. Please try again.');
     } finally {
       setIsLoading(false);
     }
@@ -1394,17 +1401,17 @@ export function ImportantDocumentsTool({ toolId }: ImportantDocumentsToolProps) 
     if (!downloadPasswordModalId) return;
 
     if (!newPassword.trim()) {
-      alert('Please enter a new password.');
+      showError('Please enter a new password.');
       return;
     }
 
     if (newPassword !== confirmNewPassword) {
-      alert('Passwords do not match. Please try again.');
+      showError('Passwords do not match. Please try again.');
       return;
     }
 
     if (newPassword.trim().length < 4) {
-      alert('Password must be at least 4 characters long.');
+      showError('Password must be at least 4 characters long.');
       return;
     }
 
@@ -1423,7 +1430,7 @@ export function ImportantDocumentsTool({ toolId }: ImportantDocumentsToolProps) 
       });
 
       if (response.ok) {
-        alert('Password reset successfully! You can now download the document.');
+        showSuccess('Password reset successfully! You can now download the document.');
         setShowForgotPasswordModal(false);
         setDownloadPasswordModalId(null);
         setDownloadPasswordInput('');
@@ -1435,11 +1442,11 @@ export function ImportantDocumentsTool({ toolId }: ImportantDocumentsToolProps) 
         setPasswordResetStep('questions');
       } else {
         const errorData = await response.json();
-        alert('Failed to reset password: ' + (errorData.error || 'Unknown error'));
+        showError('Failed to reset password: ' + (errorData.error || 'Unknown error'));
       }
     } catch (error) {
       console.error('Error resetting password:', error);
-      alert('Error resetting password. Please try again.');
+      showError('Error resetting password. Please try again.');
     } finally {
       setIsLoading(false);
     }
@@ -1452,12 +1459,11 @@ export function ImportantDocumentsTool({ toolId }: ImportantDocumentsToolProps) 
 
     const doc = documents.find(d => d.id === downloadPasswordModalId);
     if (!doc || !doc.fileUrl) {
-      alert('Document not found.');
-      setDownloadPasswordModalId(null);
-      setDownloadPasswordInput('');
+      setDownloadPasswordError('Document not found.');
       return;
     }
 
+    setDownloadPasswordError('');
     setIsLoading(true);
     try {
       // Verify password with API
@@ -1497,19 +1503,25 @@ export function ImportantDocumentsTool({ toolId }: ImportantDocumentsToolProps) 
 
           setDownloadPasswordModalId(null);
           setDownloadPasswordInput('');
+          setDownloadPasswordError('');
           setShowDownloadPassword(false);
           setPendingReplaceFile(null);
         } else {
-          alert('Incorrect password. Please try again.');
+          setDownloadPasswordError('Incorrect password. Please try again.');
           setDownloadPasswordInput('');
         }
       } else {
         const errorData = await response.json();
-        alert('Failed to verify password: ' + (errorData.error || 'Unknown error'));
+        setDownloadPasswordError(
+          errorData.error === 'Incorrect password'
+            ? 'Incorrect password. Please try again.'
+            : `Failed to verify password: ${errorData.error || 'Unknown error'}`
+        );
+        setDownloadPasswordInput('');
       }
     } catch (error) {
       console.error('Error verifying password:', error);
-      alert('Error verifying password. Please try again.');
+      setDownloadPasswordError('Error verifying password. Please try again.');
     } finally {
       setIsLoading(false);
     }
@@ -2719,6 +2731,7 @@ export function ImportantDocumentsTool({ toolId }: ImportantDocumentsToolProps) 
                 onClick={() => {
                   setDownloadPasswordModalId(null);
                   setDownloadPasswordInput('');
+                  setDownloadPasswordError('');
                   setShowDownloadPassword(false);
                   setPendingReplaceFile(null);
                 }}
@@ -2748,17 +2761,23 @@ export function ImportantDocumentsTool({ toolId }: ImportantDocumentsToolProps) 
                   <input
                     type={showDownloadPassword ? "text" : "password"}
                     value={downloadPasswordInput}
-                    onChange={(e) => setDownloadPasswordInput(e.target.value)}
+                    onChange={(e) => {
+                      setDownloadPasswordInput(e.target.value);
+                      if (downloadPasswordError) setDownloadPasswordError('');
+                    }}
                     onKeyDown={(e) => {
                       if (e.key === 'Enter') {
                         confirmDownloadWithPassword();
                       } else if (e.key === 'Escape') {
                         setDownloadPasswordModalId(null);
                         setDownloadPasswordInput('');
+                        setDownloadPasswordError('');
                         setShowDownloadPassword(false);
                         setPendingReplaceFile(null);
                       }
                     }}
+                    aria-invalid={downloadPasswordError ? true : undefined}
+                    aria-describedby={downloadPasswordError ? 'id-download-password-error' : undefined}
                     className="w-full px-4 py-2 pr-10 rounded-lg border border-slate-700 bg-slate-900/70 text-slate-100 focus:border-emerald-500/50 focus:outline-none focus:ring-1 focus:ring-emerald-500/50"
                     placeholder="Enter password"
                     autoFocus
@@ -2782,10 +2801,16 @@ export function ImportantDocumentsTool({ toolId }: ImportantDocumentsToolProps) 
                     )}
                   </button>
                 </div>
+                {downloadPasswordError && (
+                  <p id="id-download-password-error" role="alert" className={`${passwordModalErrorClass} mt-2`}>
+                    {downloadPasswordError}
+                  </p>
+                )}
                 <div className="mt-2 text-right">
                   <button
                     type="button"
                     onClick={() => {
+                      setDownloadPasswordError('');
                       void handleForgotPassword();
                     }}
                     className="text-sm text-emerald-400 hover:text-emerald-300 transition-colors"
@@ -2812,6 +2837,7 @@ export function ImportantDocumentsTool({ toolId }: ImportantDocumentsToolProps) 
                   onClick={() => {
                     setDownloadPasswordModalId(null);
                     setDownloadPasswordInput('');
+                    setDownloadPasswordError('');
                     setShowDownloadPassword(false);
                     setPendingReplaceFile(null);
                   }}

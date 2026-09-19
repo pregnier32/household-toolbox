@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useMemo, useCallback } from 'react';
 import { useTheme } from './AppThemeProvider';
+import { useAppNotice } from './AppNotice';
 import { AttachmentButton } from './AttachmentButton';
 import { AttachmentModal } from './AttachmentModal';
 import {
@@ -68,7 +69,6 @@ export type TripRecord = {
   wouldReturn: YesNoMaybe | '';
   wouldRecommend: YesNoMaybe | '';
   includeInTravelCounts: YesNo | '';
-  addToDashboard: boolean;
   dateAdded: string;
   attachments: Array<{ id: string; name: string; size: number; type: string }>;
 };
@@ -249,7 +249,6 @@ function emptyTripForm(): TripFormState {
     wouldReturn: '',
     wouldRecommend: '',
     includeInTravelCounts: '',
-    addToDashboard: false,
   };
 }
 
@@ -278,7 +277,6 @@ function tripToForm(trip: TripRecord): TripFormState {
     wouldReturn: trip.wouldReturn,
     wouldRecommend: trip.wouldRecommend,
     includeInTravelCounts: trip.includeInTravelCounts ?? '',
-    addToDashboard: trip.addToDashboard === true,
   };
 }
 
@@ -424,6 +422,7 @@ type LodgingSectionProps = {
 
 function LodgingSection({ form, setForm }: LodgingSectionProps) {
   const { resolvedTheme } = useTheme();
+  const { showError } = useAppNotice();
   const isLight = resolvedTheme === 'light';
 
   const subsectionTitleClass = isLight ? 'text-sm font-semibold text-slate-800' : 'text-sm font-semibold text-slate-100';
@@ -514,7 +513,7 @@ function LodgingSection({ form, setForm }: LodgingSectionProps) {
 
   const saveLodging = () => {
     if (!draft.name.trim()) {
-      alert('Please enter a lodging name.');
+      showError('Please enter a lodging name.');
       return;
     }
     const record: LodgingRecord = {
@@ -770,6 +769,7 @@ type JournalSectionProps = {
 
 function JournalSection({ form, setForm }: JournalSectionProps) {
   const { resolvedTheme } = useTheme();
+  const { showError } = useAppNotice();
   const isLight = resolvedTheme === 'light';
 
   const subsectionTitleClass = isLight ? 'text-sm font-semibold text-slate-800' : 'text-sm font-semibold text-slate-100';
@@ -846,11 +846,11 @@ function JournalSection({ form, setForm }: JournalSectionProps) {
 
   const saveJournal = () => {
     if (!draft.name.trim()) {
-      alert('Please enter a journal note name.');
+      showError('Please enter a journal note name.');
       return;
     }
     if (!draft.text.trim()) {
-      alert('Please enter journal note text.');
+      showError('Please enter journal note text.');
       return;
     }
     const record: JournalNote = {
@@ -1053,6 +1053,7 @@ type TravelLogToolProps = {
 
 export function TravelLogTool({ toolId }: TravelLogToolProps) {
   const { resolvedTheme } = useTheme();
+  const { showError } = useAppNotice();
   const isLight = resolvedTheme === 'light';
 
   const titleClass = isLight ? 'text-2xl font-semibold text-slate-900 mb-2' : 'text-2xl font-semibold text-slate-50 mb-2';
@@ -1115,9 +1116,6 @@ export function TravelLogTool({ toolId }: TravelLogToolProps) {
   const checkboxClass = isLight
     ? 'rounded border-slate-400 bg-white text-emerald-600 focus:ring-emerald-500 focus:ring-offset-white'
     : 'rounded border-slate-600 bg-slate-700 text-emerald-500 focus:ring-emerald-500 focus:ring-offset-slate-800';
-  const calendarPinCheckboxClass = isLight
-    ? 'w-5 h-5 rounded border-slate-400 bg-white text-emerald-600 focus:ring-emerald-500 focus:ring-offset-white'
-    : 'w-5 h-5 rounded border-slate-600 bg-slate-700 text-emerald-500 focus:ring-emerald-500 focus:ring-offset-slate-800';
   const loadingClass = isLight ? 'text-sm text-slate-600' : 'text-sm text-slate-400';
 
   const [trips, setTrips] = useState<TripRecord[]>([]);
@@ -1208,14 +1206,14 @@ export function TravelLogTool({ toolId }: TravelLogToolProps) {
         window.open(item.url, '_blank', 'noopener,noreferrer');
         return;
       }
-      alert('This file type can’t be previewed in the browser. Use Download to save it.');
+      showError('This file type can’t be previewed in the browser. Use Download to save it.');
       return;
     }
     try {
       const blob = await fetchTripAttachmentBlob(item.id, true);
       const type = blob.type || item.type || '';
       if (!canPreviewAttachment(type, item.name)) {
-        alert('This file type can’t be previewed in the browser. Use Download to save it.');
+        showError('This file type can’t be previewed in the browser. Use Download to save it.');
         return;
       }
       const url = window.URL.createObjectURL(blob);
@@ -1227,7 +1225,7 @@ export function TravelLogTool({ toolId }: TravelLogToolProps) {
         window.open(url, '_blank', 'noopener,noreferrer');
       }
     } catch (error) {
-      alert(error instanceof Error ? error.message : 'Failed to open file');
+      showError(error instanceof Error ? error.message : 'Failed to open file');
     }
   };
 
@@ -1245,7 +1243,7 @@ export function TravelLogTool({ toolId }: TravelLogToolProps) {
       document.body.removeChild(link);
       return true;
     } catch (error) {
-      alert(error instanceof Error ? error.message : 'Failed to download file');
+      showError(error instanceof Error ? error.message : 'Failed to download file');
       return false;
     }
   };
@@ -1258,7 +1256,7 @@ export function TravelLogTool({ toolId }: TravelLogToolProps) {
       }
       await loadTrips();
     } catch (error) {
-      alert(error instanceof Error ? error.message : 'Failed to add file');
+      showError(error instanceof Error ? error.message : 'Failed to add file');
     } finally {
       setAttachmentBusy(false);
     }
@@ -1277,7 +1275,7 @@ export function TravelLogTool({ toolId }: TravelLogToolProps) {
       if (!response.ok) throw new Error(data.error || 'Failed to remove file');
       await loadTrips();
     } catch (error) {
-      alert(error instanceof Error ? error.message : 'Failed to remove file');
+      showError(error instanceof Error ? error.message : 'Failed to remove file');
     } finally {
       setAttachmentBusy(false);
     }
@@ -1355,19 +1353,19 @@ export function TravelLogTool({ toolId }: TravelLogToolProps) {
 
   const validateTripForm = (form: TripFormState): boolean => {
     if (!form.tripName.trim()) {
-      alert('Please enter a trip name.');
+      showError('Please enter a trip name.');
       return false;
     }
     if (!form.startDate || !form.endDate) {
-      alert('Please enter start and end dates.');
+      showError('Please enter start and end dates.');
       return false;
     }
     if (calculateTripDays(form.startDate, form.endDate) === null) {
-      alert('End date must be on or after the start date.');
+      showError('End date must be on or after the start date.');
       return false;
     }
     if (form.tripGoal === 'Other' && !form.tripGoalOther.trim()) {
-      alert('Please describe your trip goal.');
+      showError('Please describe your trip goal.');
       return false;
     }
     return true;
@@ -1383,7 +1381,6 @@ export function TravelLogTool({ toolId }: TravelLogToolProps) {
     tripGoalOther: form.tripGoal === 'Other' ? form.tripGoalOther.trim() : '',
     plannedBudget: form.plannedBudget.trim() ? formatCurrencyDisplay(form.plannedBudget.trim()) : '',
     totalTripCost: form.totalTripCost.trim() ? formatCurrencyDisplay(form.totalTripCost.trim()) : '',
-    addToDashboard: form.addToDashboard === true,
     budgetNotes: form.budgetNotes.trim(),
     bestMemory: form.bestMemory.trim(),
     biggestSurprise: form.biggestSurprise.trim(),
@@ -1407,14 +1404,11 @@ export function TravelLogTool({ toolId }: TravelLogToolProps) {
       });
 
       if (!response.ok) {
-        alert('Failed to save trip. Please try again.');
+        showError('Failed to save trip. Please try again.');
         return;
       }
 
       const data = await response.json();
-      if (data.pinFailed) {
-        alert('Failed to update Calendar pin. Please try again.');
-      }
       const createdTrip = data.trip ? normalizeTripRecord(data.trip as TripRecord) : null;
       if (createdTrip && pendingAttachments.length > 0) {
         try {
@@ -1430,7 +1424,7 @@ export function TravelLogTool({ toolId }: TravelLogToolProps) {
           setNewTrip(emptyTripForm());
           setIsAdding(false);
           await loadTrips();
-          alert(uploadError instanceof Error ? uploadError.message : 'Trip saved, but a file failed to upload.');
+          showError(uploadError instanceof Error ? uploadError.message : 'Trip saved, but a file failed to upload.');
           return;
         }
         await loadTrips();
@@ -1446,7 +1440,7 @@ export function TravelLogTool({ toolId }: TravelLogToolProps) {
       setNewTrip(emptyTripForm());
       setIsAdding(false);
     } catch {
-      alert('Failed to save trip. Please try again.');
+      showError('Failed to save trip. Please try again.');
     } finally {
       setIsLoading(false);
     }
@@ -1487,14 +1481,11 @@ export function TravelLogTool({ toolId }: TravelLogToolProps) {
       });
 
       if (!response.ok) {
-        alert('Failed to save changes. Please try again.');
+        showError('Failed to save changes. Please try again.');
         return;
       }
 
       const data = await response.json();
-      if (data.pinFailed) {
-        alert('Failed to update Calendar pin. Please try again.');
-      }
       if (data.trip) {
         setTrips((prev) =>
           prev.map((t) => (t.id === editingId ? normalizeTripRecord(data.trip as TripRecord) : t))
@@ -1504,7 +1495,7 @@ export function TravelLogTool({ toolId }: TravelLogToolProps) {
       }
       cancelEditing();
     } catch {
-      alert('Failed to save changes. Please try again.');
+      showError('Failed to save changes. Please try again.');
     } finally {
       setIsLoading(false);
     }
@@ -1526,7 +1517,7 @@ export function TravelLogTool({ toolId }: TravelLogToolProps) {
       });
 
       if (!response.ok) {
-        alert('Failed to delete trip. Please try again.');
+        showError('Failed to delete trip. Please try again.');
         return;
       }
 
@@ -1535,7 +1526,7 @@ export function TravelLogTool({ toolId }: TravelLogToolProps) {
       setDeleteConfirmId(null);
       setDeleteConfirmText('');
     } catch {
-      alert('Failed to delete trip. Please try again.');
+      showError('Failed to delete trip. Please try again.');
     } finally {
       setIsLoading(false);
     }
@@ -1618,8 +1609,6 @@ export function TravelLogTool({ toolId }: TravelLogToolProps) {
     formKey: 'add' | 'edit'
   ) => {
     const dayCount = calculateTripDays(form.startDate, form.endDate);
-    const calendarPinId = `tl-add-to-calendar-${formKey}`;
-
     return (
       <div className="space-y-6">
         <div>
@@ -1690,21 +1679,6 @@ export function TravelLogTool({ toolId }: TravelLogToolProps) {
                 className={`${inputClass} ${isLight ? 'bg-slate-100' : 'bg-slate-800/50'} cursor-not-allowed`}
                 aria-readonly="true"
               />
-            </div>
-            <div className="md:col-span-2 flex items-center gap-3">
-              <input
-                type="checkbox"
-                id={calendarPinId}
-                checked={form.addToDashboard === true}
-                onChange={(e) => setForm((f) => ({ ...f, addToDashboard: e.target.checked }))}
-                className={calendarPinCheckboxClass}
-              />
-              <label
-                htmlFor={calendarPinId}
-                className={isLight ? 'text-sm text-slate-700 cursor-pointer' : 'text-sm text-slate-300 cursor-pointer'}
-              >
-                Add to calendar
-              </label>
             </div>
             <div>
               <label className={labelClass}>Trip rating</label>
@@ -2102,7 +2076,7 @@ export function TravelLogTool({ toolId }: TravelLogToolProps) {
   };
 
   const exportToPDF = () => {
-    alert('PDF export will be available once the Travel Log database is connected.');
+    showError('PDF export will be available once the Travel Log database is connected.');
     setShowExportPopup(false);
   };
 

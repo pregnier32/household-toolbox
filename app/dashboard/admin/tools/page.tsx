@@ -116,6 +116,9 @@ export default function ToolsPage() {
   });
   const [iconSelection, setIconSelection] = useState<string>('');
   const [statusFilter, setStatusFilter] = useState<string>('all');
+  const [deleteToolId, setDeleteToolId] = useState<string | null>(null);
+  const [deleteToolConfirmText, setDeleteToolConfirmText] = useState('');
+  const [isDeletingTool, setIsDeletingTool] = useState(false);
   const router = useRouter();
 
   useEffect(() => {
@@ -195,13 +198,19 @@ export default function ToolsPage() {
     setShowForm(true);
   };
 
-  const handleDelete = async (id: string) => {
-    if (!confirm('Are you sure you want to delete this tool? This action cannot be undone.')) {
+  const requestDeleteTool = (id: string) => {
+    setDeleteToolId(id);
+    setDeleteToolConfirmText('');
+  };
+
+  const confirmDeleteTool = async () => {
+    if (!deleteToolId || deleteToolConfirmText.toLowerCase() !== 'delete' || isDeletingTool) {
       return;
     }
 
+    setIsDeletingTool(true);
     try {
-      const response = await fetch(`/api/admin/tools?id=${id}`, {
+      const response = await fetch(`/api/admin/tools?id=${deleteToolId}`, {
         method: 'DELETE',
       });
 
@@ -212,11 +221,15 @@ export default function ToolsPage() {
       }
 
       setSuccess('Tool deleted successfully');
+      setDeleteToolId(null);
+      setDeleteToolConfirmText('');
       loadTools();
       setTimeout(() => setSuccess(null), 3000);
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to delete tool');
       setTimeout(() => setError(null), 5000);
+    } finally {
+      setIsDeletingTool(false);
     }
   };
 
@@ -824,7 +837,7 @@ export default function ToolsPage() {
                             </svg>
                           </button>
                           <button
-                            onClick={() => handleDelete(tool.id)}
+                            onClick={() => requestDeleteTool(tool.id)}
                             className={deleteIconClass}
                             title="Delete"
                           >
@@ -843,6 +856,68 @@ export default function ToolsPage() {
           );
         })()}
       </div>
+
+      {deleteToolId && (
+        <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/60">
+          <div className={`${modalCardClass} max-w-md p-6`} role="dialog" aria-modal="true" aria-labelledby="admin-delete-tool-title">
+            <h3 id="admin-delete-tool-title" className={`${modalTitleClass} mb-2`}>
+              Delete Tool
+            </h3>
+            <div
+              className={
+                isLight
+                  ? 'mb-4 rounded-lg border border-red-300 bg-red-50 px-4 py-3'
+                  : 'mb-4 rounded-lg border border-red-500/50 bg-red-500/10 px-4 py-3'
+              }
+            >
+              <p className={isLight ? 'mb-2 font-semibold text-red-700' : 'mb-2 font-semibold text-red-300'}>
+                Warning: This action cannot be undone.
+              </p>
+              <p className={isLight ? 'text-sm text-red-600' : 'text-sm text-red-200'}>
+                This will permanently delete “{tools.find((tool) => tool.id === deleteToolId)?.name || 'this tool'}”.
+              </p>
+            </div>
+            <p className={isLight ? 'mb-4 text-slate-700' : 'mb-4 text-slate-300'}>
+              Type <strong className={isLight ? 'text-slate-900' : 'text-slate-200'}>delete</strong> to confirm:
+            </p>
+            <input
+              type="text"
+              value={deleteToolConfirmText}
+              onChange={(e) => setDeleteToolConfirmText(e.target.value)}
+              placeholder="Type 'delete' to confirm"
+              autoFocus
+              onKeyDown={(e) => {
+                if (e.key === 'Escape') {
+                  setDeleteToolId(null);
+                  setDeleteToolConfirmText('');
+                }
+              }}
+              className={inputClass}
+            />
+            <div className="mt-4 flex gap-3">
+              <button
+                type="button"
+                onClick={() => void confirmDeleteTool()}
+                disabled={deleteToolConfirmText.toLowerCase() !== 'delete' || isDeletingTool}
+                className="flex-1 rounded-lg bg-red-600 px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-red-700 disabled:cursor-not-allowed disabled:opacity-50"
+              >
+                {isDeletingTool ? 'Deleting...' : 'Delete tool'}
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  setDeleteToolId(null);
+                  setDeleteToolConfirmText('');
+                }}
+                disabled={isDeletingTool}
+                className={secondaryButtonClass}
+              >
+                Cancel
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </main>
   );
 }

@@ -1,6 +1,16 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getSession } from '@/lib/session';
 import { supabaseServer } from '@/lib/supabaseServer';
+import { CALENDAR_SOURCE_CALENDAR_EVENT } from '@/lib/calendarPins';
+import {
+  deleteCalendarPinsForSources,
+  getPinnedSourceIds,
+  syncCalendarPin,
+} from '@/lib/calendarPinsServer';
+
+function withDashboardFlag<T extends { id: string }>(event: T, pinned: boolean) {
+  return { ...event, addToDashboard: pinned };
+}
 
 // GET - Fetch categories and events for the current user
 export async function GET(request: NextRequest) {
@@ -61,9 +71,16 @@ export async function GET(request: NextRequest) {
       events = eventsData || [];
     }
 
+    const { ids: pinnedIds } = await getPinnedSourceIds({
+      userId: user.id,
+      sourceType: CALENDAR_SOURCE_CALENDAR_EVENT,
+      sourceIds: events.map((event) => event.id),
+      toolId,
+    });
+
     return NextResponse.json({
       categories: categories || [],
-      events: events,
+      events: events.map((event) => withDashboardFlag(event, pinnedIds.has(event.id))),
     });
   } catch (error) {
     console.error('Error in calendar events GET:', error);
@@ -130,6 +147,22 @@ export async function POST(request: NextRequest) {
     }
 
     if (action === 'delete_category' && category?.id) {
+      const { data: categoryEvents } = await supabaseServer
+        .from('tools_ce_events')
+        .select('id')
+        .eq('category_id', category.id)
+        .eq('user_id', user.id)
+        .eq('tool_id', toolId);
+
+      const categoryEventIds = (categoryEvents || []).map((row) => row.id);
+      if (categoryEventIds.length > 0) {
+        await deleteCalendarPinsForSources({
+          userId: user.id,
+          sourceType: CALENDAR_SOURCE_CALENDAR_EVENT,
+          sourceIds: categoryEventIds,
+        });
+      }
+
       // Explicitly remove events attached to this category before deleting category.
       // This ensures category delete always cascades even if DB FK cascade is absent.
       if (forceDeleteEvents) {
@@ -174,7 +207,6 @@ export async function POST(request: NextRequest) {
           frequency: event.frequency,
           notes: event.notes || null,
           is_active: event.isActive !== undefined ? event.isActive : true,
-          add_to_dashboard: event.addToDashboard !== undefined ? event.addToDashboard : true,
           end_date: event.endDate || null,
           days_of_week: event.daysOfWeek && event.daysOfWeek.length > 0 ? event.daysOfWeek : null,
           day_of_month: event.dayOfMonth || null,
@@ -187,7 +219,24 @@ export async function POST(request: NextRequest) {
         return NextResponse.json({ error: 'Failed to create event' }, { status: 500 });
       }
 
-      return NextResponse.json({ event: data });
+      const wantsPin = event.addToDashboard === true;
+      if (wantsPin) {
+        const pinResult = await syncCalendarPin({
+          userId: user.id,
+          toolId,
+          sourceType: CALENDAR_SOURCE_CALENDAR_EVENT,
+          sourceId: data.id,
+          pinned: true,
+        });
+        if (pinResult.error) {
+          return NextResponse.json(
+            { error: 'Event saved, but failed to add it to the dashboard calendar' },
+            { status: 500 }
+          );
+        }
+      }
+
+      return NextResponse.json({ event: withDashboardFlag(data, wantsPin) });
     }
 
     if (action === 'update_event' && event) {
@@ -200,7 +249,6 @@ export async function POST(request: NextRequest) {
           frequency: event.frequency,
           notes: event.notes || null,
           is_active: event.isActive,
-          add_to_dashboard: event.addToDashboard,
           end_date: event.endDate || null,
           days_of_week: event.frequency === 'Weekly' && event.daysOfWeek && event.daysOfWeek.length > 0 
             ? event.daysOfWeek 
@@ -217,7 +265,32 @@ export async function POST(request: NextRequest) {
         return NextResponse.json({ error: 'Failed to update event' }, { status: 500 });
       }
 
-      return NextResponse.json({ event: data });
+      let pinned = false;
+      if (typeof event.addToDashboard === 'boolean') {
+        const pinResult = await syncCalendarPin({
+          userId: user.id,
+          toolId,
+          sourceType: CALENDAR_SOURCE_CALENDAR_EVENT,
+          sourceId: data.id,
+          pinned: event.addToDashboard,
+        });
+        if (pinResult.error) {
+          return NextResponse.json(
+            { error: 'Event saved, but failed to update the dashboard calendar' },
+            { status: 500 }
+          );
+        }
+        pinned = event.addToDashboard;
+      } else {
+        const { ids } = await getPinnedSourceIds({
+          userId: user.id,
+          sourceType: CALENDAR_SOURCE_CALENDAR_EVENT,
+          sourceIds: [data.id],
+        });
+        pinned = ids.has(data.id);
+      }
+
+      return NextResponse.json({ event: withDashboardFlag(data, pinned) });
     }
 
     if (action === 'inactivate_event' && event?.id) {
@@ -261,6 +334,12 @@ export async function POST(request: NextRequest) {
     }
 
     if (action === 'delete_event' && event?.id) {
+      await deleteCalendarPinsForSources({
+        userId: user.id,
+        sourceType: CALENDAR_SOURCE_CALENDAR_EVENT,
+        sourceIds: [event.id],
+      });
+
       const { error } = await supabaseServer
         .from('tools_ce_events')
         .delete()

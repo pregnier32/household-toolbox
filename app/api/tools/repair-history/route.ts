@@ -181,48 +181,6 @@ async function copyDefaultsToUser(userId: string, toolId: string) {
   }
 }
 
-// Helper function to create dashboard item (calendar event for warranty)
-async function createDashboardItem(
-  userId: string,
-  toolId: string,
-  item: {
-    title: string;
-    description?: string;
-    type: 'calendar_event' | 'action_item' | 'both';
-    scheduled_date?: string;
-    metadata?: Record<string, any>;
-  }
-) {
-  try {
-    const insertData = {
-      user_id: userId,
-      tool_id: toolId,
-      title: item.title,
-      description: item.description || null,
-      type: item.type,
-      scheduled_date: item.scheduled_date || null,
-      priority: null,
-      status: 'pending',
-      metadata: item.metadata || {},
-    };
-    
-    const { data, error } = await supabaseServer
-      .from('dashboard_items')
-      .insert(insertData)
-      .select()
-      .single();
-
-    if (error) {
-      console.error('Error creating dashboard item:', error);
-      return null;
-    }
-    
-    return data;
-  } catch (error: any) {
-    console.error('Exception creating dashboard item:', error);
-    return null;
-  }
-}
 
 async function withRecordAttachments<T extends { id: string }>(
   records: T[],
@@ -559,7 +517,6 @@ export async function POST(request: NextRequest) {
       const cost = formData.get('cost') as string;
       const serviceProvider = formData.get('serviceProvider') as string;
       const warrantyEndDate = formData.get('warrantyEndDate') as string;
-      const addWarrantyToDashboard = formData.get('addWarrantyToDashboard') === 'true';
       const submittedToInsurance = formData.get('submittedToInsurance') === 'true';
       const insuranceCarrier = formData.get('insuranceCarrier') as string;
       const claimNumber = formData.get('claimNumber') as string;
@@ -572,21 +529,6 @@ export async function POST(request: NextRequest) {
 
       if (action === 'delete' && recordId) {
         await deleteRecordStorageFiles(recordId, user.id);
-        // Get record to check for warranty dashboard item
-        const { data: record } = await supabaseServer
-          .from('tools_rh_records')
-          .select('warranty_dashboard_item_id')
-          .eq('id', recordId)
-          .eq('user_id', user.id)
-          .single();
-
-        // Delete warranty dashboard item if exists
-        if (record?.warranty_dashboard_item_id) {
-          await supabaseServer
-            .from('dashboard_items')
-            .delete()
-            .eq('id', record.warranty_dashboard_item_id);
-        }
 
         const { error } = await supabaseServer
           .from('tools_rh_records')
@@ -625,19 +567,8 @@ export async function POST(request: NextRequest) {
       };
 
       let finalRecordId = recordId;
-      let oldWarrantyDashboardItemId: string | null = null;
 
       if (action === 'update' && recordId) {
-        // Get current record to check for warranty dashboard item
-        const { data: currentRecord } = await supabaseServer
-          .from('tools_rh_records')
-          .select('warranty_dashboard_item_id')
-          .eq('id', recordId)
-          .eq('user_id', user.id)
-          .single();
-
-        oldWarrantyDashboardItemId = currentRecord?.warranty_dashboard_item_id || null;
-
         const { data, error } = await supabaseServer
           .from('tools_rh_records')
           .update(recordData)
@@ -665,49 +596,6 @@ export async function POST(request: NextRequest) {
         }
 
         finalRecordId = data.id;
-      }
-
-      // Handle warranty dashboard item
-      if (warrantyEndDate && addWarrantyToDashboard && finalRecordId) {
-        // Delete old dashboard item if exists
-        if (oldWarrantyDashboardItemId) {
-          await supabaseServer
-            .from('dashboard_items')
-            .delete()
-            .eq('id', oldWarrantyDashboardItemId);
-        }
-
-        // Create new dashboard item
-        const dashboardItem = await createDashboardItem(user.id, toolId, {
-          title: `Warranty Expires: ${itemName}`,
-          description: `Warranty for ${itemName} expires on ${new Date(warrantyEndDate).toLocaleDateString()}.${serviceProvider ? ` Service Provider: ${serviceProvider}` : ''}`,
-          type: 'calendar_event',
-          scheduled_date: warrantyEndDate,
-          metadata: {
-            recordId: finalRecordId,
-            itemName: itemName,
-            serviceProvider: serviceProvider || null,
-            headerId: headerId
-          }
-        });
-
-        if (dashboardItem) {
-          await supabaseServer
-            .from('tools_rh_records')
-            .update({ warranty_dashboard_item_id: dashboardItem.id })
-            .eq('id', finalRecordId);
-        }
-      } else if (oldWarrantyDashboardItemId) {
-        // Delete dashboard item if warranty is removed or checkbox unchecked
-        await supabaseServer
-          .from('dashboard_items')
-          .delete()
-          .eq('id', oldWarrantyDashboardItemId);
-        
-        await supabaseServer
-          .from('tools_rh_records')
-          .update({ warranty_dashboard_item_id: null })
-          .eq('id', finalRecordId);
       }
 
       return NextResponse.json({ success: true, recordId: finalRecordId });
@@ -830,21 +718,6 @@ export async function DELETE(request: NextRequest) {
 
     if (resource === 'record') {
       await deleteRecordStorageFiles(id, user.id);
-      // Get record to check for warranty dashboard item
-      const { data: record } = await supabaseServer
-        .from('tools_rh_records')
-        .select('warranty_dashboard_item_id')
-        .eq('id', id)
-        .eq('user_id', user.id)
-        .single();
-
-      // Delete warranty dashboard item if exists
-      if (record?.warranty_dashboard_item_id) {
-        await supabaseServer
-          .from('dashboard_items')
-          .delete()
-          .eq('id', record.warranty_dashboard_item_id);
-      }
 
       const { error } = await supabaseServer
         .from('tools_rh_records')

@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useTheme } from './AppThemeProvider';
+import { useAppNotice } from './AppNotice';
 import { AttachmentButton } from './AttachmentButton';
 import { AttachmentModal } from './AttachmentModal';
 import {
@@ -215,6 +216,7 @@ function pickOpenAccountId(list: HsaAccount[], prev: string | null, toolId?: str
 
 export function HSATrackerTool({ toolId }: HSATrackerToolProps) {
   const { resolvedTheme } = useTheme();
+  const { showError } = useAppNotice();
   const isLight = resolvedTheme === 'light';
 
   const cardClass = isLight
@@ -494,7 +496,7 @@ export function HSATrackerTool({ toolId }: HSATrackerToolProps) {
     } else {
       const n = parseContributionLimitInput(raw);
       if (n == null) {
-        alert('Enter a valid contribution limit of 0 or more, or leave blank.');
+        showError('Enter a valid contribution limit of 0 or more, or leave blank.');
         setContributionLimitDraft(storedContributionLimit == null ? '' : String(storedContributionLimit));
         return;
       }
@@ -1003,14 +1005,14 @@ export function HSATrackerTool({ toolId }: HSATrackerToolProps) {
         window.open(item.url, '_blank', 'noopener,noreferrer');
         return;
       }
-      alert('This file type can’t be previewed in the browser. Use Download to save it.');
+      showError('This file type can’t be previewed in the browser. Use Download to save it.');
       return;
     }
     try {
       const blob = await fetchHsaAttachmentBlob(item.id, true);
       const type = blob.type || item.type || '';
       if (!canPreviewAttachment(type, item.name)) {
-        alert('This file type can’t be previewed in the browser. Use Download to save it.');
+        showError('This file type can’t be previewed in the browser. Use Download to save it.');
         return;
       }
       const url = window.URL.createObjectURL(blob);

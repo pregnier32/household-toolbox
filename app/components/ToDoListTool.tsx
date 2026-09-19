@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useRef } from 'react';
 import { useTheme } from './AppThemeProvider';
+import { useAppNotice } from './AppNotice';
 import { AttachmentButton } from './AttachmentButton';
 import { AttachmentModal } from './AttachmentModal';
 import {
@@ -95,8 +96,8 @@ function writeLastCategoryId(toolId: string, categoryId: string) {
 
 const TASK_NAME_REQUIRED = 'Task name is required.';
 
-function notifyTaskNameRequired() {
-  alert(TASK_NAME_REQUIRED);
+function notifyTaskNameRequired(showError: (text: string) => void) {
+  showError(TASK_NAME_REQUIRED);
 }
 
 function pickOpenCategoryId(list: Category[], prev: string | null, toolId?: string): string | null {
@@ -112,6 +113,7 @@ function pickOpenCategoryId(list: Category[], prev: string | null, toolId?: stri
 
 export function ToDoListTool({ toolId }: ToDoListToolProps) {
   const { resolvedTheme } = useTheme();
+  const { showError } = useAppNotice();
   const isLight = resolvedTheme === 'light';
   const titleClass = isLight ? 'text-2xl font-semibold text-slate-900 mb-2' : 'text-2xl font-semibold text-slate-50 mb-2';
   const descClass = isLight ? 'text-slate-600 text-sm' : 'text-slate-400 text-sm';
@@ -453,7 +455,7 @@ export function ToDoListTool({ toolId }: ToDoListToolProps) {
 
   const saveNewTask = async () => {
     if (!selectedCategoryId || !newTask.taskName.trim() || !toolId) {
-      if (!newTask.taskName.trim()) notifyTaskNameRequired();
+      if (!newTask.taskName.trim()) notifyTaskNameRequired(showError);
       return;
     }
     setIsSaving(true);
@@ -516,7 +518,7 @@ export function ToDoListTool({ toolId }: ToDoListToolProps) {
   const saveTaskEdit = async () => {
     if (!editingTask || !toolId) return;
     if (!editingTask.taskName.trim()) {
-      notifyTaskNameRequired();
+      notifyTaskNameRequired(showError);
       return;
     }
     setIsSaving(true);
@@ -591,14 +593,14 @@ export function ToDoListTool({ toolId }: ToDoListToolProps) {
         window.open(item.url, '_blank', 'noopener,noreferrer');
         return;
       }
-      alert('This file type can’t be previewed in the browser. Use Download to save it.');
+      showError('This file type can’t be previewed in the browser. Use Download to save it.');
       return;
     }
     try {
       const blob = await fetchTaskAttachmentBlob(item.id, true);
       const type = blob.type || item.type || '';
       if (!canPreviewAttachment(type, item.name)) {
-        alert('This file type can’t be previewed in the browser. Use Download to save it.');
+        showError('This file type can’t be previewed in the browser. Use Download to save it.');
         return;
       }
       const url = window.URL.createObjectURL(blob);

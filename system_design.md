@@ -685,6 +685,25 @@ For dropdowns that need to display items organized by categories or areas (e.g.,
 - **Keyboard**: Support Escape key to close (implement with `useEffect`)
 - **Stacking**: The Attachment modal uses `z-50`. Any password, forgot-password, or confirm overlay that can open *from* attachments must use `z-[70]` (or higher) so it is never hidden behind the Attachment modal.
 
+### In-app notices and confirmations
+
+Never use the browser’s `alert()`, `confirm()`, or `prompt()`. Those Chrome/site dialogs sit outside the app, block QA, and cannot be styled. Every user-facing message stays on the page.
+
+**Errors, validation, and success (not a confirm):** Use the shared in-app notice (`AppNoticeProvider` in `app/layout.tsx`, `useAppNotice()` → `showError` / `showSuccess`). Examples: save failed, grocery lines have no names, Shopping List created.
+
+**In-modal messages (already inside a modal):** Keep the message in that modal. Do not also fire a notice or a browser dialog.
+- Attachment download success: green line in the Attachment modal (“File downloaded.”).
+- Wrong attachment password: error inside the password overlay; leave the overlay open so the user can retry.
+
+**Confirmations (the user must choose):** Use an in-app modal, not `window.confirm()`.
+- **Non-destructive / reversible:** Title, one-sentence question, primary confirm + Cancel. Escape and Cancel dismiss without doing the work. The confirm button is the user gesture that starts the action (needed for `keepalive` fetches). Examples: Meal Planner “Create Shopping List”, End of Life Planner “Archive Plan”.
+- **Permanent / destructive:** Typed-delete modal. Warning box (“This action cannot be undone”), instruction to type **delete**, confirm disabled until the field matches `delete` (case-insensitive). Examples: Profile “Delete Account”, Admin Tools “Delete Tool”, and existing record/plan deletes.
+
+**What not to do**
+- Do not call `alert()`, `confirm()`, or `prompt()` anywhere in tool or dashboard UI.
+- Do not use a browser dialog for download success, wrong password, validation, or “are you sure?”
+- Do not open a confirm overlay behind the Attachment modal (use `z-[70]` or higher when it stacks on attachments).
+
 ### Tab Navigation
 - **Container**: `border-b border-slate-800` with `flex gap-2`
 - **Tab**: `px-4 py-2 text-sm font-medium transition-colors`
@@ -1197,6 +1216,8 @@ Use `shrink-0` on row icons (SVG) where layout needs it. Use `type="button"` on 
 - **Error Messages**: Red border/background with red text
 - **Info Messages**: Blue or slate styling
 - **Position**: Display near the action that triggered them (form top, button area, etc.)
+- **Global toasts**: Use `useAppNotice` (`showError` / `showSuccess`) for page-level feedback. Do not use `alert()`.
+- **Confirms**: Follow **In-app notices and confirmations** above. Do not use `confirm()`.
 
 ## Attachments
 
@@ -1296,6 +1317,7 @@ Important Documents (and any later tool that locks a file) must require the reco
 - The client must not call remove/replace until a password is entered (or the record is not protected).
 - The API must also verify the password (bcrypt hash on the record). Never trust the UI alone — a request without a valid password must fail.
 - After a correct password, complete the original intent (view, download, remove, or replace). Cancel/Escape clears any queued replacement file.
+- Wrong password (and other verify failures) stay **inside** the password modal as an in-app error. Never use `alert()`, `confirm()`, or another browser dialog for this. The modal stays open so the user can retry.
 
 ### Storage quota
 
@@ -1346,7 +1368,9 @@ If an add would exceed the limit, reject it with a clear message (“would excee
 
 - Do not add a download or view icon beside the paperclip on cards or rows.
 - Do not use the older **File Input** pattern for files that belong to a tool record.
+- Do not call `alert()`, `confirm()`, or `prompt()` for user-facing errors, validation, success, or confirmation. Use the in-app notice (`useAppNotice` / `AppNoticeProvider`) or an in-app modal. Chrome dialogs block QA and sit outside the site. Permanent deletes use a typed-delete modal (type “delete”). Other confirms use an in-app Archive/Create/Cancel modal.
 - Do not call `alert()` (or any browser dialog) after a successful Download. Confirm inside the Attachment modal only.
+- Do not call `alert()` for an incorrect attachment password. Show the error inside the password modal.
 - Do not let a password or confirm dialog open behind the Attachment modal.
 - Do not allow Remove or Replace on a protected file without a verified password (client and server).
 - Do not preview Word/Excel in the browser; hide View and download them.
@@ -1421,6 +1445,18 @@ List files only. Do not attach files to master items, line items, Print, the Ite
 - Building a new list from History or Meal Planner “Save as Shopping List” does not copy files.
 - The View modal owns add/view/download/remove. Do not embed a second Attachments section above Print. Render `AttachmentModal` after the View modal so it stacks on top (both use `z-50`).
 - No paperclip on master-item Add/Edit, line-item rows, Print, Items, or the dashboard pin.
+
+### Goals Tracking
+
+Goal files and update files. Do not attach files to categories, phases, tasks, the dashboard pin, or reminders.
+
+- **Goal files** (`tools_gt_goal_attachments`, bucket `goals-tracking`, path `{userId}/goals/{goalId}/...`): plans, policies, and other standing docs. Paperclip on New Goal, Edit Goal, the goal detail/progress card (next to Edit), and each goal list row.
+- **Update files** (`tools_gt_update_attachments`, path `{userId}/updates/{noteId}/...`): photos and evidence for one update. Paperclip on the Add update composer (detail card and Edit Goal) and on each row in Update history and Edit Goal’s update list. Do not mix with the goal store.
+- Completed is a status field, not Notes-style History. Files stay editable.
+- Phases and tasks are first-class saved records, but do not add paperclips on those rows. Standing files stay on the goal; dated evidence stays on updates.
+- Queue files on create goal and until Add update; persist immediately on saved goals and posted updates. `create` update_note already returns `note.id`. Save / Add update does not require a file.
+- Render `AttachmentModal` after the Update history and Edit Goal modals so it stacks on top (both use `z-50`).
+- No paperclip on categories, phase/task rows, dashboard pin, or reminder controls.
 
 ### Healthcare Appts & History
 

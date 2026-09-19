@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useRef } from 'react';
 import { useTheme } from './AppThemeProvider';
+import { useAppNotice } from './AppNotice';
 import { AttachmentButton } from './AttachmentButton';
 import { AttachmentModal } from './AttachmentModal';
 import {
@@ -35,7 +36,6 @@ type AppointmentRecord = {
   reasonForVisit: string;
   preVisitNotes: string;
   postVisitNotes: string;
-  showOnDashboardCalendar: boolean;
   totalBilled: string;
   insurancePaid: string;
   currentAmountDue: string;
@@ -78,7 +78,6 @@ function mapApiRecordToRecord(r: {
   reason_for_visit: string | null;
   pre_visit_notes: string | null;
   post_visit_notes: string | null;
-  show_on_dashboard_calendar: boolean | null;
   total_billed: string | null;
   insurance_paid: string | null;
   current_amount_due: string | null;
@@ -94,7 +93,6 @@ function mapApiRecordToRecord(r: {
     reasonForVisit: r.reason_for_visit ?? '',
     preVisitNotes: r.pre_visit_notes ?? '',
     postVisitNotes: r.post_visit_notes ?? '',
-    showOnDashboardCalendar: r.show_on_dashboard_calendar ?? false,
     totalBilled: r.total_billed ?? '',
     insurancePaid: r.insurance_paid ?? '',
     currentAmountDue: r.current_amount_due ?? '',
@@ -208,7 +206,6 @@ const defaultRecord = (headerId: string): Omit<AppointmentRecord, 'id'> => ({
   reasonForVisit: '',
   preVisitNotes: '',
   postVisitNotes: '',
-  showOnDashboardCalendar: false,
   totalBilled: '',
   insurancePaid: '',
   currentAmountDue: '',
@@ -217,6 +214,7 @@ const defaultRecord = (headerId: string): Omit<AppointmentRecord, 'id'> => ({
 
 export function HealthcareApptsHistoryTool({ toolId }: HealthcareApptsHistoryToolProps) {
   const { resolvedTheme } = useTheme();
+  const { showError } = useAppNotice();
   const isLight = resolvedTheme === 'light';
 
   const titleClass = isLight ? 'text-2xl font-semibold text-slate-900 mb-2' : 'text-2xl font-semibold text-slate-50 mb-2';
@@ -490,14 +488,14 @@ export function HealthcareApptsHistoryTool({ toolId }: HealthcareApptsHistoryToo
         window.open(item.url, '_blank', 'noopener,noreferrer');
         return;
       }
-      alert('This file type can’t be previewed in the browser. Use Download to save it.');
+      showError('This file type can’t be previewed in the browser. Use Download to save it.');
       return;
     }
     try {
       const blob = await fetchRecordAttachmentBlob(item.id, true);
       const type = blob.type || item.type || '';
       if (!canPreviewAttachment(type, item.name)) {
-        alert('This file type can’t be previewed in the browser. Use Download to save it.');
+        showError('This file type can’t be previewed in the browser. Use Download to save it.');
         return;
       }
       const url = window.URL.createObjectURL(blob);
@@ -509,7 +507,7 @@ export function HealthcareApptsHistoryTool({ toolId }: HealthcareApptsHistoryToo
         window.open(url, '_blank', 'noopener,noreferrer');
       }
     } catch (error) {
-      alert(error instanceof Error ? error.message : 'Failed to open file');
+      showError(error instanceof Error ? error.message : 'Failed to open file');
     }
   };
 
@@ -527,7 +525,7 @@ export function HealthcareApptsHistoryTool({ toolId }: HealthcareApptsHistoryToo
       document.body.removeChild(link);
       return true;
     } catch (error) {
-      alert(error instanceof Error ? error.message : 'Failed to download file');
+      showError(error instanceof Error ? error.message : 'Failed to download file');
       return false;
     }
   };
@@ -540,7 +538,7 @@ export function HealthcareApptsHistoryTool({ toolId }: HealthcareApptsHistoryToo
       }
       if (selectedHeaderId) await loadRecords(selectedHeaderId);
     } catch (error) {
-      alert(error instanceof Error ? error.message : 'Failed to add file');
+      showError(error instanceof Error ? error.message : 'Failed to add file');
     } finally {
       setAttachmentBusy(false);
     }
@@ -559,7 +557,7 @@ export function HealthcareApptsHistoryTool({ toolId }: HealthcareApptsHistoryToo
       if (!response.ok) throw new Error(data.error || 'Failed to remove file');
       if (selectedHeaderId) await loadRecords(selectedHeaderId);
     } catch (error) {
-      alert(error instanceof Error ? error.message : 'Failed to remove file');
+      showError(error instanceof Error ? error.message : 'Failed to remove file');
     } finally {
       setAttachmentBusy(false);
     }
@@ -751,7 +749,6 @@ export function HealthcareApptsHistoryTool({ toolId }: HealthcareApptsHistoryToo
       formData.append('reasonForVisit', newRecord.reasonForVisit);
       formData.append('preVisitNotes', newRecord.preVisitNotes);
       formData.append('postVisitNotes', newRecord.postVisitNotes);
-      formData.append('showOnDashboardCalendar', 'false');
       formData.append('totalBilled', newRecord.totalBilled);
       formData.append('insurancePaid', newRecord.insurancePaid);
       formData.append('currentAmountDue', newRecord.currentAmountDue);
@@ -825,7 +822,6 @@ export function HealthcareApptsHistoryTool({ toolId }: HealthcareApptsHistoryToo
       formData.append('reasonForVisit', editingRecord.reasonForVisit);
       formData.append('preVisitNotes', editingRecord.preVisitNotes);
       formData.append('postVisitNotes', editingRecord.postVisitNotes);
-      formData.append('showOnDashboardCalendar', 'false');
       formData.append('totalBilled', editingRecord.totalBilled);
       formData.append('insurancePaid', editingRecord.insurancePaid);
       formData.append('currentAmountDue', editingRecord.currentAmountDue);
@@ -876,7 +872,7 @@ export function HealthcareApptsHistoryTool({ toolId }: HealthcareApptsHistoryToo
     const amount = hsaAmountFromHealthcare(record);
     if (!record.appointmentDate || amount <= 0) {
       const msg = 'Add to HSA needs a date and an amount (Due, or billed minus insurance).';
-      alert(msg);
+      showError(msg);
       showMessage('error', msg);
       return;
     }
@@ -924,7 +920,7 @@ export function HealthcareApptsHistoryTool({ toolId }: HealthcareApptsHistoryToo
       showMessage('success', 'Added to HSA Tracker.');
     } catch (e) {
       const msg = e instanceof Error ? e.message : 'Failed to add to HSA';
-      alert(msg);
+      showError(msg);
       showMessage('error', msg);
     } finally {
       setAddingToHsaRecordId(null);

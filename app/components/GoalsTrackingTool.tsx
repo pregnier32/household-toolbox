@@ -3,6 +3,27 @@
 import { useState, useEffect, useCallback, createContext, useContext, useRef } from 'react';
 import { createPortal } from 'react-dom';
 import { useTheme } from './AppThemeProvider';
+import { useAppNotice } from './AppNotice';
+import { AttachmentButton } from './AttachmentButton';
+import { AttachmentModal } from './AttachmentModal';
+import {
+  canPreviewAttachment,
+  createPendingAttachment,
+  isImageAttachment,
+  isPdfAttachment,
+  type AttachmentItem,
+} from '@/lib/attachments';
+
+const API_BASE = '/api/tools/goals-tracking';
+
+type GoalAttachment = {
+  id: string;
+  name: string;
+  size: number;
+  type: string;
+};
+
+type AttachmentTarget = { kind: 'goal' | 'update'; id: 'add' | string };
 
 // --- Types (exported for dashboard / context) ---
 export type Category = {
@@ -34,6 +55,7 @@ type UpdateNote = {
   goalId: string;
   noteDate: string;
   note: string;
+  attachments: GoalAttachment[];
 };
 
 export type Goal = {
@@ -52,6 +74,7 @@ export type Goal = {
   phases: Phase[];
   tasks: Task[];
   updateNotes: UpdateNote[];
+  attachments: GoalAttachment[];
 };
 
 const DEFAULT_CATEGORY_NAMES = ['Home', 'Finance', 'Health', 'Career', 'Personal'];
@@ -93,6 +116,17 @@ function pickOpenCategoryId(list: { id: string }[], currentId: string | null): s
   return list[0].id;
 }
 
+function normalizeGoal(goal: Goal): Goal {
+  return {
+    ...goal,
+    attachments: goal.attachments || [],
+    updateNotes: (goal.updateNotes || []).map((note) => ({
+      ...note,
+      attachments: note.attachments || [],
+    })),
+  };
+}
+
 // --- Shared context for dashboard to show goals ---
 type GoalsContextValue = {
   goals: Goal[];
@@ -122,7 +156,7 @@ export function GoalsProvider({
         if (cancelled) return;
         if (data.error) return;
         setCategories(data.categories ?? []);
-        setGoals(data.goals ?? []);
+        setGoals(((data.goals ?? []) as Goal[]).map(normalizeGoal));
       })
       .catch(() => {});
     return () => {
@@ -178,6 +212,7 @@ type GoalsTrackingToolProps = {
 export function GoalsTrackingTool({ toolId }: GoalsTrackingToolProps) {
   const ctx = useGoalsContext();
   const { resolvedTheme } = useTheme();
+  const { showError } = useAppNotice();
   const isLight = resolvedTheme === 'light';
 
   const cardClass = isLight
@@ -346,7 +381,7 @@ export function GoalsTrackingTool({ toolId }: GoalsTrackingToolProps) {
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || 'Failed to load');
       setCategories(data.categories ?? []);
-      setGoals(data.goals ?? []);
+      setGoals(((data.goals ?? []) as Goal[]).map(normalizeGoal));
     } catch (e) {
       setSaveMessage({ type: 'error', text: e instanceof Error ? e.message : 'Failed to load goals' });
     } finally {
@@ -380,6 +415,131 @@ export function GoalsTrackingTool({ toolId }: GoalsTrackingToolProps) {
     },
     [toolId, showMessage]
   );
+
+  const refreshGoalsSilent = async () => {
+    if (!toolId) return;
+    try {
+      const res = await fetch(`${API_BASE}?toolId=${encodeURIComponent(toolId)}`);
+      const data = await res.json();
+      if (!res.ok) return;
+      const nextGoals = ((data.goals ?? []) as Goal[]).map(normalizeGoal);
+      setGoals(nextGoals);
+      setCategories(data.categories ?? []);
+      setEditingGoal((prev) => {
+        if (!prev) return prev;
+        return nextGoals.find((goal) => goal.id === prev.id) ?? prev;
+      });
+    } catch {
+      // Keep the current list if a silent refresh fails.
+    }
+  };
+
+  const uploadGtFile = async (file: File, owner: { goalId?: string; noteId?: string }) => {
+    if (!toolId) throw new Error('Tool ID is required');
+    const formData = new FormData();
+    formData.append('toolId', toolId);
+    if (owner.goalId) formData.append('goalId', owner.goalId);
+    if (owner.noteId) formData.append('noteId', owner.noteId);
+    formData.append('file', file);
+    const response = await fetch(`${API_BASE}/attachments`, { method: 'POST', body: formData });
+    const data = await response.json().catch(() => ({}));
+    if (!response.ok) throw new Error(data.error || 'Failed to add file');
+  };
+
+  const fetchGtAttachmentBlob = async (attachmentId: string, inline = false) => {
+    const query = inline ? '?inline=1' : '';
+    const response = await fetch(`${API_BASE}/attachments/${attachmentId}${query}`);
+    if (!response.ok) {
+      const errorData = await response.json().catch(() => ({ error: 'Failed to open file' }));
+      throw new Error(errorData.error || 'Failed to open file');
+    }
+    return response.blob();
+  };
+
+  const handleViewAttachment = async (item: AttachmentItem) => {
+    if (item.file && item.url) {
+      if (isImageAttachment(item.type)) {
+        setViewPreview(item);
+        return;
+      }
+      if (isPdfAttachment(item.type, item.name)) {
+        window.open(item.url, '_blank', 'noopener,noreferrer');
+        return;
+      }
+      showError('This file type can’t be previewed in the browser. Use Download to save it.');
+      return;
+    }
+    try {
+      const blob = await fetchGtAttachmentBlob(item.id, true);
+      const type = blob.type || item.type || '';
+      if (!canPreviewAttachment(type, item.name)) {
+        showError('This file type can’t be previewed in the browser. Use Download to save it.');
+        return;
+      }
+      const url = window.URL.createObjectURL(blob);
+      if (isImageAttachment(type)) {
+        setViewPreview({ ...item, type, url, size: item.size || blob.size });
+        return;
+      }
+      if (isPdfAttachment(type, item.name)) {
+        window.open(url, '_blank', 'noopener,noreferrer');
+      }
+    } catch (error) {
+      showError(error instanceof Error ? error.message : 'Failed to open file');
+    }
+  };
+
+  const handleDownloadAttachment = async (item: AttachmentItem): Promise<boolean> => {
+    if (item.file) return false;
+    try {
+      const blob = await fetchGtAttachmentBlob(item.id);
+      const url = window.URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = url;
+      link.download = item.name || 'attachment';
+      document.body.appendChild(link);
+      link.click();
+      window.URL.revokeObjectURL(url);
+      document.body.removeChild(link);
+      return true;
+    } catch (error) {
+      showError(error instanceof Error ? error.message : 'Failed to download file');
+      return false;
+    }
+  };
+
+  const addSavedFiles = async (owner: { goalId?: string; noteId?: string }, files: File[]) => {
+    setAttachmentBusy(true);
+    try {
+      for (const file of files) {
+        await uploadGtFile(file, owner);
+      }
+      await refreshGoalsSilent();
+    } catch (error) {
+      showError(error instanceof Error ? error.message : 'Failed to add file');
+    } finally {
+      setAttachmentBusy(false);
+    }
+  };
+
+  const removeSavedFile = async (attachmentId: string) => {
+    if (!toolId) return;
+    setAttachmentBusy(true);
+    try {
+      const response = await fetch(`${API_BASE}/attachments`, {
+        method: 'DELETE',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ toolId, attachmentId }),
+      });
+      const data = await response.json().catch(() => ({}));
+      if (!response.ok) throw new Error(data.error || 'Failed to remove file');
+      await refreshGoalsSilent();
+    } catch (error) {
+      showError(error instanceof Error ? error.message : 'Failed to remove file');
+    } finally {
+      setAttachmentBusy(false);
+    }
+  };
 
   const [selectedCategoryId, setSelectedCategoryId] = useState<string | null>(null);
   const [isCreatingNewCategory, setIsCreatingNewCategory] = useState(false);
@@ -421,10 +581,38 @@ export function GoalsTrackingTool({ toolId }: GoalsTrackingToolProps) {
   const [editNoteText, setEditNoteText] = useState('');
   const [showAllUpdatesGoalId, setShowAllUpdatesGoalId] = useState<string | null>(null);
   const promptedAt100GoalIdRef = useRef<string | null>(null);
+  const [attachmentModal, setAttachmentModal] = useState<AttachmentTarget | null>(null);
+  const [pendingGoalAttachments, setPendingGoalAttachments] = useState<AttachmentItem[]>([]);
+  const [pendingUpdateAttachments, setPendingUpdateAttachments] = useState<AttachmentItem[]>([]);
+  const [attachmentBusy, setAttachmentBusy] = useState(false);
+  const [viewPreview, setViewPreview] = useState<AttachmentItem | null>(null);
+
+  const revokePending = (items: AttachmentItem[]) => {
+    items.forEach((item) => {
+      if (item.url) URL.revokeObjectURL(item.url);
+    });
+  };
+
+  const closeAttachmentModal = () => {
+    setAttachmentModal(null);
+    setViewPreview(null);
+  };
+
+  const clearPendingGoalAttachments = () => {
+    revokePending(pendingGoalAttachments);
+    setPendingGoalAttachments([]);
+  };
+
+  const clearPendingUpdateAttachments = () => {
+    revokePending(pendingUpdateAttachments);
+    setPendingUpdateAttachments([]);
+  };
 
   useEffect(() => {
     setNewUpdateNoteText('');
     setNewUpdateNoteDate(new Date().toISOString().split('T')[0]);
+    clearPendingUpdateAttachments();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [selectedGoalId]);
 
   // Filters
@@ -562,6 +750,8 @@ export function GoalsTrackingTool({ toolId }: GoalsTrackingToolProps) {
     if (!resolvedCategoryId) return;
     setSelectedGoalId(null);
     setIsAddingGoal(true);
+    clearPendingGoalAttachments();
+    closeAttachmentModal();
     setNewGoal({
       title: '',
       description: '',
@@ -574,6 +764,8 @@ export function GoalsTrackingTool({ toolId }: GoalsTrackingToolProps) {
   const cancelAddingGoal = () => {
     setIsAddingGoal(false);
     setSelectedGoalId(null);
+    clearPendingGoalAttachments();
+    if (attachmentModal?.kind === 'goal' && attachmentModal.id === 'add') closeAttachmentModal();
   };
 
   const addGoal = async () => {
@@ -588,7 +780,16 @@ export function GoalsTrackingTool({ toolId }: GoalsTrackingToolProps) {
         status: newGoal.status,
       });
       if (!data?.goal) return;
-      setGoals((prev) => [...prev, data.goal]);
+      setGoals((prev) => [...prev, normalizeGoal({ ...data.goal, attachments: [] })]);
+      try {
+        for (const queued of pendingGoalAttachments) {
+          if (!queued.file) continue;
+          await uploadGtFile(queued.file, { goalId: data.goal.id });
+        }
+      } catch (error) {
+        showError(error instanceof Error ? error.message : 'Failed to add file');
+      }
+      await refreshGoalsSilent();
       setSelectedGoalId(data.goal.id);
       showMessage('success', 'Goal created');
     } else {
@@ -609,11 +810,14 @@ export function GoalsTrackingTool({ toolId }: GoalsTrackingToolProps) {
         phases: [],
         tasks: [],
         updateNotes: [],
+        attachments: [],
       };
       setGoals((prev) => [...prev, goal]);
       setSelectedGoalId(id);
     }
     setIsAddingGoal(false);
+    clearPendingGoalAttachments();
+    if (attachmentModal?.kind === 'goal' && attachmentModal.id === 'add') closeAttachmentModal();
     setNewGoal({
       title: '',
       description: '',
@@ -628,6 +832,7 @@ export function GoalsTrackingTool({ toolId }: GoalsTrackingToolProps) {
     setEditingGoal(JSON.parse(JSON.stringify(goal)));
     setNewUpdateNoteDate(new Date().toISOString().split('T')[0]);
     setNewUpdateNoteText('');
+    clearPendingUpdateAttachments();
     promptMarkCompletedIfAt100(getGoalPercent(goal), goal.status, goal.id, { allowAlreadyAt100: true });
   };
 
@@ -653,7 +858,7 @@ export function GoalsTrackingTool({ toolId }: GoalsTrackingToolProps) {
         useTaskProgressForPercent: editingGoal.useTaskProgressForPercent,
       });
       if (!data?.goal) return;
-      setGoals((prev) => prev.map((g) => (g.id === editingGoal.id ? data.goal : g)));
+      setGoals((prev) => prev.map((g) => (g.id === editingGoal.id ? normalizeGoal(data.goal) : g)));
       showMessage('success', 'Goal updated');
       setEditingGoalId(null);
       setEditingGoal(null);
@@ -687,7 +892,7 @@ export function GoalsTrackingTool({ toolId }: GoalsTrackingToolProps) {
     if (toolId) {
       const data = await apiPost('goal', 'update', { goalId, status: 'Completed' });
       if (!data?.goal) return;
-      setGoals((prev) => prev.map((g) => (g.id === goalId ? data.goal : g)));
+      setGoals((prev) => prev.map((g) => (g.id === goalId ? normalizeGoal(data.goal) : g)));
       return;
     }
     setGoals((prev) => prev.map((g) => (g.id === goalId ? { ...g, status: 'Completed' } : g)));
@@ -753,25 +958,38 @@ export function GoalsTrackingTool({ toolId }: GoalsTrackingToolProps) {
         goalId: data.note.goalId,
         noteDate: data.note.noteDate,
         note: data.note.note,
+        attachments: [],
       };
+      try {
+        for (const queued of pendingUpdateAttachments) {
+          if (!queued.file) continue;
+          await uploadGtFile(queued.file, { noteId: note.id });
+        }
+      } catch (error) {
+        showError(error instanceof Error ? error.message : 'Failed to add file');
+      }
+      await refreshGoalsSilent();
     } else {
       note = {
         id: generateId(),
         goalId: goal.id,
         noteDate: newUpdateNoteDate,
         note: newUpdateNoteText.trim(),
+        attachments: [],
       };
-    }
-    const applyNote = (g: Goal) =>
-      g.id === goal.id
-        ? { ...g, updateNotes: [...g.updateNotes, note], lastUpdateDate: newUpdateNoteDate }
-        : g;
-    setGoals((prev) => prev.map(applyNote));
-    if (editingGoal?.id === goal.id) {
-      setEditingGoal((prev) => (prev ? applyNote(prev) : null));
+      const applyNote = (g: Goal) =>
+        g.id === goal.id
+          ? { ...g, updateNotes: [...g.updateNotes, note], lastUpdateDate: newUpdateNoteDate }
+          : g;
+      setGoals((prev) => prev.map(applyNote));
+      if (editingGoal?.id === goal.id) {
+        setEditingGoal((prev) => (prev ? applyNote(prev) : null));
+      }
     }
     setNewUpdateNoteText('');
     setNewUpdateNoteDate(new Date().toISOString().split('T')[0]);
+    clearPendingUpdateAttachments();
+    if (attachmentModal?.kind === 'update' && attachmentModal.id === 'add') closeAttachmentModal();
   };
 
   const addUpdateNoteToEditingGoal = async () => {
@@ -781,6 +999,8 @@ export function GoalsTrackingTool({ toolId }: GoalsTrackingToolProps) {
   const cancelAddingUpdateOnCard = () => {
     setNewUpdateNoteText('');
     setNewUpdateNoteDate(new Date().toISOString().split('T')[0]);
+    clearPendingUpdateAttachments();
+    if (attachmentModal?.kind === 'update' && attachmentModal.id === 'add') closeAttachmentModal();
   };
 
   const startEditingNote = (note: UpdateNote) => {
@@ -820,11 +1040,16 @@ export function GoalsTrackingTool({ toolId }: GoalsTrackingToolProps) {
 
   const deleteUpdateNote = async (noteId: string) => {
     if (!editingGoal) return;
-    if (toolId) await apiPost('update_note', 'delete', { noteId });
-    setEditingGoal((prev) =>
-      prev ? { ...prev, updateNotes: prev.updateNotes.filter((n) => n.id !== noteId) } : null
-    );
+    if (toolId) {
+      const ok = await apiPost('update_note', 'delete', { noteId });
+      if (!ok) return;
+    }
+    const applyDelete = (g: Goal) =>
+      g.id === editingGoal.id ? { ...g, updateNotes: g.updateNotes.filter((n) => n.id !== noteId) } : g;
+    setGoals((prev) => prev.map(applyDelete));
+    setEditingGoal((prev) => (prev ? applyDelete(prev) : null));
     if (editingNoteId === noteId) cancelEditingNote();
+    if (attachmentModal?.kind === 'update' && attachmentModal.id === noteId) closeAttachmentModal();
   };
 
   const deleteGoal = async () => {
@@ -843,6 +1068,7 @@ export function GoalsTrackingTool({ toolId }: GoalsTrackingToolProps) {
     setDeleteGoalConfirmText('');
     setEditingGoalId(null);
     setEditingGoal(null);
+    closeAttachmentModal();
     if (selectedGoalId === deleteConfirmGoalId) {
       setSelectedGoalId(remaining.length > 0 ? remaining[0].id : null);
     }
@@ -957,6 +1183,7 @@ export function GoalsTrackingTool({ toolId }: GoalsTrackingToolProps) {
   useEffect(() => {
     const onKeyDown = (e: KeyboardEvent) => {
       if (e.key === 'Escape') {
+        if (attachmentModal) return;
         setMenuOpenCategoryId(null);
         if (showAllUpdatesGoalId) setShowAllUpdatesGoalId(null);
         if (deleteConfirmCategoryId) {
@@ -978,7 +1205,50 @@ export function GoalsTrackingTool({ toolId }: GoalsTrackingToolProps) {
     };
     window.addEventListener('keydown', onKeyDown);
     return () => window.removeEventListener('keydown', onKeyDown);
-  }, [deleteConfirmCategoryId, deleteConfirmGoalId, showAllUpdatesGoalId, editingCategoryId, completePrompt]);
+  }, [attachmentModal, deleteConfirmCategoryId, deleteConfirmGoalId, showAllUpdatesGoalId, editingCategoryId, completePrompt]);
+
+  const savedGoalForAttachments =
+    attachmentModal?.kind === 'goal' && attachmentModal.id !== 'add'
+      ? goals.find((goal) => goal.id === attachmentModal.id) ||
+        (editingGoal?.id === attachmentModal.id ? editingGoal : null)
+      : null;
+  const savedUpdateForAttachments =
+    attachmentModal?.kind === 'update' && attachmentModal.id !== 'add'
+      ? goals.flatMap((goal) => goal.updateNotes).find((note) => note.id === attachmentModal.id) ||
+        editingGoal?.updateNotes.find((note) => note.id === attachmentModal.id) ||
+        null
+      : null;
+  const modalFiles: AttachmentItem[] =
+    attachmentModal?.kind === 'goal' && attachmentModal.id === 'add'
+      ? pendingGoalAttachments
+      : attachmentModal?.kind === 'update' && attachmentModal.id === 'add'
+        ? pendingUpdateAttachments
+        : savedGoalForAttachments
+          ? (savedGoalForAttachments.attachments || []).map((item) => ({
+              id: item.id,
+              name: item.name,
+              size: item.size,
+              type: item.type,
+            }))
+          : savedUpdateForAttachments
+            ? (savedUpdateForAttachments.attachments || []).map((item) => ({
+                id: item.id,
+                name: item.name,
+                size: item.size,
+                type: item.type,
+              }))
+            : [];
+  const modalTitle =
+    attachmentModal?.kind === 'goal' && attachmentModal.id === 'add'
+      ? newGoal.title.trim() || 'New goal'
+      : attachmentModal?.kind === 'update' && attachmentModal.id === 'add'
+        ? newUpdateNoteText.trim() || 'New update'
+        : savedGoalForAttachments?.title ||
+          (savedUpdateForAttachments
+            ? `${formatDateForDisplay(savedUpdateForAttachments.noteDate)}${
+                savedUpdateForAttachments.note ? ` · ${savedUpdateForAttachments.note}` : ''
+              }`
+            : 'Attachments');
 
   return (
     <div className="space-y-6 relative">
@@ -1281,18 +1551,27 @@ export function GoalsTrackingTool({ toolId }: GoalsTrackingToolProps) {
                 const percent = getGoalPercent(goal);
                 const isOpen = selectedGoalId === goal.id;
                 return (
-                  <li key={goal.id} className={index > 0 ? `border-t ${borderDividerClass}` : ''}>
+                  <li
+                    key={goal.id}
+                    className={`flex items-center ${index > 0 ? `border-t ${borderDividerClass}` : ''} ${
+                      isOpen
+                        ? isLight
+                          ? 'bg-slate-100'
+                          : 'bg-slate-800/50'
+                        : ''
+                    }`}
+                  >
                     <button
                       type="button"
                       onClick={() => {
                         setSelectedGoalId(goal.id);
                         setIsAddingGoal(false);
                       }}
-                      className={`w-full flex items-center gap-3 px-4 py-3 text-left text-sm font-medium transition-colors ${
+                      className={`min-w-0 flex-1 flex items-center gap-3 px-4 py-3 text-left text-sm font-medium transition-colors ${
                         isOpen
                           ? isLight
-                            ? 'bg-slate-100 text-slate-900'
-                            : 'bg-slate-800/50 text-slate-100'
+                            ? 'text-slate-900'
+                            : 'text-slate-100'
                           : isLight
                             ? 'text-slate-800 hover:bg-slate-50'
                             : 'text-slate-200 hover:bg-slate-800/30'
@@ -1312,6 +1591,12 @@ export function GoalsTrackingTool({ toolId }: GoalsTrackingToolProps) {
                       )}
                       <span className={`${panelStrongTextClass} shrink-0`}>{percent}%</span>
                     </button>
+                    <div className="shrink-0 pr-3">
+                      <AttachmentButton
+                        count={(goal.attachments || []).length}
+                        onClick={() => setAttachmentModal({ kind: 'goal', id: goal.id })}
+                      />
+                    </div>
                   </li>
                 );
               })}
@@ -1321,7 +1606,13 @@ export function GoalsTrackingTool({ toolId }: GoalsTrackingToolProps) {
           {/* Add goal form */}
           {isAddingGoal && (
             <div className={cardPad6Class}>
-              <h3 className={sectionTitleClass}>New Goal</h3>
+              <div className="flex items-center justify-between gap-3 mb-4">
+                <h3 className={`${sectionTitleClass} mb-0`}>New Goal</h3>
+                <AttachmentButton
+                  count={pendingGoalAttachments.length}
+                  onClick={() => setAttachmentModal({ kind: 'goal', id: 'add' })}
+                />
+              </div>
               <div className="space-y-4">
                 <div>
                   <label className={labelClassSm}>
@@ -1462,6 +1753,10 @@ export function GoalsTrackingTool({ toolId }: GoalsTrackingToolProps) {
                                   <th className={tableThClass}>Tasks</th>
                                   <th className="text-right py-2 px-2 align-middle" scope="col">
                                     <div className="flex items-center justify-end gap-3">
+                                      <AttachmentButton
+                                        count={(goal.attachments || []).length}
+                                        onClick={() => setAttachmentModal({ kind: 'goal', id: goal.id })}
+                                      />
                                       <button
                                         type="button"
                                         onClick={() => startEditingGoal(goal)}
@@ -1568,6 +1863,10 @@ export function GoalsTrackingTool({ toolId }: GoalsTrackingToolProps) {
                                 placeholder="What did you do?"
                                 className={`${inputClassPad} flex-1 min-w-[160px]`}
                               />
+                              <AttachmentButton
+                                count={pendingUpdateAttachments.length}
+                                onClick={() => setAttachmentModal({ kind: 'update', id: 'add' })}
+                              />
                               <button
                                 type="button"
                                 onClick={() => addUpdateNoteToGoal(goal)}
@@ -1635,11 +1934,17 @@ export function GoalsTrackingTool({ toolId }: GoalsTrackingToolProps) {
                       allNotes.map((n) => (
                         <div
                           key={n.id}
-                          className={`rounded-lg px-3 py-2 text-sm border ${isLight ? 'border-slate-200 bg-slate-50 text-slate-700' : 'border-slate-700/70 bg-slate-800/30 text-slate-300'}`}
+                          className={`flex items-start justify-between gap-2 rounded-lg px-3 py-2 text-sm border ${isLight ? 'border-slate-200 bg-slate-50 text-slate-700' : 'border-slate-700/70 bg-slate-800/30 text-slate-300'}`}
                         >
-                          <span className={bodyMutedClass}>{formatDateForDisplay(n.noteDate)}</span>
-                          {' — '}
-                          <span className="whitespace-pre-wrap">{n.note}</span>
+                          <div className="min-w-0">
+                            <span className={bodyMutedClass}>{formatDateForDisplay(n.noteDate)}</span>
+                            {' — '}
+                            <span className="whitespace-pre-wrap">{n.note}</span>
+                          </div>
+                          <AttachmentButton
+                            count={(n.attachments || []).length}
+                            onClick={() => setAttachmentModal({ kind: 'update', id: n.id })}
+                          />
                         </div>
                       ))
                     )}
@@ -1660,17 +1965,23 @@ export function GoalsTrackingTool({ toolId }: GoalsTrackingToolProps) {
               <div className={modalCardClass}>
                 <div className="flex items-center justify-between mb-4">
                   <h3 className={modalTitleClass}>Edit Goal</h3>
-                  <button
-                    type="button"
-                    onClick={cancelEditingGoal}
-                    className={modalCloseClass}
-                    aria-label="Close modal"
-                    title="Close modal"
-                  >
-                    <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-                    </svg>
-                  </button>
+                  <div className="flex items-center gap-2">
+                    <AttachmentButton
+                      count={(editingGoal.attachments || []).length}
+                      onClick={() => setAttachmentModal({ kind: 'goal', id: editingGoal.id })}
+                    />
+                    <button
+                      type="button"
+                      onClick={cancelEditingGoal}
+                      className={modalCloseClass}
+                      aria-label="Close modal"
+                      title="Close modal"
+                    >
+                      <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                      </svg>
+                    </button>
+                  </div>
                 </div>
 
                 <div className="space-y-4">
@@ -1885,6 +2196,10 @@ export function GoalsTrackingTool({ toolId }: GoalsTrackingToolProps) {
                         placeholder="What did you do?"
                         className={`${inputClassPad} flex-1 min-w-[160px]`}
                       />
+                      <AttachmentButton
+                        count={pendingUpdateAttachments.length}
+                        onClick={() => setAttachmentModal({ kind: 'update', id: 'add' })}
+                      />
                       <button
                         type="button"
                         onClick={addUpdateNoteToEditingGoal}
@@ -1938,6 +2253,10 @@ export function GoalsTrackingTool({ toolId }: GoalsTrackingToolProps) {
                                     <span className={mutedSmallClass}>{formatDateForDisplay(n.noteDate)}:</span> {n.note}
                                   </span>
                                   <div className="flex items-center gap-0.5 shrink-0">
+                                    <AttachmentButton
+                                      count={(n.attachments || []).length}
+                                      onClick={() => setAttachmentModal({ kind: 'update', id: n.id })}
+                                    />
                                     <button
                                       type="button"
                                       onClick={() => startEditingNote(n)}
@@ -2052,7 +2371,7 @@ export function GoalsTrackingTool({ toolId }: GoalsTrackingToolProps) {
                 <div className={deleteWarningBoxClass}>
                   <p className={deleteWarningTextClass}>Warning: This action cannot be undone.</p>
                   <p className={deleteWarningDetailClass}>
-                    This goal and all its phases, tasks, and notes will be permanently deleted.
+                    This goal and all its phases, tasks, notes, and files will be permanently deleted.
                   </p>
                 </div>
                 <p className={deleteInstructionTextClass}>
@@ -2090,6 +2409,61 @@ export function GoalsTrackingTool({ toolId }: GoalsTrackingToolProps) {
           )}
         </>
       )}
+
+      <AttachmentModal
+        open={attachmentModal !== null}
+        onClose={closeAttachmentModal}
+        previewItem={viewPreview}
+        title={modalTitle}
+        files={modalFiles}
+        busy={attachmentBusy}
+        onAdd={(incoming) => {
+          if (attachmentModal?.kind === 'goal' && attachmentModal.id === 'add') {
+            setPendingGoalAttachments((prev) => [...prev, ...incoming.map(createPendingAttachment)]);
+            return;
+          }
+          if (attachmentModal?.kind === 'update' && attachmentModal.id === 'add') {
+            setPendingUpdateAttachments((prev) => [...prev, ...incoming.map(createPendingAttachment)]);
+            return;
+          }
+          if (attachmentModal?.kind === 'goal' && attachmentModal.id !== 'add') {
+            void addSavedFiles({ goalId: attachmentModal.id }, incoming);
+            return;
+          }
+          if (attachmentModal?.kind === 'update' && attachmentModal.id !== 'add') {
+            void addSavedFiles({ noteId: attachmentModal.id }, incoming);
+          }
+        }}
+        onRemove={(id) => {
+          if (attachmentModal?.kind === 'goal' && attachmentModal.id === 'add') {
+            setPendingGoalAttachments((prev) => {
+              const next = prev.filter((item) => item.id !== id);
+              const removed = prev.find((item) => item.id === id);
+              if (removed?.url) URL.revokeObjectURL(removed.url);
+              return next;
+            });
+            return;
+          }
+          if (attachmentModal?.kind === 'update' && attachmentModal.id === 'add') {
+            setPendingUpdateAttachments((prev) => {
+              const next = prev.filter((item) => item.id !== id);
+              const removed = prev.find((item) => item.id === id);
+              if (removed?.url) URL.revokeObjectURL(removed.url);
+              return next;
+            });
+            return;
+          }
+          void removeSavedFile(id);
+        }}
+        onView={handleViewAttachment}
+        onDownload={
+          attachmentModal &&
+          ((attachmentModal.kind === 'goal' && attachmentModal.id === 'add') ||
+            (attachmentModal.kind === 'update' && attachmentModal.id === 'add'))
+            ? undefined
+            : handleDownloadAttachment
+        }
+      />
     </div>
   );
 }

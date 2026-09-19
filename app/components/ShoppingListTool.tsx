@@ -2,6 +2,7 @@
 
 import { useState, useMemo, useEffect } from 'react';
 import { useTheme } from './AppThemeProvider';
+import { useAppNotice } from './AppNotice';
 import { AttachmentButton } from './AttachmentButton';
 import { AttachmentModal } from './AttachmentModal';
 import {
@@ -64,6 +65,7 @@ export type ShoppingListDashboardSummary = { listId: string; name: string; date:
 
 export function ShoppingListTool({ toolId }: ShoppingListToolProps) {
   const { resolvedTheme } = useTheme();
+  const { showError } = useAppNotice();
   const isLight = resolvedTheme === 'light';
   const titleClass = isLight ? 'text-2xl font-semibold text-slate-900 mb-2' : 'text-2xl font-semibold text-slate-50 mb-2';
   const descClass = isLight ? 'text-slate-600 text-sm' : 'text-slate-400 text-sm';
@@ -298,14 +300,14 @@ export function ShoppingListTool({ toolId }: ShoppingListToolProps) {
         window.open(item.url, '_blank', 'noopener,noreferrer');
         return;
       }
-      alert('This file type can’t be previewed in the browser. Use Download to save it.');
+      showError('This file type can’t be previewed in the browser. Use Download to save it.');
       return;
     }
     try {
       const blob = await fetchListAttachmentBlob(item.id, true);
       const type = blob.type || item.type || '';
       if (!canPreviewAttachment(type, item.name)) {
-        alert('This file type can’t be previewed in the browser. Use Download to save it.');
+        showError('This file type can’t be previewed in the browser. Use Download to save it.');
         return;
       }
       const url = window.URL.createObjectURL(blob);
@@ -317,7 +319,7 @@ export function ShoppingListTool({ toolId }: ShoppingListToolProps) {
         window.open(url, '_blank', 'noopener,noreferrer');
       }
     } catch (error) {
-      alert(error instanceof Error ? error.message : 'Failed to open file');
+      showError(error instanceof Error ? error.message : 'Failed to open file');
     }
   };
 
@@ -335,7 +337,7 @@ export function ShoppingListTool({ toolId }: ShoppingListToolProps) {
       document.body.removeChild(link);
       return true;
     } catch (error) {
-      alert(error instanceof Error ? error.message : 'Failed to download file');
+      showError(error instanceof Error ? error.message : 'Failed to download file');
       return false;
     }
   };
@@ -348,7 +350,7 @@ export function ShoppingListTool({ toolId }: ShoppingListToolProps) {
       }
       await fetchLists({ silent: true });
     } catch (error) {
-      alert(error instanceof Error ? error.message : 'Failed to add file');
+      showError(error instanceof Error ? error.message : 'Failed to add file');
     } finally {
       setAttachmentBusy(false);
     }
@@ -367,7 +369,7 @@ export function ShoppingListTool({ toolId }: ShoppingListToolProps) {
       if (!response.ok) throw new Error(data.error || 'Failed to remove file');
       await fetchLists({ silent: true });
     } catch (error) {
-      alert(error instanceof Error ? error.message : 'Failed to remove file');
+      showError(error instanceof Error ? error.message : 'Failed to remove file');
     } finally {
       setAttachmentBusy(false);
     }
@@ -546,7 +548,7 @@ export function ShoppingListTool({ toolId }: ShoppingListToolProps) {
           setBuildFromHistoryId('');
           setIsCreatingList(false);
           await fetchLists();
-          alert(uploadError instanceof Error ? uploadError.message : 'List saved, but a file failed to upload.');
+          showError(uploadError instanceof Error ? uploadError.message : 'List saved, but a file failed to upload.');
           return;
         }
       }

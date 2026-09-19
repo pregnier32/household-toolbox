@@ -18,13 +18,108 @@ type CalendarEvent = {
   frequency: 'One Time' | 'Weekly' | 'Monthly' | 'Annual';
   notes: string;
   isActive: boolean;
-  addToDashboard: boolean;
   categoryId: string;
   endDate?: string | null;
   daysOfWeek?: number[]; // 0 = Sunday, 1 = Monday, ..., 6 = Saturday
   dayOfMonth?: number; // 1-31
   dateInactivated?: string | null;
+  addToDashboard: boolean;
 };
+
+type EventFormState = {
+  title: string;
+  date: string;
+  time: string | null;
+  frequency: 'One Time' | 'Weekly' | 'Monthly' | 'Annual';
+  notes: string;
+  endDate: string | null;
+  daysOfWeek: number[];
+  dayOfMonth: number | undefined;
+  addToDashboard: boolean;
+};
+
+const EMPTY_EVENT_FORM: EventFormState = {
+  title: '',
+  date: '',
+  time: null,
+  frequency: 'One Time',
+  notes: '',
+  endDate: null,
+  daysOfWeek: [],
+  dayOfMonth: undefined,
+  addToDashboard: false,
+};
+
+function mapDbEvent(e: any): CalendarEvent {
+  return {
+    id: e.id,
+    title: e.title,
+    date: e.date,
+    time: e.time || null,
+    frequency: e.frequency as 'One Time' | 'Weekly' | 'Monthly' | 'Annual',
+    notes: e.notes || '',
+    isActive: e.is_active !== false,
+    categoryId: e.category_id,
+    endDate: e.end_date || null,
+    daysOfWeek: e.days_of_week
+      ? (Array.isArray(e.days_of_week)
+        ? e.days_of_week
+        : (typeof e.days_of_week === 'string' ? JSON.parse(e.days_of_week) : e.days_of_week))
+      : undefined,
+    dayOfMonth: e.day_of_month || undefined,
+    dateInactivated: e.date_inactivated || null,
+    addToDashboard: !!e.addToDashboard,
+  };
+}
+
+function DashboardCalendarSwitch({
+  isOn,
+  onToggle,
+  isLight,
+}: {
+  isOn: boolean;
+  onToggle: () => void;
+  isLight: boolean;
+}) {
+  return (
+    <label className="flex items-center gap-2 cursor-pointer" title="Add to dashboard calendar">
+      <span className={`text-xs whitespace-nowrap ${isLight ? 'text-slate-600' : 'text-slate-400'}`}>
+        Add to dashboard calendar
+      </span>
+      <button
+        type="button"
+        role="switch"
+        aria-checked={isOn}
+        aria-label="Add to dashboard calendar"
+        title="Add to dashboard calendar"
+        onClick={onToggle}
+        className={`relative inline-flex h-6 w-11 flex-shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors focus:outline-none focus:ring-2 focus:ring-emerald-500/50 focus:ring-offset-2 ${
+          isLight ? 'focus:ring-offset-white' : 'focus:ring-offset-slate-900'
+        } ${isOn ? 'bg-emerald-500' : isLight ? 'bg-slate-300' : 'bg-slate-700'}`}
+      >
+        <span
+          className={`pointer-events-none inline-block h-5 w-5 transform rounded-full bg-white shadow ring-0 transition ${
+            isOn ? 'translate-x-5' : 'translate-x-1'
+          }`}
+        />
+      </button>
+    </label>
+  );
+}
+
+function OnCalendarChip({ isLight }: { isLight: boolean }) {
+  return (
+    <span
+      className={
+        isLight
+          ? 'inline-flex items-center rounded-full bg-emerald-100 px-2 py-0.5 text-xs font-medium text-emerald-800'
+          : 'inline-flex items-center rounded-full bg-emerald-500/20 px-2 py-0.5 text-xs font-medium text-emerald-300'
+      }
+    >
+      On calendar
+    </span>
+  );
+}
 
 const DEFAULT_CATEGORIES = [
   { name: 'Holiday', color: '#ef4444' }, // red
@@ -239,29 +334,9 @@ export function CalendarEventsTool({ toolId }: CalendarEventsToolProps) {
   
   // Calendar Events
   const [calendarEvents, setCalendarEvents] = useState<CalendarEvent[]>([]);
-  const [newEvent, setNewEvent] = useState({
-    title: '',
-    date: '',
-    time: '' as string | null,
-    frequency: 'One Time' as 'One Time' | 'Weekly' | 'Monthly' | 'Annual',
-    notes: '',
-    addToDashboard: false,
-    endDate: '' as string | null,
-    daysOfWeek: [] as number[],
-    dayOfMonth: undefined as number | undefined
-  });
+  const [newEvent, setNewEvent] = useState<EventFormState>(EMPTY_EVENT_FORM);
   const [editingEventId, setEditingEventId] = useState<string | null>(null);
-  const [editingEvent, setEditingEvent] = useState({
-    title: '',
-    date: '',
-    time: '' as string | null,
-    frequency: 'One Time' as 'One Time' | 'Weekly' | 'Monthly' | 'Annual',
-    notes: '',
-    addToDashboard: false,
-    endDate: '' as string | null,
-    daysOfWeek: [] as number[],
-    dayOfMonth: undefined as number | undefined
-  });
+  const [editingEvent, setEditingEvent] = useState<EventFormState>(EMPTY_EVENT_FORM);
 
   // Holiday selection modal
   const [showHolidayModal, setShowHolidayModal] = useState(false);
@@ -294,22 +369,7 @@ export function CalendarEventsTool({ toolId }: CalendarEventsToolProps) {
           
           if (response.ok) {
             if (data.events && Array.isArray(data.events)) {
-              const mappedEvents: CalendarEvent[] = data.events.map((e: any) => ({
-                id: e.id,
-                title: e.title,
-                date: e.date,
-                time: e.time || null,
-                frequency: e.frequency as 'One Time' | 'Weekly' | 'Monthly' | 'Annual',
-                notes: e.notes || '',
-                isActive: e.is_active !== false,
-                addToDashboard: false,
-                categoryId: e.category_id,
-                endDate: e.end_date || null,
-                daysOfWeek: e.days_of_week ? (Array.isArray(e.days_of_week) ? e.days_of_week : (typeof e.days_of_week === 'string' ? JSON.parse(e.days_of_week) : e.days_of_week)) : undefined,
-                dayOfMonth: e.day_of_month || undefined,
-                dateInactivated: e.date_inactivated || null
-              }));
-              setCalendarEvents(mappedEvents);
+              setCalendarEvents(data.events.map(mapDbEvent));
             }
           }
         } catch (error) {
@@ -408,22 +468,7 @@ export function CalendarEventsTool({ toolId }: CalendarEventsToolProps) {
         throw new Error(data.error || 'Failed to load events');
       }
       
-      // Map database events to component format
-      const mappedEvents: CalendarEvent[] = (data.events || []).map((e: any) => ({
-        id: e.id,
-        title: e.title,
-        date: e.date,
-        time: e.time || null,
-        frequency: e.frequency as 'One Time' | 'Weekly' | 'Monthly' | 'Annual',
-        notes: e.notes || '',
-        isActive: e.is_active !== false,
-        addToDashboard: false,
-        categoryId: e.category_id,
-        endDate: e.end_date || null,
-        daysOfWeek: e.days_of_week ? (Array.isArray(e.days_of_week) ? e.days_of_week : JSON.parse(e.days_of_week)) : undefined,
-        dayOfMonth: e.day_of_month || undefined,
-        dateInactivated: e.date_inactivated || null
-      }));
+      const mappedEvents: CalendarEvent[] = (data.events || []).map(mapDbEvent);
       
       // Update calendar events - merge with existing to preserve events from other categories
       setCalendarEvents(prev => {
@@ -442,17 +487,7 @@ export function CalendarEventsTool({ toolId }: CalendarEventsToolProps) {
     const category = categories.find(c => c.id === categoryId);
     if (category) {
       if (selectedCategoryId !== categoryId) {
-        setNewEvent({
-          title: '',
-          date: '',
-          time: null,
-          frequency: 'One Time',
-          notes: '',
-          addToDashboard: false,
-          endDate: null,
-          daysOfWeek: [],
-          dayOfMonth: undefined
-        });
+        setNewEvent(EMPTY_EVENT_FORM);
       }
       setSelectedCategoryId(categoryId);
       await loadCategoryEvents(categoryId);
@@ -716,12 +751,12 @@ export function CalendarEventsTool({ toolId }: CalendarEventsToolProps) {
             frequency: newEvent.frequency,
             notes: newEvent.notes || '',
             isActive: true,
-            addToDashboard: true,
             endDate: newEvent.endDate || null,
             daysOfWeek: newEvent.frequency === 'Weekly' && newEvent.daysOfWeek && newEvent.daysOfWeek.length > 0
               ? newEvent.daysOfWeek
               : undefined,
-            dayOfMonth: newEvent.frequency === 'Monthly' ? newEvent.dayOfMonth : undefined
+            dayOfMonth: newEvent.frequency === 'Monthly' ? newEvent.dayOfMonth : undefined,
+            addToDashboard: newEvent.addToDashboard
           }
         })
       });
@@ -733,36 +768,10 @@ export function CalendarEventsTool({ toolId }: CalendarEventsToolProps) {
       }
 
       if (data.event) {
-        const newEvent: CalendarEvent = {
-          id: data.event.id,
-          title: data.event.title,
-          date: data.event.date,
-          time: data.event.time || null,
-          frequency: data.event.frequency as 'One Time' | 'Weekly' | 'Monthly' | 'Annual',
-          notes: data.event.notes || '',
-          isActive: data.event.is_active !== false,
-          addToDashboard: false,
-          categoryId: data.event.category_id,
-          endDate: data.event.end_date || null,
-          daysOfWeek: data.event.days_of_week ? (Array.isArray(data.event.days_of_week) ? data.event.days_of_week : JSON.parse(data.event.days_of_week)) : undefined,
-          dayOfMonth: data.event.day_of_month || undefined,
-          dateInactivated: data.event.date_inactivated || null
-        };
-        
-        setCalendarEvents(prev => [...prev, newEvent]);
+        setCalendarEvents(prev => [...prev, mapDbEvent(data.event)]);
       }
       
-      setNewEvent({
-        title: '',
-        date: '',
-        time: null,
-        frequency: 'One Time',
-        notes: '',
-        addToDashboard: false,
-        endDate: null,
-        daysOfWeek: [],
-        dayOfMonth: undefined
-      });
+      setNewEvent(EMPTY_EVENT_FORM);
       setSaveMessage({ type: 'success', text: 'Calendar event added successfully!' });
       setTimeout(() => setSaveMessage(null), 3000);
     } catch (error) {
@@ -782,26 +791,16 @@ export function CalendarEventsTool({ toolId }: CalendarEventsToolProps) {
       time: event.time || null,
       frequency: event.frequency,
       notes: event.notes || '',
-      addToDashboard: false,
       endDate: event.endDate || null,
       daysOfWeek: event.daysOfWeek || [],
-      dayOfMonth: event.dayOfMonth
+      dayOfMonth: event.dayOfMonth,
+      addToDashboard: event.addToDashboard
     });
   };
 
   const cancelEditingEvent = () => {
     setEditingEventId(null);
-    setEditingEvent({
-      title: '',
-      date: '',
-      time: null,
-      frequency: 'One Time',
-      notes: '',
-      addToDashboard: false,
-      endDate: null,
-      daysOfWeek: [],
-      dayOfMonth: undefined
-    });
+    setEditingEvent(EMPTY_EVENT_FORM);
   };
 
   const saveEventEdit = async () => {
@@ -826,12 +825,12 @@ export function CalendarEventsTool({ toolId }: CalendarEventsToolProps) {
             frequency: editingEvent.frequency,
             notes: editingEvent.notes || '',
             isActive: eventToUpdate.isActive,
-            addToDashboard: true,
             endDate: editingEvent.endDate || null,
             daysOfWeek: editingEvent.frequency === 'Weekly' && editingEvent.daysOfWeek && editingEvent.daysOfWeek.length > 0
               ? editingEvent.daysOfWeek
               : undefined,
-            dayOfMonth: editingEvent.frequency === 'Monthly' ? editingEvent.dayOfMonth : undefined
+            dayOfMonth: editingEvent.frequency === 'Monthly' ? editingEvent.dayOfMonth : undefined,
+            addToDashboard: editingEvent.addToDashboard
           }
         })
       });
@@ -843,39 +842,14 @@ export function CalendarEventsTool({ toolId }: CalendarEventsToolProps) {
       }
 
       if (data.event) {
-        const updatedEvent: CalendarEvent = {
-          id: data.event.id,
-          title: data.event.title,
-          date: data.event.date,
-          time: data.event.time || null,
-          frequency: data.event.frequency as 'One Time' | 'Weekly' | 'Monthly' | 'Annual',
-          notes: data.event.notes || '',
-          isActive: data.event.is_active !== false,
-          addToDashboard: false,
-          categoryId: data.event.category_id,
-          endDate: data.event.end_date || null,
-          daysOfWeek: data.event.days_of_week ? (Array.isArray(data.event.days_of_week) ? data.event.days_of_week : JSON.parse(data.event.days_of_week)) : undefined,
-          dayOfMonth: data.event.day_of_month || undefined,
-          dateInactivated: data.event.date_inactivated || null
-        };
-        
+        const updatedEvent = mapDbEvent(data.event);
         setCalendarEvents(prev => prev.map(event =>
           event.id === editingEventId ? updatedEvent : event
         ));
       }
       
       setEditingEventId(null);
-      setEditingEvent({
-        title: '',
-        date: '',
-        time: null,
-        frequency: 'One Time',
-        notes: '',
-        addToDashboard: false,
-        endDate: null,
-        daysOfWeek: [],
-        dayOfMonth: undefined
-      });
+      setEditingEvent(EMPTY_EVENT_FORM);
       setSaveMessage({ type: 'success', text: 'Calendar event updated successfully!' });
       setTimeout(() => setSaveMessage(null), 3000);
     } catch (error) {
@@ -1221,15 +1195,10 @@ export function CalendarEventsTool({ toolId }: CalendarEventsToolProps) {
     const finalDate = holiday.getDate(yearToUse);
     
     setNewEvent({
+      ...EMPTY_EVENT_FORM,
       title: holiday.name,
       date: finalDate,
-      time: null,
       frequency: 'Annual',
-      notes: '',
-      addToDashboard: false,
-      endDate: null,
-      daysOfWeek: [],
-      dayOfMonth: undefined
     });
     
     setShowHolidayModal(false);
@@ -1773,6 +1742,11 @@ export function CalendarEventsTool({ toolId }: CalendarEventsToolProps) {
                   className={`${inputClass} resize-none`}
                 />
               </div>
+              <DashboardCalendarSwitch
+                isOn={newEvent.addToDashboard}
+                isLight={isLight}
+                onToggle={() => setNewEvent({ ...newEvent, addToDashboard: !newEvent.addToDashboard })}
+              />
               <button
                 onClick={addCalendarEvent}
                 disabled={!newEvent.title.trim() || !newEvent.date || isSaving}
@@ -1934,6 +1908,11 @@ export function CalendarEventsTool({ toolId }: CalendarEventsToolProps) {
                               className="w-full px-4 py-2 rounded-lg border border-slate-700 bg-slate-900/70 text-slate-100 focus:border-emerald-500/50 focus:outline-none focus:ring-1 focus:ring-emerald-500/50 resize-none"
                             />
                           </div>
+                          <DashboardCalendarSwitch
+                            isOn={editingEvent.addToDashboard}
+                            isLight={isLight}
+                            onToggle={() => setEditingEvent({ ...editingEvent, addToDashboard: !editingEvent.addToDashboard })}
+                          />
                           <div className="flex gap-2">
                             <button
                               onClick={saveEventEdit}
@@ -1953,7 +1932,10 @@ export function CalendarEventsTool({ toolId }: CalendarEventsToolProps) {
                       ) : (
                         <div className="flex items-start justify-between">
                           <div className="flex-1">
-                            <h4 className={isLight ? 'text-slate-900 font-medium' : 'text-slate-100 font-medium'}>{event.title}</h4>
+                            <div className="flex items-center gap-2 flex-wrap">
+                              <h4 className={isLight ? 'text-slate-900 font-medium' : 'text-slate-100 font-medium'}>{event.title}</h4>
+                              {event.addToDashboard && <OnCalendarChip isLight={isLight} />}
+                            </div>
                             <p className={`text-sm ${mutedTextClass} mt-1`}>
                               Date: {parseLocalDate(event.date).toLocaleDateString()} | Frequency: {event.frequency}
                             </p>
@@ -2040,11 +2022,12 @@ export function CalendarEventsTool({ toolId }: CalendarEventsToolProps) {
                       <div key={event.id} className={`${nestedCardClass} opacity-75`}>
                         <div className="flex items-start justify-between">
                           <div className="flex-1">
-                            <div className="flex items-center gap-3 mb-2">
+                            <div className="flex items-center gap-3 mb-2 flex-wrap">
                               <h4 className="text-lg font-semibold text-slate-300">{event.title}</h4>
                               <span className="px-2 py-1 rounded text-xs font-medium bg-slate-600/50 text-slate-400">
                                 {selectedCategory?.name || 'Event'}
                               </span>
+                              {event.addToDashboard && <OnCalendarChip isLight={isLight} />}
                             </div>
                             <div className="grid grid-cols-1 md:grid-cols-3 gap-4 text-sm">
                               <div>

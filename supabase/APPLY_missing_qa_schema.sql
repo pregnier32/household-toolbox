@@ -138,15 +138,5 @@ ALTER TABLE tools_sl_list_items
 ALTER TABLE tools_sl_list_items
   ADD COLUMN IF NOT EXISTS unit TEXT;
 
--- ============================================================================
--- TRAVEL LOG
--- ============================================================================
-ALTER TABLE tools_tl_trips
-  ADD COLUMN IF NOT EXISTS add_to_dashboard BOOLEAN NOT NULL DEFAULT false;
-
-CREATE INDEX IF NOT EXISTS idx_tl_trips_add_to_dashboard
-  ON tools_tl_trips(add_to_dashboard)
-  WHERE add_to_dashboard = true;
-
 -- Reload PostgREST so new table/columns are visible immediately
 NOTIFY pgrst, 'reload schema';
