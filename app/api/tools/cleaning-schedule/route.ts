@@ -6,10 +6,12 @@ import {
   asDateOnly,
   CleaningFrequency,
   CleaningScheduleData,
+  completionDayForToday,
   dbToFrequency,
   frequencyToDb,
   isFrequencyValid,
   latenessFor,
+  parseReminderDays,
   todayIso,
 } from '@/lib/cleaning-schedule';
 
@@ -17,6 +19,8 @@ type DbCategory = {
   id: string;
   name: string;
   is_default: boolean;
+  is_active: boolean;
+  date_inactivated: string | null;
 };
 
 type DbItem = {
@@ -39,6 +43,7 @@ type DbTask = {
   day_of_month: number | null;
   next_due_date: string;
   last_completed_date: string | null;
+  reminder_days: number | null;
   is_active: boolean;
   date_added: string;
   date_inactivated: string | null;
@@ -52,6 +57,22 @@ type DbCompletion = {
   lateness: 'Early' | 'On time' | 'Late';
 };
 
+function asErrorMessage(error: unknown, fallback: string): string {
+  if (typeof error === 'string' && error.trim() && error !== '[object Object]') return error;
+  if (error instanceof Error && error.message.trim() && error.message !== '[object Object]') return error.message;
+  if (error && typeof error === 'object') {
+    const record = error as { message?: unknown; error?: unknown; details?: unknown };
+    if (typeof record.message === 'string' && record.message.trim() && record.message !== '[object Object]') {
+      return record.message;
+    }
+    if (typeof record.error === 'string' && record.error.trim() && record.error !== '[object Object]') {
+      return record.error;
+    }
+    if (typeof record.details === 'string' && record.details.trim()) return record.details;
+  }
+  return fallback;
+}
+
 function mapData(
   categories: DbCategory[],
   items: DbItem[],
@@ -63,6 +84,8 @@ function mapData(
       id: row.id,
       name: row.name,
       isDefault: row.is_default === true,
+      isActive: row.is_active !== false,
+      dateInactivated: row.date_inactivated ? asDateOnly(row.date_inactivated) : undefined,
     })),
     items: items.map((row) => ({
       id: row.id,
@@ -79,6 +102,7 @@ function mapData(
       frequency: dbToFrequency(row),
       nextDueDate: asDateOnly(row.next_due_date),
       lastCompletedDate: row.last_completed_date ? asDateOnly(row.last_completed_date) : null,
+      reminderDays: parseReminderDays(row.reminder_days),
       isActive: row.is_active !== false,
       dateAdded: asDateOnly(row.date_added) || todayIso(),
       dateInactivated: row.date_inactivated ? asDateOnly(row.date_inactivated) : undefined,
@@ -182,7 +206,7 @@ async function fetchAllData(userId: string, toolId: string): Promise<CleaningSch
   const [categoriesRes, itemsRes, tasksRes, completionsRes] = await Promise.all([
     supabaseServer
       .from('tools_cs_categories')
-      .select('id, name, is_default')
+      .select('id, name, is_default, is_active, date_inactivated')
       .eq('user_id', userId)
       .eq('tool_id', toolId)
       .order('name', { ascending: true }),
@@ -206,10 +230,10 @@ async function fetchAllData(userId: string, toolId: string): Promise<CleaningSch
       .order('completed_date', { ascending: false }),
   ]);
 
-  if (categoriesRes.error) throw categoriesRes.error;
-  if (itemsRes.error) throw itemsRes.error;
-  if (tasksRes.error) throw tasksRes.error;
-  if (completionsRes.error) throw completionsRes.error;
+  if (categoriesRes.error) throw new Error(asErrorMessage(categoriesRes.error, 'Failed to fetch categories'));
+  if (itemsRes.error) throw new Error(asErrorMessage(itemsRes.error, 'Failed to fetch items'));
+  if (tasksRes.error) throw new Error(asErrorMessage(tasksRes.error, 'Failed to fetch tasks'));
+  if (completionsRes.error) throw new Error(asErrorMessage(completionsRes.error, 'Failed to fetch completions'));
 
   return mapData(
     (categoriesRes.data ?? []) as DbCategory[],
@@ -327,6 +351,8 @@ export async function POST(request: NextRequest) {
       nextDueDate,
       scheduledDate,
       completeBasis,
+      reminderDays,
+      completedDate: completedDateRaw,
     } = body as {
       toolId?: string;
       action?: string;
@@ -341,6 +367,8 @@ export async function POST(request: NextRequest) {
       nextDueDate?: string;
       scheduledDate?: string;
       completeBasis?: 'today' | 'scheduled';
+      reminderDays?: number | null;
+      completedDate?: string;
     };
 
     if (!toolId) {
@@ -422,6 +450,45 @@ export async function POST(request: NextRequest) {
       if (error) {
         console.error('Error updating category:', error);
         return NextResponse.json({ error: 'Failed to update category' }, { status: 500 });
+      }
+
+      return NextResponse.json({ success: true, ...(await fetchAllData(user.id, toolId)) });
+    }
+
+    if (action === 'archiveCategory' || action === 'reactivateCategory') {
+      if (!categoryId) {
+        return NextResponse.json({ error: 'Category ID is required' }, { status: 400 });
+      }
+
+      const { data: category } = await supabaseServer
+        .from('tools_cs_categories')
+        .select('id, is_default')
+        .eq('id', categoryId)
+        .eq('user_id', user.id)
+        .eq('tool_id', toolId)
+        .maybeSingle();
+
+      if (!category) {
+        return NextResponse.json({ error: 'Category not found' }, { status: 404 });
+      }
+      if (category.is_default) {
+        return NextResponse.json({ error: 'Default categories cannot be archived' }, { status: 400 });
+      }
+
+      const { error } = await supabaseServer
+        .from('tools_cs_categories')
+        .update(
+          action === 'archiveCategory'
+            ? { is_active: false, date_inactivated: todayIso() }
+            : { is_active: true, date_inactivated: null }
+        )
+        .eq('id', categoryId)
+        .eq('user_id', user.id)
+        .eq('tool_id', toolId);
+
+      if (error) {
+        console.error('Error updating category active state:', error);
+        return NextResponse.json({ error: asErrorMessage(error, 'Failed to update category') }, { status: 500 });
       }
 
       return NextResponse.json({ success: true, ...(await fetchAllData(user.id, toolId)) });
@@ -581,6 +648,7 @@ export async function POST(request: NextRequest) {
           .update({
             ...frequencyToDb(frequency),
             next_due_date: nextDueDate,
+            reminder_days: parseReminderDays(reminderDays),
           })
           .eq('id', taskId)
           .eq('user_id', user.id)
@@ -693,6 +761,7 @@ export async function POST(request: NextRequest) {
         item_id: itemId,
         ...frequencyToDb(frequency),
         next_due_date: nextDueDate,
+        reminder_days: parseReminderDays(reminderDays),
         is_active: true,
         date_inactivated: null,
       };
@@ -722,20 +791,41 @@ export async function POST(request: NextRequest) {
         return NextResponse.json({ error: 'Task ID is required' }, { status: 400 });
       }
 
-      const { error } = await supabaseServer
+      const { data: existing, error: existingError } = await supabaseServer
+        .from('tools_cs_tasks')
+        .select('id')
+        .eq('id', taskId)
+        .eq('user_id', user.id)
+        .eq('tool_id', toolId)
+        .maybeSingle();
+
+      if (existingError) {
+        console.error('Error finding task to update active state:', existingError);
+        return NextResponse.json({ error: asErrorMessage(existingError, 'Failed to update task') }, { status: 500 });
+      }
+      if (!existing) {
+        return NextResponse.json({ error: 'Task not found' }, { status: 404 });
+      }
+
+      const { data: updated, error } = await supabaseServer
         .from('tools_cs_tasks')
         .update(
           action === 'deactivateTask'
             ? { is_active: false, date_inactivated: todayIso() }
             : { is_active: true, date_inactivated: null }
         )
-        .eq('id', taskId)
+        .eq('id', existing.id)
         .eq('user_id', user.id)
-        .eq('tool_id', toolId);
+        .eq('tool_id', toolId)
+        .select('id')
+        .maybeSingle();
 
       if (error) {
         console.error('Error updating task active state:', error);
-        return NextResponse.json({ error: 'Failed to update task' }, { status: 500 });
+        return NextResponse.json({ error: asErrorMessage(error, 'Failed to update task') }, { status: 500 });
+      }
+      if (!updated) {
+        return NextResponse.json({ error: 'Task not found' }, { status: 404 });
       }
 
       return NextResponse.json({ success: true, ...(await fetchAllData(user.id, toolId)) });
@@ -800,7 +890,8 @@ export async function POST(request: NextRequest) {
         return NextResponse.json({ error: 'Task not found' }, { status: 404 });
       }
 
-      const completedDate = completeBasis === 'scheduled' ? asDateOnly(scheduledDate) : todayIso();
+      const completedDate =
+        completeBasis === 'scheduled' ? asDateOnly(scheduledDate) : completionDayForToday(completedDateRaw);
       const scheduled = asDateOnly(scheduledDate);
       const frequency = dbToFrequency(task as DbTask);
       const nextDue = advanceFrom(completedDate, frequency);
@@ -845,6 +936,6 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: 'Invalid action' }, { status: 400 });
   } catch (error: unknown) {
     console.error('Error in POST /api/tools/cleaning-schedule:', error);
-    return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
+    return NextResponse.json({ error: asErrorMessage(error, 'Internal server error') }, { status: 500 });
   }
 }

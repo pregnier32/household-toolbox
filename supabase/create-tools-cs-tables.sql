@@ -71,6 +71,8 @@ CREATE TABLE IF NOT EXISTS tools_cs_categories (
 
   name TEXT NOT NULL,
   is_default BOOLEAN NOT NULL DEFAULT false,
+  is_active BOOLEAN NOT NULL DEFAULT true,
+  date_inactivated DATE,
   -- Reserved for a later icon pass; unused by the current UI.
   icon_key TEXT,
 
@@ -84,6 +86,8 @@ CREATE INDEX IF NOT EXISTS idx_cs_categories_user_id ON tools_cs_categories(user
 CREATE INDEX IF NOT EXISTS idx_cs_categories_tool_id ON tools_cs_categories(tool_id);
 CREATE INDEX IF NOT EXISTS idx_cs_categories_user_tool ON tools_cs_categories(user_id, tool_id);
 CREATE INDEX IF NOT EXISTS idx_cs_categories_is_default ON tools_cs_categories(is_default);
+CREATE INDEX IF NOT EXISTS idx_cs_categories_is_active ON tools_cs_categories(is_active);
+CREATE INDEX IF NOT EXISTS idx_cs_categories_user_tool_active ON tools_cs_categories(user_id, tool_id, is_active);
 CREATE INDEX IF NOT EXISTS idx_cs_categories_name ON tools_cs_categories(name);
 
 -- ============================================================================
@@ -152,6 +156,7 @@ CREATE TABLE IF NOT EXISTS tools_cs_tasks (
 
   next_due_date DATE NOT NULL,
   last_completed_date DATE,
+  reminder_days INTEGER CHECK (reminder_days IS NULL OR reminder_days >= 1),
 
   is_active BOOLEAN NOT NULL DEFAULT true,
   date_added DATE NOT NULL DEFAULT CURRENT_DATE,

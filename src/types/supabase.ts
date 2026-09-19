@@ -505,8 +505,10 @@ export type Database = {
       tools_cs_categories: {
         Row: {
           created_at: string
+          date_inactivated: string | null
           icon_key: string | null
           id: string
+          is_active: boolean
           is_default: boolean
           name: string
           tool_id: string
@@ -515,8 +517,10 @@ export type Database = {
         }
         Insert: {
           created_at?: string
+          date_inactivated?: string | null
           icon_key?: string | null
           id?: string
+          is_active?: boolean
           is_default?: boolean
           name: string
           tool_id: string
@@ -525,8 +529,10 @@ export type Database = {
         }
         Update: {
           created_at?: string
+          date_inactivated?: string | null
           icon_key?: string | null
           id?: string
+          is_active?: boolean
           is_default?: boolean
           name?: string
           tool_id?: string
@@ -750,6 +756,7 @@ export type Database = {
           item_id: string
           last_completed_date: string | null
           next_due_date: string
+          reminder_days: number | null
           tool_id: string
           updated_at: string
           user_id: string
@@ -768,6 +775,7 @@ export type Database = {
           item_id: string
           last_completed_date?: string | null
           next_due_date: string
+          reminder_days?: number | null
           tool_id: string
           updated_at?: string
           user_id: string
@@ -786,6 +794,7 @@ export type Database = {
           item_id?: string
           last_completed_date?: string | null
           next_due_date?: string
+          reminder_days?: number | null
           tool_id?: string
           updated_at?: string
           user_id?: string
@@ -1975,6 +1984,7 @@ export type Database = {
           provider_notes: string
           provider_phone: string
           provider_website: string
+          reminder_days: number | null
           tool_id: string
           updated_at: string
           user_id: string
@@ -2002,6 +2012,7 @@ export type Database = {
           provider_notes?: string
           provider_phone?: string
           provider_website?: string
+          reminder_days?: number | null
           tool_id: string
           updated_at?: string
           user_id: string
@@ -2029,6 +2040,7 @@ export type Database = {
           provider_notes?: string
           provider_phone?: string
           provider_website?: string
+          reminder_days?: number | null
           tool_id?: string
           updated_at?: string
           user_id?: string
@@ -4303,6 +4315,10 @@ export type Database = {
           id: string
           last_name: string
           password: string
+          storage_addon_gb: number
+          storage_plan: string
+          storage_usage_updated_at: string | null
+          storage_used_bytes: number
           theme_preference: string | null
           updated_at: string | null
           user_id: string
@@ -4317,6 +4333,10 @@ export type Database = {
           id?: string
           last_name: string
           password: string
+          storage_addon_gb?: number
+          storage_plan?: string
+          storage_usage_updated_at?: string | null
+          storage_used_bytes?: number
           theme_preference?: string | null
           updated_at?: string | null
           user_id?: string
@@ -4331,6 +4351,10 @@ export type Database = {
           id?: string
           last_name?: string
           password?: string
+          storage_addon_gb?: number
+          storage_plan?: string
+          storage_usage_updated_at?: string | null
+          storage_used_bytes?: number
           theme_preference?: string | null
           updated_at?: string | null
           user_id?: string
@@ -4388,7 +4412,10 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
-      [_ in never]: never
+      get_user_storage_usage: {
+        Args: { p_user_id: string }
+        Returns: { bucket_id: string; used_bytes: number }[]
+      }
     }
     Enums: {
       [_ in never]: never

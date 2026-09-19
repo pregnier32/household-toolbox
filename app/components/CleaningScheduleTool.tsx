@@ -6,6 +6,7 @@ import {
   addDays,
   addMonthsSetDay,
   advanceFrom,
+  asDateOnly,
   CleaningCategory,
   CleaningCompletion,
   CleaningFrequency,
@@ -273,6 +274,84 @@ function rangeWindow(range: RangeId, today: string): { start: string; end: strin
   if (range === 'this_month') return { start: startOfMonth(today), end: endOfMonth(today) };
   if (range === 'next_3_months') return { start: today, end: addMonthsSetDay(today, 3) };
   return null;
+}
+
+function toErrorText(error: unknown, fallback: string): string {
+  if (typeof error === 'string' && error.trim() && error !== '[object Object]') return error;
+  if (error instanceof Error && error.message.trim() && error.message !== '[object Object]') return error.message;
+  if (error && typeof error === 'object') {
+    const record = error as { error?: unknown; message?: unknown; details?: unknown };
+    if (typeof record.error === 'string' && record.error.trim() && record.error !== '[object Object]') return record.error;
+    if (typeof record.message === 'string' && record.message.trim() && record.message !== '[object Object]') {
+      return record.message;
+    }
+    if (typeof record.details === 'string' && record.details.trim()) return record.details;
+  }
+  return fallback;
+}
+
+function ReminderDaysFields({
+  id,
+  value,
+  onChange,
+  labelClass,
+  inputClass,
+  hintClass,
+}: {
+  id: string;
+  value: number | null;
+  onChange: (next: number | null) => void;
+  labelClass: string;
+  inputClass: string;
+  hintClass: string;
+}) {
+  return (
+    <div>
+      <label className={labelClass} htmlFor={id}>
+        Reminder
+      </label>
+      <div className="flex items-center gap-2 flex-wrap">
+        <span className={`text-sm ${hintClass}`}>Remind me</span>
+        <input
+          id={id}
+          type="number"
+          min={1}
+          max={365}
+          value={value ?? ''}
+          onChange={(e) => {
+            const raw = e.target.value;
+            if (raw === '') {
+              onChange(null);
+              return;
+            }
+            const next = Number.parseInt(raw, 10);
+            onChange(Number.isInteger(next) && next >= 1 ? Math.min(next, 365) : null);
+          }}
+          placeholder="Off"
+          className={`${inputClass} w-24`}
+        />
+        <span className={`text-sm ${hintClass}`}>days before due</span>
+      </div>
+    </div>
+  );
+}
+
+function reminderSummary(days: number | null | undefined): string {
+  if (days == null) return 'Off';
+  return `${days} day${days === 1 ? '' : 's'} before due`;
+}
+
+function datesForRange(range: RangeId, nextDueDate: string, frequency: CleaningFrequency, today: string): string[] {
+  const nextDue = asDateOnly(nextDueDate) || nextDueDate;
+  if (range === 'overdue') {
+    return compareIso(nextDue, today) < 0 ? [nextDue] : [];
+  }
+  const window = rangeWindow(range, today);
+  if (range === 'this_week' && window) {
+    if (compareIso(nextDue, window.start) < 0 || compareIso(nextDue, window.end) > 0) return [];
+    return expandOccurrences(nextDue, frequency, window.start, window.end);
+  }
+  return window ? expandOccurrences(nextDue, frequency, window.start, window.end) : [nextDue];
 }
 
 function EditIcon() {
@@ -565,6 +644,8 @@ export function CleaningScheduleTool({ toolId }: CleaningScheduleToolProps) {
   const [categoryFilter, setCategoryFilter] = useState('all');
   const [sortBy, setSortBy] = useState<SortId>('nextDue');
   const [showHistory, setShowHistory] = useState(false);
+  const [showCompletionHistory, setShowCompletionHistory] = useState(false);
+  const [collapsedGroupIds, setCollapsedGroupIds] = useState<string[]>([]);
   const [libraryCategoryId, setLibraryCategoryId] = useState('');
   const [libraryFilter, setLibraryFilter] = useState<LibraryFilter>('all');
 
@@ -578,14 +659,17 @@ export function CleaningScheduleTool({ toolId }: CleaningScheduleToolProps) {
   const [editingCategoryId, setEditingCategoryId] = useState<string | null>(null);
   const [editingCategoryName, setEditingCategoryName] = useState('');
 
-  const [activateItemId, setActivateItemId] = useState<string | null>(null);
+  const [activateItemIds, setActivateItemIds] = useState<string[]>([]);
   const [activateForm, setActivateForm] = useState<FrequencyForm>(() => emptyFrequencyForm(todayIso()));
   const [activateNextDue, setActivateNextDue] = useState(todayIso);
+  const [activateReminderDays, setActivateReminderDays] = useState<number | null>(null);
+  const [selectedDefaultIds, setSelectedDefaultIds] = useState<string[]>([]);
 
   const [detailTaskId, setDetailTaskId] = useState<string | null>(null);
   const [detailEditing, setDetailEditing] = useState(false);
   const [detailForm, setDetailForm] = useState<FrequencyForm>(() => emptyFrequencyForm(todayIso()));
   const [detailNextDue, setDetailNextDue] = useState(todayIso);
+  const [detailReminderDays, setDetailReminderDays] = useState<number | null>(null);
   const [detailItemForm, setDetailItemForm] = useState<ItemForm>(emptyItemForm);
 
   const [completeOccurrence, setCompleteOccurrence] = useState<{ taskId: string; scheduledDate: string } | null>(null);
@@ -606,11 +690,17 @@ export function CleaningScheduleTool({ toolId }: CleaningScheduleToolProps) {
     const nextCategories = data.categories ?? [];
     setCategories(nextCategories);
     setLibraryItems(data.items ?? []);
-    setScheduledTasks(data.tasks ?? []);
+    setScheduledTasks(
+      (data.tasks ?? []).map((task) => ({
+        ...task,
+        nextDueDate: asDateOnly(task.nextDueDate) || task.nextDueDate,
+      }))
+    );
     setCompletions(data.completions ?? []);
     setLibraryCategoryId((prev) => {
-      if (prev && nextCategories.some((category) => category.id === prev)) return prev;
-      return [...nextCategories].sort((a, b) => a.name.localeCompare(b.name))[0]?.id ?? '';
+      const active = nextCategories.filter((category) => category.isActive !== false);
+      if (prev && active.some((category) => category.id === prev)) return prev;
+      return [...active].sort((a, b) => a.name.localeCompare(b.name))[0]?.id ?? '';
     });
   }, []);
 
@@ -624,7 +714,7 @@ export function CleaningScheduleTool({ toolId }: CleaningScheduleToolProps) {
       });
       const data = await response.json().catch(() => ({ error: 'Unknown error' }));
       if (!response.ok) {
-        throw new Error(data.error || 'Request failed');
+        throw new Error(toErrorText(data?.error ?? data, 'Request failed'));
       }
       if (data.categories) applyData(data as CleaningScheduleData);
       return data;
@@ -652,7 +742,7 @@ export function CleaningScheduleTool({ toolId }: CleaningScheduleToolProps) {
       try {
         const response = await fetch(`${API_BASE}?toolId=${encodeURIComponent(toolId)}`);
         const data = await response.json().catch(() => ({ error: 'Failed to load Cleaning Schedule' }));
-        if (!response.ok) throw new Error(data.error || 'Failed to load Cleaning Schedule');
+        if (!response.ok) throw new Error(toErrorText(data?.error ?? data, 'Failed to load Cleaning Schedule'));
         applyData(data as CleaningScheduleData);
       } catch (error) {
         setCategories([]);
@@ -679,8 +769,8 @@ export function CleaningScheduleTool({ toolId }: CleaningScheduleToolProps) {
         setCompleteOccurrence(null);
         return;
       }
-      if (activateItemId) {
-        setActivateItemId(null);
+      if (activateItemIds.length > 0) {
+        setActivateItemIds([]);
         return;
       }
       if (detailTaskId) {
@@ -692,11 +782,19 @@ export function CleaningScheduleTool({ toolId }: CleaningScheduleToolProps) {
     };
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
-  }, [deleteTarget, completeOccurrence, activateItemId, detailTaskId, showExportPopup]);
+  }, [deleteTarget, completeOccurrence, activateItemIds, detailTaskId, showExportPopup]);
 
   const sortedCategories = useMemo(
     () => [...categories].sort((a, b) => a.name.localeCompare(b.name)),
     [categories]
+  );
+  const activeCategories = useMemo(
+    () => sortedCategories.filter((category) => category.isActive !== false),
+    [sortedCategories]
+  );
+  const archivedCategories = useMemo(
+    () => sortedCategories.filter((category) => category.isActive === false),
+    [sortedCategories]
   );
 
   const categoryName = (categoryId: string) => categories.find((category) => category.id === categoryId)?.name ?? 'Uncategorized';
@@ -731,24 +829,46 @@ export function CleaningScheduleTool({ toolId }: CleaningScheduleToolProps) {
       return;
     }
     const existing = scheduleByItem.get(itemId);
-    setActivateItemId(itemId);
+    setActivateItemIds([itemId]);
     setActivateForm(existing ? frequencyToForm(existing.frequency, today) : emptyFrequencyForm(today));
     setActivateNextDue(existing?.nextDueDate || today);
+    setActivateReminderDays(existing?.reminderDays ?? null);
+  };
+
+  const openBulkActivate = (itemIds: string[]) => {
+    const ids = itemIds.filter((itemId) => {
+      const item = libraryItems.find((entry) => entry.id === itemId);
+      return Boolean(item?.isDefault && !item.isHidden && !activeScheduleByItem.has(itemId));
+    });
+    if (ids.length === 0) return;
+    setActivateItemIds(ids);
+    setActivateForm(emptyFrequencyForm(today));
+    setActivateNextDue(today);
+    setActivateReminderDays(null);
   };
 
   const saveActivation = async () => {
-    if (!activateItemId || !activateNextDue || !isFrequencyFormValid(activateForm) || isSaving) return;
-    const itemName = libraryItems.find((item) => item.id === activateItemId)?.name ?? 'Task';
+    if (activateItemIds.length === 0 || !activateNextDue || !isFrequencyFormValid(activateForm) || isSaving) return;
+    const itemName = libraryItems.find((item) => item.id === activateItemIds[0])?.name ?? 'Task';
     setIsSaving(true);
     try {
-      await postAction({
-        action: 'activateTask',
-        itemId: activateItemId,
-        frequency: formToFrequency(activateForm),
-        nextDueDate: activateNextDue,
-      });
-      setActivateItemId(null);
-      showBanner('success', `${itemName} is now on the schedule.`);
+      const frequency = formToFrequency(activateForm);
+      for (const itemId of activateItemIds) {
+        await postAction({
+          action: 'activateTask',
+          itemId,
+          frequency,
+          nextDueDate: activateNextDue,
+          reminderDays: activateReminderDays,
+        });
+      }
+      const count = activateItemIds.length;
+      setActivateItemIds([]);
+      setSelectedDefaultIds((prev) => prev.filter((id) => !activateItemIds.includes(id)));
+      showBanner(
+        'success',
+        count === 1 ? `${itemName} is now on the schedule.` : `${count} default items are now on the schedule.`
+      );
     } catch (error) {
       showBanner('error', error instanceof Error ? error.message : 'Failed to activate task');
     } finally {
@@ -764,6 +884,7 @@ export function CleaningScheduleTool({ toolId }: CleaningScheduleToolProps) {
     setDetailEditing(editing);
     setDetailForm(frequencyToForm(task.frequency, today));
     setDetailNextDue(task.nextDueDate);
+    setDetailReminderDays(task.reminderDays);
     setDetailItemForm({
       name: item.name,
       categoryId: item.categoryId,
@@ -796,6 +917,7 @@ export function CleaningScheduleTool({ toolId }: CleaningScheduleToolProps) {
         ...itemCategoryPayload(detailItemForm),
         frequency: formToFrequency(detailForm),
         nextDueDate: detailNextDue,
+        reminderDays: detailReminderDays,
       });
       setDetailEditing(false);
       showBanner('success', 'Schedule updated.');
@@ -813,9 +935,9 @@ export function CleaningScheduleTool({ toolId }: CleaningScheduleToolProps) {
       await postAction({ action: 'deactivateTask', taskId });
       setDetailTaskId(null);
       setDetailEditing(false);
-      showBanner('success', 'Moved to history.');
+      showBanner('success', 'Moved to history (inactive).');
     } catch (error) {
-      showBanner('error', error instanceof Error ? error.message : 'Failed to move task to history');
+      showBanner('error', toErrorText(error, 'Failed to move task to history'));
     } finally {
       setIsSaving(false);
     }
@@ -836,6 +958,8 @@ export function CleaningScheduleTool({ toolId }: CleaningScheduleToolProps) {
   };
 
   const openComplete = (taskId: string, scheduledDate: string) => {
+    setDetailTaskId(null);
+    setDetailEditing(false);
     setCompleteOccurrence({ taskId, scheduledDate });
     setCompleteBasis('today');
   };
@@ -852,8 +976,10 @@ export function CleaningScheduleTool({ toolId }: CleaningScheduleToolProps) {
         taskId: task.id,
         scheduledDate: completeOccurrence.scheduledDate,
         completeBasis,
+        completedDate: completeBasis === 'today' ? today : undefined,
       });
       setCompleteOccurrence(null);
+      setShowCompletionHistory(true);
       const nextDueDate = typeof data.nextDueDate === 'string' ? data.nextDueDate : '';
       showBanner(
         'success',
@@ -991,6 +1117,34 @@ export function CleaningScheduleTool({ toolId }: CleaningScheduleToolProps) {
     }
   };
 
+  const archiveCategory = async (categoryId: string) => {
+    const category = categories.find((entry) => entry.id === categoryId);
+    if (!category || category.isDefault || isSaving) return;
+    setIsSaving(true);
+    try {
+      await postAction({ action: 'archiveCategory', categoryId });
+      showBanner('success', `${category.name} archived. Items and history were kept.`);
+    } catch (error) {
+      showBanner('error', error instanceof Error ? error.message : 'Failed to archive category');
+    } finally {
+      setIsSaving(false);
+    }
+  };
+
+  const reactivateCategory = async (categoryId: string) => {
+    const category = categories.find((entry) => entry.id === categoryId);
+    if (!category || isSaving) return;
+    setIsSaving(true);
+    try {
+      await postAction({ action: 'reactivateCategory', categoryId });
+      showBanner('success', `${category.name} restored to active categories.`);
+    } catch (error) {
+      showBanner('error', error instanceof Error ? error.message : 'Failed to restore category');
+    } finally {
+      setIsSaving(false);
+    }
+  };
+
   const categoryUsage = (categoryId: string) => libraryItems.filter((item) => item.categoryId === categoryId).length;
 
   const confirmDelete = async () => {
@@ -1050,12 +1204,11 @@ export function CleaningScheduleTool({ toolId }: CleaningScheduleToolProps) {
 
   const occurrences = useMemo(() => {
     const active = scheduledTasks.filter((task) => task.isActive);
-    const window = rangeWindow(range, today);
     const rows: OccurrenceRow[] = [];
     active.forEach((task) => {
       const item = libraryItems.find((entry) => entry.id === task.libraryItemId);
       if (!item) return;
-      const dates = window ? expandOccurrences(task.nextDueDate, task.frequency, window.start, window.end) : [task.nextDueDate];
+      const dates = datesForRange(range, task.nextDueDate, task.frequency, today);
       dates.forEach((date) => {
         rows.push({
           taskId: task.id,
@@ -1090,8 +1243,50 @@ export function CleaningScheduleTool({ toolId }: CleaningScheduleToolProps) {
     return filtered;
   }, [scheduledTasks, libraryItems, categories, range, search, categoryFilter, sortBy, today]);
 
+  const occurrenceGroups = useMemo(() => {
+    const groups: { taskId: string; itemId: string; name: string; categoryName: string; frequencyLabel: string; rows: OccurrenceRow[] }[] = [];
+    const indexByTask = new Map<string, number>();
+    occurrences.forEach((row) => {
+      const existing = indexByTask.get(row.taskId);
+      if (existing != null) {
+        groups[existing].rows.push(row);
+        return;
+      }
+      indexByTask.set(row.taskId, groups.length);
+      groups.push({
+        taskId: row.taskId,
+        itemId: row.itemId,
+        name: row.name,
+        categoryName: row.categoryName,
+        frequencyLabel: row.frequencyLabel,
+        rows: [row],
+      });
+    });
+    return groups;
+  }, [occurrences]);
+
+  const toggleOccurrenceGroup = (taskId: string) => {
+    setCollapsedGroupIds((prev) => (prev.includes(taskId) ? prev.filter((id) => id !== taskId) : [...prev, taskId]));
+  };
+
   const historyTasks = scheduledTasks.filter((task) => !task.isActive);
-  const selectedLibraryCategory = categories.find((category) => category.id === libraryCategoryId) ?? sortedCategories[0];
+  const completionHistoryRows = useMemo(
+    () =>
+      [...completions]
+        .sort((a, b) => compareIso(b.completedDate, a.completedDate) || compareIso(b.scheduledDate, a.scheduledDate))
+        .map((row) => {
+          const task = scheduledTasks.find((entry) => entry.id === row.scheduledTaskId);
+          const item = task ? libraryItems.find((entry) => entry.id === task.libraryItemId) : undefined;
+          return {
+            ...row,
+            name: item?.name ?? 'Task',
+            categoryName: item ? categoryName(item.categoryId) : '',
+          };
+        }),
+    [completions, scheduledTasks, libraryItems, categories]
+  );
+  const selectedLibraryCategory =
+    activeCategories.find((category) => category.id === libraryCategoryId) ?? activeCategories[0];
   const itemsInCategory = libraryItems
     .filter((item) => item.categoryId === selectedLibraryCategory?.id)
     .sort((a, b) => a.name.localeCompare(b.name));
@@ -1099,6 +1294,18 @@ export function CleaningScheduleTool({ toolId }: CleaningScheduleToolProps) {
   const availableItems = itemsInCategory.filter((item) => !item.isHidden && !activeScheduleByItem.has(item.id));
   const scheduledItems = itemsInCategory.filter((item) => activeScheduleByItem.has(item.id));
   const hiddenItems = itemsInCategory.filter((item) => item.isDefault && item.isHidden);
+  const selectableDefaultIds = availableItems.filter((item) => item.isDefault).map((item) => item.id);
+  const selectedAvailableDefaultIds = selectedDefaultIds.filter((id) => selectableDefaultIds.includes(id));
+
+  const toggleDefaultSelected = (itemId: string) => {
+    setSelectedDefaultIds((prev) => (prev.includes(itemId) ? prev.filter((id) => id !== itemId) : [...prev, itemId]));
+  };
+
+  const toggleSelectAllDefaults = () => {
+    if (selectableDefaultIds.length === 0) return;
+    const allSelected = selectableDefaultIds.every((id) => selectedDefaultIds.includes(id));
+    setSelectedDefaultIds(allSelected ? [] : selectableDefaultIds);
+  };
 
   const detailTask = scheduledTasks.find((task) => task.id === detailTaskId);
   const detailItem = detailTask ? libraryItems.find((item) => item.id === detailTask.libraryItemId) : undefined;
@@ -1109,13 +1316,13 @@ export function CleaningScheduleTool({ toolId }: CleaningScheduleToolProps) {
   const statusBadgeClass = (status: OccurrenceStatus) => {
     if (status === 'Overdue') {
       return isLight
-        ? 'px-1.5 py-0.5 rounded text-xs font-medium border border-red-300 bg-red-50 text-red-800'
-        : 'px-1.5 py-0.5 rounded text-xs font-medium bg-red-500/20 text-red-300';
+        ? 'px-1.5 py-0.5 rounded text-xs font-semibold border border-red-600 bg-red-100 text-red-800'
+        : 'px-1.5 py-0.5 rounded text-xs font-semibold border border-red-400 bg-red-500/40 text-red-100';
     }
     if (status === 'Due today') {
       return isLight
-        ? 'px-1.5 py-0.5 rounded text-xs font-medium border border-amber-300 bg-amber-50 text-amber-900'
-        : 'px-1.5 py-0.5 rounded text-xs font-medium bg-amber-500/20 text-amber-300';
+        ? 'px-1.5 py-0.5 rounded text-xs font-semibold border border-amber-500 bg-amber-100 text-amber-950'
+        : 'px-1.5 py-0.5 rounded text-xs font-semibold border border-amber-400 bg-amber-500/40 text-amber-100';
     }
     if (status === 'Due soon') {
       return isLight
@@ -1126,6 +1333,66 @@ export function CleaningScheduleTool({ toolId }: CleaningScheduleToolProps) {
       ? 'px-1.5 py-0.5 rounded text-xs font-medium border border-slate-300 bg-slate-100 text-slate-700'
       : 'px-1.5 py-0.5 rounded text-xs font-medium bg-slate-700/50 text-slate-300';
   };
+
+  const occurrenceRowClass = (status: OccurrenceStatus) => {
+    if (status === 'Overdue') {
+      return isLight
+        ? `${nestedCardClass} border-l-4 border-l-red-600`
+        : `${nestedCardClass} border-l-4 border-l-red-400`;
+    }
+    if (status === 'Due today') {
+      return isLight
+        ? `${nestedCardClass} border-l-4 border-l-amber-500`
+        : `${nestedCardClass} border-l-4 border-l-amber-400`;
+    }
+    return nestedCardClass;
+  };
+
+  const renderOccurrenceRow = (row: OccurrenceRow) => (
+    <div key={`${row.taskId}-${row.date}`} className={occurrenceRowClass(row.status)}>
+      <div className="flex items-start justify-between">
+        <div className="min-w-0">
+          <div className="flex flex-wrap items-center gap-2 mb-1">
+            <h4 className={headingSmClass}>{row.name}</h4>
+            <span className={chipNeutralClass}>{row.categoryName}</span>
+            <span className={statusBadgeClass(row.status)}>{row.status}</span>
+          </div>
+          <p className={subTextClass}>
+            {formatDateForDisplay(row.date)} · {row.frequencyLabel}
+          </p>
+        </div>
+        <div className="flex shrink-0 items-center gap-1.5 ml-4">
+          <button
+            type="button"
+            onClick={() => openComplete(row.taskId, row.date)}
+            className={rowIconEmeraldClass}
+            aria-label="Complete"
+            title="Complete"
+          >
+            <CheckIcon />
+          </button>
+          <button
+            type="button"
+            onClick={() => openDetail(row.taskId)}
+            className={rowIconEmeraldClass}
+            aria-label="View/Edit"
+            title="View/Edit"
+          >
+            <EditIcon />
+          </button>
+          <button
+            type="button"
+            onClick={() => deactivateTask(row.taskId)}
+            className={rowIconSecondaryClass}
+            aria-label="Move to history — archive this task (inactive). Not completion history."
+            title="Move to history — archive this task (inactive). Not completion history."
+          >
+            <ArchiveIcon />
+          </button>
+        </div>
+      </div>
+    </div>
+  );
 
   const renderItemFields = (form: ItemForm, onChange: (next: ItemForm) => void, item?: CleaningLibraryItem) => {
     const lockName = Boolean(item?.isDefault);
@@ -1174,7 +1441,9 @@ export function CleaningScheduleTool({ toolId }: CleaningScheduleToolProps) {
               className={selectClass}
             >
               <option value="">Select a category...</option>
-              {sortedCategories.map((category) => (
+              {sortedCategories
+                .filter((category) => category.isActive !== false || category.id === form.categoryId)
+                .map((category) => (
                 <option key={category.id} value={category.id}>
                   {category.name}
                 </option>
@@ -1220,6 +1489,21 @@ export function CleaningScheduleTool({ toolId }: CleaningScheduleToolProps) {
         <p className={isLight ? 'text-xs font-semibold uppercase tracking-[0.18em] text-emerald-700 mb-2' : 'text-xs font-semibold uppercase tracking-[0.18em] text-emerald-300 mb-2'}>
           {title}
         </p>
+        {mode === 'available' && selectableDefaultIds.length > 0 && (
+          <div className="flex flex-wrap items-center gap-2 mb-3">
+            <button type="button" onClick={toggleSelectAllDefaults} className={compactPrimaryClass}>
+              {selectableDefaultIds.every((id) => selectedDefaultIds.includes(id)) ? 'Clear selection' : 'Select all defaults'}
+            </button>
+            <button
+              type="button"
+              onClick={() => openBulkActivate(selectedAvailableDefaultIds)}
+              disabled={selectedAvailableDefaultIds.length === 0 || isSaving}
+              className={compactPrimaryClass}
+            >
+              Activate selected{selectedAvailableDefaultIds.length > 0 ? ` (${selectedAvailableDefaultIds.length})` : ''}
+            </button>
+          </div>
+        )}
         {items.length === 0 ? (
           <p className={`${subTextClass} py-2`}>{empty}</p>
         ) : (
@@ -1244,8 +1528,23 @@ export function CleaningScheduleTool({ toolId }: CleaningScheduleToolProps) {
               return (
                 <div key={item.id} className={nestedCardClass}>
                   <div className="flex items-start justify-between">
+                    {mode === 'available' && item.isDefault && (
+                      <label className={`${radioLabelClass} mt-1 mr-3 shrink-0`} onClick={(event) => event.stopPropagation()}>
+                        <input
+                          type="checkbox"
+                          checked={selectedDefaultIds.includes(item.id)}
+                          onChange={() => toggleDefaultSelected(item.id)}
+                          aria-label={`Select ${item.name}`}
+                          className={
+                            isLight
+                              ? 'rounded border-slate-400 bg-white text-emerald-600 focus:ring-emerald-500'
+                              : 'rounded border-slate-600 bg-slate-700 text-emerald-500 focus:ring-emerald-500'
+                          }
+                        />
+                      </label>
+                    )}
                     <div
-                      className={`min-w-0 ${mode === 'scheduled' && schedule ? 'cursor-pointer' : ''}`}
+                      className={`min-w-0 flex-1 ${mode === 'scheduled' && schedule ? 'cursor-pointer' : ''}`}
                       onClick={mode === 'scheduled' && schedule ? () => openDetail(schedule.id, true) : undefined}
                       onKeyDown={
                         mode === 'scheduled' && schedule
@@ -1391,7 +1690,7 @@ export function CleaningScheduleTool({ toolId }: CleaningScheduleToolProps) {
                   <option value="all">All</option>
                   {sortedCategories.map((category) => (
                     <option key={category.id} value={category.id}>
-                      {category.name}
+                      {category.isActive === false ? `${category.name} (archived)` : category.name}
                     </option>
                   ))}
                 </select>
@@ -1411,71 +1710,92 @@ export function CleaningScheduleTool({ toolId }: CleaningScheduleToolProps) {
 
             {occurrences.length === 0 ? (
               <p className={`${mutedTextClass} text-center py-8`}>No cleaning tasks in this view. Activate items from the Library tab.</p>
-            ) : (
-              <div className="space-y-3">
-                {occurrences.map((row) => (
-                  <div key={`${row.taskId}-${row.date}`} className={nestedCardClass}>
-                    <div className="flex items-start justify-between">
-                      <div className="min-w-0">
-                        <div className="flex flex-wrap items-center gap-2 mb-1">
-                          <h4 className={headingSmClass}>{row.name}</h4>
-                          <span className={chipNeutralClass}>{row.categoryName}</span>
-                          <span className={statusBadgeClass(row.status)}>{row.status}</span>
+            ) : range === 'next_3_months' ? (
+              <div className="space-y-4">
+                {occurrenceGroups.map((group) => {
+                  const collapsed = collapsedGroupIds.includes(group.taskId);
+                  return (
+                    <div key={group.taskId}>
+                      <div className="flex items-start justify-between gap-3 mb-2">
+                        <div className="min-w-0">
+                          <h4 className={headingSmClass}>{group.name}</h4>
+                          <p className={subTextClass}>
+                            {group.categoryName} · {group.frequencyLabel} · {group.rows.length}{' '}
+                            {group.rows.length === 1 ? 'occurrence' : 'occurrences'}
+                          </p>
                         </div>
-                        <p className={subTextClass}>
-                          {formatDateForDisplay(row.date)} · {row.frequencyLabel}
-                        </p>
-                      </div>
-                      <div className="flex shrink-0 items-center gap-1.5 ml-4">
                         <button
                           type="button"
-                          onClick={() => openComplete(row.taskId, row.date)}
-                          className={rowIconEmeraldClass}
-                          aria-label="Complete"
-                          title="Complete"
+                          onClick={() => toggleOccurrenceGroup(group.taskId)}
+                          className={`text-sm shrink-0 ${mutedTextClass} hover:opacity-80 transition-colors`}
                         >
-                          <CheckIcon />
-                        </button>
-                        <button
-                          type="button"
-                          onClick={() => openDetail(row.taskId)}
-                          className={rowIconEmeraldClass}
-                          aria-label="View/Edit"
-                          title="View/Edit"
-                        >
-                          <EditIcon />
-                        </button>
-                        <button
-                          type="button"
-                          onClick={() => deactivateTask(row.taskId)}
-                          className={rowIconSecondaryClass}
-                          aria-label="Move to history"
-                          title="Move to history"
-                        >
-                          <ArchiveIcon />
+                          {collapsed ? 'Show' : 'Hide'} ({group.rows.length})
                         </button>
                       </div>
+                      {!collapsed && <div className="space-y-3">{group.rows.map(renderOccurrenceRow)}</div>}
                     </div>
-                  </div>
-                ))}
+                  );
+                })}
               </div>
+            ) : (
+              <div className="space-y-3">{occurrences.map(renderOccurrenceRow)}</div>
             )}
           </div>
 
           <div className={cardClass}>
             <div className="flex items-center justify-between mb-4">
-              <h3 className={sectionTitleClass}>History</h3>
+              <div>
+                <h3 className={sectionTitleClass}>History</h3>
+                <p className={`${subTextClass} mt-1`}>Completion records — same source as each task’s Completion history.</p>
+              </div>
+              <button
+                type="button"
+                onClick={() => setShowCompletionHistory(!showCompletionHistory)}
+                className={`text-sm ${mutedTextClass} hover:opacity-80 transition-colors`}
+              >
+                {showCompletionHistory ? 'Hide' : 'Show'} ({completionHistoryRows.length})
+              </button>
+            </div>
+            {showCompletionHistory &&
+              (completionHistoryRows.length === 0 ? (
+                <p className={`${mutedTextClass} text-center py-8`}>No completion records.</p>
+              ) : (
+                <div className="space-y-3">
+                  {completionHistoryRows.map((row) => (
+                    <div key={row.id} className={nestedCardClass}>
+                      <button type="button" onClick={() => openDetail(row.scheduledTaskId)} className="text-left w-full min-w-0">
+                        <div className="flex flex-wrap items-center gap-2 mb-1">
+                          <h4 className={headingSmClass}>{row.name}</h4>
+                          {row.categoryName && <span className={chipNeutralClass}>{row.categoryName}</span>}
+                          <span className={chipNeutralClass}>{row.lateness}</span>
+                        </div>
+                        <p className={subTextClass}>
+                          Scheduled {formatDateForDisplay(row.scheduledDate)} · Completed {formatDateForDisplay(row.completedDate)}
+                        </p>
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              ))}
+          </div>
+
+          <div className={cardClass}>
+            <div className="flex items-center justify-between mb-4">
+              <div>
+                <h3 className={sectionTitleClass}>Inactive history</h3>
+                <p className={`${subTextClass} mt-1`}>Archived tasks. Completion records are in History above.</p>
+              </div>
               <button
                 type="button"
                 onClick={() => setShowHistory(!showHistory)}
                 className={`text-sm ${mutedTextClass} hover:opacity-80 transition-colors`}
               >
-                {showHistory ? 'Hide' : 'Show'} ({historyTasks.length})
+                {showHistory ? 'Hide archived' : 'Archived'} ({historyTasks.length})
               </button>
             </div>
             {showHistory &&
               (historyTasks.length === 0 ? (
-                <p className={`${mutedTextClass} text-center py-8`}>No tasks in history.</p>
+                <p className={`${mutedTextClass} text-center py-8`}>No archived tasks.</p>
               ) : (
                 <div className="space-y-3">
                   {historyTasks.map((task) => {
@@ -1572,11 +1892,14 @@ export function CleaningScheduleTool({ toolId }: CleaningScheduleToolProps) {
                   Categories
                 </h3>
                 <nav className="space-y-0.5" aria-label="Cleaning item categories">
-                  {sortedCategories.map((category) => (
+                  {activeCategories.map((category) => (
                     <button
                       key={category.id}
                       type="button"
-                      onClick={() => setLibraryCategoryId(category.id)}
+                      onClick={() => {
+                        setLibraryCategoryId(category.id);
+                        setSelectedDefaultIds([]);
+                      }}
                       className={`w-full text-left px-3 py-2 rounded-lg text-sm font-medium transition-colors ${
                         selectedLibraryCategory?.id === category.id
                           ? isLight
@@ -1678,11 +2001,12 @@ export function CleaningScheduleTool({ toolId }: CleaningScheduleToolProps) {
             <div className="flex items-center justify-between mb-4">
               <h3 className={sectionTitleClass}>Categories</h3>
               <span className={subTextClass}>
-                {categories.length} {categories.length === 1 ? 'category' : 'categories'}
+                {activeCategories.length} active
+                {archivedCategories.length > 0 ? ` · ${archivedCategories.length} archived` : ''}
               </span>
             </div>
             <div className="space-y-3">
-              {sortedCategories.map((category) => {
+              {activeCategories.map((category) => {
                 const used = categoryUsage(category.id);
                 return (
                   <div key={category.id} className={nestedCardClass}>
@@ -1725,33 +2049,32 @@ export function CleaningScheduleTool({ toolId }: CleaningScheduleToolProps) {
                             </span>
                           </div>
                         </div>
-                        <div className="flex shrink-0 items-center gap-1.5 ml-4">
-                          {!category.isDefault && (
+                        {!category.isDefault && (
+                          <div className="flex shrink-0 items-center gap-2 ml-4">
                             <button
                               type="button"
                               onClick={() => {
                                 setEditingCategoryId(category.id);
                                 setEditingCategoryName(category.name);
                               }}
-                              className={rowIconEmeraldClass}
-                              aria-label="Rename category"
-                              title="Rename category"
+                              className={compactPrimaryClass}
+                              aria-label="Edit"
+                              title="Edit category name"
                             >
-                              <EditIcon />
+                              Edit
                             </button>
-                          )}
-                          {!category.isDefault && used === 0 && (
                             <button
                               type="button"
-                              onClick={() => setDeleteTarget({ kind: 'category', id: category.id })}
-                              className={rowIconDangerClass}
-                              aria-label="Delete category"
-                              title="Delete category"
+                              onClick={() => archiveCategory(category.id)}
+                              disabled={isSaving}
+                              className={secondaryButtonClass}
+                              aria-label="Archive"
+                              title="Archive category — keeps items and history"
                             >
-                              <DeleteIcon />
+                              Archive
                             </button>
-                          )}
-                        </div>
+                          </div>
+                        )}
                       </div>
                     )}
                   </div>
@@ -1759,6 +2082,44 @@ export function CleaningScheduleTool({ toolId }: CleaningScheduleToolProps) {
               })}
             </div>
           </div>
+          {archivedCategories.length > 0 && (
+            <div className={cardClass}>
+              <div className="flex items-center justify-between mb-4">
+                <div>
+                  <h3 className={sectionTitleClass}>Archived categories</h3>
+                  <p className={`${subTextClass} mt-1`}>Removed from active use. Items and history were kept.</p>
+                </div>
+              </div>
+              <div className="space-y-3">
+                {archivedCategories.map((category) => {
+                  const used = categoryUsage(category.id);
+                  return (
+                    <div key={category.id} className={nestedCardClass}>
+                      <div className="flex items-start justify-between">
+                        <div>
+                          <div className="flex flex-wrap items-center gap-2 mb-1">
+                            <h4 className={headingSmClass}>{category.name}</h4>
+                            <span className={chipNeutralClass}>Archived</span>
+                            <span className={chipNeutralClass}>
+                              {used} {used === 1 ? 'item' : 'items'}
+                            </span>
+                          </div>
+                        </div>
+                        <button
+                          type="button"
+                          onClick={() => reactivateCategory(category.id)}
+                          disabled={isSaving}
+                          className={compactPrimaryClass}
+                        >
+                          Reactivate
+                        </button>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+          )}
         </div>
       )}
 
@@ -1808,16 +2169,18 @@ export function CleaningScheduleTool({ toolId }: CleaningScheduleToolProps) {
         </div>
       )}
 
-      {activateItemId && (
+      {activateItemIds.length > 0 && (
         <div className={overlayClass}>
           <div className={modalCardClass}>
             <div className="flex items-center justify-between mb-4">
               <h3 className={sectionTitleClass}>
-                Activate {libraryItems.find((item) => item.id === activateItemId)?.name ?? 'item'}
+                {activateItemIds.length === 1
+                  ? `Activate ${libraryItems.find((item) => item.id === activateItemIds[0])?.name ?? 'item'}`
+                  : `Activate ${activateItemIds.length} default items`}
               </h3>
               <button
                 type="button"
-                onClick={() => setActivateItemId(null)}
+                onClick={() => setActivateItemIds([])}
                 aria-label="Close modal"
                 title="Close modal"
                 className={iconButtonClass}
@@ -1839,6 +2202,14 @@ export function CleaningScheduleTool({ toolId }: CleaningScheduleToolProps) {
                   className={inputClass}
                 />
               </div>
+              <ReminderDaysFields
+                id="cs-activate-reminder-days"
+                value={activateReminderDays}
+                onChange={setActivateReminderDays}
+                labelClass={labelClass}
+                inputClass={inputClass}
+                hintClass={mutedTextClass}
+              />
               <div className="flex gap-3 pt-2">
                 <button
                   type="button"
@@ -1848,7 +2219,7 @@ export function CleaningScheduleTool({ toolId }: CleaningScheduleToolProps) {
                 >
                   Activate
                 </button>
-                <button type="button" onClick={() => setActivateItemId(null)} className={secondaryButtonClass}>
+                <button type="button" onClick={() => setActivateItemIds([])} className={secondaryButtonClass}>
                   Cancel
                 </button>
               </div>
@@ -1942,6 +2313,14 @@ export function CleaningScheduleTool({ toolId }: CleaningScheduleToolProps) {
                     className={inputClass}
                   />
                 </div>
+                <ReminderDaysFields
+                  id="cs-detail-reminder-days"
+                  value={detailReminderDays}
+                  onChange={setDetailReminderDays}
+                  labelClass={labelClass}
+                  inputClass={inputClass}
+                  hintClass={mutedTextClass}
+                />
                 <div className="flex gap-3">
                   <button
                     type="button"
@@ -1972,6 +2351,10 @@ export function CleaningScheduleTool({ toolId }: CleaningScheduleToolProps) {
                     <p className={bodyTextClass}>{formatDateForDisplay(detailTask.nextDueDate)}</p>
                   </div>
                   <div>
+                    <p className={compactLabelClass}>Reminder</p>
+                    <p className={bodyTextClass}>{reminderSummary(detailTask.reminderDays)}</p>
+                  </div>
+                  <div>
                     <p className={compactLabelClass}>Last completed</p>
                     <p className={bodyTextClass}>{detailTask.lastCompletedDate ? formatDateForDisplay(detailTask.lastCompletedDate) : '—'}</p>
                   </div>
@@ -1997,9 +2380,17 @@ export function CleaningScheduleTool({ toolId }: CleaningScheduleToolProps) {
                       <button type="button" onClick={() => openComplete(detailTask.id, detailTask.nextDueDate)} className={primaryButtonClass}>
                         Complete
                       </button>
-                      <button type="button" onClick={() => deactivateTask(detailTask.id)} className={secondaryButtonClass}>
+                      <button
+                        type="button"
+                        onClick={() => deactivateTask(detailTask.id)}
+                        className={secondaryButtonClass}
+                        title="Move to history — archive this task (inactive). Not completion history."
+                      >
                         Move to history
                       </button>
+                      <p className={`${subTextClass} w-full`}>
+                        Move to history archives the task. It does not record a completion. Completion history is below.
+                      </p>
                     </>
                   )}
                   {!detailTask.isActive && (
