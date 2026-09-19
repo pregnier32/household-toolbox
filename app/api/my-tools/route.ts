@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { getSession } from '@/lib/session';
 import { supabaseServer } from '@/lib/supabaseServer';
 
-// GET - Fetch current user's active tools with details
+// GET - Fetch current user's owned tools (active and inactive) with details
 export async function GET() {
   // Check if user is authenticated
   const user = await getSession();
@@ -12,7 +12,7 @@ export async function GET() {
   }
 
   try {
-    // Fetch user's active tools with tool details
+    // Owned tools stay listed after Inactivate so Reactivate is available (not Store Buy).
     const { data: userTools, error } = await supabaseServer
       .from('users_tools')
       .select(`
@@ -28,7 +28,7 @@ export async function GET() {
         )
       `)
       .eq('user_id', user.id)
-      .eq('status', 'active')
+      .in('status', ['active', 'inactive'])
       .order('created_at', { ascending: false });
 
     if (error) {

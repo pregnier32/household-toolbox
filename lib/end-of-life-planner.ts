@@ -826,6 +826,17 @@ export type EolPlanData = {
   sectionOrder: string[];
 };
 
+export type EolHistoryKind = 'created' | 'edit' | 'archive' | 'restore';
+
+export type EolHistoryEvent = {
+  id: string;
+  at: string;
+  kind: EolHistoryKind;
+  summary: string;
+};
+
+export const EOL_HISTORY_LIMIT = 40;
+
 export type EolPlan = {
   id: string;
   name: string;
@@ -837,6 +848,7 @@ export type EolPlan = {
   lastUpdated: string;
   card_color: string;
   status: EolPlanStatus;
+  historyEvents: EolHistoryEvent[];
   data: EolPlanData;
 };
 
@@ -1465,12 +1477,49 @@ export function createPlan(input: {
     lastUpdated: stamp,
     card_color: input.card_color || '#10b981',
     status: 'Active',
+    historyEvents: [{ id: createEolId('hist'), at: stamp, kind: 'created', summary: 'Created plan' }],
     data: emptyPlanData(),
   };
 }
 
 export function touchPlan(plan: EolPlan): EolPlan {
   return { ...plan, lastUpdated: nowIso() };
+}
+
+export function normalizeHistoryEvents(raw: unknown): EolHistoryEvent[] {
+  return asArray(raw, (value) => {
+    const item = (value && typeof value === 'object' ? value : {}) as Partial<EolHistoryEvent>;
+    const kind = item.kind;
+    if (kind !== 'created' && kind !== 'edit' && kind !== 'archive' && kind !== 'restore') return null;
+    const summary = asString(item.summary).trim();
+    if (!summary) return null;
+    return {
+      id: asString(item.id) || createEolId('hist'),
+      at: asString(item.at) || nowIso(),
+      kind,
+      summary,
+    };
+  }).filter((event): event is EolHistoryEvent => Boolean(event));
+}
+
+export function seedPlanHistory(plan: EolPlan): EolHistoryEvent[] {
+  const existing = normalizeHistoryEvents(plan.historyEvents);
+  if (existing.length) return existing;
+  return [{ id: createEolId('hist'), at: plan.dateCreated || nowIso(), kind: 'created', summary: 'Created plan' }];
+}
+
+export function appendPlanHistory(plan: EolPlan, kind: EolHistoryKind, summary: string): EolPlan {
+  const event: EolHistoryEvent = {
+    id: createEolId('hist'),
+    at: nowIso(),
+    kind,
+    summary,
+  };
+  return {
+    ...plan,
+    lastUpdated: event.at,
+    historyEvents: [...seedPlanHistory(plan), event].slice(-EOL_HISTORY_LIMIT),
+  };
 }
 
 function hasValue(value: unknown): boolean {
@@ -2429,6 +2478,10 @@ function normalizePlan(raw: unknown): EolPlan | null {
     lastUpdated: asString(item.lastUpdated) || nowIso(),
     card_color: asString(item.card_color) || '#10b981',
     status: item.status === 'Archived' ? 'Archived' : 'Active',
+    historyEvents: seedPlanHistory({
+      historyEvents: normalizeHistoryEvents(item.historyEvents),
+      dateCreated: asString(item.dateCreated) || nowIso(),
+    } as EolPlan),
     data: {
       personal: {
         ...emptyPersonalRecord(),

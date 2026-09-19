@@ -13,7 +13,9 @@ import {
   EolPlanStatus,
   EolRelationship,
   isEolUuid,
+  normalizeHistoryEvents,
   secretText,
+  seedPlanHistory,
   withSecret,
 } from '@/lib/end-of-life-planner';
 
@@ -202,21 +204,34 @@ export async function saveEolPlan(userId: string, toolId: string, plan: EolPlan)
     return saveEolPlan(userId, toolId, { ...plan, id: created.id });
   }
 
+  const headerFields = {
+    name: plan.name.trim(),
+    person_full_name: plan.personFullName.trim(),
+    relationship: plan.relationship || '',
+    relationship_custom: plan.relationshipCustom || '',
+    date_of_birth: dateOrNull(plan.dateOfBirth),
+    card_color: plan.card_color || '#10b981',
+    status: plan.status === 'Archived' ? 'Archived' : 'Active',
+    history_events: seedPlanHistory(plan),
+  };
   const { error: headerError } = await supabaseServer
     .from('tools_eolp_plans')
-    .update({
-      name: plan.name.trim(),
-      person_full_name: plan.personFullName.trim(),
-      relationship: plan.relationship || '',
-      relationship_custom: plan.relationshipCustom || '',
-      date_of_birth: dateOrNull(plan.dateOfBirth),
-      card_color: plan.card_color || '#10b981',
-      status: plan.status === 'Archived' ? 'Archived' : 'Active',
-    })
+    .update(headerFields)
     .eq('id', planId)
     .eq('user_id', userId)
     .eq('tool_id', toolId);
-  await throwIfError(headerError, 'update plan header');
+  if (headerError && /history_events/.test(headerError.message || '')) {
+    const { history_events: _ignored, ...headerWithoutHistory } = headerFields;
+    const { error: fallbackError } = await supabaseServer
+      .from('tools_eolp_plans')
+      .update(headerWithoutHistory)
+      .eq('id', planId)
+      .eq('user_id', userId)
+      .eq('tool_id', toolId);
+    await throwIfError(fallbackError, 'update plan header');
+  } else {
+    await throwIfError(headerError, 'update plan header');
+  }
 
   await persistPlanData(userId, toolId, planId, plan);
   return hydratePlan(userId, toolId, {
@@ -1434,6 +1449,10 @@ async function hydratePlan(_userId: string, _toolId: string, row: Record<string,
     lastUpdated: text(row.updated_at) || new Date().toISOString(),
     card_color: text(row.card_color) || '#10b981',
     status: (row.status === 'Archived' ? 'Archived' : 'Active') as EolPlanStatus,
+    historyEvents: seedPlanHistory({
+      historyEvents: normalizeHistoryEvents(row.history_events),
+      dateCreated: text(row.created_at) || new Date().toISOString(),
+    } as EolPlan),
     data,
   };
 }

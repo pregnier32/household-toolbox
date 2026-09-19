@@ -600,6 +600,7 @@ type Tool = {
   created_at: string | null;
   updated_at: string | null;
   isOwned?: boolean;
+  isActive?: boolean;
   trialStatus?: string | null;
   trialEndDate?: string | null;
   icons: {
@@ -1064,10 +1065,10 @@ export default function Dashboard() {
                     {/* Active Tools - Tools the user owns */}
                     <div>
                       <h2 className="text-lg font-semibold text-slate-100 mb-4">Active</h2>
-                      {tools.filter(t => t.isOwned === true).length > 0 ? (
+                      {tools.filter(t => t.isOwned === true && t.isActive === true).length > 0 ? (
                         <div className="grid gap-4 md:grid-cols-4 lg:grid-cols-6">
                           {tools
-                            .filter(t => t.isOwned === true)
+                            .filter(t => t.isOwned === true && t.isActive === true)
                             .sort((a, b) => a.name.localeCompare(b.name, undefined, { sensitivity: 'base' }))
                             .map((tool) => {
                               // Use default icon first, then fallback to available/coming_soon for backward compatibility

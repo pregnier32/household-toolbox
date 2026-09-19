@@ -6,7 +6,7 @@
  * localStorage drafts are migrated once if the database is empty.
  */
 
-import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
+import { useCallback, useEffect, useId, useMemo, useRef, useState, type ReactNode } from 'react';
 import { useTheme } from './AppThemeProvider';
 import {
   ACCOUNT_DISPOSITIONS,
@@ -75,6 +75,7 @@ import {
   EolRelationship,
   formatDateDisplay,
   formatDateTimeDisplay,
+  appendPlanHistory,
   HOME_PROVIDER_TYPES,
   INCOME_TYPES,
   insertSectionAfter,
@@ -347,8 +348,19 @@ function FamilyMemberList(props: {
   addRequestKey?: number;
 }) {
   const [editor, setEditor] = useState<{ mode: 'add' | 'edit'; draft: EolFamilyPerson } | null>(null);
+  const listControlId = useId();
+  const [filterText, setFilterText] = useState('');
+  const [sortBy, setSortBy] = useState<SectionSortId>('saved');
   const members = props.records.filter(
     (person) => person.name.trim() || person.contactInfo.trim() || person.relationship.trim()
+  );
+  const visibleMembers = useMemo(
+    () =>
+      filterAndSortSectionRows(members, filterText, sortBy, (person) => person.name, (person) => [
+        person.contactInfo,
+        person.relationship,
+      ]),
+    [members, filterText, sortBy]
   );
 
   useEffect(() => {
@@ -376,6 +388,17 @@ function FamilyMemberList(props: {
 
   return (
     <div className="space-y-3">
+      <SectionListControls
+        filterId={`${listControlId}-filter`}
+        sortId={`${listControlId}-sort`}
+        filterText={filterText}
+        sortBy={sortBy}
+        onFilter={setFilterText}
+        onSort={setSortBy}
+        inputClass={props.inputClass}
+        selectClass={props.selectClass}
+        labelClass={props.labelClass}
+      />
       <div className="overflow-x-auto">
         <table className="w-full min-w-[36rem] table-fixed text-sm">
           <thead>
@@ -392,11 +415,17 @@ function FamilyMemberList(props: {
             {members.length === 0 ? (
               <tr>
                 <td colSpan={4} className={`${props.mutedTextClass} py-4`}>
-                  No family members added yet.
+                  No family members added yet. Next step: Add family member.
+                </td>
+              </tr>
+            ) : visibleMembers.length === 0 ? (
+              <tr>
+                <td colSpan={4} className={`${props.mutedTextClass} py-4`}>
+                  No matching entries in this section.
                 </td>
               </tr>
             ) : (
-              members.map((person) => (
+              visibleMembers.map((person) => (
                 <tr key={person.id} className={`border-t ${props.listDividerClass}`}>
                   <td className={`truncate py-2.5 pr-3 font-medium ${props.bodyTextClass}`}>{person.name || 'Untitled'}</td>
                   <td className={`truncate py-2.5 pr-3 ${props.bodyTextClass}`}>{person.contactInfo || '—'}</td>
@@ -515,6 +544,76 @@ function FamilyMemberList(props: {
   );
 }
 
+type SectionSortId = 'saved' | 'az' | 'za';
+
+function filterAndSortSectionRows<T extends { id: string }>(
+  records: T[],
+  filterText: string,
+  sortBy: SectionSortId,
+  titleOf: (item: T) => string,
+  extraValues: (item: T) => string[]
+): T[] {
+  const query = filterText.trim().toLowerCase();
+  let rows = records;
+  if (query) {
+    rows = rows.filter((item) => {
+      if ((titleOf(item) || '').toLowerCase().includes(query)) return true;
+      return extraValues(item).some((value) => value.toLowerCase().includes(query));
+    });
+  }
+  if (sortBy === 'az' || sortBy === 'za') {
+    rows = [...rows].sort((a, b) => {
+      const cmp = (titleOf(a) || '').localeCompare(titleOf(b) || '', undefined, { sensitivity: 'base' });
+      return sortBy === 'az' ? cmp : -cmp;
+    });
+  }
+  return rows;
+}
+
+function SectionListControls(props: {
+  filterId: string;
+  sortId: string;
+  filterText: string;
+  sortBy: SectionSortId;
+  onFilter: (value: string) => void;
+  onSort: (value: SectionSortId) => void;
+  inputClass: string;
+  selectClass: string;
+  labelClass: string;
+}) {
+  return (
+    <div className="flex flex-wrap items-end gap-3">
+      <div className="min-w-[12rem] flex-1">
+        <label htmlFor={props.filterId} className={props.labelClass}>
+          Filter
+        </label>
+        <input
+          id={props.filterId}
+          value={props.filterText}
+          onChange={(event) => props.onFilter(event.target.value)}
+          className={props.inputClass}
+          placeholder="Filter this section"
+        />
+      </div>
+      <div className="min-w-[10rem]">
+        <label htmlFor={props.sortId} className={props.labelClass}>
+          Sort
+        </label>
+        <select
+          id={props.sortId}
+          value={props.sortBy}
+          onChange={(event) => props.onSort(event.target.value as SectionSortId)}
+          className={props.selectClass}
+        >
+          <option value="saved">Saved order</option>
+          <option value="az">Name A–Z</option>
+          <option value="za">Name Z–A</option>
+        </select>
+      </div>
+    </div>
+  );
+}
+
 function RecordTableList<T extends { id: string }>(props: {
   records: T[];
   columns: { label: string; value: (item: T) => string; emphasize?: boolean }[];
@@ -544,8 +643,21 @@ function RecordTableList<T extends { id: string }>(props: {
   modalCardClass: string;
   sectionTitleClass: string;
   listDividerClass: string;
+  inputClass: string;
+  selectClass: string;
+  labelClass: string;
 }) {
   const [editor, setEditor] = useState<{ mode: 'add' | 'edit'; draft: T } | null>(null);
+  const listControlId = useId();
+  const [filterText, setFilterText] = useState('');
+  const [sortBy, setSortBy] = useState<SectionSortId>('saved');
+  const visibleRecords = useMemo(
+    () =>
+      filterAndSortSectionRows(props.records, filterText, sortBy, props.titleOf, (item) =>
+        props.columns.map((column) => column.value(item) || '')
+      ),
+    [props.records, props.columns, props.titleOf, filterText, sortBy]
+  );
 
   useEffect(() => {
     const onKey = (event: KeyboardEvent) => {
@@ -573,6 +685,17 @@ function RecordTableList<T extends { id: string }>(props: {
 
   return (
     <div className="space-y-3">
+      <SectionListControls
+        filterId={`${listControlId}-filter`}
+        sortId={`${listControlId}-sort`}
+        filterText={filterText}
+        sortBy={sortBy}
+        onFilter={setFilterText}
+        onSort={setSortBy}
+        inputClass={props.inputClass}
+        selectClass={props.selectClass}
+        labelClass={props.labelClass}
+      />
       <div className="overflow-x-auto">
         <table className="w-full min-w-[40rem] table-fixed text-sm">
           <thead>
@@ -591,11 +714,17 @@ function RecordTableList<T extends { id: string }>(props: {
             {props.records.length === 0 ? (
               <tr>
                 <td colSpan={props.columns.length + 1} className={`${props.mutedTextClass} py-4`}>
-                  {props.emptyText}
+                  {props.emptyText} Next step: {props.addTitle}.
+                </td>
+              </tr>
+            ) : visibleRecords.length === 0 ? (
+              <tr>
+                <td colSpan={props.columns.length + 1} className={`${props.mutedTextClass} py-4`}>
+                  No matching entries in this section.
                 </td>
               </tr>
             ) : (
-              props.records.map((item) => (
+              visibleRecords.map((item) => (
                 <tr key={item.id} className={`border-t ${props.listDividerClass}`}>
                   {props.columns.map((column) => (
                     <td
@@ -822,6 +951,7 @@ export function EndOfLifePlannerTool({ toolId }: EndOfLifePlannerToolProps) {
   const [saveStatus, setSaveStatus] = useState<'idle' | 'saving' | 'saved' | 'error'>('idle');
   const [formError, setFormError] = useState('');
   const [showArchived, setShowArchived] = useState(false);
+  const [planSearchQuery, setPlanSearchQuery] = useState('');
   const [isCreatingPlan, setIsCreatingPlan] = useState(false);
   const [newPlanName, setNewPlanName] = useState('');
   const [newPersonName, setNewPersonName] = useState('');
@@ -984,10 +1114,17 @@ export function EndOfLifePlannerTool({ toolId }: EndOfLifePlannerToolProps) {
     return () => window.removeEventListener('keydown', onKey);
   }, [deleteTarget, showExportPopup, renamingSectionId, menuOpenPlanId, menuOpenTabId, menuOpenSubsectionId]);
 
-  const visiblePlans = useMemo(
-    () => plans.filter((plan) => showArchived || plan.status === 'Active'),
-    [plans, showArchived]
-  );
+  const visiblePlans = useMemo(() => {
+    const query = planSearchQuery.trim().toLowerCase();
+    return plans.filter((plan) => {
+      if (!showArchived && plan.status !== 'Active') return false;
+      if (!query) return true;
+      return (
+        plan.name.toLowerCase().includes(query) ||
+        plan.personFullName.toLowerCase().includes(query)
+      );
+    });
+  }, [plans, showArchived, planSearchQuery]);
 
   const selectedPlan = plans.find((plan) => plan.id === selectedPlanId) || null;
   const overall = selectedPlan ? overallPlanPercent(selectedPlan) : 0;
@@ -1021,7 +1158,11 @@ export function EndOfLifePlannerTool({ toolId }: EndOfLifePlannerToolProps) {
       const currentId = selectedPlanIdRef.current;
       if (!currentId) return;
       setPlans((prev) => {
-        const next = prev.map((plan) => (plan.id === currentId ? touchPlan(updater(plan)) : plan));
+        const next = prev.map((plan) => {
+          if (plan.id !== currentId) return plan;
+          const updated = touchPlan(updater(plan));
+          return immediate ? appendPlanHistory(updated, 'edit', 'Edited plan') : updated;
+        });
         persist(next, currentId, immediate, { planIds: [currentId] });
         return next;
       });
@@ -1109,15 +1250,19 @@ export function EndOfLifePlannerTool({ toolId }: EndOfLifePlannerToolProps) {
     }
     const next = plans.map((plan) =>
       plan.id === editingPlanId
-        ? touchPlan({
-            ...plan,
-            name: editName.trim(),
-            personFullName: editPersonName.trim(),
-            relationship: editRelationship,
-            relationshipCustom: editRelationshipCustom.trim(),
-            dateOfBirth: editDob,
-            card_color: editColor,
-          })
+        ? appendPlanHistory(
+            {
+              ...plan,
+              name: editName.trim(),
+              personFullName: editPersonName.trim(),
+              relationship: editRelationship,
+              relationshipCustom: editRelationshipCustom.trim(),
+              dateOfBirth: editDob,
+              card_color: editColor,
+            },
+            'edit',
+            'Edited plan details'
+          )
         : plan
     );
     setEditingPlanId(null);
@@ -1126,8 +1271,21 @@ export function EndOfLifePlannerTool({ toolId }: EndOfLifePlannerToolProps) {
   };
 
   const archivePlan = (id: string, archived: boolean) => {
+    if (archived) {
+      const plan = plans.find((item) => item.id === id);
+      if (!window.confirm(`Archive “${plan?.name || 'this plan'}”? The plan and its data stay available under Show archived plans.`)) {
+        setMenuOpenPlanId(null);
+        return;
+      }
+    }
     const next = plans.map((plan) =>
-      plan.id === id ? touchPlan({ ...plan, status: archived ? 'Archived' : 'Active' }) : plan
+      plan.id === id
+        ? appendPlanHistory(
+            { ...plan, status: archived ? 'Archived' : 'Active' },
+            archived ? 'archive' : 'restore',
+            archived ? 'Archived plan' : 'Restored plan'
+          )
+        : plan
     );
     setMenuOpenPlanId(null);
     const shouldDeselect = archived && selectedPlanId === id && !showArchived;
@@ -1278,7 +1436,7 @@ export function EndOfLifePlannerTool({ toolId }: EndOfLifePlannerToolProps) {
 
   const subsectionHeading = (
     title: string,
-    options?: { collapseKey?: string; onDuplicate?: () => void; onDelete?: () => void; onAdd?: () => void }
+    options?: { collapseKey?: string; onDuplicate?: () => void; onDelete?: () => void; onAdd?: () => void; addLabel?: string }
   ) => {
     const collapseKey = options?.collapseKey;
     const menuId = collapseKey || null;
@@ -1386,8 +1544,8 @@ export function EndOfLifePlannerTool({ toolId }: EndOfLifePlannerToolProps) {
                 ? 'inline-flex items-center justify-center rounded-md border-2 border-emerald-600 p-0.5 text-emerald-600 transition-colors hover:bg-emerald-50 hover:text-emerald-800'
                 : 'inline-flex items-center justify-center rounded-md border-2 border-emerald-400 p-0.5 text-emerald-400 transition-colors hover:bg-emerald-500/15 hover:text-emerald-300'
             }
-            aria-label="Add family member"
-            title="Add family member"
+            aria-label={options?.addLabel || 'Add family member'}
+            title={options?.addLabel || 'Add family member'}
           >
             <OutlineIcon d={ICON.plus} className="h-4 w-4" />
           </button>
@@ -1548,8 +1706,8 @@ export function EndOfLifePlannerTool({ toolId }: EndOfLifePlannerToolProps) {
               type="button"
               onClick={() => toggleSecret(id)}
               className={rowIconSecondaryClass}
-              aria-label={shown ? 'Hide value' : 'Show value'}
-              title={shown ? 'Hide value' : 'Show value'}
+              aria-label={shown ? `Hide ${spec.label}` : `Show ${spec.label}`}
+              title={shown ? `Hide ${spec.label}` : `Show ${spec.label}`}
             >
               <OutlineIcon d={shown ? ICON.eyeOff : ICON.eye} />
             </button>
@@ -1931,6 +2089,9 @@ export function EndOfLifePlannerTool({ toolId }: EndOfLifePlannerToolProps) {
     modalCardClass: modalCardWideClass,
     sectionTitleClass,
     listDividerClass: isLight ? 'border-slate-200' : 'border-slate-700/50',
+    inputClass,
+    selectClass,
+    labelClass,
     onDelete: (label: string, onConfirm: () => void) => setDeleteTarget({ kind: 'record', label, onConfirm }),
   };
 
@@ -2870,7 +3031,23 @@ export function EndOfLifePlannerTool({ toolId }: EndOfLifePlannerToolProps) {
         </div>
         {!isCreatingPlan ? (
           <>
+            <div className="mb-3 max-w-md">
+              <label htmlFor="eol-plan-search" className={labelClass}>
+                Search plans
+              </label>
+              <input
+                id="eol-plan-search"
+                type="text"
+                value={planSearchQuery}
+                onChange={(event) => setPlanSearchQuery(event.target.value)}
+                placeholder="Search by plan name or person…"
+                className={inputClass}
+              />
+            </div>
             <div className="flex items-center gap-3 flex-wrap">
+              {plans.filter((plan) => showArchived || plan.status === 'Active').length > 0 && visiblePlans.length === 0 ? (
+                <p className={mutedTextClass}>No matching plans.</p>
+              ) : null}
               {visiblePlans.map((plan) =>
                 editingPlanId === plan.id ? (
                   <div
@@ -2947,6 +3124,7 @@ export function EndOfLifePlannerTool({ toolId }: EndOfLifePlannerToolProps) {
                     >
                       <div className="text-center">{plan.name}</div>
                       {plan.status === 'Archived' ? <div className="text-xs mt-1 opacity-80">Archived</div> : null}
+                      <div className="text-xs mt-1 opacity-80">Updated {formatDateTimeDisplay(plan.lastUpdated)}</div>
                     </button>
                     <button
                       type="button"
@@ -3116,8 +3294,33 @@ export function EndOfLifePlannerTool({ toolId }: EndOfLifePlannerToolProps) {
 
       {selectedPlan ? (
         <>
-          <div className={tabStripClass}>
-            <p className={`mb-2 text-base font-semibold ${bodyTextClass}`}>{selectedPlan.name}</p>
+          <div className={`${tabStripClass} relative z-50`}>
+            <div className="mb-2">
+              <p className={`text-base font-semibold ${bodyTextClass}`}>{selectedPlan.name}</p>
+              <p className={`text-xs ${mutedTextClass}`}>
+                Created {formatDateDisplay(selectedPlan.dateCreated.split('T')[0])} · Last updated{' '}
+                {formatDateTimeDisplay(selectedPlan.lastUpdated)}
+              </p>
+              {(selectedPlan.historyEvents || []).length > 0 ? (
+                <ul className={`mt-2 space-y-0.5 text-xs ${mutedTextClass}`}>
+                  <li className={isLight ? 'font-semibold text-slate-700' : 'font-semibold text-slate-300'}>
+                    Recent activity
+                  </li>
+                  {[...selectedPlan.historyEvents].reverse().slice(0, 8).map((event) => (
+                    <li key={event.id}>
+                      {event.kind === 'restore'
+                        ? 'Restored'
+                        : event.kind === 'archive'
+                          ? 'Archived'
+                          : event.kind === 'created'
+                            ? 'Created'
+                            : 'Edited'}
+                      : {event.summary} · {formatDateTimeDisplay(event.at)}
+                    </li>
+                  ))}
+                </ul>
+              ) : null}
+            </div>
             <div className="flex flex-wrap gap-2">
               {tabs.map((tab) => {
                 const sectionKey = tab.custom && tab.id.startsWith('custom:') ? tab.id.slice(7) : String(tab.id);
@@ -3255,7 +3458,7 @@ export function EndOfLifePlannerTool({ toolId }: EndOfLifePlannerToolProps) {
                           }}
                         >
                           <OutlineIcon d={ICON.trash} className="h-4 w-4" />
-                          Delete
+                          Delete Section
                         </button>
                       </div>
                     ) : null}
@@ -3562,6 +3765,7 @@ export function EndOfLifePlannerTool({ toolId }: EndOfLifePlannerToolProps) {
                   {sectionRule()}
                   {subsectionHeading(personalBlockTitle('contacts-list', 'Contacts'), {
                     collapseKey: 'contacts-list',
+                    addLabel: 'Add Contact',
                     onAdd: () => {
                       if (isSubsectionInactive('contacts-list')) toggleSubsection('contacts-list');
                       requestFamilyAdd('contacts');
@@ -3603,6 +3807,7 @@ export function EndOfLifePlannerTool({ toolId }: EndOfLifePlannerToolProps) {
                   {sectionRule()}
                   {subsectionHeading(personalBlockTitle('devices-list', 'Devices'), {
                     collapseKey: 'devices-list',
+                    addLabel: 'Add Device',
                     onAdd: () => {
                       if (isSubsectionInactive('devices-list')) toggleSubsection('devices-list');
                       requestFamilyAdd('devices');
@@ -3644,6 +3849,7 @@ export function EndOfLifePlannerTool({ toolId }: EndOfLifePlannerToolProps) {
                   {sectionRule()}
                   {subsectionHeading(personalBlockTitle('online-list', 'Accounts'), {
                     collapseKey: 'online-list',
+                    addLabel: 'Add Online Account',
                     onAdd: () => {
                       if (isSubsectionInactive('online-list')) toggleSubsection('online-list');
                       requestFamilyAdd('online');
@@ -3685,6 +3891,7 @@ export function EndOfLifePlannerTool({ toolId }: EndOfLifePlannerToolProps) {
                   {sectionRule()}
                   {subsectionHeading(personalBlockTitle('documents-list', 'Documents'), {
                     collapseKey: 'documents-list',
+                    addLabel: 'Add Document',
                     onAdd: () => {
                       if (isSubsectionInactive('documents-list')) toggleSubsection('documents-list');
                       requestFamilyAdd('documents');
@@ -3726,6 +3933,7 @@ export function EndOfLifePlannerTool({ toolId }: EndOfLifePlannerToolProps) {
                   {sectionRule()}
                   {subsectionHeading(personalBlockTitle('insurance-list', 'Policies'), {
                     collapseKey: 'insurance-list',
+                    addLabel: 'Add Policy',
                     onAdd: () => {
                       if (isSubsectionInactive('insurance-list')) toggleSubsection('insurance-list');
                       requestFamilyAdd('insurance');
@@ -3767,6 +3975,7 @@ export function EndOfLifePlannerTool({ toolId }: EndOfLifePlannerToolProps) {
                   {sectionRule()}
                   {subsectionHeading(personalBlockTitle('financial-bank', 'Bank Accounts'), {
                     collapseKey: 'financial-bank',
+                    addLabel: 'Add Bank Account',
                     onAdd: () => {
                       if (isSubsectionInactive('financial-bank')) toggleSubsection('financial-bank');
                       requestFamilyAdd('bank');
@@ -3783,6 +3992,7 @@ export function EndOfLifePlannerTool({ toolId }: EndOfLifePlannerToolProps) {
                   {sectionRule()}
                   {subsectionHeading(personalBlockTitle('financial-invest', 'Investment & Retirement Accounts'), {
                     collapseKey: 'financial-invest',
+                    addLabel: 'Add Investment Account',
                     onAdd: () => {
                       if (isSubsectionInactive('financial-invest')) toggleSubsection('financial-invest');
                       requestFamilyAdd('invest');
@@ -3799,6 +4009,7 @@ export function EndOfLifePlannerTool({ toolId }: EndOfLifePlannerToolProps) {
                   {sectionRule()}
                   {subsectionHeading(personalBlockTitle('financial-cards', 'Credit Cards'), {
                     collapseKey: 'financial-cards',
+                    addLabel: 'Add Credit Card',
                     onAdd: () => {
                       if (isSubsectionInactive('financial-cards')) toggleSubsection('financial-cards');
                       requestFamilyAdd('cards');
@@ -3815,6 +4026,7 @@ export function EndOfLifePlannerTool({ toolId }: EndOfLifePlannerToolProps) {
                   {sectionRule()}
                   {subsectionHeading(personalBlockTitle('financial-debts', 'Loans & Debts'), {
                     collapseKey: 'financial-debts',
+                    addLabel: 'Add Debt',
                     onAdd: () => {
                       if (isSubsectionInactive('financial-debts')) toggleSubsection('financial-debts');
                       requestFamilyAdd('debts');
@@ -3831,6 +4043,7 @@ export function EndOfLifePlannerTool({ toolId }: EndOfLifePlannerToolProps) {
                   {sectionRule()}
                   {subsectionHeading(personalBlockTitle('financial-income', 'Income Sources'), {
                     collapseKey: 'financial-income',
+                    addLabel: 'Add Income Source',
                     onAdd: () => {
                       if (isSubsectionInactive('financial-income')) toggleSubsection('financial-income');
                       requestFamilyAdd('income');
@@ -3847,6 +4060,7 @@ export function EndOfLifePlannerTool({ toolId }: EndOfLifePlannerToolProps) {
                   {sectionRule()}
                   {subsectionHeading(personalBlockTitle('financial-bills', 'Recurring Bills'), {
                     collapseKey: 'financial-bills',
+                    addLabel: 'Add Recurring Bill',
                     onAdd: () => {
                       if (isSubsectionInactive('financial-bills')) toggleSubsection('financial-bills');
                       requestFamilyAdd('bills');
@@ -3914,6 +4128,7 @@ export function EndOfLifePlannerTool({ toolId }: EndOfLifePlannerToolProps) {
                   {sectionRule()}
                   {subsectionHeading(personalBlockTitle('home-utilities', 'Utilities'), {
                     collapseKey: 'home-utilities',
+                    addLabel: 'Add Utility',
                     onAdd: () => {
                       if (isSubsectionInactive('home-utilities')) toggleSubsection('home-utilities');
                       requestFamilyAdd('utilities');
@@ -3956,6 +4171,7 @@ export function EndOfLifePlannerTool({ toolId }: EndOfLifePlannerToolProps) {
                   {sectionRule()}
                   {subsectionHeading(personalBlockTitle('home-providers', 'Home Service Providers'), {
                     collapseKey: 'home-providers',
+                    addLabel: 'Add Service Provider',
                     onAdd: () => {
                       if (isSubsectionInactive('home-providers')) toggleSubsection('home-providers');
                       requestFamilyAdd('providers');
@@ -3972,6 +4188,7 @@ export function EndOfLifePlannerTool({ toolId }: EndOfLifePlannerToolProps) {
                   {sectionRule()}
                   {subsectionHeading(personalBlockTitle('home-vehicles', 'Vehicles'), {
                     collapseKey: 'home-vehicles',
+                    addLabel: 'Add Vehicle',
                     onAdd: () => {
                       if (isSubsectionInactive('home-vehicles')) toggleSubsection('home-vehicles');
                       requestFamilyAdd('vehicles');
@@ -4014,6 +4231,7 @@ export function EndOfLifePlannerTool({ toolId }: EndOfLifePlannerToolProps) {
                   {sectionRule()}
                   {subsectionHeading(personalBlockTitle('next-steps-list', 'Steps'), {
                     collapseKey: 'next-steps-list',
+                    addLabel: 'Add Step',
                     onAdd: () => {
                       if (isSubsectionInactive('next-steps-list')) toggleSubsection('next-steps-list');
                       requestFamilyAdd('steps');
@@ -4262,6 +4480,7 @@ export function EndOfLifePlannerTool({ toolId }: EndOfLifePlannerToolProps) {
                   {sectionRule()}
                   {subsectionHeading(personalBlockTitle('my-wishes-items', 'Personal Property'), {
                     collapseKey: 'my-wishes-items',
+                    addLabel: 'Add Personal Item',
                     onAdd: () => {
                       if (isSubsectionInactive('my-wishes-items')) toggleSubsection('my-wishes-items');
                       requestFamilyAdd('items');
@@ -4303,6 +4522,7 @@ export function EndOfLifePlannerTool({ toolId }: EndOfLifePlannerToolProps) {
                   {sectionRule()}
                   {subsectionHeading(personalBlockTitle('letters-list', 'Letters'), {
                     collapseKey: 'letters-list',
+                    addLabel: 'Add Letter',
                     onAdd: () => {
                       if (isSubsectionInactive('letters-list')) toggleSubsection('letters-list');
                       requestFamilyAdd('letters');
@@ -4344,6 +4564,7 @@ export function EndOfLifePlannerTool({ toolId }: EndOfLifePlannerToolProps) {
                   {sectionRule()}
                   {subsectionHeading(personalBlockTitle('other-list', 'Records'), {
                     collapseKey: 'other-list',
+                    addLabel: 'Add Custom Record',
                     onAdd: () => {
                       if (isSubsectionInactive('other-list')) toggleSubsection('other-list');
                       requestFamilyAdd('other');

@@ -126,8 +126,12 @@ CREATE TABLE IF NOT EXISTS tools_eolp_plans (
   status TEXT NOT NULL DEFAULT 'Active' CHECK (status IN ('Active', 'Archived')),
   is_selected BOOLEAN NOT NULL DEFAULT false,
   created_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT NOW(),
-  updated_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT NOW()
+  updated_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT NOW(),
+  history_events JSONB NOT NULL DEFAULT '[]'::jsonb
 );
+
+ALTER TABLE tools_eolp_plans
+  ADD COLUMN IF NOT EXISTS history_events JSONB NOT NULL DEFAULT '[]'::jsonb;
 
 CREATE INDEX IF NOT EXISTS idx_eolp_plans_user_id ON tools_eolp_plans(user_id);
 CREATE INDEX IF NOT EXISTS idx_eolp_plans_tool_id ON tools_eolp_plans(tool_id);
