@@ -1,13 +1,11 @@
 /**
  * End of Life Planner — client types, seed data, completion math, and draft persist.
  *
- * Future API: /api/tools/end-of-life-planner
- * Future tables: tools_eol_*
+ * API: /api/tools/end-of-life-planner
+ * Tables: tools_eolp_*
  *
- * Temporary until API/DB pass — easy to rip out:
- * localStorage key ht-eol-planner-ui-draft is a stand-in so auto-save and
- * “resume later” can be demonstrated. Replace loadEolDraft / saveEolDraft
- * with the API without rewriting screens.
+ * loadEolDraft / saveEolDraft remain as a one-time migrate helper when
+ * the database is still empty.
  */
 
 export const EOL_UI_DRAFT_STORAGE_KEY = 'ht-eol-planner-ui-draft';
@@ -78,7 +76,7 @@ export const EOL_CUSTOM_TEMPLATES: { id: EolCustomTemplate; label: string }[] = 
   { id: 'contacts', label: 'Important Contacts' },
   { id: 'devices', label: 'Device Login' },
   { id: 'online', label: 'Online Login' },
-  { id: 'documents', label: 'Important Document Notes' },
+  { id: 'documents', label: 'Important Documents' },
   { id: 'insurance', label: 'Insurance Information' },
   { id: 'letters', label: 'Letters' },
   { id: 'other', label: 'Other / Custom Record' },
@@ -89,7 +87,7 @@ export const EOL_BUILT_IN_TABS: { id: EolBuiltInSectionId; label: string }[] = [
   { id: 'contacts', label: 'Important Contacts' },
   { id: 'devices', label: 'Device Login' },
   { id: 'online', label: 'Online Login' },
-  { id: 'documents', label: 'Important Document Notes' },
+  { id: 'documents', label: 'Important Documents' },
   { id: 'insurance', label: 'Insurance Information' },
   { id: 'financial', label: 'Financial Info' },
   { id: 'home', label: 'Home Info' },
@@ -103,8 +101,25 @@ export const EOL_BUILT_IN_TABS: { id: EolBuiltInSectionId; label: string }[] = [
 export type EolFamilyPerson = {
   id: string;
   name: string;
-  notes: string;
+  contactInfo: string;
+  relationship: string;
 };
+
+export const FAMILY_RELATIONSHIPS = [
+  'Spouse/partner',
+  'Child',
+  'Parent',
+  'Sibling',
+  'Grandparent',
+  'Grandchild',
+  'Stepchild',
+  'Stepparent',
+  'In-law',
+  'Guardian',
+  'Dependent',
+  'Emergency contact',
+  'Other',
+] as const;
 
 export type EolPersonalRecord = {
   fullLegalName: string;
@@ -134,11 +149,73 @@ export type EolPersonalRecord = {
   serviceDates: string;
   militaryId: string;
   dischargeRecordsLocation: string;
-  familySpouse: string;
-  children: EolFamilyPerson[];
-  parents: EolFamilyPerson[];
-  dependents: EolFamilyPerson[];
-  emergencyFamilyContact: string;
+  familyMembers: EolFamilyPerson[];
+};
+
+export type EolPersonalBlockKind = 'identification' | 'employment' | 'military' | 'family' | 'notes';
+
+export const PERSONAL_BLOCK_KINDS: EolPersonalBlockKind[] = [
+  'identification',
+  'employment',
+  'military',
+  'family',
+  'notes',
+];
+
+export const PERSONAL_BLOCK_LABELS: Record<EolPersonalBlockKind, string> = {
+  identification: 'Identification',
+  employment: 'Employment',
+  military: 'Military Information',
+  family: 'Family Information',
+  notes: 'Notes',
+};
+
+export const PERSONAL_BUILTIN_KEYS: Record<EolPersonalBlockKind, string> = {
+  identification: 'personal-id',
+  employment: 'personal-work',
+  military: 'personal-military',
+  family: 'personal-family',
+  notes: 'personal-notes',
+};
+
+export type EolIdentificationFields = {
+  driversLicenseNumber: EolSecretString;
+  driversLicenseState: string;
+  passportNumber: EolSecretString;
+  passportExpiration: string;
+  otherIdentification: string;
+};
+
+export type EolEmploymentFields = {
+  employer: string;
+  jobTitle: string;
+  employerContact: string;
+  hrContact: string;
+  workPhone: string;
+  workEmail: string;
+};
+
+export type EolMilitaryFields = {
+  veteranStatus: string;
+  militaryBranch: string;
+  serviceDates: string;
+  militaryId: string;
+  dischargeRecordsLocation: string;
+};
+
+export type EolFamilyFields = {
+  members: EolFamilyPerson[];
+};
+
+export type EolPersonalExtraSection = {
+  id: string;
+  kind: EolPersonalBlockKind;
+  name: string;
+  identification: EolIdentificationFields;
+  employment: EolEmploymentFields;
+  military: EolMilitaryFields;
+  family: EolFamilyFields;
+  notes: string;
 };
 
 export const CONTACT_TYPES = [
@@ -740,6 +817,13 @@ export type EolPlanData = {
   otherRecords: EolCustomRecord[];
   otherNotes: string;
   customSections: EolCustomSection[];
+  personalExtraSections: EolPersonalExtraSection[];
+  sectionLabels: Record<string, string>;
+  inactiveSectionIds: string[];
+  completedSectionIds: string[];
+  inactiveSubsectionIds: string[];
+  removedSectionIds: string[];
+  sectionOrder: string[];
 };
 
 export type EolPlan = {
@@ -762,11 +846,17 @@ export type EolDraftStore = {
   selectedPlanId: string | null;
 };
 
-export function createEolId(prefix: string): string {
+const EOL_UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+
+export function isEolUuid(id: string | null | undefined): boolean {
+  return Boolean(id && EOL_UUID_RE.test(id));
+}
+
+export function createEolId(_prefix?: string): string {
   if (typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function') {
-    return `${prefix}-${crypto.randomUUID()}`;
+    return crypto.randomUUID();
   }
-  return `${prefix}-${Date.now()}-${Math.random().toString(36).slice(2, 10)}`;
+  return `00000000-0000-4000-8000-${Date.now().toString(16).padStart(12, '0').slice(-12)}`;
 }
 
 export function nowIso(): string {
@@ -813,7 +903,7 @@ export function maskSecret(value: string, last4 = false): string {
 }
 
 export function emptyFamilyPerson(): EolFamilyPerson {
-  return { id: createEolId('fam'), name: '', notes: '' };
+  return { id: createEolId('fam'), name: '', contactInfo: '', relationship: '' };
 }
 
 export function emptyPersonalRecord(): EolPersonalRecord {
@@ -845,11 +935,57 @@ export function emptyPersonalRecord(): EolPersonalRecord {
     serviceDates: '',
     militaryId: '',
     dischargeRecordsLocation: '',
-    familySpouse: '',
-    children: [],
-    parents: [],
-    dependents: [],
-    emergencyFamilyContact: '',
+    familyMembers: [],
+  };
+}
+
+export function emptyIdentificationFields(): EolIdentificationFields {
+  return {
+    driversLicenseNumber: emptySecret(),
+    driversLicenseState: '',
+    passportNumber: emptySecret(),
+    passportExpiration: '',
+    otherIdentification: '',
+  };
+}
+
+export function emptyEmploymentFields(): EolEmploymentFields {
+  return {
+    employer: '',
+    jobTitle: '',
+    employerContact: '',
+    hrContact: '',
+    workPhone: '',
+    workEmail: '',
+  };
+}
+
+export function emptyMilitaryFields(): EolMilitaryFields {
+  return {
+    veteranStatus: '',
+    militaryBranch: '',
+    serviceDates: '',
+    militaryId: '',
+    dischargeRecordsLocation: '',
+  };
+}
+
+export function emptyFamilyFields(): EolFamilyFields {
+  return {
+    members: [],
+  };
+}
+
+export function emptyPersonalExtraSection(kind: EolPersonalBlockKind, name: string): EolPersonalExtraSection {
+  return {
+    id: createEolId('pblock'),
+    kind,
+    name,
+    identification: emptyIdentificationFields(),
+    employment: emptyEmploymentFields(),
+    military: emptyMilitaryFields(),
+    family: emptyFamilyFields(),
+    notes: '',
   };
 }
 
@@ -1299,6 +1435,13 @@ export function emptyPlanData(): EolPlanData {
     otherRecords: [],
     otherNotes: '',
     customSections: [],
+    personalExtraSections: [],
+    sectionLabels: {},
+    inactiveSectionIds: [],
+    completedSectionIds: [],
+    inactiveSubsectionIds: [],
+    removedSectionIds: [],
+    sectionOrder: [],
   };
 }
 
@@ -1402,11 +1545,7 @@ function personalFieldValues(personal: EolPersonalRecord): unknown[] {
     personal.serviceDates,
     personal.militaryId,
     personal.dischargeRecordsLocation,
-    personal.familySpouse,
-    personal.children,
-    personal.parents,
-    personal.dependents,
-    personal.emergencyFamilyContact,
+    personal.familyMembers,
   ];
 }
 
@@ -1804,19 +1943,23 @@ export type EolSectionProgress = {
   custom: boolean;
 };
 
-export function planSectionProgress(plan: EolPlan): EolSectionProgress[] {
+export function planSectionProgress(plan: EolPlan, options?: { includeHidden?: boolean }): EolSectionProgress[] {
+  const inactive = new Set(plan.data.inactiveSectionIds || []);
+  const removed = new Set(plan.data.removedSectionIds || []);
+  const completed = new Set(plan.data.completedSectionIds || []);
+  const labels = plan.data.sectionLabels || {};
   const builtIn = EOL_BUILT_IN_TABS.map((tab) => {
-    const percent = builtInSectionPercent(plan.data, tab.id);
+    const percent = completed.has(tab.id) ? 100 : 0;
     return {
       id: tab.id,
-      label: tab.label,
+      label: labels[tab.id] || tab.label,
       percent,
       status: sectionStatus(percent),
       custom: false,
     };
   });
   const custom = plan.data.customSections.map((section) => {
-    const percent = customSectionPercent(section);
+    const percent = completed.has(section.id) ? 100 : 0;
     return {
       id: section.id,
       label: section.name,
@@ -1825,13 +1968,183 @@ export function planSectionProgress(plan: EolPlan): EolSectionProgress[] {
       custom: true,
     };
   });
-  return [...builtIn, ...custom];
+  return [...builtIn, ...custom].filter((section) => {
+    if (removed.has(section.id)) return false;
+    if (!options?.includeHidden && inactive.has(section.id)) return false;
+    return true;
+  });
 }
 
 export function overallPlanPercent(plan: EolPlan): number {
   const sections = planSectionProgress(plan);
   if (sections.length === 0) return 0;
   return Math.round(sections.reduce((sum, section) => sum + section.percent, 0) / sections.length);
+}
+
+const BUILT_IN_DUPLICATE_TEMPLATE: Partial<Record<EolBuiltInSectionId, EolCustomTemplate>> = {
+  contacts: 'contacts',
+  devices: 'devices',
+  online: 'online',
+  documents: 'documents',
+  insurance: 'insurance',
+  letters: 'letters',
+  other: 'other',
+};
+
+function reIdList<T extends { id: string }>(list: T[], prefix: string): T[] {
+  return list.map((item) => ({ ...item, id: createEolId(prefix) }));
+}
+
+export function cloneCustomSection(section: EolCustomSection): EolCustomSection {
+  return {
+    ...section,
+    id: createEolId('csec'),
+    name: copyName(section.name),
+    contacts: reIdList(section.contacts, 'contact'),
+    devices: reIdList(section.devices, 'device'),
+    onlineAccounts: reIdList(section.onlineAccounts, 'online'),
+    documents: reIdList(section.documents, 'doc'),
+    insurance: reIdList(section.insurance, 'ins'),
+    letters: reIdList(section.letters, 'letter').map((letter) => ({ ...letter, lastUpdated: nowIso() })),
+    otherRecords: reIdList(section.otherRecords, 'other').map((record) => ({
+      ...record,
+      customFields: reIdList(record.customFields, 'cfield'),
+    })),
+  };
+}
+
+export function duplicateBuiltInSection(data: EolPlanData, id: EolBuiltInSectionId, label: string): EolCustomSection {
+  const modeledAfter = BUILT_IN_DUPLICATE_TEMPLATE[id] || 'other';
+  const section = emptyCustomSection(copyName(label), modeledAfter);
+  switch (id) {
+    case 'contacts':
+      return { ...section, contacts: reIdList(data.contacts, 'contact'), notes: data.contactsNotes };
+    case 'devices':
+      return { ...section, devices: reIdList(data.devices, 'device'), notes: data.devicesNotes };
+    case 'online':
+      return { ...section, onlineAccounts: reIdList(data.onlineAccounts, 'online'), notes: data.onlineNotes };
+    case 'documents':
+      return { ...section, documents: reIdList(data.documents, 'doc'), notes: data.documentsNotes };
+    case 'insurance':
+      return { ...section, insurance: reIdList(data.insurance, 'ins'), notes: data.insuranceNotes };
+    case 'letters':
+      return { ...section, letters: reIdList(data.letters, 'letter'), notes: data.lettersNotes };
+    case 'other':
+      return { ...section, otherRecords: reIdList(data.otherRecords, 'other'), notes: data.otherNotes };
+    default:
+      return { ...section, notes: '' };
+  }
+}
+
+function reIdFamilyPeople(list: EolFamilyPerson[]): EolFamilyPerson[] {
+  return list.map((person) => ({ ...person, id: createEolId('fam') }));
+}
+
+function cloneIdentificationFields(fields: EolIdentificationFields): EolIdentificationFields {
+  return {
+    ...fields,
+    driversLicenseNumber: withSecret(secretText(fields.driversLicenseNumber)),
+    passportNumber: withSecret(secretText(fields.passportNumber)),
+  };
+}
+
+function cloneFamilyFields(fields: EolFamilyFields): EolFamilyFields {
+  return {
+    members: reIdFamilyPeople(fields.members || []),
+  };
+}
+
+export function nextPersonalCopyName(base: string, existingNames: string[]): string {
+  const root = base.replace(/ \(copy(?: \d+)?\)$/i, '').trim() || 'Copy';
+  const used = new Set(existingNames.map((name) => name.trim().toLowerCase()));
+  const first = `${root} (copy)`;
+  if (!used.has(first.toLowerCase())) return first;
+  let index = 2;
+  while (used.has(`${root} (copy ${index})`.toLowerCase())) index += 1;
+  return `${root} (copy ${index})`;
+}
+
+export function snapshotPersonalBlock(
+  data: EolPlanData,
+  kind: EolPersonalBlockKind,
+  name: string
+): EolPersonalExtraSection {
+  const personal = data.personal;
+  const extra = emptyPersonalExtraSection(kind, name);
+  extra.identification = cloneIdentificationFields({
+    driversLicenseNumber: personal.driversLicenseNumber,
+    driversLicenseState: personal.driversLicenseState,
+    passportNumber: personal.passportNumber,
+    passportExpiration: personal.passportExpiration,
+    otherIdentification: personal.otherIdentification,
+  });
+  extra.employment = { ...emptyEmploymentFields(), ...{
+    employer: personal.employer,
+    jobTitle: personal.jobTitle,
+    employerContact: personal.employerContact,
+    hrContact: personal.hrContact,
+    workPhone: personal.workPhone,
+    workEmail: personal.workEmail,
+  } };
+  extra.military = {
+    veteranStatus: personal.veteranStatus,
+    militaryBranch: personal.militaryBranch,
+    serviceDates: personal.serviceDates,
+    militaryId: personal.militaryId,
+    dischargeRecordsLocation: personal.dischargeRecordsLocation,
+  };
+  extra.family = cloneFamilyFields({
+    members: personal.familyMembers,
+  });
+  extra.notes = data.personalNotes;
+  return extra;
+}
+
+export function clonePersonalExtraSection(section: EolPersonalExtraSection, name: string): EolPersonalExtraSection {
+  return {
+    ...section,
+    id: createEolId('pblock'),
+    name,
+    identification: cloneIdentificationFields(section.identification),
+    employment: { ...section.employment },
+    military: { ...section.military },
+    family: cloneFamilyFields(section.family),
+    notes: section.notes,
+  };
+}
+
+export function insertPersonalExtra(
+  list: EolPersonalExtraSection[],
+  extra: EolPersonalExtraSection,
+  afterId?: string
+): EolPersonalExtraSection[] {
+  if (!afterId) return [...list, extra];
+  const index = list.findIndex((item) => item.id === afterId);
+  if (index < 0) return [...list, extra];
+  const next = [...list];
+  next.splice(index + 1, 0, extra);
+  return next;
+}
+
+export function duplicatePersonalSubsection(
+  data: EolPlanData,
+  kind: EolPersonalBlockKind,
+  extraId?: string
+): { data: EolPlanData; extraId: string } {
+  const extras = data.personalExtraSections || [];
+  const source = extraId ? extras.find((item) => item.id === extraId) : null;
+  const builtInName = data.sectionLabels?.[PERSONAL_BUILTIN_KEYS[kind]] || PERSONAL_BLOCK_LABELS[kind];
+  const existingNames = [builtInName, ...extras.filter((item) => item.kind === kind).map((item) => item.name)];
+  const name = nextPersonalCopyName(source?.name || builtInName, existingNames);
+  const extra = source ? clonePersonalExtraSection(source, name) : snapshotPersonalBlock(data, kind, name);
+  const afterId = extraId || [...extras].reverse().find((item) => item.kind === kind)?.id;
+  return {
+    data: {
+      ...data,
+      personalExtraSections: insertPersonalExtra(extras, extra, afterId),
+    },
+    extraId: extra.id,
+  };
 }
 
 function moveItem<T>(list: T[], index: number, direction: -1 | 1): T[] {
@@ -1893,10 +2206,69 @@ function asArray<T>(value: unknown, mapItem: (item: unknown) => T): T[] {
 }
 
 function normalizeFamilyPerson(raw: unknown): EolFamilyPerson {
-  const item = (raw && typeof raw === 'object' ? raw : {}) as Partial<EolFamilyPerson>;
+  const item = (raw && typeof raw === 'object' ? raw : {}) as Partial<EolFamilyPerson> & { notes?: string };
   return {
     id: asString(item.id) || createEolId('fam'),
     name: asString(item.name),
+    contactInfo: asString(item.contactInfo) || asString(item.notes),
+    relationship: asString(item.relationship),
+  };
+}
+
+function familyPersonFromName(name: string, relationship: string): EolFamilyPerson | null {
+  const trimmed = name.trim();
+  if (!trimmed) return null;
+  return { id: createEolId('fam'), name: trimmed, contactInfo: '', relationship };
+}
+
+function isFilledFamilyMember(person: EolFamilyPerson): boolean {
+  return Boolean(person.name.trim() || person.contactInfo.trim() || person.relationship.trim());
+}
+
+function resolveFamilyMembers(source: Record<string, unknown>): EolFamilyPerson[] {
+  const stored = asArray(source.familyMembers ?? source.members, normalizeFamilyPerson).filter(isFilledFamilyMember);
+  if (stored.length > 0) return stored;
+  const migrated: EolFamilyPerson[] = [];
+  const spouse = familyPersonFromName(asString(source.familySpouse), 'Spouse/partner');
+  if (spouse) migrated.push(spouse);
+  const emergency = familyPersonFromName(asString(source.emergencyFamilyContact), 'Emergency contact');
+  if (emergency) migrated.push(emergency);
+  asArray(source.children, normalizeFamilyPerson).forEach((person) => {
+    migrated.push({ ...person, relationship: person.relationship || 'Child' });
+  });
+  asArray(source.parents, normalizeFamilyPerson).forEach((person) => {
+    migrated.push({ ...person, relationship: person.relationship || 'Parent' });
+  });
+  asArray(source.dependents, normalizeFamilyPerson).forEach((person) => {
+    migrated.push({ ...person, relationship: person.relationship || 'Dependent' });
+  });
+  return migrated;
+}
+
+function normalizePersonalExtraSection(raw: unknown): EolPersonalExtraSection {
+  const item = (raw && typeof raw === 'object' ? raw : {}) as Partial<EolPersonalExtraSection>;
+  const kind = PERSONAL_BLOCK_KINDS.includes(item.kind as EolPersonalBlockKind)
+    ? (item.kind as EolPersonalBlockKind)
+    : 'employment';
+  const identification = (item.identification && typeof item.identification === 'object' ? item.identification : {}) as Partial<EolIdentificationFields>;
+  const employment = (item.employment && typeof item.employment === 'object' ? item.employment : {}) as Partial<EolEmploymentFields>;
+  const military = (item.military && typeof item.military === 'object' ? item.military : {}) as Partial<EolMilitaryFields>;
+  const family = (item.family && typeof item.family === 'object' ? item.family : {}) as Partial<EolFamilyFields>;
+  return {
+    id: asString(item.id) || createEolId('pblock'),
+    kind,
+    name: asString(item.name) || PERSONAL_BLOCK_LABELS[kind],
+    identification: {
+      ...emptyIdentificationFields(),
+      ...identification,
+      driversLicenseNumber: asSecret(identification.driversLicenseNumber),
+      passportNumber: asSecret(identification.passportNumber),
+    },
+    employment: { ...emptyEmploymentFields(), ...employment },
+    military: { ...emptyMilitaryFields(), ...military },
+    family: {
+      members: resolveFamilyMembers(family as Record<string, unknown>),
+    },
     notes: asString(item.notes),
   };
 }
@@ -2064,9 +2436,7 @@ function normalizePlan(raw: unknown): EolPlan | null {
         ssn: asSecret(personal.ssn),
         driversLicenseNumber: asSecret(personal.driversLicenseNumber),
         passportNumber: asSecret(personal.passportNumber),
-        children: asArray(personal.children, normalizeFamilyPerson),
-        parents: asArray(personal.parents, normalizeFamilyPerson),
-        dependents: asArray(personal.dependents, normalizeFamilyPerson),
+        familyMembers: resolveFamilyMembers(personal as Record<string, unknown>),
       },
       personalNotes: asString(data.personalNotes),
       contacts: asArray(data.contacts, normalizeContact),
@@ -2166,8 +2536,56 @@ function normalizePlan(raw: unknown): EolPlan | null {
       otherRecords: asArray(data.otherRecords, normalizeOther),
       otherNotes: asString(data.otherNotes),
       customSections: asArray(data.customSections, normalizeCustomSection),
+      personalExtraSections: asArray(data.personalExtraSections, normalizePersonalExtraSection),
+      sectionLabels: (() => {
+        const raw = data.sectionLabels && typeof data.sectionLabels === 'object' ? data.sectionLabels : {};
+        const labels: Record<string, string> = {};
+        Object.entries(raw as Record<string, unknown>).forEach(([key, value]) => {
+          if (typeof value === 'string' && value.trim()) labels[key] = value.trim();
+        });
+        return labels;
+      })(),
+      inactiveSectionIds: asArray(data.inactiveSectionIds, (value) => asString(value)).filter(Boolean),
+      completedSectionIds: asArray(data.completedSectionIds, (value) => asString(value)).filter(Boolean),
+      inactiveSubsectionIds: asArray(data.inactiveSubsectionIds, (value) => asString(value)).filter(Boolean),
+      removedSectionIds: asArray(data.removedSectionIds, (value) => asString(value)).filter(Boolean),
+      sectionOrder: asArray(data.sectionOrder, (value) => asString(value)).filter(Boolean),
     },
   };
+}
+
+export function defaultSectionOrder(data: EolPlanData): string[] {
+  const removed = new Set(data.removedSectionIds || []);
+  const builtIn = EOL_BUILT_IN_TABS.map((tab) => tab.id).filter((id) => !removed.has(id));
+  const custom = (data.customSections || []).map((section) => section.id).filter((id) => !removed.has(id));
+  return [...builtIn, ...custom];
+}
+
+export function resolveSectionOrder(data: EolPlanData): string[] {
+  const defaults = defaultSectionOrder(data);
+  const known = new Set(defaults);
+  const stored = (data.sectionOrder || []).filter((id) => known.has(id));
+  const missing = defaults.filter((id) => !stored.includes(id));
+  return [...stored, ...missing];
+}
+
+export function insertSectionAfter(order: string[], afterId: string, newId: string): string[] {
+  const without = order.filter((id) => id !== newId);
+  const index = without.indexOf(afterId);
+  if (index < 0) return [...without, newId];
+  const next = [...without];
+  next.splice(index + 1, 0, newId);
+  return next;
+}
+
+export function moveSectionOrder(order: string[], id: string, direction: -1 | 1): string[] {
+  const index = order.indexOf(id);
+  const nextIndex = index + direction;
+  if (index < 0 || nextIndex < 0 || nextIndex >= order.length) return order;
+  const copy = [...order];
+  const [item] = copy.splice(index, 1);
+  copy.splice(nextIndex, 0, item);
+  return copy;
 }
 
 export function emptyDraftStore(): EolDraftStore {
@@ -2201,6 +2619,11 @@ export function saveEolDraft(store: EolDraftStore): void {
     selectedPlanId: store.selectedPlanId,
   };
   window.localStorage.setItem(EOL_UI_DRAFT_STORAGE_KEY, JSON.stringify(payload));
+}
+
+export function clearEolDraft(): void {
+  if (typeof window === 'undefined') return;
+  window.localStorage.removeItem(EOL_UI_DRAFT_STORAGE_KEY);
 }
 
 export function sortContacts(contacts: EolContact[]): EolContact[] {

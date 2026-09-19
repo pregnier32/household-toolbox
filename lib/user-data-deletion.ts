@@ -64,6 +64,7 @@ async function removeStoragePaths(bucket: string, paths: string[]): Promise<void
  * | Event Budget Planner | tools_ebp_categories, tools_ebp_types, tools_ebp_vendors, tools_ebp_events → tools_ebp_event_category_budgets, tools_ebp_expenses → tools_ebp_expense_splits | supabase/create-tools-ebp-tables.sql |
  * | Cleaning Schedule    | tools_cs_categories, tools_cs_items → tools_cs_tasks → tools_cs_completions | supabase/create-tools-cs-tables.sql |
  * | Home Maintenance     | tools_hms_categories, tools_hms_items → tools_hms_tasks → tools_hms_completions | supabase/create-tools-hms-tables.sql |
+ * | End of Life Planner  | tools_eolp_plans → sections, subsections, personal/home/wishes 1:1 rows, list tables, tools_eolp_other_custom_fields | supabase/create-tools-eolp-tables.sql |
  * | Notes                | tools_note_notes, tools_note_tags, tools_note_note_tags, tools_note_security_questions | supabase/archive/create-notes-tables.sql |
  * | Goals Tracking       | tools_gt_categories, tools_gt_goals, tools_gt_phases, tools_gt_tasks, tools_gt_update_notes | supabase/archive/create-tools-gt-tables.sql |
  * | Meal Planner         | tools_mp_items, tools_mp_meal_types, tools_mp_meals, tools_mp_meal_ingredients, tools_mp_plans, tools_mp_plan_assignments | supabase/archive/create-tools-mp-tables.sql |
@@ -80,7 +81,8 @@ async function removeStoragePaths(bucket: string, paths: string[]): Promise<void
  * Monolithic reference (may duplicate archive scripts): supabase/DB_Build_ASOF_4_26_26.sql
  * Global seed data (not per-user, not deleted): tools_hsa_default_accounts, tools_gt_default_categories,
  *   tools_ebp_default_categories, tools_ebp_default_types, tools_cs_default_categories,
- *   tools_cs_default_items, tools_hms_default_categories, tools_hms_default_items, etc.
+ *   tools_cs_default_items, tools_hms_default_categories, tools_hms_default_items,
+ *   tools_eolp_default_next_steps, etc.
  *
  * Event Budget Planner API: app/api/tools/event-budget-planner/ (route.ts + categories/types/vendors sub-routes)
  * Cleaning Schedule API: app/api/tools/cleaning-schedule/route.ts
@@ -89,6 +91,9 @@ async function removeStoragePaths(bucket: string, paths: string[]): Promise<void
  * Home Maintenance Schedule API: app/api/tools/home-maintenance-schedule/route.ts
  * Home Maintenance Schedule UI: app/components/HomeMaintenanceScheduleTool.tsx
  * Home Maintenance Schedule helpers: lib/home-maintenance-schedule.ts
+ * End of Life Planner API: app/api/tools/end-of-life-planner/route.ts
+ * End of Life Planner UI: app/components/EndOfLifePlannerTool.tsx
+ * End of Life Planner helpers: lib/end-of-life-planner.ts, lib/end-of-life-planner-db.ts
  */
 export async function deleteUserAndAssociatedData(userId: string): Promise<void> {
   const storageDeletes: Array<{ bucket: string; path: string }> = [];
@@ -276,6 +281,17 @@ export async function deleteUserAndAssociatedData(userId: string): Promise<void>
     .eq('user_id', userId);
   if (hmsCategoriesDeleteError && !isMissingRelationError(hmsCategoriesDeleteError)) throw hmsCategoriesDeleteError;
   // tools_hms_default_categories / tools_hms_default_items are global seed rows and are left in place.
+
+  // End of Life Planner — supabase/create-tools-eolp-tables.sql (DB-only; no storage)
+  // API: app/api/tools/end-of-life-planner/route.ts
+  // UI: app/components/EndOfLifePlannerTool.tsx
+  // Helpers: lib/end-of-life-planner.ts, lib/end-of-life-planner-db.ts
+  // tools_eolp_plans and child tools_eolp_* rows (sections, subsections, personal, personal_blocks,
+  // family_members, contacts, devices, online_accounts, documents, insurance, bank_accounts,
+  // investments, credit_cards, debts, income_sources, recurring_bills, home, utilities, providers,
+  // vehicles, next_steps, eol_wishes, my_wishes, personal_items, letters, other_records,
+  // other_custom_fields): removed via users ON DELETE CASCADE (and plan/record CASCADE).
+  // tools_eolp_default_next_steps is global seed data and is left in place.
 
   const grouped = storageDeletes.reduce<Record<string, string[]>>((acc, item) => {
     if (!acc[item.bucket]) acc[item.bucket] = [];
