@@ -1123,7 +1123,7 @@ export function CleaningScheduleTool({ toolId }: CleaningScheduleToolProps) {
     setIsSaving(true);
     try {
       await postAction({ action: 'archiveCategory', categoryId });
-      showBanner('success', `${category.name} archived. Items and history were kept.`);
+      showBanner('success', `${category.name} archived. Items and history were kept. Scheduled tasks moved to Archived.`);
     } catch (error) {
       showBanner('error', error instanceof Error ? error.message : 'Failed to archive category');
     } finally {

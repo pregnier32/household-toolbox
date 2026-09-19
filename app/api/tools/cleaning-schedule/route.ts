@@ -475,6 +475,42 @@ export async function POST(request: NextRequest) {
         return NextResponse.json({ error: 'Default categories cannot be archived' }, { status: 400 });
       }
 
+      if (action === 'archiveCategory') {
+        const { data: categoryItems, error: itemsError } = await supabaseServer
+          .from('tools_cs_items')
+          .select('id')
+          .eq('category_id', categoryId)
+          .eq('user_id', user.id)
+          .eq('tool_id', toolId);
+
+        if (itemsError) {
+          console.error('Error finding items for category archive:', itemsError);
+          return NextResponse.json(
+            { error: asErrorMessage(itemsError, 'Failed to archive category tasks') },
+            { status: 500 }
+          );
+        }
+
+        const itemIds = (categoryItems ?? []).map((row) => row.id);
+        if (itemIds.length > 0) {
+          const { error: taskError } = await supabaseServer
+            .from('tools_cs_tasks')
+            .update({ is_active: false, date_inactivated: todayIso() })
+            .eq('user_id', user.id)
+            .eq('tool_id', toolId)
+            .eq('is_active', true)
+            .in('item_id', itemIds);
+
+          if (taskError) {
+            console.error('Error archiving category tasks:', taskError);
+            return NextResponse.json(
+              { error: asErrorMessage(taskError, 'Failed to move scheduled tasks to Archived') },
+              { status: 500 }
+            );
+          }
+        }
+      }
+
       const { error } = await supabaseServer
         .from('tools_cs_categories')
         .update(
