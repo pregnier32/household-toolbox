@@ -182,22 +182,42 @@ async function insertListLineItems(rows: ListItemInsert[]): Promise<string | nul
 
 type GroceryLineWrite = { name?: string; category?: string; quantity?: unknown };
 
-async function resolveShoppingListToolId(userId: string, requestedToolId?: string) {
-  const { data: named } = await supabaseServer
-    .from('tools')
-    .select('id, name')
-    .eq('name', 'Shopping List');
-  const slTools = named ?? [];
+async function resolveShoppingListToolId(userId: string) {
+  const { data: named } = await supabaseServer.from('tools').select('id, name');
+  const slTools = (named ?? []).filter((tool) => (tool.name ?? '').trim().toLowerCase() === 'shopping list');
+  if (slTools.length === 0) return null;
+
   const { data: owned } = await supabaseServer
     .from('users_tools')
+    .select('tool_id, status')
+    .eq('user_id', userId)
+    .in('status', ['active', 'inactive']);
+  const ownedActive = new Set((owned ?? []).filter((row) => row.status === 'active').map((row) => row.tool_id));
+  const ownedAny = new Set((owned ?? []).map((row) => row.tool_id));
+  const activeOwned = slTools.filter((tool) => ownedActive.has(tool.id));
+  const candidates = activeOwned.length ? activeOwned : slTools.filter((tool) => ownedAny.has(tool.id));
+  if (candidates.length === 0) return null;
+  if (candidates.length === 1) return candidates[0].id;
+
+  const { data: existingLists } = await supabaseServer
+    .from('tools_sl_lists')
     .select('tool_id')
     .eq('user_id', userId)
-    .eq('status', 'active');
-  const ownedIds = new Set((owned ?? []).map((row) => row.tool_id));
-  const ownedSl = slTools.find((tool) => ownedIds.has(tool.id));
-  if (ownedSl) return ownedSl.id;
-  if (requestedToolId && slTools.some((tool) => tool.id === requestedToolId)) return requestedToolId;
-  return slTools[0]?.id ?? null;
+    .in('tool_id', candidates.map((tool) => tool.id));
+  const counts = new Map<string, number>();
+  for (const row of existingLists ?? []) {
+    counts.set(row.tool_id, (counts.get(row.tool_id) ?? 0) + 1);
+  }
+  let best = candidates[0].id;
+  let bestCount = 0;
+  for (const tool of candidates) {
+    const n = counts.get(tool.id) ?? 0;
+    if (n > bestCount) {
+      best = tool.id;
+      bestCount = n;
+    }
+  }
+  return best;
 }
 
 async function ensureItemsFromGroceryLines(
@@ -463,21 +483,24 @@ export async function POST(request: NextRequest) {
     }
 
     if (action === 'createList') {
-      const { name, listDate, itemIds, items: itemWrites, groceryLines } = body as {
+      const { name, listDate, itemIds, items: itemWrites, groceryLines, fromMealPlanner } = body as {
         name: string;
         listDate: string;
         itemIds?: string[];
         items?: LineItemWrite[];
         groceryLines?: GroceryLineWrite[];
+        fromMealPlanner?: boolean;
       };
       if (!name?.trim()) {
         return NextResponse.json({ error: 'List name is required' }, { status: 400 });
       }
-      const listToolId = groceryLines?.length
-        ? await resolveShoppingListToolId(user.id, toolId)
-        : toolId;
+      const isGroceryPush = Boolean(fromMealPlanner || (groceryLines && groceryLines.length > 0));
+      const listToolId = isGroceryPush ? await resolveShoppingListToolId(user.id) : toolId;
       if (!listToolId) {
-        return NextResponse.json({ error: 'Shopping List tool was not found.' }, { status: 400 });
+        return NextResponse.json(
+          { error: isGroceryPush ? 'Owned Shopping List tool was not found.' : 'Shopping List tool was not found.' },
+          { status: 400 }
+        );
       }
       let createItems = lineItemsFromBody(itemIds, itemWrites);
       if (groceryLines?.length) {
@@ -488,6 +511,9 @@ export async function POST(request: NextRequest) {
             { error: e instanceof Error ? e.message : 'Failed to match grocery lines' },
             { status: 500 }
           );
+        }
+        if (createItems.length === 0) {
+          return NextResponse.json({ error: 'No grocery line names to save.' }, { status: 400 });
         }
       }
       const { list, listError } = await insertShoppingList(
@@ -518,19 +544,28 @@ export async function POST(request: NextRequest) {
         }
       }
 
+      const { data: verify } = await supabaseServer
+        .from('tools_sl_lists')
+        .select('id, name, list_date, is_active, tool_id')
+        .eq('id', list.id)
+        .eq('user_id', user.id)
+        .eq('tool_id', listToolId)
+        .eq('is_active', true)
+        .maybeSingle();
+      if (!verify?.id) {
+        return NextResponse.json({ error: 'Shopping List was created but is not Active.' }, { status: 500 });
+      }
+      const savedItems = await fetchListLineItems(verify.id);
+
       return NextResponse.json({
         list: {
-          id: list.id,
-          name: list.name,
-          date: list.list_date,
+          id: verify.id,
+          name: verify.name,
+          date: verify.list_date,
           isActive: true,
+          toolId: listToolId,
           showOnDashboard: false,
-          items: createItems.map((item) => ({
-            itemId: item.itemId,
-            name: '',
-            quantity: normalizeQuantity(item.quantity),
-            unit: normalizeUnit(item.unit),
-          })),
+          items: savedItems,
         },
       });
     }
