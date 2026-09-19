@@ -24,6 +24,7 @@ export async function GET(
     // Get password from query parameter if provided
     const { searchParams } = new URL(request.url);
     const password = searchParams.get('password');
+    const inline = searchParams.get('inline') === '1';
 
     // Fetch document to verify ownership and get file info
     const { data: document, error: docError } = await supabaseServer
@@ -104,12 +105,12 @@ export async function GET(
     const arrayBuffer = await fileData.arrayBuffer();
     const buffer = Buffer.from(arrayBuffer);
 
-    // Return the file with appropriate headers
+    const safeName = (document.file_name || 'document').replace(/["\r\n]/g, '');
     return new NextResponse(buffer, {
       status: 200,
       headers: {
         'Content-Type': document.file_type || 'application/octet-stream',
-        'Content-Disposition': `attachment; filename="${document.file_name || 'document'}"`,
+        'Content-Disposition': `${inline ? 'inline' : 'attachment'}; filename="${safeName}"`,
         'Content-Length': buffer.length.toString(),
       },
     });

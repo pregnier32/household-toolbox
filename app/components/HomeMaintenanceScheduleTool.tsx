@@ -1081,7 +1081,7 @@ export function HomeMaintenanceScheduleTool({ toolId }: HomeMaintenanceScheduleT
     try {
       await postAction({ action: 'reactivateTask', taskId });
       showBanner('success', 'Task reactivated.');
-      openDetail(taskId, true);
+      openDetail(taskId, false);
     } catch (error) {
       showBanner('error', error instanceof Error ? error.message : 'Failed to reactivate task');
     } finally {
@@ -1090,6 +1090,8 @@ export function HomeMaintenanceScheduleTool({ toolId }: HomeMaintenanceScheduleT
   };
 
   const openComplete = (taskId: string, scheduledDate: string) => {
+    setDetailTaskId(null);
+    setDetailEditing(false);
     setCompleteOccurrence({ taskId, scheduledDate });
     setCompleteBasis('today');
     setCompleteNotes('');
@@ -1114,6 +1116,7 @@ export function HomeMaintenanceScheduleTool({ toolId }: HomeMaintenanceScheduleT
         taskId: task.id,
         scheduledDate: completeOccurrence.scheduledDate,
         completeBasis,
+        completedDate: completeBasis === 'today' ? today : undefined,
         completionNotes: completeNotes.trim(),
         cost,
       });
@@ -1405,6 +1408,26 @@ export function HomeMaintenanceScheduleTool({ toolId }: HomeMaintenanceScheduleT
   }, [range, completions, scheduledTasks, libraryItems, categories, search, categoryFilter, sortBy, today]);
 
   const historyTasks = scheduledTasks.filter((task) => !task.isActive);
+  const historyCompletionRows = useMemo(() => {
+    const rows: CompletedRow[] = completions.map((row) => {
+      const task = scheduledTasks.find((entry) => entry.id === row.scheduledTaskId);
+      const item = task ? libraryItems.find((entry) => entry.id === task.libraryItemId) : undefined;
+      return {
+        completionId: row.id,
+        taskId: row.scheduledTaskId,
+        name: item?.name ?? 'Maintenance task',
+        categoryName: item ? categoryName(item.categoryId) : 'Uncategorized',
+        scheduledDate: row.scheduledDate,
+        completedDate: row.completedDate,
+        lateness: row.lateness,
+        cost: row.cost,
+        notes: row.notes,
+      };
+    });
+    rows.sort((a, b) => compareIso(b.completedDate, a.completedDate) || a.name.localeCompare(b.name));
+    return rows;
+  }, [completions, scheduledTasks, libraryItems, categories]);
+  const historyCount = historyCompletionRows.length + historyTasks.length;
   const selectedLibraryCategory = categories.find((category) => category.id === libraryCategoryId) ?? sortedCategories[0];
   const itemsInCategory = libraryItems
     .filter((item) => item.categoryId === selectedLibraryCategory?.id)
@@ -1809,8 +1832,8 @@ export function HomeMaintenanceScheduleTool({ toolId }: HomeMaintenanceScheduleT
                       <div className="min-w-0">
                         <div className="flex flex-wrap items-center gap-2 mb-1">
                           <h4 className={headingSmClass}>{row.name}</h4>
-                          {row.location && <span className={chipNeutralClass}>{row.location}</span>}
-                          <span className={chipNeutralClass}>{row.categoryName}</span>
+                          {row.location && <span className={chipNeutralClass}>Location: {row.location}</span>}
+                          <span className={chipNeutralClass}>Category: {row.categoryName}</span>
                           <span className={statusBadgeClass(row.status)}>{row.status}</span>
                         </div>
                         <p className={subTextClass}>
@@ -1861,14 +1884,43 @@ export function HomeMaintenanceScheduleTool({ toolId }: HomeMaintenanceScheduleT
                 onClick={() => setShowHistory(!showHistory)}
                 className={`text-sm ${mutedTextClass} hover:opacity-80 transition-colors`}
               >
-                {showHistory ? 'Hide' : 'Show'} ({historyTasks.length})
+                {showHistory ? 'Hide' : 'Show'} ({historyCount})
               </button>
             </div>
             {showHistory &&
-              (historyTasks.length === 0 ? (
+              (historyCount === 0 ? (
                 <p className={`${mutedTextClass} text-center py-8`}>No tasks in history.</p>
               ) : (
                 <div className="space-y-3">
+                  {historyCompletionRows.map((row) => (
+                    <div key={row.completionId} className={`${nestedCardClass} ${isLight ? '' : 'opacity-80'}`}>
+                      <div className="flex items-start justify-between">
+                        <button type="button" onClick={() => openDetail(row.taskId)} className="text-left min-w-0">
+                          <div className="flex flex-wrap items-center gap-2 mb-1">
+                            <h4 className={headingSmClass}>{row.name}</h4>
+                            <span className={chipNeutralClass}>{row.categoryName}</span>
+                            <span className={statusBadgeClass('Completed')}>Completed</span>
+                          </div>
+                          <p className={subTextClass}>
+                            Scheduled {formatDateForDisplay(row.scheduledDate)} · Completed {formatDateForDisplay(row.completedDate)} · {row.lateness}
+                            {row.cost != null ? ` · ${formatCost(row.cost)}` : ''}
+                          </p>
+                          {row.notes && <p className={`${subTextClass} italic mt-1`}>{snippet(row.notes)}</p>}
+                        </button>
+                        <div className="flex shrink-0 items-center gap-1.5 ml-4">
+                          <button
+                            type="button"
+                            onClick={() => openDetail(row.taskId)}
+                            className={rowIconEmeraldClass}
+                            aria-label="View/Edit"
+                            title="View/Edit"
+                          >
+                            <EditIcon />
+                          </button>
+                        </div>
+                      </div>
+                    </div>
+                  ))}
                   {historyTasks.map((task) => {
                     const item = libraryItems.find((entry) => entry.id === task.libraryItemId);
                     if (!item) return null;

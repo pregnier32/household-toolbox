@@ -2,6 +2,9 @@
 
 import { useState, useEffect } from 'react';
 import { useTheme } from './AppThemeProvider';
+import { AttachmentButton } from './AttachmentButton';
+import { AttachmentModal } from './AttachmentModal';
+import { canPreviewAttachment, formatAttachmentBytes, isImageAttachment, isPdfAttachment, type AttachmentItem } from '@/lib/attachments';
 
 type DocumentTag = {
   id: string;
@@ -72,6 +75,33 @@ const SECURITY_QUESTIONS = [
   { id: 'q20', question: 'What was the name of your favorite childhood toy?' }
 ];
 
+const EXISTING_PASSWORD_PLACEHOLDER = '••••••••';
+
+function isExistingPasswordPlaceholder(value: string) {
+  return value === EXISTING_PASSWORD_PLACEHOLDER;
+}
+
+function parseLocalDate(isoDate: string): Date | null {
+  const match = /^(\d{4})-(\d{2})-(\d{2})/.exec(isoDate);
+  if (!match) return null;
+  return new Date(Number(match[1]), Number(match[2]) - 1, Number(match[3]));
+}
+
+function formatLocalDate(isoDate: string): string {
+  const d = parseLocalDate(isoDate);
+  return d ? d.toLocaleDateString() : isoDate;
+}
+
+function formatLocalDateLong(isoDate: string): string {
+  const d = parseLocalDate(isoDate);
+  return d ? d.toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' }) : isoDate;
+}
+
+function toDateInputValue(isoDate: string): string {
+  const match = /^(\d{4})-(\d{2})-(\d{2})/.exec(isoDate);
+  return match ? `${match[1]}-${match[2]}-${match[3]}` : isoDate;
+}
+
 type ImportantDocumentsToolProps = {
   toolId?: string;
 };
@@ -113,6 +143,17 @@ export function ImportantDocumentsTool({ toolId }: ImportantDocumentsToolProps) 
   const modalCardClass = isLight
     ? 'rounded-2xl border border-slate-200 bg-white p-6 max-w-md w-full mx-4 shadow-xl'
     : 'rounded-2xl border border-slate-800 bg-slate-900 p-6 max-w-md w-full mx-4';
+  const modalCardLgClass = isLight
+    ? 'rounded-2xl border border-slate-200 bg-white p-6 max-w-2xl w-full mx-4 max-h-[90vh] overflow-y-auto shadow-xl'
+    : 'rounded-2xl border border-slate-800 bg-slate-900 p-6 max-w-2xl w-full mx-4 max-h-[90vh] overflow-y-auto';
+  const viewFieldLabelClass = isLight ? 'text-sm font-medium text-slate-700' : 'text-sm font-medium text-slate-300';
+  const viewFieldValueClass = isLight ? 'text-slate-900 text-base' : 'text-slate-100 text-base';
+  const viewNoteBoxClass = isLight
+    ? 'px-4 py-3 rounded-lg border border-slate-200 bg-slate-50 text-slate-900 whitespace-pre-wrap break-words'
+    : 'px-4 py-3 rounded-lg border border-slate-700 bg-slate-900/70 text-slate-100 whitespace-pre-wrap break-words';
+  const viewCloseClass = isLight
+    ? 'rounded-lg p-1 text-slate-600 hover:bg-slate-100 hover:text-slate-900 transition-colors'
+    : 'rounded-lg p-1 text-slate-400 hover:bg-slate-800 hover:text-slate-200 transition-colors';
   const deleteModalCardClass = isLight
     ? 'rounded-2xl border border-slate-200 bg-white p-6 max-w-md w-full mx-4 shadow-2xl'
     : 'rounded-2xl border border-slate-800 bg-slate-900 p-6 max-w-md w-full mx-4';
@@ -141,6 +182,7 @@ export function ImportantDocumentsTool({ toolId }: ImportantDocumentsToolProps) 
   const [tags, setTags] = useState<DocumentTag[]>([]);
   const [activeTab, setActiveTab] = useState<'documents' | 'tags'>('documents');
   const [isLoading, setIsLoading] = useState(false);
+  const [hasLoadedDocuments, setHasLoadedDocuments] = useState(false);
   
   // Search and filter state
   const [searchQuery, setSearchQuery] = useState('');
@@ -180,7 +222,6 @@ export function ImportantDocumentsTool({ toolId }: ImportantDocumentsToolProps) 
     uploadedDate: '',
     effectiveDate: '',
     note: '',
-    file: null as File | null,
     selectedTags: [] as string[],
     requiresPasswordForDownload: false,
     downloadPassword: '',
@@ -194,12 +235,19 @@ export function ImportantDocumentsTool({ toolId }: ImportantDocumentsToolProps) 
   const [editingTagName, setEditingTagName] = useState('');
   
   // History state
-  const [showHistory, setShowHistory] = useState(false);
+  const [showHistory, setShowHistory] = useState(true);
   const [deleteConfirmId, setDeleteConfirmId] = useState<string | null>(null);
   const [deleteConfirmText, setDeleteConfirmText] = useState('');
   const [deleteTagConfirmId, setDeleteTagConfirmId] = useState<string | null>(null);
   const [deleteTagConfirmText, setDeleteTagConfirmText] = useState('');
+  const [viewingDocument, setViewingDocument] = useState<Document | null>(null);
+  const [attachmentModal, setAttachmentModal] = useState<null | 'add' | string>(null);
+  const [attachmentBusy, setAttachmentBusy] = useState(false);
+  const [addAttachmentPreviewUrl, setAddAttachmentPreviewUrl] = useState<string | null>(null);
   const [downloadPasswordModalId, setDownloadPasswordModalId] = useState<string | null>(null);
+  const [passwordFileIntent, setPasswordFileIntent] = useState<'view' | 'download' | 'remove' | 'replace'>('download');
+  const [pendingReplaceFile, setPendingReplaceFile] = useState<File | null>(null);
+  const [viewPreview, setViewPreview] = useState<AttachmentItem | null>(null);
   const [downloadPasswordInput, setDownloadPasswordInput] = useState('');
   const [showDownloadPassword, setShowDownloadPassword] = useState(false);
   const [showForgotPasswordModal, setShowForgotPasswordModal] = useState(false);
@@ -210,6 +258,24 @@ export function ImportantDocumentsTool({ toolId }: ImportantDocumentsToolProps) 
   const [showNewPassword, setShowNewPassword] = useState(false);
   const [showConfirmNewPassword, setShowConfirmNewPassword] = useState(false);
   const [passwordResetStep, setPasswordResetStep] = useState<'questions' | 'reset'>('questions');
+
+  useEffect(() => {
+    if (!newDocument.file) {
+      setAddAttachmentPreviewUrl(null);
+      return;
+    }
+    const url = URL.createObjectURL(newDocument.file);
+    setAddAttachmentPreviewUrl(url);
+    return () => URL.revokeObjectURL(url);
+  }, [newDocument.file]);
+
+  useEffect(() => {
+    return () => {
+      if (viewPreview?.url?.startsWith('blob:')) {
+        URL.revokeObjectURL(viewPreview.url);
+      }
+    };
+  }, [viewPreview]);
 
   // Load documents and tags from API
   useEffect(() => {
@@ -297,10 +363,11 @@ export function ImportantDocumentsTool({ toolId }: ImportantDocumentsToolProps) 
       } catch (error) {
         console.error('Error loading data:', error);
       } finally {
+        setHasLoadedDocuments(true);
         setIsLoading(false);
       }
     };
-    
+
     loadData();
   }, [toolId]);
 
@@ -318,27 +385,9 @@ export function ImportantDocumentsTool({ toolId }: ImportantDocumentsToolProps) 
 
   const activeDocuments = filteredDocuments.filter(doc => doc.isActive).sort((a, b) => a.documentName.localeCompare(b.documentName));
   const inactiveDocuments = filteredDocuments.filter(doc => !doc.isActive);
+  const isDocumentFilterActive = searchQuery.trim() !== '' || selectedTagFilter !== 'all';
   const activeTags = tags.filter(tag => tag.isActive).sort((a, b) => a.name.localeCompare(b.name));
   const inactiveTags = tags.filter(tag => !tag.isActive).sort((a, b) => a.name.localeCompare(b.name));
-
-  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>, isEdit: boolean = false) => {
-    const file = e.target.files?.[0] || null;
-    if (file) {
-      // Check file size (10MB limit)
-      const maxSize = 10 * 1024 * 1024; // 10MB in bytes
-      if (file.size > maxSize) {
-        alert('File size cannot exceed 10MB. Please choose a smaller file.');
-        e.target.value = ''; // Reset input
-        return;
-      }
-      
-      if (isEdit) {
-        setEditingDocument({ ...editingDocument, file });
-      } else {
-        setNewDocument({ ...newDocument, file });
-      }
-    }
-  };
 
   const addDocument = async () => {
     if (!newDocument.documentName.trim() || !newDocument.uploadedDate) {
@@ -454,6 +503,7 @@ export function ImportantDocumentsTool({ toolId }: ImportantDocumentsToolProps) 
           ]
         });
         setShowPassword({ ...showPassword, new: false, newConfirm: false });
+        setAttachmentModal(null);
         setIsAdding(false);
       } else {
         const errorData = await response.json();
@@ -473,15 +523,18 @@ export function ImportantDocumentsTool({ toolId }: ImportantDocumentsToolProps) 
     setEditingDocument({
       documentName: document.documentName,
       uploadedDate: document.uploadedDate,
-      effectiveDate: document.effectiveDate || '',
+      effectiveDate: document.effectiveDate ? toDateInputValue(document.effectiveDate) : '',
       note: document.note || '',
-      file: null,
       selectedTags: document.tags,
       requiresPasswordForDownload: document.requiresPasswordForDownload || false,
-      downloadPassword: '', // Don't show existing password for security
-      confirmPassword: ''
+      downloadPassword: document.requiresPasswordForDownload ? EXISTING_PASSWORD_PLACEHOLDER : '',
+      confirmPassword: document.requiresPasswordForDownload ? EXISTING_PASSWORD_PLACEHOLDER : ''
     });
     setShowPassword({ ...showPassword, edit: false, editConfirm: false });
+  };
+
+  const openViewDocument = (document: Document) => {
+    setViewingDocument(document);
   };
 
   const cancelEditing = () => {
@@ -491,7 +544,6 @@ export function ImportantDocumentsTool({ toolId }: ImportantDocumentsToolProps) 
       uploadedDate: '',
       effectiveDate: '',
       note: '',
-      file: null,
       selectedTags: [],
       requiresPasswordForDownload: false,
       downloadPassword: '',
@@ -511,15 +563,15 @@ export function ImportantDocumentsTool({ toolId }: ImportantDocumentsToolProps) 
     }
 
     const existingDoc = documents.find(doc => doc.id === editingId);
+    const enteredPassword = editingDocument.downloadPassword.trim();
+    const isChangingPassword = Boolean(enteredPassword) && !isExistingPasswordPlaceholder(enteredPassword);
     if (editingDocument.requiresPasswordForDownload) {
-      // If password protection is newly enabled or password is being changed
-      if (editingDocument.downloadPassword.trim()) {
+      if (isChangingPassword) {
         if (editingDocument.downloadPassword !== editingDocument.confirmPassword) {
           alert('Passwords do not match. Please confirm your password.');
           return;
         }
-      } else if (!existingDoc?.requiresPasswordForDownload || !existingDoc?.downloadPassword) {
-        // Only require password if it's newly enabled
+      } else if (!existingDoc?.requiresPasswordForDownload) {
         alert('Please enter a password for download protection.');
         return;
       }
@@ -540,12 +592,9 @@ export function ImportantDocumentsTool({ toolId }: ImportantDocumentsToolProps) 
       formData.append('uploadedDate', editingDocument.uploadedDate);
       formData.append('effectiveDate', editingDocument.effectiveDate || '');
       formData.append('note', editingDocument.note.trim() || '');
-      if (editingDocument.file) {
-        formData.append('file', editingDocument.file);
-      }
       formData.append('requiresPasswordForDownload', editingDocument.requiresPasswordForDownload.toString());
-      if (editingDocument.requiresPasswordForDownload && editingDocument.downloadPassword.trim()) {
-        formData.append('downloadPassword', editingDocument.downloadPassword.trim());
+      if (editingDocument.requiresPasswordForDownload && isChangingPassword) {
+        formData.append('downloadPassword', enteredPassword);
       }
       formData.append('selectedTags', JSON.stringify(editingDocument.selectedTags));
       // Note: Security questions are only set on create, not on update unless password is being changed
@@ -1068,6 +1117,53 @@ export function ImportantDocumentsTool({ toolId }: ImportantDocumentsToolProps) 
     return SECURITY_QUESTIONS.filter(q => !selectedQuestionIds.includes(q.id));
   };
 
+  const triggerDownload = (blob: Blob, fileName: string) => {
+    const url = window.URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = fileName || 'document';
+    document.body.appendChild(a);
+    a.click();
+    window.URL.revokeObjectURL(url);
+    document.body.removeChild(a);
+    alert('Document downloaded successfully.');
+  };
+
+  const fetchDocumentBlob = async (doc: Document, password?: string, inline = false): Promise<Blob> => {
+    const params = new URLSearchParams();
+    if (inline) params.set('inline', '1');
+    if (password) params.set('password', password);
+    const query = params.toString();
+    const response = await fetch(`/api/tools/important-documents/download/${doc.id}${query ? `?${query}` : ''}`);
+    if (!response.ok) {
+      const errorData = await response.json().catch(() => ({ error: 'Failed to open file' }));
+      throw new Error(errorData.error || 'Failed to open file');
+    }
+    return response.blob();
+  };
+
+  const openDocumentForView = async (doc: Document, blob: Blob) => {
+    const type = blob.type || doc.fileType || '';
+    if (!canPreviewAttachment(type, doc.fileName)) {
+      alert('This file type can’t be previewed in the browser. Use Download to save it.');
+      return;
+    }
+    const url = window.URL.createObjectURL(blob);
+    if (isImageAttachment(type)) {
+      setViewPreview({
+        id: doc.id,
+        name: doc.fileName || 'Attachment',
+        size: doc.fileSize || blob.size,
+        type,
+        url,
+      });
+      return;
+    }
+    if (isPdfAttachment(type, doc.fileName)) {
+      window.open(url, '_blank', 'noopener,noreferrer');
+    }
+  };
+
   const handleDownload = async (doc: Document) => {
     if (!doc.fileUrl) {
       alert('No file available for download.');
@@ -1075,31 +1171,143 @@ export function ImportantDocumentsTool({ toolId }: ImportantDocumentsToolProps) 
     }
 
     if (doc.requiresPasswordForDownload) {
-      // Show password modal
-      setDownloadPasswordModalId(doc.id);
-      setDownloadPasswordInput('');
+      promptDocumentPassword(doc, 'download');
       return;
     }
 
-    // Download via API endpoint (handles authentication and private storage)
     try {
-      const response = await fetch(`/api/tools/important-documents/download/${doc.id}`);
-      if (!response.ok) {
-        const errorData = await response.json().catch(() => ({ error: 'Failed to download file' }));
-        throw new Error(errorData.error || 'Failed to download file');
-      }
-      const blob = await response.blob();
-      const url = window.URL.createObjectURL(blob);
-      const a = document.createElement('a');
-      a.href = url;
-      a.download = doc.fileName || 'document';
-      document.body.appendChild(a);
-      a.click();
-      window.URL.revokeObjectURL(url);
-      document.body.removeChild(a);
+      const blob = await fetchDocumentBlob(doc);
+      triggerDownload(blob, doc.fileName || 'document');
     } catch (error) {
       console.error('Error downloading file:', error);
       alert('Failed to download file. Please try again.');
+    }
+  };
+
+  const handleViewDocument = async (doc: Document) => {
+    if (!doc.fileUrl) {
+      alert('No file available to view.');
+      return;
+    }
+
+    if (doc.requiresPasswordForDownload) {
+      promptDocumentPassword(doc, 'view');
+      return;
+    }
+
+    try {
+      const blob = await fetchDocumentBlob(doc, undefined, true);
+      await openDocumentForView(doc, blob);
+    } catch (error) {
+      console.error('Error viewing file:', error);
+      alert('Failed to open file. Please try again.');
+    }
+  };
+
+  const documentHasAttachment = (doc: Document) => Boolean(doc.fileUrl || doc.fileName);
+
+  const savedDocumentToAttachment = (doc: Document): AttachmentItem[] => {
+    if (!documentHasAttachment(doc)) return [];
+    return [
+      {
+        id: doc.id,
+        name: doc.fileName || 'Attachment',
+        size: doc.fileSize || 0,
+        type: doc.fileType || '',
+        url: doc.fileUrl,
+      },
+    ];
+  };
+
+  const reloadDocuments = async () => {
+    if (!toolId) return;
+    const response = await fetch(`/api/tools/important-documents?toolId=${toolId}`);
+    if (!response.ok) return;
+    const data = await response.json();
+    const transformedDocuments: Document[] = (data.documents || []).map((doc: any) => ({
+      id: doc.id,
+      documentName: doc.document_name,
+      uploadedDate: doc.uploaded_date,
+      effectiveDate: doc.effective_date,
+      note: doc.note,
+      fileUrl: doc.file_url,
+      fileName: doc.file_name,
+      fileSize: doc.file_size,
+      fileType: doc.file_type,
+      tags: doc.tags || [],
+      isActive: doc.is_active !== false,
+      dateAdded: doc.date_added,
+      dateInactivated: doc.date_inactivated,
+      requiresPasswordForDownload: doc.requires_password_for_download || false,
+      downloadPassword: null,
+      securityQuestions: null,
+    }));
+    setDocuments(transformedDocuments);
+  };
+
+  const promptDocumentPassword = (
+    doc: Document,
+    intent: 'view' | 'download' | 'remove' | 'replace',
+    file?: File
+  ) => {
+    setPasswordFileIntent(intent);
+    setPendingReplaceFile(file ?? null);
+    setDownloadPasswordModalId(doc.id);
+    setDownloadPasswordInput('');
+  };
+
+  const replaceSavedDocumentFile = async (documentId: string, file: File, password?: string) => {
+    if (!toolId) return;
+    const doc = documents.find((item) => item.id === documentId);
+    if (doc?.requiresPasswordForDownload && !password) {
+      promptDocumentPassword(doc, 'replace', file);
+      return;
+    }
+    setAttachmentBusy(true);
+    try {
+      const formData = new FormData();
+      formData.append('toolId', toolId);
+      formData.append('documentId', documentId);
+      formData.append('action', 'replaceFile');
+      formData.append('file', file);
+      if (password) formData.append('password', password);
+      const response = await fetch('/api/tools/important-documents', { method: 'POST', body: formData });
+      const data = await response.json().catch(() => ({}));
+      if (!response.ok) {
+        throw new Error(data.error || 'Failed to replace file');
+      }
+      await reloadDocuments();
+    } catch (error) {
+      alert(error instanceof Error ? error.message : 'Failed to replace file');
+    } finally {
+      setAttachmentBusy(false);
+    }
+  };
+
+  const removeSavedDocumentFile = async (documentId: string, password?: string) => {
+    if (!toolId) return;
+    const doc = documents.find((item) => item.id === documentId);
+    if (doc?.requiresPasswordForDownload && !password) {
+      promptDocumentPassword(doc, 'remove');
+      return;
+    }
+    setAttachmentBusy(true);
+    try {
+      const formData = new FormData();
+      formData.append('toolId', toolId);
+      formData.append('documentId', documentId);
+      formData.append('action', 'removeFile');
+      if (password) formData.append('password', password);
+      const response = await fetch('/api/tools/important-documents', { method: 'POST', body: formData });
+      const data = await response.json().catch(() => ({}));
+      if (!response.ok) {
+        throw new Error(data.error || 'Failed to remove file');
+      }
+      await reloadDocuments();
+    } catch (error) {
+      alert(error instanceof Error ? error.message : 'Failed to remove file');
+    } finally {
+      setAttachmentBusy(false);
     }
   };
 
@@ -1120,6 +1328,7 @@ export function ImportantDocumentsTool({ toolId }: ImportantDocumentsToolProps) 
       setSecurityQuestions(data.questions || []);
       setSecurityAnswers(data.questions?.map((q: { questionId: string }) => ({ questionId: q.questionId, answer: '' })) || []);
       setPasswordResetStep('questions');
+      setShowForgotPasswordModal(true);
     } catch (error) {
       console.error('Error loading security questions:', error);
       alert('Error loading security questions. Please try again.');
@@ -1257,25 +1466,30 @@ export function ImportantDocumentsTool({ toolId }: ImportantDocumentsToolProps) 
       if (response.ok) {
         const data = await response.json();
         if (data.valid) {
-          // Password correct, download file via API endpoint with password
-          const fileResponse = await fetch(`/api/tools/important-documents/download/${doc.id}?password=${encodeURIComponent(downloadPasswordInput.trim())}`);
-          if (!fileResponse.ok) {
-            const errorData = await fileResponse.json().catch(() => ({ error: 'Failed to download file' }));
-            throw new Error(errorData.error || 'Failed to download file');
+          const password = downloadPasswordInput.trim();
+          if (passwordFileIntent === 'remove') {
+            await removeSavedDocumentFile(doc.id, password);
+          } else if (passwordFileIntent === 'replace') {
+            if (pendingReplaceFile) {
+              await replaceSavedDocumentFile(doc.id, pendingReplaceFile, password);
+            }
+          } else {
+            const blob = await fetchDocumentBlob(
+              doc,
+              password,
+              passwordFileIntent === 'view'
+            );
+            if (passwordFileIntent === 'view') {
+              await openDocumentForView(doc, blob);
+            } else {
+              triggerDownload(blob, doc.fileName || 'document');
+            }
           }
-          const blob = await fileResponse.blob();
-          const url = window.URL.createObjectURL(blob);
-          const a = document.createElement('a');
-          a.href = url;
-          a.download = doc.fileName || 'document';
-          document.body.appendChild(a);
-          a.click();
-          window.URL.revokeObjectURL(url);
-          document.body.removeChild(a);
-          
+
           setDownloadPasswordModalId(null);
           setDownloadPasswordInput('');
           setShowDownloadPassword(false);
+          setPendingReplaceFile(null);
         } else {
           alert('Incorrect password. Please try again.');
           setDownloadPasswordInput('');
@@ -1291,6 +1505,28 @@ export function ImportantDocumentsTool({ toolId }: ImportantDocumentsToolProps) 
       setIsLoading(false);
     }
   };
+
+  const savedAttachmentDoc =
+    attachmentModal && attachmentModal !== 'add'
+      ? documents.find((doc) => doc.id === attachmentModal) || null
+      : null;
+  const modalFiles: AttachmentItem[] =
+    attachmentModal === 'add'
+      ? newDocument.file
+        ? [
+            {
+              id: 'pending-new-document',
+              name: newDocument.file.name,
+              size: newDocument.file.size,
+              type: newDocument.file.type,
+              file: newDocument.file,
+              url: addAttachmentPreviewUrl,
+            },
+          ]
+        : []
+      : savedAttachmentDoc
+        ? savedDocumentToAttachment(savedAttachmentDoc)
+        : [];
 
   return (
     <div className="space-y-6">
@@ -1416,21 +1652,23 @@ export function ImportantDocumentsTool({ toolId }: ImportantDocumentsToolProps) 
                   </div>
                   <div>
                     <label className="block text-sm font-medium text-slate-300 mb-2">
-                      File Upload <span className="text-red-400">*</span>
+                      Attachments <span className="text-red-400">*</span>
                     </label>
-                    <input
-                      type="file"
-                      onChange={(e) => handleFileChange(e, false)}
-                      className="w-full px-4 py-2 rounded-lg border border-slate-700 bg-slate-900/70 text-slate-100 focus:border-emerald-500/50 focus:outline-none focus:ring-1 focus:ring-emerald-500/50 file:mr-4 file:py-2 file:px-4 file:rounded-lg file:border-0 file:text-sm file:font-semibold file:bg-emerald-500 file:text-slate-950 hover:file:bg-emerald-400"
-                    />
-                    <p className="text-xs text-slate-400 mt-1">
-                      Maximum file size: 10MB
-                    </p>
-                    {newDocument.file && (
-                      <p className="text-xs text-slate-300 mt-1">
-                        Selected: {newDocument.file.name} ({(newDocument.file.size / 1024 / 1024).toFixed(2)} MB)
-                      </p>
-                    )}
+                    <div className="flex items-center gap-3">
+                      <AttachmentButton
+                        count={newDocument.file ? 1 : 0}
+                        onClick={() => setAttachmentModal('add')}
+                      />
+                      <div className="min-w-0">
+                        {newDocument.file ? (
+                          <p className="truncate text-sm text-slate-300">
+                            {newDocument.file.name} · {formatAttachmentBytes(newDocument.file.size)}
+                          </p>
+                        ) : (
+                          <p className="text-sm text-slate-400">No attachments yet. Click the paperclip to add a file.</p>
+                        )}
+                      </div>
+                    </div>
                   </div>
                 </div>
                 <div>
@@ -1635,6 +1873,7 @@ export function ImportantDocumentsTool({ toolId }: ImportantDocumentsToolProps) 
                   <button
                     onClick={() => {
                       setIsAdding(false);
+                      setAttachmentModal(null);
                       setNewDocument({
                         documentName: '',
                         uploadedDate: new Date().toISOString().split('T')[0],
@@ -1667,10 +1906,14 @@ export function ImportantDocumentsTool({ toolId }: ImportantDocumentsToolProps) 
             <div className="flex items-center justify-between mb-4">
               <h3 className={sectionTitleClass}>Active Documents</h3>
               <span className={counterTextClass}>
-                {activeDocuments.length} {activeDocuments.length === 1 ? 'document' : 'documents'}
+                {isDocumentFilterActive
+                  ? `${activeDocuments.length} matching ${activeDocuments.length === 1 ? 'document' : 'documents'}`
+                  : `${activeDocuments.length} ${activeDocuments.length === 1 ? 'document' : 'documents'}`}
               </span>
             </div>
-            {activeDocuments.length > 0 ? (
+            {!hasLoadedDocuments ? (
+              <p className={`${loadingClass} text-center py-8`}>Loading...</p>
+            ) : activeDocuments.length > 0 ? (
               <div className="space-y-4">
                 {activeDocuments.map(document => (
                     <div key={document.id} className={nestedCardClass}>
@@ -1712,26 +1955,24 @@ export function ImportantDocumentsTool({ toolId }: ImportantDocumentsToolProps) 
                           </div>
                           <div>
                             <label className="block text-sm font-medium text-slate-300 mb-2">
-                              File Upload (Optional - leave empty to keep current file)
+                              Attachments
                             </label>
-                            <input
-                              type="file"
-                              onChange={(e) => handleFileChange(e, true)}
-                              className="w-full px-4 py-2 rounded-lg border border-slate-700 bg-slate-900/70 text-slate-100 focus:border-emerald-500/50 focus:outline-none focus:ring-1 focus:ring-emerald-500/50 file:mr-4 file:py-2 file:px-4 file:rounded-lg file:border-0 file:text-sm file:font-semibold file:bg-emerald-500 file:text-slate-950 hover:file:bg-emerald-400"
-                            />
-                            <p className="text-xs text-slate-400 mt-1">
-                              Maximum file size: 10MB
-                            </p>
-                            {editingDocument.file && (
-                              <p className="text-xs text-slate-300 mt-1">
-                                New file: {editingDocument.file.name} ({(editingDocument.file.size / 1024 / 1024).toFixed(2)} MB)
-                              </p>
-                            )}
-                            {document.fileName && !editingDocument.file && (
-                              <p className="text-xs text-slate-400 mt-1">
-                                Current file: {document.fileName}
-                              </p>
-                            )}
+                            <div className="flex items-center gap-3">
+                              <AttachmentButton
+                                count={documentHasAttachment(document) ? 1 : 0}
+                                onClick={() => setAttachmentModal(document.id)}
+                              />
+                              <div className="min-w-0">
+                                {documentHasAttachment(document) ? (
+                                  <p className="truncate text-sm text-slate-300">
+                                    {document.fileName || 'Attachment'}
+                                    {document.fileSize ? ` · ${formatAttachmentBytes(document.fileSize)}` : ''}
+                                  </p>
+                                ) : (
+                                  <p className="text-sm text-slate-400">No attachments yet. Click the paperclip to add a file.</p>
+                                )}
+                              </div>
+                            </div>
                           </div>
                         </div>
                         <div>
@@ -1783,17 +2024,26 @@ export function ImportantDocumentsTool({ toolId }: ImportantDocumentsToolProps) 
                             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                               <div>
                                 <label className="block text-sm font-medium text-slate-300 mb-2">
-                                  Download Password <span className="text-red-400">*</span>
-                                  {document.requiresPasswordForDownload && document.downloadPassword && (
-                                    <span className="text-xs text-slate-400 ml-2">(Leave empty to keep current)</span>
+                                  Download Password {document.requiresPasswordForDownload ? null : <span className="text-red-400">*</span>}
+                                  {document.requiresPasswordForDownload && (
+                                    <span className="text-xs text-slate-400 ml-2">(Password is set — leave empty to keep current)</span>
                                   )}
                                 </label>
                                 <div className="relative">
                                   <input
                                     type={showPassword.edit ? "text" : "password"}
-                                    value={editingDocument.downloadPassword}
-                                    onChange={(e) => setEditingDocument({ ...editingDocument, downloadPassword: e.target.value })}
-                                    placeholder={document.requiresPasswordForDownload && document.downloadPassword ? "Enter new password or leave empty" : "Enter password for download"}
+                                    value={isExistingPasswordPlaceholder(editingDocument.downloadPassword) ? '' : editingDocument.downloadPassword}
+                                    onChange={(e) => {
+                                      const newValue = e.target.value;
+                                      setEditingDocument({
+                                        ...editingDocument,
+                                        downloadPassword: newValue,
+                                        confirmPassword: newValue === '' && document.requiresPasswordForDownload
+                                          ? EXISTING_PASSWORD_PLACEHOLDER
+                                          : (editingDocument.confirmPassword === EXISTING_PASSWORD_PLACEHOLDER ? '' : editingDocument.confirmPassword)
+                                      });
+                                    }}
+                                    placeholder={document.requiresPasswordForDownload ? "Enter new password or leave empty to keep existing" : "Enter password for download"}
                                     className="w-full px-4 py-2 pr-10 rounded-lg border border-slate-700 bg-slate-900/70 text-slate-100 placeholder-slate-500 focus:border-emerald-500/50 focus:outline-none focus:ring-1 focus:ring-emerald-500/50"
                                   />
                                   <button
@@ -1816,17 +2066,17 @@ export function ImportantDocumentsTool({ toolId }: ImportantDocumentsToolProps) 
                               </div>
                               <div>
                                 <label className="block text-sm font-medium text-slate-300 mb-2">
-                                  Confirm Password <span className="text-red-400">*</span>
-                                  {document.requiresPasswordForDownload && document.downloadPassword && editingDocument.downloadPassword && (
+                                  Confirm Password {document.requiresPasswordForDownload && (!editingDocument.downloadPassword || isExistingPasswordPlaceholder(editingDocument.downloadPassword)) ? null : <span className="text-red-400">*</span>}
+                                  {document.requiresPasswordForDownload && editingDocument.downloadPassword && !isExistingPasswordPlaceholder(editingDocument.downloadPassword) && (
                                     <span className="text-xs text-slate-400 ml-2">(Required if changing)</span>
                                   )}
                                 </label>
                                 <div className="relative">
                                   <input
                                     type={showPassword.editConfirm ? "text" : "password"}
-                                    value={editingDocument.confirmPassword}
+                                    value={isExistingPasswordPlaceholder(editingDocument.confirmPassword) ? '' : editingDocument.confirmPassword}
                                     onChange={(e) => setEditingDocument({ ...editingDocument, confirmPassword: e.target.value })}
-                                    placeholder="Confirm password"
+                                    placeholder={document.requiresPasswordForDownload && isExistingPasswordPlaceholder(editingDocument.downloadPassword) ? "Leave empty to keep existing" : "Confirm password"}
                                     className="w-full px-4 py-2 pr-10 rounded-lg border border-slate-700 bg-slate-900/70 text-slate-100 placeholder-slate-500 focus:border-emerald-500/50 focus:outline-none focus:ring-1 focus:ring-emerald-500/50"
                                   />
                                   <button
@@ -1846,7 +2096,7 @@ export function ImportantDocumentsTool({ toolId }: ImportantDocumentsToolProps) 
                                     )}
                                   </button>
                                 </div>
-                                {editingDocument.downloadPassword && editingDocument.confirmPassword && editingDocument.downloadPassword !== editingDocument.confirmPassword && (
+                                {editingDocument.downloadPassword && !isExistingPasswordPlaceholder(editingDocument.downloadPassword) && editingDocument.confirmPassword && editingDocument.downloadPassword !== editingDocument.confirmPassword && (
                                   <p className="text-xs text-red-400 mt-1">Passwords do not match</p>
                                 )}
                               </div>
@@ -1860,8 +2110,8 @@ export function ImportantDocumentsTool({ toolId }: ImportantDocumentsToolProps) 
                               !editingDocument.documentName.trim() || 
                               !editingDocument.uploadedDate ||
                               editingDocument.selectedTags.length === 0 ||
-                              (editingDocument.requiresPasswordForDownload && editingDocument.downloadPassword.trim() && editingDocument.downloadPassword !== editingDocument.confirmPassword) ||
-                              (editingDocument.requiresPasswordForDownload && !editingDocument.downloadPassword.trim() && (!document.requiresPasswordForDownload || !document.downloadPassword))
+                              (editingDocument.requiresPasswordForDownload && editingDocument.downloadPassword.trim() && !isExistingPasswordPlaceholder(editingDocument.downloadPassword) && editingDocument.downloadPassword !== editingDocument.confirmPassword) ||
+                              (editingDocument.requiresPasswordForDownload && (!editingDocument.downloadPassword.trim() || isExistingPasswordPlaceholder(editingDocument.downloadPassword)) && !document.requiresPasswordForDownload)
                             }
                             className="px-4 py-2.5 rounded-lg bg-emerald-500 text-slate-950 font-semibold hover:bg-emerald-400 transition-colors focus:outline-none focus:ring-2 focus:ring-emerald-500/50 focus:ring-offset-2 focus:ring-offset-slate-900 disabled:cursor-not-allowed disabled:opacity-50"
                           >
@@ -1909,7 +2159,7 @@ export function ImportantDocumentsTool({ toolId }: ImportantDocumentsToolProps) 
                             </span>
                             {document.effectiveDate && (
                               <span>
-                                <span className="text-slate-400">Effective:</span> {new Date(document.effectiveDate).toLocaleDateString()}
+                                <span className="text-slate-400">Effective:</span> {formatLocalDate(document.effectiveDate)}
                               </span>
                             )}
                             {document.fileName && (
@@ -1931,15 +2181,20 @@ export function ImportantDocumentsTool({ toolId }: ImportantDocumentsToolProps) 
                           )}
                         </div>
                         <div className="flex gap-1.5 flex-shrink-0">
+                          <AttachmentButton
+                            count={documentHasAttachment(document) ? 1 : 0}
+                            onClick={() => setAttachmentModal(document.id)}
+                          />
                           <button
                             type="button"
-                            onClick={() => handleDownload(document)}
+                            onClick={() => openViewDocument(document)}
                             className={rowIconSecondaryClass}
-                            title="Download document"
-                            aria-label="Download document"
+                            title="View document"
+                            aria-label="View document"
                           >
                             <svg className="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 3v12m0 0l4-4m-4 4l-4-4m-5 8h18" />
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z" />
+                              <circle cx="12" cy="12" r="3" />
                             </svg>
                           </button>
                           <button
@@ -1970,6 +2225,8 @@ export function ImportantDocumentsTool({ toolId }: ImportantDocumentsToolProps) 
                   </div>
                 ))}
               </div>
+            ) : isDocumentFilterActive ? (
+              <p className="text-slate-400 text-center py-8">No matching documents.</p>
             ) : (
               <p className="text-slate-400 text-center py-8">No active documents. Add one to get started!</p>
             )}
@@ -1978,7 +2235,7 @@ export function ImportantDocumentsTool({ toolId }: ImportantDocumentsToolProps) 
           {/* History Section */}
           <div className={cardClass}>
             <div className="flex items-center justify-between mb-4">
-              <h3 className="text-lg font-semibold text-slate-50">History</h3>
+              <h3 className={sectionTitleClass}>History</h3>
               <button
                 onClick={() => setShowHistory(!showHistory)}
                 className="text-sm text-slate-400 hover:text-slate-300 transition-colors"
@@ -1987,7 +2244,9 @@ export function ImportantDocumentsTool({ toolId }: ImportantDocumentsToolProps) 
               </button>
             </div>
             {showHistory && (
-              inactiveDocuments.length > 0 ? (
+              !hasLoadedDocuments ? (
+                <p className={`${loadingClass} text-center py-8`}>Loading...</p>
+              ) : inactiveDocuments.length > 0 ? (
                 <div className="space-y-4">
                   {inactiveDocuments.map(document => (
                     <div key={document.id} className="p-3 rounded-lg border border-slate-700 bg-slate-800/50 opacity-75">
@@ -2023,6 +2282,9 @@ export function ImportantDocumentsTool({ toolId }: ImportantDocumentsToolProps) 
                               <span className="text-slate-500">Uploaded:</span> {new Date(document.uploadedDate).toLocaleDateString()}
                             </span>
                             <span>
+                              <span className="text-slate-500">Added:</span> {new Date(document.dateAdded).toLocaleDateString()}
+                            </span>
+                            <span>
                               <span className="text-slate-500">Inactivated:</span> {document.dateInactivated ? new Date(document.dateInactivated).toLocaleDateString() : 'N/A'}
                             </span>
                           </div>
@@ -2034,15 +2296,20 @@ export function ImportantDocumentsTool({ toolId }: ImportantDocumentsToolProps) 
                           )}
                         </div>
                         <div className="flex gap-1.5 flex-shrink-0">
+                          <AttachmentButton
+                            count={documentHasAttachment(document) ? 1 : 0}
+                            onClick={() => setAttachmentModal(document.id)}
+                          />
                           <button
                             type="button"
-                            onClick={() => handleDownload(document)}
+                            onClick={() => openViewDocument(document)}
                             className={rowIconSecondaryClass}
-                            title="Download document"
-                            aria-label="Download document"
+                            title="View document"
+                            aria-label="View document"
                           >
                             <svg className="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 3v12m0 0l4-4m-4 4l-4-4m-5 8h18" />
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z" />
+                              <circle cx="12" cy="12" r="3" />
                             </svg>
                           </button>
                           <button
@@ -2072,6 +2339,8 @@ export function ImportantDocumentsTool({ toolId }: ImportantDocumentsToolProps) 
                     </div>
                   ))}
                 </div>
+              ) : isDocumentFilterActive ? (
+                <p className="text-slate-400 text-center py-8">No matching documents in history.</p>
               ) : (
                 <p className="text-slate-400 text-center py-8">No inactive documents in history.</p>
               )
@@ -2270,6 +2539,129 @@ export function ImportantDocumentsTool({ toolId }: ImportantDocumentsToolProps) 
         </div>
       )}
 
+      {/* View Document Modal */}
+      {viewingDocument && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50">
+          <div className={modalCardLgClass}>
+            <div className="flex items-center justify-between mb-4">
+              <h3 className={sectionTitleClass}>View Document</h3>
+              <button
+                type="button"
+                onClick={() => setViewingDocument(null)}
+                className={viewCloseClass}
+                aria-label="Close"
+              >
+                ✕
+              </button>
+            </div>
+            <div className="space-y-4">
+              <div>
+                <span className={viewFieldLabelClass}>Document Name:</span>
+                <span className={`${viewFieldValueClass} ml-2`}>{viewingDocument.documentName}</span>
+              </div>
+              <div>
+                <span className={viewFieldLabelClass}>Uploaded Date:</span>
+                <span className={`${viewFieldValueClass} ml-2`}>
+                  {new Date(viewingDocument.uploadedDate).toLocaleDateString('en-US', {
+                    year: 'numeric',
+                    month: 'long',
+                    day: 'numeric'
+                  })}
+                </span>
+              </div>
+              {viewingDocument.effectiveDate && (
+                <div>
+                  <span className={viewFieldLabelClass}>Effective Date:</span>
+                  <span className={`${viewFieldValueClass} ml-2`}>
+                    {formatLocalDateLong(viewingDocument.effectiveDate)}
+                  </span>
+                </div>
+              )}
+              {viewingDocument.dateInactivated && (
+                <div>
+                  <span className={viewFieldLabelClass}>Inactivated:</span>
+                  <span className={`${viewFieldValueClass} ml-2`}>
+                    {new Date(viewingDocument.dateInactivated).toLocaleDateString('en-US', {
+                      year: 'numeric',
+                      month: 'long',
+                      day: 'numeric'
+                    })}
+                  </span>
+                </div>
+              )}
+              {viewingDocument.tags.length > 0 && (
+                <div>
+                  <p className={`${viewFieldLabelClass} mb-1`}>Tags</p>
+                  <div className="flex flex-wrap gap-2">
+                    {viewingDocument.tags.map((tagId) => {
+                      const tag = tags.find(t => t.id === tagId);
+                      return tag ? (
+                        <span
+                          key={tagId}
+                          className={isLight
+                            ? 'px-2.5 py-1 rounded-lg border border-emerald-300 bg-emerald-50 text-emerald-800 text-xs'
+                            : 'px-2.5 py-1 rounded-lg bg-emerald-500/20 text-emerald-300 text-xs'}
+                        >
+                          {tag.name}
+                        </span>
+                      ) : null;
+                    })}
+                  </div>
+                </div>
+              )}
+              {viewingDocument.fileName && (
+                <div>
+                  <span className={viewFieldLabelClass}>File:</span>
+                  <span className={`${viewFieldValueClass} ml-2`}>{viewingDocument.fileName}</span>
+                  {viewingDocument.fileSize ? (
+                    <span className={`${isLight ? 'text-slate-600' : 'text-slate-400'} text-sm ml-2`}>
+                      ({formatAttachmentBytes(viewingDocument.fileSize)})
+                    </span>
+                  ) : null}
+                </div>
+              )}
+              {viewingDocument.requiresPasswordForDownload && (
+                <div>
+                  <span className={isLight
+                    ? 'px-1.5 py-0.5 rounded text-xs font-medium bg-amber-100 text-amber-800'
+                    : 'px-1.5 py-0.5 rounded text-xs font-medium bg-amber-500/20 text-amber-300'}>
+                    🔒 Password required for download
+                  </span>
+                </div>
+              )}
+              {viewingDocument.note && (
+                <div>
+                  <p className={`${viewFieldLabelClass} mb-1`}>Note</p>
+                  <div className={viewNoteBoxClass}>{viewingDocument.note}</div>
+                </div>
+              )}
+            </div>
+            <div className="mt-6 flex justify-end gap-2">
+              {viewingDocument.isActive && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    const documentToEdit = viewingDocument;
+                    setViewingDocument(null);
+                    startEditing(documentToEdit);
+                  }}
+                  className={primaryButtonClass}
+                >
+                  Edit
+                </button>
+              )}
+              <button
+                type="button"
+                onClick={() => setViewingDocument(null)}
+                className={secondaryButtonClass}
+              >
+                Close
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Delete Confirmation Modal */}
       {deleteConfirmId && (
         <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
@@ -2319,16 +2711,17 @@ export function ImportantDocumentsTool({ toolId }: ImportantDocumentsToolProps) 
       )}
 
       {/* Download Password Modal */}
-      {downloadPasswordModalId && (
-        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
+      {downloadPasswordModalId && !showForgotPasswordModal && (
+        <div className="fixed inset-0 z-[70] flex items-center justify-center bg-black/50">
           <div className={modalCardClass}>
             <div className="flex items-center justify-between mb-4">
-              <h3 className="text-lg font-semibold text-slate-50">Enter Download Password</h3>
+              <h3 className="text-lg font-semibold text-slate-50">Enter Password</h3>
               <button
                 onClick={() => {
                   setDownloadPasswordModalId(null);
                   setDownloadPasswordInput('');
                   setShowDownloadPassword(false);
+                  setPendingReplaceFile(null);
                 }}
                 className={isLight ? 'rounded-lg p-1 text-slate-600 hover:bg-slate-100 hover:text-slate-900 transition-colors' : 'rounded-lg p-1 text-slate-400 hover:bg-slate-800 hover:text-slate-200 transition-colors'}
                 title="Close"
@@ -2337,7 +2730,15 @@ export function ImportantDocumentsTool({ toolId }: ImportantDocumentsToolProps) 
               </button>
             </div>
             <p className="text-sm text-slate-400 mb-4">
-              This document is password protected. Please enter the password to download.
+              This document is password protected. Enter the password to{' '}
+              {passwordFileIntent === 'view'
+                ? 'view'
+                : passwordFileIntent === 'remove'
+                  ? 'remove'
+                  : passwordFileIntent === 'replace'
+                    ? 'replace'
+                    : 'download'}{' '}
+              the attachment.
             </p>
             <div className="space-y-4">
               <div>
@@ -2356,6 +2757,7 @@ export function ImportantDocumentsTool({ toolId }: ImportantDocumentsToolProps) 
                         setDownloadPasswordModalId(null);
                         setDownloadPasswordInput('');
                         setShowDownloadPassword(false);
+                        setPendingReplaceFile(null);
                       }
                     }}
                     className="w-full px-4 py-2 pr-10 rounded-lg border border-slate-700 bg-slate-900/70 text-slate-100 focus:border-emerald-500/50 focus:outline-none focus:ring-1 focus:ring-emerald-500/50"
@@ -2385,8 +2787,7 @@ export function ImportantDocumentsTool({ toolId }: ImportantDocumentsToolProps) 
                   <button
                     type="button"
                     onClick={() => {
-                      setShowForgotPasswordModal(true);
-                      handleForgotPassword();
+                      void handleForgotPassword();
                     }}
                     className="text-sm text-emerald-400 hover:text-emerald-300 transition-colors"
                   >
@@ -2400,13 +2801,20 @@ export function ImportantDocumentsTool({ toolId }: ImportantDocumentsToolProps) 
                   disabled={!downloadPasswordInput.trim() || isLoading}
                   className="flex-1 px-4 py-2.5 rounded-lg bg-emerald-500 text-slate-950 font-semibold hover:bg-emerald-400 transition-colors focus:outline-none focus:ring-2 focus:ring-emerald-500/50 focus:ring-offset-2 focus:ring-offset-slate-900 disabled:cursor-not-allowed disabled:opacity-50"
                 >
-                  Download
+                  {passwordFileIntent === 'view'
+                    ? 'View'
+                    : passwordFileIntent === 'remove'
+                      ? 'Remove'
+                      : passwordFileIntent === 'replace'
+                        ? 'Replace'
+                        : 'Download'}
                 </button>
                 <button
                   onClick={() => {
                     setDownloadPasswordModalId(null);
                     setDownloadPasswordInput('');
                     setShowDownloadPassword(false);
+                    setPendingReplaceFile(null);
                   }}
                   className={secondaryButtonClass}
                 >
@@ -2420,7 +2828,7 @@ export function ImportantDocumentsTool({ toolId }: ImportantDocumentsToolProps) 
 
       {/* Forgot Password Modal */}
       {showForgotPasswordModal && (
-        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
+        <div className="fixed inset-0 z-[70] flex items-center justify-center bg-black/50">
           <div className={`${modalCardClass} max-h-[90vh] overflow-y-auto`}>
             <div className="flex items-center justify-between mb-4">
               <h3 className="text-lg font-semibold text-slate-50">
@@ -2598,6 +3006,57 @@ export function ImportantDocumentsTool({ toolId }: ImportantDocumentsToolProps) 
       )}
 
       {/* Delete Tag Confirmation Modal */}
+      <AttachmentModal
+        open={attachmentModal !== null}
+        onClose={() => {
+          setAttachmentModal(null);
+          setViewPreview(null);
+        }}
+        previewItem={viewPreview}
+        title={
+          attachmentModal === 'add'
+            ? newDocument.documentName.trim() || 'New document'
+            : savedAttachmentDoc?.documentName || 'Document'
+        }
+        files={modalFiles}
+        maxFiles={1}
+        busy={attachmentBusy}
+        onAdd={(incoming) => {
+          const file = incoming[0];
+          if (!file) return;
+          if (attachmentModal === 'add') {
+            setNewDocument((prev) => ({ ...prev, file }));
+            return;
+          }
+          if (attachmentModal) {
+            void replaceSavedDocumentFile(attachmentModal, file);
+          }
+        }}
+        onRemove={() => {
+          if (attachmentModal === 'add') {
+            setNewDocument((prev) => ({ ...prev, file: null }));
+            return;
+          }
+          if (attachmentModal) {
+            void removeSavedDocumentFile(attachmentModal);
+          }
+        }}
+        onView={
+          savedAttachmentDoc
+            ? () => {
+                void handleViewDocument(savedAttachmentDoc);
+              }
+            : undefined
+        }
+        onDownload={
+          savedAttachmentDoc
+            ? () => {
+                void handleDownload(savedAttachmentDoc);
+              }
+            : undefined
+        }
+      />
+
       {deleteTagConfirmId && (
         <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
           <div className={deleteModalCardClass}>
