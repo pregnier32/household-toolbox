@@ -1123,56 +1123,45 @@ export function MealPlannerTool({ toolId }: MealPlannerToolProps) {
       alert('No grocery lines to save. Assign meals to days first.');
       return;
     }
+    if (!toolId) {
+      alert('Meal Planner tool was not found.');
+      return;
+    }
+    const groceryLines = groceryItems.map((row) => ({
+      name: row.name,
+      category: row.category || 'Other',
+      quantity: Number.isFinite(row.count) && row.count > 0 ? row.count : null,
+    }));
+    if (groceryLines.every((row) => !row.name.trim() || row.name === 'Unknown')) {
+      alert('Grocery lines need item names before saving to Shopping List.');
+      return;
+    }
     if (!window.confirm(`Create an Active Shopping List named "${plan.name}" from these grocery lines?`)) {
       return;
     }
+    // Start the write in the same turn as confirm, before React re-renders. keepalive
+    // lets Chrome finish the POST if the tab is discarded (Terri QA: tab died, no list row).
+    const createListPromise = fetch('/api/tools/shopping-list', {
+      method: 'POST',
+      credentials: 'same-origin',
+      keepalive: true,
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        action: 'createList',
+        toolId,
+        fromMealPlanner: true,
+        name: plan.name,
+        listDate: plan.startDate,
+        groceryLines,
+      }),
+    });
     setIsPushingGrocery(true);
     try {
-      if (!toolId) throw new Error('Meal Planner tool was not found.');
-      const groceryLines = groceryItems.map((row) => ({
-        name: row.name,
-        category: row.category || 'Other',
-        quantity: Number.isFinite(row.count) && row.count > 0 ? row.count : null,
-      }));
-      if (groceryLines.every((row) => !row.name.trim() || row.name === 'Unknown')) {
-        throw new Error('Grocery lines need item names before saving to Shopping List.');
-      }
-      const createListRes = await fetch('/api/tools/shopping-list', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          action: 'createList',
-          toolId,
-          fromMealPlanner: true,
-          name: plan.name,
-          listDate: plan.startDate,
-          groceryLines,
-        }),
-      });
+      const createListRes = await createListPromise;
       const created = await createListRes.json().catch(() => ({}));
       const list = (created as { list?: { id?: string; toolId?: string; isActive?: boolean; name?: string; items?: { name?: string }[] } }).list;
       if (!createListRes.ok || !list?.id) {
         throw new Error((created as { error?: string }).error || 'Failed to create Shopping List');
-      }
-      const slToolId = list.toolId;
-      if (!slToolId) throw new Error('Shopping List was created without an owned tool id.');
-      const verifyRes = await fetch(
-        `/api/tools/shopping-list?toolId=${encodeURIComponent(slToolId)}&resource=lists`
-      );
-      if (!verifyRes.ok) throw new Error('Shopping List was created but Active lists could not be loaded.');
-      const verifyData = await verifyRes.json();
-      const found = ((verifyData.lists ?? []) as { id?: string; isActive?: boolean; items?: { name?: string }[] }[]).find(
-        (row) => row.id === list.id && row.isActive
-      );
-      if (!found) {
-        throw new Error('Shopping List was created but is not in Active lists.');
-      }
-      const savedNames = new Set((found.items ?? []).map((item) => (item.name ?? '').trim().toLowerCase()).filter(Boolean));
-      const missing = groceryLines
-        .map((row) => row.name.trim())
-        .filter((name) => name && name !== 'Unknown' && !savedNames.has(name.toLowerCase()));
-      if (missing.length) {
-        throw new Error(`Active list is missing: ${missing.join(', ')}`);
       }
       alert('Active Shopping List created.');
     } catch (e) {
