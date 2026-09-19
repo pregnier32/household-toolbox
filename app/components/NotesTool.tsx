@@ -1121,7 +1121,7 @@ export function NotesTool({ toolId }: NotesToolProps) {
     const loadResponse = await fetch(`/api/tools/notes?toolId=${toolId}`);
     if (!loadResponse.ok) return [];
     const data = await loadResponse.json();
-    const next = (data.notes || []).map((note: Parameters<typeof mapNote>[0]) => mapNote(note));
+    const next: Note[] = (data.notes || []).map((note: Parameters<typeof mapNote>[0]) => mapNote(note));
     setNotes(next);
     setViewNoteModal((prev) => (prev ? next.find((note) => note.id === prev.id) || prev : null));
     return next;
