@@ -27,6 +27,13 @@ export type CleaningCategory = {
   dateInactivated?: string;
 };
 
+export type CleaningAttachment = {
+  id: string;
+  name: string;
+  size: number;
+  type: string;
+};
+
 export type CleaningLibraryItem = {
   id: string;
   name: string;
@@ -35,6 +42,7 @@ export type CleaningLibraryItem = {
   notes: string;
   isDefault: boolean;
   isHidden: boolean;
+  attachments: CleaningAttachment[];
 };
 
 export type CleaningScheduledTask = {
@@ -55,6 +63,7 @@ export type CleaningCompletion = {
   scheduledDate: string;
   completedDate: string;
   lateness: 'Early' | 'On time' | 'Late';
+  attachments: CleaningAttachment[];
 };
 
 export type CleaningScheduleData = {

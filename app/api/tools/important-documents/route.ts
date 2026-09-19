@@ -225,7 +225,7 @@ export async function POST(request: NextRequest) {
     if ((action === 'replaceFile' || action === 'removeFile') && documentId) {
       const { data: existing, error: existingError } = await supabaseServer
         .from('tools_id_documents')
-        .select('id, file_url, file_size, requires_password_for_download, download_password_hash')
+        .select('id, file_url, file_size, requires_password_for_download, download_password_hash, is_active')
         .eq('id', documentId)
         .eq('user_id', user.id)
         .eq('tool_id', toolId)
@@ -233,6 +233,10 @@ export async function POST(request: NextRequest) {
 
       if (existingError || !existing) {
         return NextResponse.json({ error: 'Document not found' }, { status: 404 });
+      }
+
+      if (existing.is_active === false) {
+        return NextResponse.json({ error: 'Restore this document to add or change files.' }, { status: 403 });
       }
 
       if (existing.requires_password_for_download) {

@@ -1,6 +1,37 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getSession } from '@/lib/session';
 import { supabaseServer } from '@/lib/supabaseServer';
+import { deleteCategoryTaskStorageFiles, deleteTaskStorageFiles, isMissingRelationError } from '@/lib/todo-storage';
+
+async function attachmentsByTaskIds(taskIds: string[], userId: string) {
+  const map: Record<string, Array<{ id: string; name: string; size: number; type: string }>> = {};
+  if (taskIds.length === 0) return map;
+
+  const { data, error } = await supabaseServer
+    .from('tools_tdl_attachments')
+    .select('id, task_id, file_name, file_size, file_type')
+    .eq('user_id', userId)
+    .in('task_id', taskIds)
+    .order('created_at', { ascending: true });
+
+  if (error) {
+    if (!isMissingRelationError(error)) {
+      console.error('Error fetching to-do attachments:', error);
+    }
+    return map;
+  }
+
+  (data || []).forEach((row) => {
+    if (!map[row.task_id]) map[row.task_id] = [];
+    map[row.task_id].push({
+      id: row.id,
+      name: row.file_name,
+      size: row.file_size,
+      type: row.file_type,
+    });
+  });
+  return map;
+}
 
 async function copyDefaultsToUser(userId: string, toolId: string) {
   const { data: existing } = await supabaseServer
@@ -120,6 +151,8 @@ export async function GET(request: NextRequest) {
         return NextResponse.json({ error: 'Failed to fetch tasks' }, { status: 500 });
       }
 
+      const attachmentMap = await attachmentsByTaskIds((tasks || []).map((t) => t.id), user.id);
+
       return NextResponse.json({
         tasks: (tasks || []).map((t) => ({
           id: t.id,
@@ -129,6 +162,7 @@ export async function GET(request: NextRequest) {
           priority: t.priority || 'Medium',
           notes: t.notes || '',
           status: t.status || 'Not Started',
+          attachments: attachmentMap[t.id] || [],
         })),
       });
     }
@@ -230,6 +264,7 @@ export async function POST(request: NextRequest) {
         if (!categoryId) {
           return NextResponse.json({ error: 'Category ID is required' }, { status: 400 });
         }
+        await deleteCategoryTaskStorageFiles(categoryId, user.id);
         const { error } = await supabaseServer
           .from('tools_tdl_categories')
           .delete()
@@ -284,6 +319,7 @@ export async function POST(request: NextRequest) {
             priority: data.priority || 'Medium',
             notes: data.notes || '',
             status: data.status || 'Not Started',
+            attachments: [],
           },
         });
       }
@@ -338,6 +374,7 @@ export async function POST(request: NextRequest) {
         if (!taskId) {
           return NextResponse.json({ error: 'Task ID is required' }, { status: 400 });
         }
+        await deleteTaskStorageFiles(taskId, user.id);
         const { error } = await supabaseServer
           .from('tools_tdl_tasks')
           .delete()

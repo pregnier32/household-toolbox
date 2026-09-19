@@ -556,6 +556,54 @@ export type Database = {
           },
         ]
       }
+      tools_cs_completion_attachments: {
+        Row: {
+          completion_id: string
+          created_at: string
+          file_name: string
+          file_size: number
+          file_type: string
+          file_url: string
+          id: string
+          user_id: string
+        }
+        Insert: {
+          completion_id: string
+          created_at?: string
+          file_name: string
+          file_size: number
+          file_type: string
+          file_url: string
+          id?: string
+          user_id: string
+        }
+        Update: {
+          completion_id?: string
+          created_at?: string
+          file_name?: string
+          file_size?: number
+          file_type?: string
+          file_url?: string
+          id?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "tools_cs_completion_attachments_completion_id_fkey"
+            columns: ["completion_id"]
+            isOneToOne: false
+            referencedRelation: "tools_cs_completions"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "tools_cs_completion_attachments_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "users"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       tools_cs_completions: {
         Row: {
           completed_date: string
@@ -673,6 +721,54 @@ export type Database = {
           updated_at?: string
         }
         Relationships: []
+      }
+      tools_cs_item_attachments: {
+        Row: {
+          created_at: string
+          file_name: string
+          file_size: number
+          file_type: string
+          file_url: string
+          id: string
+          item_id: string
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          file_name: string
+          file_size: number
+          file_type: string
+          file_url: string
+          id?: string
+          item_id: string
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          file_name?: string
+          file_size?: number
+          file_type?: string
+          file_url?: string
+          id?: string
+          item_id?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "tools_cs_item_attachments_item_id_fkey"
+            columns: ["item_id"]
+            isOneToOne: false
+            referencedRelation: "tools_cs_items"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "tools_cs_item_attachments_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "users"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       tools_cs_items: {
         Row: {
@@ -1244,6 +1340,2446 @@ export type Database = {
           },
           {
             foreignKeyName: "tools_ebp_vendors_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "users"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      tools_eolp_bank_accounts: {
+        Row: {
+          account_type: string
+          bank_contact: string
+          beneficiary: string
+          created_at: string
+          display_order: number
+          id: string
+          institution: string
+          joint_owner: string
+          last_four: string
+          login_storage: string
+          owners: string
+          plan_id: string
+          purpose: string
+          tool_id: string
+          updated_at: string
+          user_id: string
+          website: string
+        }
+        Insert: {
+          account_type?: string
+          bank_contact?: string
+          beneficiary?: string
+          created_at?: string
+          display_order?: number
+          id?: string
+          institution?: string
+          joint_owner?: string
+          last_four?: string
+          login_storage?: string
+          owners?: string
+          plan_id: string
+          purpose?: string
+          tool_id: string
+          updated_at?: string
+          user_id: string
+          website?: string
+        }
+        Update: {
+          account_type?: string
+          bank_contact?: string
+          beneficiary?: string
+          created_at?: string
+          display_order?: number
+          id?: string
+          institution?: string
+          joint_owner?: string
+          last_four?: string
+          login_storage?: string
+          owners?: string
+          plan_id?: string
+          purpose?: string
+          tool_id?: string
+          updated_at?: string
+          user_id?: string
+          website?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "tools_eolp_bank_accounts_plan_id_fkey"
+            columns: ["plan_id"]
+            isOneToOne: false
+            referencedRelation: "tools_eolp_plans"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "tools_eolp_bank_accounts_tool_id_fkey"
+            columns: ["tool_id"]
+            isOneToOne: false
+            referencedRelation: "tools"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "tools_eolp_bank_accounts_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "users"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      tools_eolp_contacts: {
+        Row: {
+          address: string
+          alternate_phone: string
+          company: string
+          contact_type: string
+          created_at: string
+          email: string
+          id: string
+          name: string
+          phone: string
+          plan_id: string
+          priority: number
+          relationship: string
+          section_id: string | null
+          tool_id: string
+          updated_at: string
+          user_id: string
+          why_contact: string
+        }
+        Insert: {
+          address?: string
+          alternate_phone?: string
+          company?: string
+          contact_type?: string
+          created_at?: string
+          email?: string
+          id?: string
+          name?: string
+          phone?: string
+          plan_id: string
+          priority?: number
+          relationship?: string
+          section_id?: string | null
+          tool_id: string
+          updated_at?: string
+          user_id: string
+          why_contact?: string
+        }
+        Update: {
+          address?: string
+          alternate_phone?: string
+          company?: string
+          contact_type?: string
+          created_at?: string
+          email?: string
+          id?: string
+          name?: string
+          phone?: string
+          plan_id?: string
+          priority?: number
+          relationship?: string
+          section_id?: string | null
+          tool_id?: string
+          updated_at?: string
+          user_id?: string
+          why_contact?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "tools_eolp_contacts_plan_id_fkey"
+            columns: ["plan_id"]
+            isOneToOne: false
+            referencedRelation: "tools_eolp_plans"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "tools_eolp_contacts_section_id_fkey"
+            columns: ["section_id"]
+            isOneToOne: false
+            referencedRelation: "tools_eolp_sections"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "tools_eolp_contacts_tool_id_fkey"
+            columns: ["tool_id"]
+            isOneToOne: false
+            referencedRelation: "tools"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "tools_eolp_contacts_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "users"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      tools_eolp_credit_cards: {
+        Row: {
+          authorized_users: string
+          automatic_payments: string
+          balance_notes: string
+          card_type: string
+          closing_instructions: string
+          created_at: string
+          display_order: number
+          id: string
+          issuer: string
+          last_four: string
+          plan_id: string
+          primary_holder: string
+          tool_id: string
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          authorized_users?: string
+          automatic_payments?: string
+          balance_notes?: string
+          card_type?: string
+          closing_instructions?: string
+          created_at?: string
+          display_order?: number
+          id?: string
+          issuer?: string
+          last_four?: string
+          plan_id: string
+          primary_holder?: string
+          tool_id: string
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          authorized_users?: string
+          automatic_payments?: string
+          balance_notes?: string
+          card_type?: string
+          closing_instructions?: string
+          created_at?: string
+          display_order?: number
+          id?: string
+          issuer?: string
+          last_four?: string
+          plan_id?: string
+          primary_holder?: string
+          tool_id?: string
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "tools_eolp_credit_cards_plan_id_fkey"
+            columns: ["plan_id"]
+            isOneToOne: false
+            referencedRelation: "tools_eolp_plans"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "tools_eolp_credit_cards_tool_id_fkey"
+            columns: ["tool_id"]
+            isOneToOne: false
+            referencedRelation: "tools"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "tools_eolp_credit_cards_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "users"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      tools_eolp_debts: {
+        Row: {
+          account_reference: string
+          approximate_balance: string
+          automatic_payment: string
+          collateral: string
+          contact: string
+          created_at: string
+          creditor: string
+          debt_type: string
+          display_order: number
+          id: string
+          monthly_payment: string
+          plan_id: string
+          tool_id: string
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          account_reference?: string
+          approximate_balance?: string
+          automatic_payment?: string
+          collateral?: string
+          contact?: string
+          created_at?: string
+          creditor?: string
+          debt_type?: string
+          display_order?: number
+          id?: string
+          monthly_payment?: string
+          plan_id: string
+          tool_id: string
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          account_reference?: string
+          approximate_balance?: string
+          automatic_payment?: string
+          collateral?: string
+          contact?: string
+          created_at?: string
+          creditor?: string
+          debt_type?: string
+          display_order?: number
+          id?: string
+          monthly_payment?: string
+          plan_id?: string
+          tool_id?: string
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "tools_eolp_debts_plan_id_fkey"
+            columns: ["plan_id"]
+            isOneToOne: false
+            referencedRelation: "tools_eolp_plans"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "tools_eolp_debts_tool_id_fkey"
+            columns: ["tool_id"]
+            isOneToOne: false
+            referencedRelation: "tools"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "tools_eolp_debts_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "users"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      tools_eolp_default_next_steps: {
+        Row: {
+          created_at: string
+          display_order: number
+          id: string
+          priority: string
+          seed_key: string
+          title: string
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          display_order?: number
+          id?: string
+          priority: string
+          seed_key: string
+          title: string
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          display_order?: number
+          id?: string
+          priority?: string
+          seed_key?: string
+          title?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
+      tools_eolp_devices: {
+        Row: {
+          access_instructions: string
+          associated_account: string
+          created_at: string
+          device_type: string
+          id: string
+          location: string
+          manufacturer: string
+          model: string
+          name: string
+          password_secret: string
+          pin_secret: string
+          plan_id: string
+          recovery_key_secret: string
+          section_id: string | null
+          stored_information: string
+          tool_id: string
+          updated_at: string
+          user_id: string
+          username: string
+        }
+        Insert: {
+          access_instructions?: string
+          associated_account?: string
+          created_at?: string
+          device_type?: string
+          id?: string
+          location?: string
+          manufacturer?: string
+          model?: string
+          name?: string
+          password_secret?: string
+          pin_secret?: string
+          plan_id: string
+          recovery_key_secret?: string
+          section_id?: string | null
+          stored_information?: string
+          tool_id: string
+          updated_at?: string
+          user_id: string
+          username?: string
+        }
+        Update: {
+          access_instructions?: string
+          associated_account?: string
+          created_at?: string
+          device_type?: string
+          id?: string
+          location?: string
+          manufacturer?: string
+          model?: string
+          name?: string
+          password_secret?: string
+          pin_secret?: string
+          plan_id?: string
+          recovery_key_secret?: string
+          section_id?: string | null
+          stored_information?: string
+          tool_id?: string
+          updated_at?: string
+          user_id?: string
+          username?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "tools_eolp_devices_plan_id_fkey"
+            columns: ["plan_id"]
+            isOneToOne: false
+            referencedRelation: "tools_eolp_plans"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "tools_eolp_devices_section_id_fkey"
+            columns: ["section_id"]
+            isOneToOne: false
+            referencedRelation: "tools_eolp_sections"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "tools_eolp_devices_tool_id_fkey"
+            columns: ["tool_id"]
+            isOneToOne: false
+            referencedRelation: "tools"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "tools_eolp_devices_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "users"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      tools_eolp_documents: {
+        Row: {
+          attorney_contact: string
+          created_at: string
+          date_created: string | null
+          digital_location: string
+          document_type: string
+          expiration_date: string | null
+          id: string
+          last_updated: string | null
+          name: string
+          original_or_copy: string
+          physical_location: string
+          plan_id: string
+          section_id: string | null
+          special_instructions: string
+          tool_id: string
+          updated_at: string
+          user_id: string
+          who_has_copy: string
+        }
+        Insert: {
+          attorney_contact?: string
+          created_at?: string
+          date_created?: string | null
+          digital_location?: string
+          document_type?: string
+          expiration_date?: string | null
+          id?: string
+          last_updated?: string | null
+          name?: string
+          original_or_copy?: string
+          physical_location?: string
+          plan_id: string
+          section_id?: string | null
+          special_instructions?: string
+          tool_id: string
+          updated_at?: string
+          user_id: string
+          who_has_copy?: string
+        }
+        Update: {
+          attorney_contact?: string
+          created_at?: string
+          date_created?: string | null
+          digital_location?: string
+          document_type?: string
+          expiration_date?: string | null
+          id?: string
+          last_updated?: string | null
+          name?: string
+          original_or_copy?: string
+          physical_location?: string
+          plan_id?: string
+          section_id?: string | null
+          special_instructions?: string
+          tool_id?: string
+          updated_at?: string
+          user_id?: string
+          who_has_copy?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "tools_eolp_documents_plan_id_fkey"
+            columns: ["plan_id"]
+            isOneToOne: false
+            referencedRelation: "tools_eolp_plans"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "tools_eolp_documents_section_id_fkey"
+            columns: ["section_id"]
+            isOneToOne: false
+            referencedRelation: "tools_eolp_sections"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "tools_eolp_documents_tool_id_fkey"
+            columns: ["tool_id"]
+            isOneToOne: false
+            referencedRelation: "tools"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "tools_eolp_documents_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "users"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      tools_eolp_eol_wishes: {
+        Row: {
+          ashes_instructions: string
+          casket_preference: string
+          cemetery: string
+          cemetery_plot: string
+          clergy: string
+          clothing_preference: string
+          created_at: string
+          disposition_preference: string
+          flowers_preference: string
+          funeral_contract_location: string
+          funeral_home: string
+          funeral_home_contact: string
+          funeral_service_desired: string
+          headstone_wishes: string
+          id: string
+          memorial_donation: string
+          memorial_service_desired: string
+          military_honors: string
+          obituary_wishes: string
+          organ_donation_wishes: string
+          organizations_to_notify: string
+          pallbearer_preferences: string
+          paperwork_location: string
+          people_to_notify: string
+          plan_id: string
+          preferred_location: string
+          preferred_music: string
+          preferred_readings: string
+          preferred_speakers: string
+          prepaid_arrangements: string
+          religious_service: string
+          tool_id: string
+          updated_at: string
+          user_id: string
+          viewing: string
+        }
+        Insert: {
+          ashes_instructions?: string
+          casket_preference?: string
+          cemetery?: string
+          cemetery_plot?: string
+          clergy?: string
+          clothing_preference?: string
+          created_at?: string
+          disposition_preference?: string
+          flowers_preference?: string
+          funeral_contract_location?: string
+          funeral_home?: string
+          funeral_home_contact?: string
+          funeral_service_desired?: string
+          headstone_wishes?: string
+          id?: string
+          memorial_donation?: string
+          memorial_service_desired?: string
+          military_honors?: string
+          obituary_wishes?: string
+          organ_donation_wishes?: string
+          organizations_to_notify?: string
+          pallbearer_preferences?: string
+          paperwork_location?: string
+          people_to_notify?: string
+          plan_id: string
+          preferred_location?: string
+          preferred_music?: string
+          preferred_readings?: string
+          preferred_speakers?: string
+          prepaid_arrangements?: string
+          religious_service?: string
+          tool_id: string
+          updated_at?: string
+          user_id: string
+          viewing?: string
+        }
+        Update: {
+          ashes_instructions?: string
+          casket_preference?: string
+          cemetery?: string
+          cemetery_plot?: string
+          clergy?: string
+          clothing_preference?: string
+          created_at?: string
+          disposition_preference?: string
+          flowers_preference?: string
+          funeral_contract_location?: string
+          funeral_home?: string
+          funeral_home_contact?: string
+          funeral_service_desired?: string
+          headstone_wishes?: string
+          id?: string
+          memorial_donation?: string
+          memorial_service_desired?: string
+          military_honors?: string
+          obituary_wishes?: string
+          organ_donation_wishes?: string
+          organizations_to_notify?: string
+          pallbearer_preferences?: string
+          paperwork_location?: string
+          people_to_notify?: string
+          plan_id?: string
+          preferred_location?: string
+          preferred_music?: string
+          preferred_readings?: string
+          preferred_speakers?: string
+          prepaid_arrangements?: string
+          religious_service?: string
+          tool_id?: string
+          updated_at?: string
+          user_id?: string
+          viewing?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "tools_eolp_eol_wishes_plan_id_fkey"
+            columns: ["plan_id"]
+            isOneToOne: true
+            referencedRelation: "tools_eolp_plans"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "tools_eolp_eol_wishes_tool_id_fkey"
+            columns: ["tool_id"]
+            isOneToOne: false
+            referencedRelation: "tools"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "tools_eolp_eol_wishes_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "users"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      tools_eolp_family_members: {
+        Row: {
+          contact_info: string
+          created_at: string
+          display_order: number
+          id: string
+          name: string
+          personal_block_id: string | null
+          plan_id: string
+          relationship: string
+          tool_id: string
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          contact_info?: string
+          created_at?: string
+          display_order?: number
+          id?: string
+          name?: string
+          personal_block_id?: string | null
+          plan_id: string
+          relationship?: string
+          tool_id: string
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          contact_info?: string
+          created_at?: string
+          display_order?: number
+          id?: string
+          name?: string
+          personal_block_id?: string | null
+          plan_id?: string
+          relationship?: string
+          tool_id?: string
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "tools_eolp_family_members_personal_block_id_fkey"
+            columns: ["personal_block_id"]
+            isOneToOne: false
+            referencedRelation: "tools_eolp_personal_blocks"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "tools_eolp_family_members_plan_id_fkey"
+            columns: ["plan_id"]
+            isOneToOne: false
+            referencedRelation: "tools_eolp_plans"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "tools_eolp_family_members_tool_id_fkey"
+            columns: ["tool_id"]
+            isOneToOne: false
+            referencedRelation: "tools"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "tools_eolp_family_members_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "users"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      tools_eolp_home: {
+        Row: {
+          address: string
+          alarm_information_secret: string
+          camera_information: string
+          created_at: string
+          deed_location: string
+          garage_code_secret: string
+          homeowners_insurance: string
+          id: string
+          mailbox_information: string
+          monthly_payment: string
+          mortgage_balance: string
+          mortgage_company: string
+          mortgage_reference: string
+          other_owners: string
+          ownership_type: string
+          plan_id: string
+          property_tax: string
+          safe_instructions_secret: string
+          safe_location: string
+          spare_key_location: string
+          tool_id: string
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          address?: string
+          alarm_information_secret?: string
+          camera_information?: string
+          created_at?: string
+          deed_location?: string
+          garage_code_secret?: string
+          homeowners_insurance?: string
+          id?: string
+          mailbox_information?: string
+          monthly_payment?: string
+          mortgage_balance?: string
+          mortgage_company?: string
+          mortgage_reference?: string
+          other_owners?: string
+          ownership_type?: string
+          plan_id: string
+          property_tax?: string
+          safe_instructions_secret?: string
+          safe_location?: string
+          spare_key_location?: string
+          tool_id: string
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          address?: string
+          alarm_information_secret?: string
+          camera_information?: string
+          created_at?: string
+          deed_location?: string
+          garage_code_secret?: string
+          homeowners_insurance?: string
+          id?: string
+          mailbox_information?: string
+          monthly_payment?: string
+          mortgage_balance?: string
+          mortgage_company?: string
+          mortgage_reference?: string
+          other_owners?: string
+          ownership_type?: string
+          plan_id?: string
+          property_tax?: string
+          safe_instructions_secret?: string
+          safe_location?: string
+          spare_key_location?: string
+          tool_id?: string
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "tools_eolp_home_plan_id_fkey"
+            columns: ["plan_id"]
+            isOneToOne: true
+            referencedRelation: "tools_eolp_plans"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "tools_eolp_home_tool_id_fkey"
+            columns: ["tool_id"]
+            isOneToOne: false
+            referencedRelation: "tools"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "tools_eolp_home_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "users"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      tools_eolp_income_sources: {
+        Row: {
+          amount_frequency: string
+          contact: string
+          created_at: string
+          deposited_where: string
+          display_order: number
+          id: string
+          income_type: string
+          plan_id: string
+          survivor_benefits: string
+          tool_id: string
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          amount_frequency?: string
+          contact?: string
+          created_at?: string
+          deposited_where?: string
+          display_order?: number
+          id?: string
+          income_type?: string
+          plan_id: string
+          survivor_benefits?: string
+          tool_id: string
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          amount_frequency?: string
+          contact?: string
+          created_at?: string
+          deposited_where?: string
+          display_order?: number
+          id?: string
+          income_type?: string
+          plan_id?: string
+          survivor_benefits?: string
+          tool_id?: string
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "tools_eolp_income_sources_plan_id_fkey"
+            columns: ["plan_id"]
+            isOneToOne: false
+            referencedRelation: "tools_eolp_plans"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "tools_eolp_income_sources_tool_id_fkey"
+            columns: ["tool_id"]
+            isOneToOne: false
+            referencedRelation: "tools"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "tools_eolp_income_sources_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "users"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      tools_eolp_insurance: {
+        Row: {
+          agent: string
+          agent_contact: string
+          automatic_payment: string
+          beneficiary: string
+          claim_contact: string
+          company: string
+          coverage_amount: string
+          created_at: string
+          document_location: string
+          expiration_renewal: string
+          id: string
+          instructions: string
+          insured_person: string
+          payment_account: string
+          payment_frequency: string
+          plan_id: string
+          policy_number: string
+          policy_type: string
+          policyholder: string
+          premium: string
+          section_id: string | null
+          tool_id: string
+          updated_at: string
+          user_id: string
+          website: string
+        }
+        Insert: {
+          agent?: string
+          agent_contact?: string
+          automatic_payment?: string
+          beneficiary?: string
+          claim_contact?: string
+          company?: string
+          coverage_amount?: string
+          created_at?: string
+          document_location?: string
+          expiration_renewal?: string
+          id?: string
+          instructions?: string
+          insured_person?: string
+          payment_account?: string
+          payment_frequency?: string
+          plan_id: string
+          policy_number?: string
+          policy_type?: string
+          policyholder?: string
+          premium?: string
+          section_id?: string | null
+          tool_id: string
+          updated_at?: string
+          user_id: string
+          website?: string
+        }
+        Update: {
+          agent?: string
+          agent_contact?: string
+          automatic_payment?: string
+          beneficiary?: string
+          claim_contact?: string
+          company?: string
+          coverage_amount?: string
+          created_at?: string
+          document_location?: string
+          expiration_renewal?: string
+          id?: string
+          instructions?: string
+          insured_person?: string
+          payment_account?: string
+          payment_frequency?: string
+          plan_id?: string
+          policy_number?: string
+          policy_type?: string
+          policyholder?: string
+          premium?: string
+          section_id?: string | null
+          tool_id?: string
+          updated_at?: string
+          user_id?: string
+          website?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "tools_eolp_insurance_plan_id_fkey"
+            columns: ["plan_id"]
+            isOneToOne: false
+            referencedRelation: "tools_eolp_plans"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "tools_eolp_insurance_section_id_fkey"
+            columns: ["section_id"]
+            isOneToOne: false
+            referencedRelation: "tools_eolp_sections"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "tools_eolp_insurance_tool_id_fkey"
+            columns: ["tool_id"]
+            isOneToOne: false
+            referencedRelation: "tools"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "tools_eolp_insurance_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "users"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      tools_eolp_investments: {
+        Row: {
+          account_reference: string
+          account_type: string
+          advisor: string
+          beneficiaries: string
+          created_at: string
+          display_order: number
+          id: string
+          institution: string
+          owner: string
+          plan_id: string
+          tool_id: string
+          updated_at: string
+          user_id: string
+          website_login: string
+        }
+        Insert: {
+          account_reference?: string
+          account_type?: string
+          advisor?: string
+          beneficiaries?: string
+          created_at?: string
+          display_order?: number
+          id?: string
+          institution?: string
+          owner?: string
+          plan_id: string
+          tool_id: string
+          updated_at?: string
+          user_id: string
+          website_login?: string
+        }
+        Update: {
+          account_reference?: string
+          account_type?: string
+          advisor?: string
+          beneficiaries?: string
+          created_at?: string
+          display_order?: number
+          id?: string
+          institution?: string
+          owner?: string
+          plan_id?: string
+          tool_id?: string
+          updated_at?: string
+          user_id?: string
+          website_login?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "tools_eolp_investments_plan_id_fkey"
+            columns: ["plan_id"]
+            isOneToOne: false
+            referencedRelation: "tools_eolp_plans"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "tools_eolp_investments_tool_id_fkey"
+            columns: ["tool_id"]
+            isOneToOne: false
+            referencedRelation: "tools"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "tools_eolp_investments_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "users"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      tools_eolp_letters: {
+        Row: {
+          body_secret: string
+          created_at: string
+          id: string
+          instructions: string
+          last_updated: string
+          letter_type: string
+          plan_id: string
+          recipient: string
+          section_id: string | null
+          status: string
+          title: string
+          tool_id: string
+          updated_at: string
+          user_id: string
+          visibility: string
+          when_to_share: string
+        }
+        Insert: {
+          body_secret?: string
+          created_at?: string
+          id?: string
+          instructions?: string
+          last_updated?: string
+          letter_type?: string
+          plan_id: string
+          recipient?: string
+          section_id?: string | null
+          status?: string
+          title?: string
+          tool_id: string
+          updated_at?: string
+          user_id: string
+          visibility?: string
+          when_to_share?: string
+        }
+        Update: {
+          body_secret?: string
+          created_at?: string
+          id?: string
+          instructions?: string
+          last_updated?: string
+          letter_type?: string
+          plan_id?: string
+          recipient?: string
+          section_id?: string | null
+          status?: string
+          title?: string
+          tool_id?: string
+          updated_at?: string
+          user_id?: string
+          visibility?: string
+          when_to_share?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "tools_eolp_letters_plan_id_fkey"
+            columns: ["plan_id"]
+            isOneToOne: false
+            referencedRelation: "tools_eolp_plans"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "tools_eolp_letters_section_id_fkey"
+            columns: ["section_id"]
+            isOneToOne: false
+            referencedRelation: "tools_eolp_sections"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "tools_eolp_letters_tool_id_fkey"
+            columns: ["tool_id"]
+            isOneToOne: false
+            referencedRelation: "tools"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "tools_eolp_letters_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "users"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      tools_eolp_my_wishes: {
+        Row: {
+          charitable_wishes: string
+          collections: string
+          created_at: string
+          digital_media: string
+          do_not_want: string
+          family_to_know: string
+          id: string
+          important_organizations: string
+          most_important: string
+          online_presence: string
+          personal_files: string
+          pets_care: string
+          phone_computer: string
+          plan_id: string
+          social_media: string
+          special_belongings: string
+          specific_gifts: string
+          thanked_remembered: string
+          tool_id: string
+          traditions: string
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          charitable_wishes?: string
+          collections?: string
+          created_at?: string
+          digital_media?: string
+          do_not_want?: string
+          family_to_know?: string
+          id?: string
+          important_organizations?: string
+          most_important?: string
+          online_presence?: string
+          personal_files?: string
+          pets_care?: string
+          phone_computer?: string
+          plan_id: string
+          social_media?: string
+          special_belongings?: string
+          specific_gifts?: string
+          thanked_remembered?: string
+          tool_id: string
+          traditions?: string
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          charitable_wishes?: string
+          collections?: string
+          created_at?: string
+          digital_media?: string
+          do_not_want?: string
+          family_to_know?: string
+          id?: string
+          important_organizations?: string
+          most_important?: string
+          online_presence?: string
+          personal_files?: string
+          pets_care?: string
+          phone_computer?: string
+          plan_id?: string
+          social_media?: string
+          special_belongings?: string
+          specific_gifts?: string
+          thanked_remembered?: string
+          tool_id?: string
+          traditions?: string
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "tools_eolp_my_wishes_plan_id_fkey"
+            columns: ["plan_id"]
+            isOneToOne: true
+            referencedRelation: "tools_eolp_plans"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "tools_eolp_my_wishes_tool_id_fkey"
+            columns: ["tool_id"]
+            isOneToOne: false
+            referencedRelation: "tools"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "tools_eolp_my_wishes_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "users"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      tools_eolp_next_steps: {
+        Row: {
+          created_at: string
+          display_order: number
+          id: string
+          instructions: string
+          is_hidden: boolean
+          is_predefined: boolean
+          person_responsible: string
+          plan_id: string
+          priority: string
+          related_contact_id: string | null
+          related_document: string
+          seed_key: string | null
+          status: string
+          title: string
+          tool_id: string
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          display_order?: number
+          id?: string
+          instructions?: string
+          is_hidden?: boolean
+          is_predefined?: boolean
+          person_responsible?: string
+          plan_id: string
+          priority?: string
+          related_contact_id?: string | null
+          related_document?: string
+          seed_key?: string | null
+          status?: string
+          title?: string
+          tool_id: string
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          display_order?: number
+          id?: string
+          instructions?: string
+          is_hidden?: boolean
+          is_predefined?: boolean
+          person_responsible?: string
+          plan_id?: string
+          priority?: string
+          related_contact_id?: string | null
+          related_document?: string
+          seed_key?: string | null
+          status?: string
+          title?: string
+          tool_id?: string
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "tools_eolp_next_steps_plan_id_fkey"
+            columns: ["plan_id"]
+            isOneToOne: false
+            referencedRelation: "tools_eolp_plans"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "tools_eolp_next_steps_related_contact_id_fkey"
+            columns: ["related_contact_id"]
+            isOneToOne: false
+            referencedRelation: "tools_eolp_contacts"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "tools_eolp_next_steps_tool_id_fkey"
+            columns: ["tool_id"]
+            isOneToOne: false
+            referencedRelation: "tools"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "tools_eolp_next_steps_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "users"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      tools_eolp_online_accounts: {
+        Row: {
+          account_reference: string
+          category: string
+          created_at: string
+          disposition: string
+          id: string
+          mfa_enabled: string
+          mfa_location_secret: string
+          mfa_method: string
+          password_secret: string
+          password_stored_elsewhere: string
+          password_stored_elsewhere_detail: string
+          plan_id: string
+          recovery_email_secret: string
+          recovery_phone_secret: string
+          section_id: string | null
+          service_name: string
+          special_instructions: string
+          tool_id: string
+          updated_at: string
+          user_id: string
+          username: string
+          website: string
+        }
+        Insert: {
+          account_reference?: string
+          category?: string
+          created_at?: string
+          disposition?: string
+          id?: string
+          mfa_enabled?: string
+          mfa_location_secret?: string
+          mfa_method?: string
+          password_secret?: string
+          password_stored_elsewhere?: string
+          password_stored_elsewhere_detail?: string
+          plan_id: string
+          recovery_email_secret?: string
+          recovery_phone_secret?: string
+          section_id?: string | null
+          service_name?: string
+          special_instructions?: string
+          tool_id: string
+          updated_at?: string
+          user_id: string
+          username?: string
+          website?: string
+        }
+        Update: {
+          account_reference?: string
+          category?: string
+          created_at?: string
+          disposition?: string
+          id?: string
+          mfa_enabled?: string
+          mfa_location_secret?: string
+          mfa_method?: string
+          password_secret?: string
+          password_stored_elsewhere?: string
+          password_stored_elsewhere_detail?: string
+          plan_id?: string
+          recovery_email_secret?: string
+          recovery_phone_secret?: string
+          section_id?: string | null
+          service_name?: string
+          special_instructions?: string
+          tool_id?: string
+          updated_at?: string
+          user_id?: string
+          username?: string
+          website?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "tools_eolp_online_accounts_plan_id_fkey"
+            columns: ["plan_id"]
+            isOneToOne: false
+            referencedRelation: "tools_eolp_plans"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "tools_eolp_online_accounts_section_id_fkey"
+            columns: ["section_id"]
+            isOneToOne: false
+            referencedRelation: "tools_eolp_sections"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "tools_eolp_online_accounts_tool_id_fkey"
+            columns: ["tool_id"]
+            isOneToOne: false
+            referencedRelation: "tools"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "tools_eolp_online_accounts_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "users"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      tools_eolp_other_custom_fields: {
+        Row: {
+          created_at: string
+          display_order: number
+          id: string
+          label: string
+          record_id: string
+          tool_id: string
+          updated_at: string
+          user_id: string
+          value: string
+        }
+        Insert: {
+          created_at?: string
+          display_order?: number
+          id?: string
+          label?: string
+          record_id: string
+          tool_id: string
+          updated_at?: string
+          user_id: string
+          value?: string
+        }
+        Update: {
+          created_at?: string
+          display_order?: number
+          id?: string
+          label?: string
+          record_id?: string
+          tool_id?: string
+          updated_at?: string
+          user_id?: string
+          value?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "tools_eolp_other_custom_fields_record_id_fkey"
+            columns: ["record_id"]
+            isOneToOne: false
+            referencedRelation: "tools_eolp_other_records"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "tools_eolp_other_custom_fields_tool_id_fkey"
+            columns: ["tool_id"]
+            isOneToOne: false
+            referencedRelation: "tools"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "tools_eolp_other_custom_fields_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "users"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      tools_eolp_other_records: {
+        Row: {
+          category: string
+          contact: string
+          created_at: string
+          custom_notes: string
+          description: string
+          display_order: number
+          id: string
+          important_date: string | null
+          instructions: string
+          location: string
+          plan_id: string
+          section_id: string | null
+          title: string
+          tool_id: string
+          updated_at: string
+          user_id: string
+          website: string
+        }
+        Insert: {
+          category?: string
+          contact?: string
+          created_at?: string
+          custom_notes?: string
+          description?: string
+          display_order?: number
+          id?: string
+          important_date?: string | null
+          instructions?: string
+          location?: string
+          plan_id: string
+          section_id?: string | null
+          title?: string
+          tool_id: string
+          updated_at?: string
+          user_id: string
+          website?: string
+        }
+        Update: {
+          category?: string
+          contact?: string
+          created_at?: string
+          custom_notes?: string
+          description?: string
+          display_order?: number
+          id?: string
+          important_date?: string | null
+          instructions?: string
+          location?: string
+          plan_id?: string
+          section_id?: string | null
+          title?: string
+          tool_id?: string
+          updated_at?: string
+          user_id?: string
+          website?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "tools_eolp_other_records_plan_id_fkey"
+            columns: ["plan_id"]
+            isOneToOne: false
+            referencedRelation: "tools_eolp_plans"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "tools_eolp_other_records_section_id_fkey"
+            columns: ["section_id"]
+            isOneToOne: false
+            referencedRelation: "tools_eolp_sections"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "tools_eolp_other_records_tool_id_fkey"
+            columns: ["tool_id"]
+            isOneToOne: false
+            referencedRelation: "tools"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "tools_eolp_other_records_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "users"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      tools_eolp_personal: {
+        Row: {
+          created_at: string
+          date_of_birth: string | null
+          discharge_records_location: string
+          drivers_license_number_secret: string
+          drivers_license_state: string
+          employer: string
+          employer_contact: string
+          full_legal_name: string
+          home_address: string
+          hr_contact: string
+          id: string
+          job_title: string
+          marital_status: string
+          military_branch: string
+          military_id: string
+          other_identification: string
+          passport_expiration: string | null
+          passport_number_secret: string
+          personal_email: string
+          phone: string
+          place_of_birth: string
+          plan_id: string
+          preferred_name: string
+          previous_names: string
+          service_dates: string
+          spouse_partner: string
+          ssn_secret: string
+          tool_id: string
+          updated_at: string
+          user_id: string
+          veteran_status: string
+          work_email: string
+          work_phone: string
+        }
+        Insert: {
+          created_at?: string
+          date_of_birth?: string | null
+          discharge_records_location?: string
+          drivers_license_number_secret?: string
+          drivers_license_state?: string
+          employer?: string
+          employer_contact?: string
+          full_legal_name?: string
+          home_address?: string
+          hr_contact?: string
+          id?: string
+          job_title?: string
+          marital_status?: string
+          military_branch?: string
+          military_id?: string
+          other_identification?: string
+          passport_expiration?: string | null
+          passport_number_secret?: string
+          personal_email?: string
+          phone?: string
+          place_of_birth?: string
+          plan_id: string
+          preferred_name?: string
+          previous_names?: string
+          service_dates?: string
+          spouse_partner?: string
+          ssn_secret?: string
+          tool_id: string
+          updated_at?: string
+          user_id: string
+          veteran_status?: string
+          work_email?: string
+          work_phone?: string
+        }
+        Update: {
+          created_at?: string
+          date_of_birth?: string | null
+          discharge_records_location?: string
+          drivers_license_number_secret?: string
+          drivers_license_state?: string
+          employer?: string
+          employer_contact?: string
+          full_legal_name?: string
+          home_address?: string
+          hr_contact?: string
+          id?: string
+          job_title?: string
+          marital_status?: string
+          military_branch?: string
+          military_id?: string
+          other_identification?: string
+          passport_expiration?: string | null
+          passport_number_secret?: string
+          personal_email?: string
+          phone?: string
+          place_of_birth?: string
+          plan_id?: string
+          preferred_name?: string
+          previous_names?: string
+          service_dates?: string
+          spouse_partner?: string
+          ssn_secret?: string
+          tool_id?: string
+          updated_at?: string
+          user_id?: string
+          veteran_status?: string
+          work_email?: string
+          work_phone?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "tools_eolp_personal_plan_id_fkey"
+            columns: ["plan_id"]
+            isOneToOne: true
+            referencedRelation: "tools_eolp_plans"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "tools_eolp_personal_tool_id_fkey"
+            columns: ["tool_id"]
+            isOneToOne: false
+            referencedRelation: "tools"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "tools_eolp_personal_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "users"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      tools_eolp_personal_blocks: {
+        Row: {
+          created_at: string
+          discharge_records_location: string
+          display_order: number
+          drivers_license_number_secret: string
+          drivers_license_state: string
+          employer: string
+          employer_contact: string
+          hr_contact: string
+          id: string
+          job_title: string
+          kind: string
+          military_branch: string
+          military_id: string
+          name: string
+          notes: string
+          other_identification: string
+          passport_expiration: string | null
+          passport_number_secret: string
+          plan_id: string
+          service_dates: string
+          tool_id: string
+          updated_at: string
+          user_id: string
+          veteran_status: string
+          work_email: string
+          work_phone: string
+        }
+        Insert: {
+          created_at?: string
+          discharge_records_location?: string
+          display_order?: number
+          drivers_license_number_secret?: string
+          drivers_license_state?: string
+          employer?: string
+          employer_contact?: string
+          hr_contact?: string
+          id?: string
+          job_title?: string
+          kind: string
+          military_branch?: string
+          military_id?: string
+          name: string
+          notes?: string
+          other_identification?: string
+          passport_expiration?: string | null
+          passport_number_secret?: string
+          plan_id: string
+          service_dates?: string
+          tool_id: string
+          updated_at?: string
+          user_id: string
+          veteran_status?: string
+          work_email?: string
+          work_phone?: string
+        }
+        Update: {
+          created_at?: string
+          discharge_records_location?: string
+          display_order?: number
+          drivers_license_number_secret?: string
+          drivers_license_state?: string
+          employer?: string
+          employer_contact?: string
+          hr_contact?: string
+          id?: string
+          job_title?: string
+          kind?: string
+          military_branch?: string
+          military_id?: string
+          name?: string
+          notes?: string
+          other_identification?: string
+          passport_expiration?: string | null
+          passport_number_secret?: string
+          plan_id?: string
+          service_dates?: string
+          tool_id?: string
+          updated_at?: string
+          user_id?: string
+          veteran_status?: string
+          work_email?: string
+          work_phone?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "tools_eolp_personal_blocks_plan_id_fkey"
+            columns: ["plan_id"]
+            isOneToOne: false
+            referencedRelation: "tools_eolp_plans"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "tools_eolp_personal_blocks_tool_id_fkey"
+            columns: ["tool_id"]
+            isOneToOne: false
+            referencedRelation: "tools"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "tools_eolp_personal_blocks_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "users"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      tools_eolp_personal_items: {
+        Row: {
+          created_at: string
+          description: string
+          display_order: number
+          id: string
+          item: string
+          location: string
+          photo_reference: string
+          plan_id: string
+          reason: string
+          recipient: string
+          special_instructions: string
+          tool_id: string
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          description?: string
+          display_order?: number
+          id?: string
+          item?: string
+          location?: string
+          photo_reference?: string
+          plan_id: string
+          reason?: string
+          recipient?: string
+          special_instructions?: string
+          tool_id: string
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          description?: string
+          display_order?: number
+          id?: string
+          item?: string
+          location?: string
+          photo_reference?: string
+          plan_id?: string
+          reason?: string
+          recipient?: string
+          special_instructions?: string
+          tool_id?: string
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "tools_eolp_personal_items_plan_id_fkey"
+            columns: ["plan_id"]
+            isOneToOne: false
+            referencedRelation: "tools_eolp_plans"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "tools_eolp_personal_items_tool_id_fkey"
+            columns: ["tool_id"]
+            isOneToOne: false
+            referencedRelation: "tools"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "tools_eolp_personal_items_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "users"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      tools_eolp_plans: {
+        Row: {
+          card_color: string
+          created_at: string
+          date_of_birth: string | null
+          history_events: Json
+          id: string
+          is_selected: boolean
+          name: string
+          person_full_name: string
+          relationship: string
+          relationship_custom: string
+          status: string
+          tool_id: string
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          card_color?: string
+          created_at?: string
+          date_of_birth?: string | null
+          history_events?: Json
+          id?: string
+          is_selected?: boolean
+          name: string
+          person_full_name?: string
+          relationship?: string
+          relationship_custom?: string
+          status?: string
+          tool_id: string
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          card_color?: string
+          created_at?: string
+          date_of_birth?: string | null
+          history_events?: Json
+          id?: string
+          is_selected?: boolean
+          name?: string
+          person_full_name?: string
+          relationship?: string
+          relationship_custom?: string
+          status?: string
+          tool_id?: string
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "tools_eolp_plans_tool_id_fkey"
+            columns: ["tool_id"]
+            isOneToOne: false
+            referencedRelation: "tools"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "tools_eolp_plans_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "users"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      tools_eolp_providers: {
+        Row: {
+          account_reference: string
+          contact: string
+          created_at: string
+          display_order: number
+          id: string
+          name: string
+          notes: string
+          plan_id: string
+          provider_type: string
+          tool_id: string
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          account_reference?: string
+          contact?: string
+          created_at?: string
+          display_order?: number
+          id?: string
+          name?: string
+          notes?: string
+          plan_id: string
+          provider_type?: string
+          tool_id: string
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          account_reference?: string
+          contact?: string
+          created_at?: string
+          display_order?: number
+          id?: string
+          name?: string
+          notes?: string
+          plan_id?: string
+          provider_type?: string
+          tool_id?: string
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "tools_eolp_providers_plan_id_fkey"
+            columns: ["plan_id"]
+            isOneToOne: false
+            referencedRelation: "tools_eolp_plans"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "tools_eolp_providers_tool_id_fkey"
+            columns: ["tool_id"]
+            isOneToOne: false
+            referencedRelation: "tools"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "tools_eolp_providers_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "users"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      tools_eolp_recurring_bills: {
+        Row: {
+          amount: string
+          automatic_payment: string
+          cancel_after_death: string
+          company: string
+          created_at: string
+          description: string
+          display_order: number
+          due_date: string
+          frequency: string
+          id: string
+          payment_account: string
+          plan_id: string
+          tool_id: string
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          amount?: string
+          automatic_payment?: string
+          cancel_after_death?: string
+          company?: string
+          created_at?: string
+          description?: string
+          display_order?: number
+          due_date?: string
+          frequency?: string
+          id?: string
+          payment_account?: string
+          plan_id: string
+          tool_id: string
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          amount?: string
+          automatic_payment?: string
+          cancel_after_death?: string
+          company?: string
+          created_at?: string
+          description?: string
+          display_order?: number
+          due_date?: string
+          frequency?: string
+          id?: string
+          payment_account?: string
+          plan_id?: string
+          tool_id?: string
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "tools_eolp_recurring_bills_plan_id_fkey"
+            columns: ["plan_id"]
+            isOneToOne: false
+            referencedRelation: "tools_eolp_plans"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "tools_eolp_recurring_bills_tool_id_fkey"
+            columns: ["tool_id"]
+            isOneToOne: false
+            referencedRelation: "tools"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "tools_eolp_recurring_bills_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "users"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      tools_eolp_sections: {
+        Row: {
+          builtin_key: string | null
+          created_at: string
+          display_order: number
+          id: string
+          is_complete: boolean
+          is_inactive: boolean
+          is_removed: boolean
+          kind: string
+          modeled_after: string | null
+          name: string
+          notes: string
+          plan_id: string
+          tool_id: string
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          builtin_key?: string | null
+          created_at?: string
+          display_order?: number
+          id?: string
+          is_complete?: boolean
+          is_inactive?: boolean
+          is_removed?: boolean
+          kind: string
+          modeled_after?: string | null
+          name: string
+          notes?: string
+          plan_id: string
+          tool_id: string
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          builtin_key?: string | null
+          created_at?: string
+          display_order?: number
+          id?: string
+          is_complete?: boolean
+          is_inactive?: boolean
+          is_removed?: boolean
+          kind?: string
+          modeled_after?: string | null
+          name?: string
+          notes?: string
+          plan_id?: string
+          tool_id?: string
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "tools_eolp_sections_plan_id_fkey"
+            columns: ["plan_id"]
+            isOneToOne: false
+            referencedRelation: "tools_eolp_plans"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "tools_eolp_sections_tool_id_fkey"
+            columns: ["tool_id"]
+            isOneToOne: false
+            referencedRelation: "tools"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "tools_eolp_sections_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "users"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      tools_eolp_subsections: {
+        Row: {
+          created_at: string
+          display_order: number
+          id: string
+          is_inactive: boolean
+          name: string
+          plan_id: string
+          section_id: string | null
+          subsection_key: string
+          tool_id: string
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          display_order?: number
+          id?: string
+          is_inactive?: boolean
+          name: string
+          plan_id: string
+          section_id?: string | null
+          subsection_key: string
+          tool_id: string
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          display_order?: number
+          id?: string
+          is_inactive?: boolean
+          name?: string
+          plan_id?: string
+          section_id?: string | null
+          subsection_key?: string
+          tool_id?: string
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "tools_eolp_subsections_plan_id_fkey"
+            columns: ["plan_id"]
+            isOneToOne: false
+            referencedRelation: "tools_eolp_plans"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "tools_eolp_subsections_section_id_fkey"
+            columns: ["section_id"]
+            isOneToOne: false
+            referencedRelation: "tools_eolp_sections"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "tools_eolp_subsections_tool_id_fkey"
+            columns: ["tool_id"]
+            isOneToOne: false
+            referencedRelation: "tools"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "tools_eolp_subsections_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "users"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      tools_eolp_utilities: {
+        Row: {
+          account_reference: string
+          automatic_payment: string
+          contact: string
+          created_at: string
+          display_order: number
+          id: string
+          login_reference: string
+          payment_source: string
+          plan_id: string
+          provider: string
+          tool_id: string
+          updated_at: string
+          user_id: string
+          utility_type: string
+        }
+        Insert: {
+          account_reference?: string
+          automatic_payment?: string
+          contact?: string
+          created_at?: string
+          display_order?: number
+          id?: string
+          login_reference?: string
+          payment_source?: string
+          plan_id: string
+          provider?: string
+          tool_id: string
+          updated_at?: string
+          user_id: string
+          utility_type?: string
+        }
+        Update: {
+          account_reference?: string
+          automatic_payment?: string
+          contact?: string
+          created_at?: string
+          display_order?: number
+          id?: string
+          login_reference?: string
+          payment_source?: string
+          plan_id?: string
+          provider?: string
+          tool_id?: string
+          updated_at?: string
+          user_id?: string
+          utility_type?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "tools_eolp_utilities_plan_id_fkey"
+            columns: ["plan_id"]
+            isOneToOne: false
+            referencedRelation: "tools_eolp_plans"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "tools_eolp_utilities_tool_id_fkey"
+            columns: ["tool_id"]
+            isOneToOne: false
+            referencedRelation: "tools"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "tools_eolp_utilities_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "users"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      tools_eolp_vehicles: {
+        Row: {
+          created_at: string
+          display_order: number
+          id: string
+          insurance: string
+          loan_information: string
+          make: string
+          model: string
+          plan_id: string
+          spare_key_location: string
+          title_location: string
+          tool_id: string
+          updated_at: string
+          user_id: string
+          vin: string
+          year: string
+        }
+        Insert: {
+          created_at?: string
+          display_order?: number
+          id?: string
+          insurance?: string
+          loan_information?: string
+          make?: string
+          model?: string
+          plan_id: string
+          spare_key_location?: string
+          title_location?: string
+          tool_id: string
+          updated_at?: string
+          user_id: string
+          vin?: string
+          year?: string
+        }
+        Update: {
+          created_at?: string
+          display_order?: number
+          id?: string
+          insurance?: string
+          loan_information?: string
+          make?: string
+          model?: string
+          plan_id?: string
+          spare_key_location?: string
+          title_location?: string
+          tool_id?: string
+          updated_at?: string
+          user_id?: string
+          vin?: string
+          year?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "tools_eolp_vehicles_plan_id_fkey"
+            columns: ["plan_id"]
+            isOneToOne: false
+            referencedRelation: "tools_eolp_plans"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "tools_eolp_vehicles_tool_id_fkey"
+            columns: ["tool_id"]
+            isOneToOne: false
+            referencedRelation: "tools"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "tools_eolp_vehicles_user_id_fkey"
             columns: ["user_id"]
             isOneToOne: false
             referencedRelation: "users"
@@ -2223,6 +4759,54 @@ export type Database = {
           },
         ]
       }
+      tools_hsa_expense_receipts: {
+        Row: {
+          created_at: string
+          expense_id: string
+          file_name: string
+          file_size: number
+          file_type: string
+          file_url: string
+          id: string
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          expense_id: string
+          file_name: string
+          file_size: number
+          file_type: string
+          file_url: string
+          id?: string
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          expense_id?: string
+          file_name?: string
+          file_size?: number
+          file_type?: string
+          file_url?: string
+          id?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "tools_hsa_expense_receipts_expense_id_fkey"
+            columns: ["expense_id"]
+            isOneToOne: false
+            referencedRelation: "tools_hsa_expenses"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "tools_hsa_expense_receipts_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "users"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       tools_hsa_expenses: {
         Row: {
           account_id: string
@@ -2799,6 +5383,54 @@ export type Database = {
           },
           {
             foreignKeyName: "tools_mp_plans_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "users"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      tools_note_attachments: {
+        Row: {
+          created_at: string
+          file_name: string
+          file_size: number
+          file_type: string
+          file_url: string
+          id: string
+          note_id: string
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          file_name: string
+          file_size: number
+          file_type: string
+          file_url: string
+          id?: string
+          note_id: string
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          file_name?: string
+          file_size?: number
+          file_type?: string
+          file_url?: string
+          id?: string
+          note_id?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "tools_note_attachments_note_id_fkey"
+            columns: ["note_id"]
+            isOneToOne: false
+            referencedRelation: "tools_note_notes"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "tools_note_attachments_user_id_fkey"
             columns: ["user_id"]
             isOneToOne: false
             referencedRelation: "users"
@@ -3973,6 +6605,54 @@ export type Database = {
           },
         ]
       }
+      tools_tdl_attachments: {
+        Row: {
+          created_at: string
+          file_name: string
+          file_size: number
+          file_type: string
+          file_url: string
+          id: string
+          task_id: string
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          file_name: string
+          file_size: number
+          file_type: string
+          file_url: string
+          id?: string
+          task_id: string
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          file_name?: string
+          file_size?: number
+          file_type?: string
+          file_url?: string
+          id?: string
+          task_id?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "tools_tdl_attachments_task_id_fkey"
+            columns: ["task_id"]
+            isOneToOne: false
+            referencedRelation: "tools_tdl_tasks"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "tools_tdl_attachments_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "users"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       tools_tdl_categories: {
         Row: {
           card_color: string | null
@@ -4197,6 +6877,54 @@ export type Database = {
           },
         ]
       }
+      tools_tl_trip_attachments: {
+        Row: {
+          created_at: string
+          file_name: string
+          file_size: number
+          file_type: string
+          file_url: string
+          id: string
+          trip_id: string
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          file_name: string
+          file_size: number
+          file_type: string
+          file_url: string
+          id?: string
+          trip_id: string
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          file_name?: string
+          file_size?: number
+          file_type?: string
+          file_url?: string
+          id?: string
+          trip_id?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "tools_tl_trip_attachments_trip_id_fkey"
+            columns: ["trip_id"]
+            isOneToOne: false
+            referencedRelation: "tools_tl_trips"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "tools_tl_trip_attachments_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "users"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       tools_tl_trips: {
         Row: {
           add_to_dashboard: boolean
@@ -4412,9 +7140,16 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
+      apply_tools_eolp_owner_rls: {
+        Args: { p_table: string }
+        Returns: undefined
+      }
       get_user_storage_usage: {
         Args: { p_user_id: string }
-        Returns: { bucket_id: string; used_bytes: number }[]
+        Returns: {
+          bucket_id: string
+          used_bytes: number
+        }[]
       }
     }
     Enums: {

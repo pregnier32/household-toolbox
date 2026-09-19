@@ -1232,6 +1232,7 @@ Use these; do not invent a per-tool upload UI.
 - `previewItem` to open an in-modal image preview after a successful View
 - `maxFiles` — omit for unlimited; set `1` for a single-file record (Important Documents)
 - `busy` while an upload, replace, or remove is in flight
+- `readOnly` — hide add/replace/remove (History). View and Download stay available.
 
 ### Paperclip placement
 
@@ -1347,6 +1348,31 @@ If an add would exceed the limit, reject it with a clear message (“would excee
 - Do not preview Word/Excel in the browser; download them.
 - Do not scan all 18 buckets on every user-menu open.
 - Do not enable paid storage / add-on buttons until billing is actually wired.
+
+### Cleaning Schedule
+
+Two file stores. Do not attach files to scheduled tasks — a task is 1:1 with its library item, so task-level files would duplicate the item store.
+
+- **Library item files** (`tools_cs_item_attachments`, bucket `cleaning-schedule`, path `{userId}/items/{itemId}/...`): standing photos or instructions for the item. Library add/edit/cards, schedule rows, View/Edit, and archived schedule paperclips all open this store. Files stay when a task is archived or deleted.
+- **Completion files** (`tools_cs_completion_attachments`, path `{userId}/completions/{completionId}/...`): dated proof for one occurrence. Queue in the Complete dialog; after save they are read-only in completion History. No add/remove after complete.
+- No paperclip on categories or Activate.
+
+### HSA Tracker
+
+Expense receipts only. Do not attach files to accounts, deposits, Summary KPIs, or Reports.
+
+- **Expense files** (`tools_hsa_expense_receipts`, bucket `hsa-tracker`, path `{userId}/{expenseId}/...`): multiple optional receipts/EOBs. Paperclip on Add expense, Edit expense, and expense cards.
+- Keep the yellow “Receipt still needed” banner when the warning checkbox is on **and** the expense has no files. Do not add a second “Attach receipt” button. Do not show file names on the card.
+- Reimbursed is a field, not History. Files stay editable.
+- No paperclip on account add/edit, deposits, or Reports.
+
+### Travel Log
+
+Trip files only. Do not attach files to lodging or journal notes until those child rows are upserted by id (they are currently deleted and re-inserted on every trip save).
+
+- **Trip files** (`tools_tl_trip_attachments`, bucket `travel-log`, path `{userId}/{tripId}/...`): multiple optional tickets, boarding passes, photos, and receipts. Paperclip on Add trip, Edit trip, and trip cards.
+- The “Trip History” heading is the trip list, not an archive. Files stay editable.
+- No second “Upload receipts” control under Budget. No paperclip on lodging/journal modals or Export.
 
 ---
 
@@ -1586,7 +1612,7 @@ USING (
 - `pet-care-schedule` - Stores pet documents (`supabase/archive/create-pet-care-schedule-storage-bucket.sql`)
 - `important-documents` - Stores important documents (warranties, policies, records) (`supabase/archive/create-important-documents-storage-bucket.sql`)
 - `healthcare-appt-history` - Healthcare appointment documents (`supabase/archive/create-healthcare-appts-history-storage-bucket.sql`)
-- `hsa-tracker` - Planned for HSA expense receipts (`supabase/create-tools-hsa-tables.sql`, phase 2)
+- `hsa-tracker` - HSA expense receipts (`supabase/ADD_hsa_attachments.sql`)
 
 **Why These Policies Matter**:
 - **Security**: Ensures users can only access files in their own folder (`{userId}/...`)
@@ -1628,7 +1654,7 @@ The application uses a shared server-side deletion service to remove a user acco
 
 **Important Design Rule (Future Tools)**:
 - DB records: If new tool tables are correctly related to `users` with cascade chains, no extra DB deletion code is required (e.g. Address Book in `supabase/create-tools-ab-tables.sql`, Travel Log in `supabase/create-tools-tl-tables.sql`, HSA `tools_hsa_accounts` / `tools_hsa_deposits` / `tools_hsa_expenses` in `supabase/create-tools-hsa-tables.sql`, Event Budget Planner in `supabase/create-tools-ebp-tables.sql`). Tools with `ON DELETE RESTRICT` between child tables (e.g. EBP expenses → categories/vendors) may need an explicit parent-row delete in `lib/user-data-deletion.ts` before the `users` row is removed.
-- Storage files: If a new tool uploads files, update `deleteUserAndAssociatedData()` so those bucket objects are removed during account erasure (e.g. future `tools_hsa_expense_receipts` → bucket `hsa-tracker`).
+- Storage files: If a new tool uploads files, update `deleteUserAndAssociatedData()` so those bucket objects are removed during account erasure.
 
 **Implementation Guidance for New File-Based Tools**:
 - Prefer storing a storage-relative path (or a consistently parseable URL) in the DB.

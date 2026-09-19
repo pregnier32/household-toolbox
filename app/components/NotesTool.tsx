@@ -2,6 +2,15 @@
 
 import { useState, useEffect } from 'react';
 import { useTheme } from './AppThemeProvider';
+import { AttachmentButton } from './AttachmentButton';
+import { AttachmentModal } from './AttachmentModal';
+import {
+  canPreviewAttachment,
+  createPendingAttachment,
+  isImageAttachment,
+  isPdfAttachment,
+  type AttachmentItem,
+} from '@/lib/attachments';
 
 type NoteTag = {
   id: string;
@@ -16,6 +25,13 @@ type SecurityQuestion = {
   answer: string;
 };
 
+type NoteAttachment = {
+  id: string;
+  name: string;
+  size: number;
+  type: string;
+};
+
 type Note = {
   id: string;
   noteName: string;
@@ -28,7 +44,39 @@ type Note = {
   requiresPasswordForView: boolean;
   viewPassword: string | null;
   securityQuestions: SecurityQuestion[] | null;
+  attachments: NoteAttachment[];
 };
+
+const mapNote = (note: {
+  id: string;
+  note_name: string;
+  created_date: string;
+  note: string;
+  tags?: string[];
+  is_active?: boolean;
+  date_added: string;
+  date_inactivated?: string | null;
+  requires_password_for_view?: boolean;
+  attachments?: Array<{ id: string; name?: string; file_name?: string; size?: number; file_size?: number; type?: string; file_type?: string }>;
+}): Note => ({
+  id: note.id,
+  noteName: note.note_name,
+  createdDate: note.created_date,
+  note: note.note,
+  tags: note.tags || [],
+  isActive: note.is_active !== false,
+  dateAdded: note.date_added,
+  dateInactivated: note.date_inactivated || undefined,
+  requiresPasswordForView: note.requires_password_for_view || false,
+  viewPassword: null,
+  securityQuestions: null,
+  attachments: (note.attachments || []).map((item) => ({
+    id: item.id,
+    name: item.name || item.file_name || 'Attachment',
+    size: item.size ?? item.file_size ?? 0,
+    type: item.type || item.file_type || '',
+  })),
+});
 
 const DEFAULT_TAGS = [
   'Home',
@@ -209,7 +257,12 @@ export function NotesTool({ toolId }: NotesToolProps) {
   const [showViewPassword, setShowViewPassword] = useState(false);
   const [showForgotPasswordModal, setShowForgotPasswordModal] = useState(false);
   const [viewNoteModal, setViewNoteModal] = useState<Note | null>(null);
-  const [passwordAction, setPasswordAction] = useState<'view' | 'edit' | 'inactivate' | null>(null);
+  const [passwordAction, setPasswordAction] = useState<'view' | 'edit' | 'inactivate' | 'attachments' | null>(null);
+  const [pendingAttachments, setPendingAttachments] = useState<AttachmentItem[]>([]);
+  const [attachmentModal, setAttachmentModal] = useState<null | 'add' | string>(null);
+  const [attachmentBusy, setAttachmentBusy] = useState(false);
+  const [viewPreview, setViewPreview] = useState<AttachmentItem | null>(null);
+  const [noteUnlocks, setNoteUnlocks] = useState<Record<string, string>>({});
   const [securityQuestions, setSecurityQuestions] = useState<Array<{ questionId: string; question: string }>>([]);
   const [securityAnswers, setSecurityAnswers] = useState<Array<{ questionId: string; answer: string }>>([]);
   const [newPassword, setNewPassword] = useState('');
@@ -230,19 +283,7 @@ export function NotesTool({ toolId }: NotesToolProps) {
           const data = await response.json();
           
           // Transform database format to component format
-          const transformedNotes: Note[] = (data.notes || []).map((note: any) => ({
-            id: note.id,
-            noteName: note.note_name,
-            createdDate: note.created_date,
-            note: note.note,
-            tags: note.tags || [],
-            isActive: note.is_active !== false,
-            dateAdded: note.date_added,
-            dateInactivated: note.date_inactivated,
-            requiresPasswordForView: note.requires_password_for_view || false,
-            viewPassword: null, // Never expose password hash
-            securityQuestions: null // Security questions are not returned for security
-          }));
+          const transformedNotes: Note[] = (data.notes || []).map((note: any) => mapNote(note));
           
           setNotes(transformedNotes);
           
@@ -416,26 +457,39 @@ export function NotesTool({ toolId }: NotesToolProps) {
       });
 
       if (response.ok) {
-        // Reload notes from API
+        const created = await response.json().catch(() => ({}));
+        const createdNoteId = created.note?.id as string | undefined;
+        if (createdNoteId && pendingAttachments.length > 0) {
+          for (const item of pendingAttachments) {
+            if (!item.file) continue;
+            const formData = new FormData();
+            formData.append('toolId', toolId);
+            formData.append('noteId', createdNoteId);
+            formData.append('file', item.file);
+            if (newNote.requiresPasswordForView && newNote.viewPassword.trim()) {
+              formData.append('password', newNote.viewPassword.trim());
+            }
+            const uploadResponse = await fetch('/api/tools/notes/attachments', { method: 'POST', body: formData });
+            if (!uploadResponse.ok) {
+              const errorData = await uploadResponse.json().catch(() => ({}));
+              throw new Error(errorData.error || 'Note saved, but a file failed to upload.');
+            }
+          }
+        }
+
         const loadResponse = await fetch(`/api/tools/notes?toolId=${toolId}`);
         if (loadResponse.ok) {
           const data = await loadResponse.json();
-          const transformedNotes: Note[] = (data.notes || []).map((note: any) => ({
-            id: note.id,
-            noteName: note.note_name,
-            createdDate: note.created_date,
-            note: note.note,
-            tags: note.tags || [],
-            isActive: note.is_active !== false,
-            dateAdded: note.date_added,
-            dateInactivated: note.date_inactivated,
-            requiresPasswordForView: note.requires_password_for_view || false,
-            viewPassword: null,
-            securityQuestions: null
-          }));
+          const transformedNotes: Note[] = (data.notes || []).map((note: any) => mapNote(note));
           setNotes(transformedNotes);
         }
-        
+
+        pendingAttachments.forEach((item) => {
+          if (item.url) URL.revokeObjectURL(item.url);
+        });
+        setPendingAttachments([]);
+        setAttachmentModal(null);
+
         // Reset form
         setNewNote({
           noteName: '',
@@ -455,7 +509,7 @@ export function NotesTool({ toolId }: NotesToolProps) {
         alert(errorMessage);
       }
     } catch (error) {
-      alert('Error adding note. Please try again.');
+      alert(error instanceof Error ? error.message : 'Error adding note. Please try again.');
     } finally {
       setIsLoading(false);
     }
@@ -463,7 +517,7 @@ export function NotesTool({ toolId }: NotesToolProps) {
 
   const startEditing = (note: Note) => {
     // Check if password is required
-    if (note.requiresPasswordForView) {
+    if (note.requiresPasswordForView && noteUnlocks[note.id] == null) {
       setViewPasswordModalId(note.id);
       setViewPasswordInput('');
       setViewPasswordError('');
@@ -575,19 +629,7 @@ export function NotesTool({ toolId }: NotesToolProps) {
         const loadResponse = await fetch(`/api/tools/notes?toolId=${toolId}`);
         if (loadResponse.ok) {
           const data = await loadResponse.json();
-          const transformedNotes: Note[] = (data.notes || []).map((note: any) => ({
-            id: note.id,
-            noteName: note.note_name,
-            createdDate: note.created_date,
-            note: note.note,
-            tags: note.tags || [],
-            isActive: note.is_active !== false,
-            dateAdded: note.date_added,
-            dateInactivated: note.date_inactivated,
-            requiresPasswordForView: note.requires_password_for_view || false,
-            viewPassword: null,
-            securityQuestions: null
-          }));
+          const transformedNotes: Note[] = (data.notes || []).map((note: any) => mapNote(note));
           setNotes(transformedNotes);
         }
         cancelEditing();
@@ -611,7 +653,7 @@ export function NotesTool({ toolId }: NotesToolProps) {
 
     // Check if password is required
     const note = notes.find(n => n.id === id);
-    if (note && note.requiresPasswordForView) {
+    if (note && note.requiresPasswordForView && noteUnlocks[note.id] == null) {
       setViewPasswordModalId(id);
       setViewPasswordInput('');
       setViewPasswordError('');
@@ -647,19 +689,7 @@ export function NotesTool({ toolId }: NotesToolProps) {
         const loadResponse = await fetch(`/api/tools/notes?toolId=${toolId}`);
         if (loadResponse.ok) {
           const data = await loadResponse.json();
-          const transformedNotes: Note[] = (data.notes || []).map((note: any) => ({
-            id: note.id,
-            noteName: note.note_name,
-            createdDate: note.created_date,
-            note: note.note,
-            tags: note.tags || [],
-            isActive: note.is_active !== false,
-            dateAdded: note.date_added,
-            dateInactivated: note.date_inactivated,
-            requiresPasswordForView: note.requires_password_for_view || false,
-            viewPassword: null,
-            securityQuestions: null
-          }));
+          const transformedNotes: Note[] = (data.notes || []).map((note: any) => mapNote(note));
           setNotes(transformedNotes);
         }
       } else {
@@ -699,19 +729,7 @@ export function NotesTool({ toolId }: NotesToolProps) {
         const loadResponse = await fetch(`/api/tools/notes?toolId=${toolId}`);
         if (loadResponse.ok) {
           const data = await loadResponse.json();
-          const transformedNotes: Note[] = (data.notes || []).map((note: any) => ({
-            id: note.id,
-            noteName: note.note_name,
-            createdDate: note.created_date,
-            note: note.note,
-            tags: note.tags || [],
-            isActive: note.is_active !== false,
-            dateAdded: note.date_added,
-            dateInactivated: note.date_inactivated,
-            requiresPasswordForView: note.requires_password_for_view || false,
-            viewPassword: null,
-            securityQuestions: null
-          }));
+          const transformedNotes: Note[] = (data.notes || []).map((note: any) => mapNote(note));
           setNotes(transformedNotes);
         }
       } else {
@@ -749,19 +767,7 @@ export function NotesTool({ toolId }: NotesToolProps) {
         const loadResponse = await fetch(`/api/tools/notes?toolId=${toolId}`);
         if (loadResponse.ok) {
           const data = await loadResponse.json();
-          const transformedNotes: Note[] = (data.notes || []).map((note: any) => ({
-            id: note.id,
-            noteName: note.note_name,
-            createdDate: note.created_date,
-            note: note.note,
-            tags: note.tags || [],
-            isActive: note.is_active !== false,
-            dateAdded: note.date_added,
-            dateInactivated: note.date_inactivated,
-            requiresPasswordForView: note.requires_password_for_view || false,
-            viewPassword: null,
-            securityQuestions: null
-          }));
+          const transformedNotes: Note[] = (data.notes || []).map((note: any) => mapNote(note));
           setNotes(transformedNotes);
         }
         setDeleteConfirmId(null);
@@ -1110,9 +1116,182 @@ export function NotesTool({ toolId }: NotesToolProps) {
     return SECURITY_QUESTIONS.filter(q => !selectedQuestionIds.includes(q.id));
   };
 
+  const reloadNotes = async () => {
+    if (!toolId) return [];
+    const loadResponse = await fetch(`/api/tools/notes?toolId=${toolId}`);
+    if (!loadResponse.ok) return [];
+    const data = await loadResponse.json();
+    const next = (data.notes || []).map((note: Parameters<typeof mapNote>[0]) => mapNote(note));
+    setNotes(next);
+    setViewNoteModal((prev) => (prev ? next.find((note) => note.id === prev.id) || prev : null));
+    return next;
+  };
+
+  const rememberNoteUnlock = (noteId: string, password: string) => {
+    setNoteUnlocks((prev) => ({ ...prev, [noteId]: password }));
+  };
+
+  const openAttachments = (target: 'add' | Note) => {
+    if (target === 'add') {
+      setAttachmentModal('add');
+      return;
+    }
+    if (target.requiresPasswordForView && noteUnlocks[target.id] == null) {
+      setViewPasswordModalId(target.id);
+      setViewPasswordInput('');
+      setViewPasswordError('');
+      setPasswordAction('attachments');
+      return;
+    }
+    setAttachmentModal(target.id);
+  };
+
+  const savedAttachmentNote =
+    attachmentModal && attachmentModal !== 'add'
+      ? notes.find((note) => note.id === attachmentModal) || null
+      : null;
+
+  const modalFiles: AttachmentItem[] =
+    attachmentModal === 'add'
+      ? pendingAttachments
+      : savedAttachmentNote
+        ? savedAttachmentNote.attachments.map((item) => ({
+            id: item.id,
+            name: item.name,
+            size: item.size,
+            type: item.type,
+          }))
+        : [];
+
+  const fetchNoteAttachmentBlob = async (attachmentId: string, password?: string, inline = false) => {
+    const params = new URLSearchParams();
+    if (inline) params.set('inline', '1');
+    if (password) params.set('password', password);
+    const query = params.toString();
+    const response = await fetch(`/api/tools/notes/attachments/${attachmentId}${query ? `?${query}` : ''}`);
+    if (!response.ok) {
+      const errorData = await response.json().catch(() => ({ error: 'Failed to open file' }));
+      throw new Error(errorData.error || 'Failed to open file');
+    }
+    return response.blob();
+  };
+
+  const handleViewAttachment = async (item: AttachmentItem) => {
+    if (item.file && item.url) {
+      if (isImageAttachment(item.type)) {
+        setViewPreview(item);
+        return;
+      }
+      if (isPdfAttachment(item.type, item.name)) {
+        window.open(item.url, '_blank', 'noopener,noreferrer');
+        return;
+      }
+      alert('This file type can’t be previewed in the browser. Use Download to save it.');
+      return;
+    }
+    if (!savedAttachmentNote) return;
+    const password = noteUnlocks[savedAttachmentNote.id];
+    try {
+      const blob = await fetchNoteAttachmentBlob(item.id, password, true);
+      const type = blob.type || item.type || '';
+      if (!canPreviewAttachment(type, item.name)) {
+        alert('This file type can’t be previewed in the browser. Use Download to save it.');
+        return;
+      }
+      const url = window.URL.createObjectURL(blob);
+      if (isImageAttachment(type)) {
+        setViewPreview({ ...item, type, url, size: item.size || blob.size });
+        return;
+      }
+      if (isPdfAttachment(type, item.name)) {
+        window.open(url, '_blank', 'noopener,noreferrer');
+      }
+    } catch (error) {
+      alert(error instanceof Error ? error.message : 'Failed to open file');
+    }
+  };
+
+  const handleDownloadAttachment = async (item: AttachmentItem) => {
+    if (item.file) return;
+    if (!savedAttachmentNote) return;
+    const password = noteUnlocks[savedAttachmentNote.id];
+    try {
+      const blob = await fetchNoteAttachmentBlob(item.id, password);
+      const url = window.URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = url;
+      link.download = item.name || 'attachment';
+      document.body.appendChild(link);
+      link.click();
+      window.URL.revokeObjectURL(url);
+      document.body.removeChild(link);
+    } catch (error) {
+      alert(error instanceof Error ? error.message : 'Failed to download file');
+    }
+  };
+
+  const addSavedNoteFiles = async (noteId: string, files: File[]) => {
+    if (!toolId) return;
+    const note = notes.find((item) => item.id === noteId);
+    if (note && !note.isActive) {
+      alert('Restore this item to add or change files.');
+      return;
+    }
+    setAttachmentBusy(true);
+    try {
+      for (const file of files) {
+        const formData = new FormData();
+        formData.append('toolId', toolId);
+        formData.append('noteId', noteId);
+        formData.append('file', file);
+        const password = noteUnlocks[noteId];
+        if (password) formData.append('password', password);
+        const response = await fetch('/api/tools/notes/attachments', { method: 'POST', body: formData });
+        const data = await response.json().catch(() => ({}));
+        if (!response.ok) {
+          throw new Error(data.error || 'Failed to add file');
+        }
+      }
+      await reloadNotes();
+    } catch (error) {
+      alert(error instanceof Error ? error.message : 'Failed to add file');
+    } finally {
+      setAttachmentBusy(false);
+    }
+  };
+
+  const removeSavedNoteFile = async (noteId: string, attachmentId: string) => {
+    if (!toolId) return;
+    const note = notes.find((item) => item.id === noteId);
+    if (note && !note.isActive) {
+      alert('Restore this item to add or change files.');
+      return;
+    }
+    setAttachmentBusy(true);
+    try {
+      const response = await fetch('/api/tools/notes/attachments', {
+        method: 'DELETE',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          toolId,
+          attachmentId,
+          password: noteUnlocks[noteId],
+        }),
+      });
+      const data = await response.json().catch(() => ({}));
+      if (!response.ok) {
+        throw new Error(data.error || 'Failed to remove file');
+      }
+      await reloadNotes();
+    } catch (error) {
+      alert(error instanceof Error ? error.message : 'Failed to remove file');
+    } finally {
+      setAttachmentBusy(false);
+    }
+  };
+
   const handleViewNote = async (note: Note) => {
-    if (note.requiresPasswordForView) {
-      // Show password modal
+    if (note.requiresPasswordForView && noteUnlocks[note.id] == null) {
       setViewPasswordModalId(note.id);
       setViewPasswordInput('');
       setViewPasswordError('');
@@ -1120,7 +1299,6 @@ export function NotesTool({ toolId }: NotesToolProps) {
       return;
     }
 
-    // Show note in modal (no password required)
     setViewNoteModal(note);
   };
 
@@ -1281,11 +1459,14 @@ export function NotesTool({ toolId }: NotesToolProps) {
       if (response.ok) {
         const data = await response.json();
         if (data.valid) {
-          // Password correct, proceed with the intended action
+          const password = viewPasswordInput.trim();
+          rememberNoteUnlock(note.id, password);
           const action = passwordAction || 'view';
           
           if (action === 'view') {
             setViewNoteModal(note);
+          } else if (action === 'attachments') {
+            setAttachmentModal(note.id);
           } else if (action === 'edit') {
             // Proceed with editing
             // Use a placeholder value to indicate password is already set
@@ -1414,7 +1595,13 @@ export function NotesTool({ toolId }: NotesToolProps) {
             </div>
           ) : (
             <div className={cardClass}>
-              <h3 className={`${sectionTitleClass} mb-4`}>Add New Note</h3>
+              <div className="mb-4 flex items-center justify-between gap-3">
+                <h3 className={sectionTitleClass}>Add New Note</h3>
+                <AttachmentButton
+                  count={pendingAttachments.length}
+                  onClick={() => openAttachments('add')}
+                />
+              </div>
               <div className="space-y-4">
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                   <div>
@@ -1631,6 +1818,11 @@ export function NotesTool({ toolId }: NotesToolProps) {
                   </button>
                   <button
                     onClick={() => {
+                      pendingAttachments.forEach((item) => {
+                        if (item.url) URL.revokeObjectURL(item.url);
+                      });
+                      setPendingAttachments([]);
+                      setAttachmentModal(null);
                       setIsAdding(false);
                       setNewNote({
                         noteName: '',
@@ -1667,6 +1859,13 @@ export function NotesTool({ toolId }: NotesToolProps) {
                     <div key={note.id} className={nestedCardClass}>
                     {editingId === note.id ? (
                       <div className="space-y-4">
+                        <div className="flex items-center justify-between gap-3">
+                          <h3 className={sectionTitleClass}>Edit Note</h3>
+                          <AttachmentButton
+                            count={note.attachments.length}
+                            onClick={() => openAttachments(note)}
+                          />
+                        </div>
                         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                           <div>
                             <label className="block text-sm font-medium text-slate-300 mb-2">
@@ -1937,6 +2136,10 @@ export function NotesTool({ toolId }: NotesToolProps) {
                           </div>
                         </div>
                         <div className="flex gap-1.5 flex-shrink-0">
+                          <AttachmentButton
+                            count={note.attachments.length}
+                            onClick={() => openAttachments(note)}
+                          />
                           <button
                             type="button"
                             onClick={() => handleViewNote(note)}
@@ -2034,6 +2237,10 @@ export function NotesTool({ toolId }: NotesToolProps) {
                           </div>
                         </div>
                         <div className="flex gap-1.5 flex-shrink-0">
+                          <AttachmentButton
+                            count={note.attachments.length}
+                            onClick={() => openAttachments(note)}
+                          />
                           <button
                             type="button"
                             onClick={() => handleViewNote(note)}
@@ -2327,12 +2534,13 @@ export function NotesTool({ toolId }: NotesToolProps) {
 
       {/* View Password Modal */}
       {viewPasswordModalId && (
-        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
+        <div className="fixed inset-0 z-[70] flex items-center justify-center bg-black/50">
           <div className={modalCardClass}>
             <div className="flex items-center justify-between mb-4">
               <h3 className={sectionTitleClass}>
                 {passwordAction === 'edit' ? 'Enter Password to Edit' : 
-                 passwordAction === 'inactivate' ? 'Enter Password to Inactivate' : 
+                 passwordAction === 'inactivate' ? 'Enter Password to Inactivate' :
+                 passwordAction === 'attachments' ? 'Enter Password for Attachments' :
                  'Enter View Password'}
               </h3>
               <button
@@ -2351,6 +2559,7 @@ export function NotesTool({ toolId }: NotesToolProps) {
             <p className="text-sm text-slate-400 mb-4">
               {passwordAction === 'edit' ? 'This note is password protected. Please enter the password to edit.' :
                passwordAction === 'inactivate' ? 'This note is password protected. Please enter the password to inactivate.' :
+               passwordAction === 'attachments' ? 'This note is password protected. Please enter the password to open attachments.' :
                'This note is password protected. Please enter the password to view.'}
             </p>
             <div className="space-y-4">
@@ -2424,6 +2633,7 @@ export function NotesTool({ toolId }: NotesToolProps) {
                 >
                   {passwordAction === 'edit' ? 'Edit Note' :
                    passwordAction === 'inactivate' ? 'Inactivate Note' :
+                   passwordAction === 'attachments' ? 'Open Attachments' :
                    'View Note'}
                 </button>
                 <button
@@ -2446,7 +2656,7 @@ export function NotesTool({ toolId }: NotesToolProps) {
 
       {/* Forgot Password Modal */}
       {showForgotPasswordModal && (
-        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
+        <div className="fixed inset-0 z-[70] flex items-center justify-center bg-black/50">
           <div className={isLight ? `${modalCardClass} max-h-[90vh] overflow-y-auto` : 'bg-slate-800 rounded-2xl border border-slate-700 p-6 max-w-md w-full mx-4 max-h-[90vh] overflow-y-auto'}>
             <div className="flex items-center justify-between mb-4">
               <h3 className={sectionTitleClass}>
@@ -2680,12 +2890,19 @@ export function NotesTool({ toolId }: NotesToolProps) {
           <div className={modalCardLgClass}>
             <div className="flex items-center justify-between mb-4">
               <h3 className={sectionTitleClass}>View Note</h3>
-              <button
-                onClick={() => setViewNoteModal(null)}
-                className="text-slate-400 hover:text-slate-200 transition-colors"
-              >
-                ✕
-              </button>
+              <div className="flex items-center gap-2">
+                <AttachmentButton
+                  count={viewNoteModal.attachments.length}
+                  onClick={() => openAttachments(viewNoteModal)}
+                />
+                <button
+                  onClick={() => setViewNoteModal(null)}
+                  className="text-slate-400 hover:text-slate-200 transition-colors"
+                  aria-label="Close"
+                >
+                  ✕
+                </button>
+              </div>
             </div>
             <div className="space-y-4">
               <div>
@@ -2760,6 +2977,48 @@ export function NotesTool({ toolId }: NotesToolProps) {
           </div>
         </div>
       )}
+
+      <AttachmentModal
+        open={attachmentModal !== null}
+        onClose={() => {
+          setAttachmentModal(null);
+          setViewPreview(null);
+        }}
+        previewItem={viewPreview}
+        title={
+          attachmentModal === 'add'
+            ? newNote.noteName.trim() || 'New note'
+            : savedAttachmentNote?.noteName || 'Note'
+        }
+        files={modalFiles}
+        busy={attachmentBusy}
+        readOnly={Boolean(savedAttachmentNote && !savedAttachmentNote.isActive)}
+        onAdd={(incoming) => {
+          if (attachmentModal === 'add') {
+            setPendingAttachments((prev) => [...prev, ...incoming.map(createPendingAttachment)]);
+            return;
+          }
+          if (attachmentModal) {
+            void addSavedNoteFiles(attachmentModal, incoming);
+          }
+        }}
+        onRemove={(id) => {
+          if (attachmentModal === 'add') {
+            setPendingAttachments((prev) => {
+              const next = prev.filter((item) => item.id !== id);
+              const removed = prev.find((item) => item.id === id);
+              if (removed?.url) URL.revokeObjectURL(removed.url);
+              return next;
+            });
+            return;
+          }
+          if (attachmentModal) {
+            void removeSavedNoteFile(attachmentModal, id);
+          }
+        }}
+        onView={handleViewAttachment}
+        onDownload={attachmentModal === 'add' ? undefined : handleDownloadAttachment}
+      />
     </div>
   );
 }

@@ -1,7 +1,7 @@
 -- HSA Tracker Tool Database Schema
 -- All tables prefixed with 'tools_hsa_'
 -- Matches UI: HSA accounts (tabs), deposits, expenses.
--- Receipt file storage is deferred; add tools_hsa_expense_receipts + storage bucket later.
+-- Expense receipts: supabase/ADD_hsa_attachments.sql (tools_hsa_expense_receipts, bucket hsa-tracker).
 --
 -- Run in Supabase SQL Editor (idempotent: safe to re-run).
 -- After deploy, add tool_id FK indexes to add-performance-indexes.sql if you maintain that file.
@@ -91,7 +91,7 @@ CREATE INDEX IF NOT EXISTS idx_hsa_deposits_account_tax_year ON tools_hsa_deposi
 CREATE INDEX IF NOT EXISTS idx_hsa_deposits_is_repeatable ON tools_hsa_deposits(is_repeatable) WHERE is_repeatable = true;
 
 -- ============================================================================
--- EXPENSES (receipt files deferred — warn_until_receipt only until storage exists)
+-- EXPENSES (receipt files: tools_hsa_expense_receipts via supabase/ADD_hsa_attachments.sql)
 -- ============================================================================
 CREATE TABLE IF NOT EXISTS tools_hsa_expenses (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
@@ -299,16 +299,5 @@ INSERT INTO tools_hsa_default_accounts (name, card_color, display_order) VALUES
   ('Self', '#10b981', 0)
 ON CONFLICT (name) DO NOTHING;
 
--- ============================================================================
--- FUTURE: tools_hsa_expense_receipts (when file uploads are implemented)
--- ============================================================================
--- CREATE TABLE tools_hsa_expense_receipts (
---   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
---   expense_id UUID NOT NULL REFERENCES tools_hsa_expenses(id) ON DELETE CASCADE,
---   file_url TEXT NOT NULL,
---   file_name TEXT,
---   file_size BIGINT,
---   file_type TEXT,
---   created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
--- );
+-- Expense receipts: supabase/ADD_hsa_attachments.sql
 -- Storage bucket: hsa-tracker (see system_design.md storage policy template)

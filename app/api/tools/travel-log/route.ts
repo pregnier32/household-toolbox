@@ -1,6 +1,11 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getSession } from '@/lib/session';
 import { supabaseServer } from '@/lib/supabaseServer';
+import {
+  attachmentsByTripIds,
+  deleteTripStorageFiles,
+  type TravelLogAttachment,
+} from '@/lib/travel-log-storage';
 
 type DbTrip = {
   id: string;
@@ -198,7 +203,8 @@ function buildJournalInsertRows(tripId: string, notes: JournalInput[]) {
 function mapTripToUi(
   trip: DbTrip,
   lodging: DbLodging[],
-  journalNotes: DbJournalNote[]
+  journalNotes: DbJournalNote[],
+  attachments: TravelLogAttachment[] = []
 ) {
   return {
     id: trip.id,
@@ -244,6 +250,7 @@ function mapTripToUi(
     includeInTravelCounts: booleanToIncludeCounts(trip.include_in_travel_counts),
     addToDashboard: trip.add_to_dashboard === true,
     dateAdded: trip.created_at,
+    attachments,
   };
 }
 
@@ -412,8 +419,9 @@ export async function GET(request: NextRequest) {
       journalNotes = (journalRes.data ?? []) as DbJournalNote[];
     }
 
+    const attachmentMap = await attachmentsByTripIds(tripIds, user.id);
     const mappedTrips = (trips ?? []).map((trip) =>
-      mapTripToUi(trip as DbTrip, lodging, journalNotes)
+      mapTripToUi(trip as DbTrip, lodging, journalNotes, attachmentMap[trip.id] || [])
     );
 
     return NextResponse.json({ trips: mappedTrips });
@@ -453,6 +461,8 @@ export async function POST(request: NextRequest) {
       } catch (pinError) {
         console.error('Error removing travel log calendar pins:', pinError);
       }
+
+      await deleteTripStorageFiles(tripId, user.id);
 
       const { error } = await supabaseServer
         .from('tools_tl_trips')
@@ -539,7 +549,8 @@ export async function POST(request: NextRequest) {
         trip: mapTripToUi(
           created as DbTrip,
           (lodgingRows ?? []) as DbLodging[],
-          (journalRows ?? []) as DbJournalNote[]
+          (journalRows ?? []) as DbJournalNote[],
+          []
         ),
       });
     }
@@ -609,13 +620,15 @@ export async function POST(request: NextRequest) {
         .select('*')
         .eq('trip_id', tripId);
 
+      const updateAttachments = await attachmentsByTripIds([tripId], user.id);
       return NextResponse.json({
         success: true,
         pinFailed,
         trip: mapTripToUi(
           updated as DbTrip,
           (lodgingRows ?? []) as DbLodging[],
-          (journalRows ?? []) as DbJournalNote[]
+          (journalRows ?? []) as DbJournalNote[],
+          updateAttachments[tripId] || []
         ),
       });
     }

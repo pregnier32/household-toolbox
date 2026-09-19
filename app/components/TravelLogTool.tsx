@@ -2,6 +2,15 @@
 
 import { useState, useEffect, useMemo, useCallback } from 'react';
 import { useTheme } from './AppThemeProvider';
+import { AttachmentButton } from './AttachmentButton';
+import { AttachmentModal } from './AttachmentModal';
+import {
+  canPreviewAttachment,
+  createPendingAttachment,
+  isImageAttachment,
+  isPdfAttachment,
+  type AttachmentItem,
+} from '@/lib/attachments';
 
 const TRIP_TYPES = ['Family', 'Couple', 'Solo', 'Business', 'Friends', 'Group Tour', 'Other'] as const;
 const TRIP_GOALS = ['Relaxation', 'Adventure', 'Family Time', 'Business', 'Other'] as const;
@@ -61,9 +70,10 @@ export type TripRecord = {
   includeInTravelCounts: YesNo | '';
   addToDashboard: boolean;
   dateAdded: string;
+  attachments: Array<{ id: string; name: string; size: number; type: string }>;
 };
 
-type TripFormState = Omit<TripRecord, 'id' | 'dateAdded'>;
+type TripFormState = Omit<TripRecord, 'id' | 'dateAdded' | 'attachments'>;
 
 type LodgingDraft = {
   name: string;
@@ -191,6 +201,7 @@ function normalizeTripRecord(trip: TripRecord): TripRecord {
     ...trip,
     plannedBudget: currencyFromUnknown(raw.plannedBudget ?? raw.planned_budget),
     totalTripCost: currencyFromUnknown(raw.totalTripCost ?? raw.total_trip_cost),
+    attachments: trip.attachments ?? [],
   };
 }
 
@@ -1120,6 +1131,10 @@ export function TravelLogTool({ toolId }: TravelLogToolProps) {
   const [deleteConfirmId, setDeleteConfirmId] = useState<string | null>(null);
   const [deleteConfirmText, setDeleteConfirmText] = useState('');
   const [showExportPopup, setShowExportPopup] = useState(false);
+  const [pendingAttachments, setPendingAttachments] = useState<AttachmentItem[]>([]);
+  const [attachmentModal, setAttachmentModal] = useState<null | 'add' | string>(null);
+  const [attachmentBusy, setAttachmentBusy] = useState(false);
+  const [viewPreview, setViewPreview] = useState<AttachmentItem | null>(null);
 
   const loadTrips = useCallback(async () => {
     if (!toolId) return;
@@ -1138,6 +1153,152 @@ export function TravelLogTool({ toolId }: TravelLogToolProps) {
       setIsLoading(false);
     }
   }, [toolId]);
+
+  const revokePending = (items: AttachmentItem[]) => {
+    items.forEach((item) => {
+      if (item.url) URL.revokeObjectURL(item.url);
+    });
+  };
+
+  const uploadTripFile = async (file: File, tripId: string) => {
+    if (!toolId) throw new Error('Tool ID is required');
+    const formData = new FormData();
+    formData.append('toolId', toolId);
+    formData.append('tripId', tripId);
+    formData.append('file', file);
+    const response = await fetch('/api/tools/travel-log/attachments', { method: 'POST', body: formData });
+    const data = await response.json().catch(() => ({}));
+    if (!response.ok) throw new Error(data.error || 'Failed to add file');
+  };
+
+  const savedAttachmentTrip =
+    attachmentModal && attachmentModal !== 'add'
+      ? trips.find((trip) => trip.id === attachmentModal) || null
+      : null;
+
+  const modalFiles: AttachmentItem[] =
+    attachmentModal === 'add'
+      ? pendingAttachments
+      : savedAttachmentTrip
+        ? (savedAttachmentTrip.attachments || []).map((item) => ({
+            id: item.id,
+            name: item.name,
+            size: item.size,
+            type: item.type,
+          }))
+        : [];
+
+  const fetchTripAttachmentBlob = async (attachmentId: string, inline = false) => {
+    const query = inline ? '?inline=1' : '';
+    const response = await fetch(`/api/tools/travel-log/attachments/${attachmentId}${query}`);
+    if (!response.ok) {
+      const errorData = await response.json().catch(() => ({ error: 'Failed to open file' }));
+      throw new Error(errorData.error || 'Failed to open file');
+    }
+    return response.blob();
+  };
+
+  const handleViewAttachment = async (item: AttachmentItem) => {
+    if (item.file && item.url) {
+      if (isImageAttachment(item.type)) {
+        setViewPreview(item);
+        return;
+      }
+      if (isPdfAttachment(item.type, item.name)) {
+        window.open(item.url, '_blank', 'noopener,noreferrer');
+        return;
+      }
+      alert('This file type can’t be previewed in the browser. Use Download to save it.');
+      return;
+    }
+    try {
+      const blob = await fetchTripAttachmentBlob(item.id, true);
+      const type = blob.type || item.type || '';
+      if (!canPreviewAttachment(type, item.name)) {
+        alert('This file type can’t be previewed in the browser. Use Download to save it.');
+        return;
+      }
+      const url = window.URL.createObjectURL(blob);
+      if (isImageAttachment(type)) {
+        setViewPreview({ ...item, type, url, size: item.size || blob.size });
+        return;
+      }
+      if (isPdfAttachment(type, item.name)) {
+        window.open(url, '_blank', 'noopener,noreferrer');
+      }
+    } catch (error) {
+      alert(error instanceof Error ? error.message : 'Failed to open file');
+    }
+  };
+
+  const handleDownloadAttachment = async (item: AttachmentItem) => {
+    if (item.file) return;
+    try {
+      const blob = await fetchTripAttachmentBlob(item.id);
+      const url = window.URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = url;
+      link.download = item.name || 'attachment';
+      document.body.appendChild(link);
+      link.click();
+      window.URL.revokeObjectURL(url);
+      document.body.removeChild(link);
+    } catch (error) {
+      alert(error instanceof Error ? error.message : 'Failed to download file');
+    }
+  };
+
+  const addSavedTripFiles = async (tripId: string, files: File[]) => {
+    setAttachmentBusy(true);
+    try {
+      for (const file of files) {
+        await uploadTripFile(file, tripId);
+      }
+      await loadTrips();
+    } catch (error) {
+      alert(error instanceof Error ? error.message : 'Failed to add file');
+    } finally {
+      setAttachmentBusy(false);
+    }
+  };
+
+  const removeSavedTripFile = async (attachmentId: string) => {
+    if (!toolId) return;
+    setAttachmentBusy(true);
+    try {
+      const response = await fetch('/api/tools/travel-log/attachments', {
+        method: 'DELETE',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ toolId, attachmentId }),
+      });
+      const data = await response.json().catch(() => ({}));
+      if (!response.ok) throw new Error(data.error || 'Failed to remove file');
+      await loadTrips();
+    } catch (error) {
+      alert(error instanceof Error ? error.message : 'Failed to remove file');
+    } finally {
+      setAttachmentBusy(false);
+    }
+  };
+
+  const startAddingTrip = () => {
+    revokePending(pendingAttachments);
+    setPendingAttachments([]);
+    setAttachmentModal(null);
+    setViewPreview(null);
+    setEditingId(null);
+    setNewTrip(emptyTripForm());
+    setIsAdding(true);
+  };
+
+  const cancelAddingTrip = () => {
+    revokePending(pendingAttachments);
+    setPendingAttachments([]);
+    setAttachmentModal(null);
+    setViewPreview(null);
+    setIsAdding(false);
+    setNewTrip(emptyTripForm());
+  };
 
   useEffect(() => {
     loadTrips();
@@ -1252,11 +1413,34 @@ export function TravelLogTool({ toolId }: TravelLogToolProps) {
       if (data.pinFailed) {
         alert('Failed to update Calendar pin. Please try again.');
       }
-      if (data.trip) {
-        setTrips((prev) => [...prev, normalizeTripRecord(data.trip as TripRecord)]);
+      const createdTrip = data.trip ? normalizeTripRecord(data.trip as TripRecord) : null;
+      if (createdTrip && pendingAttachments.length > 0) {
+        try {
+          for (const queued of pendingAttachments) {
+            if (!queued.file) continue;
+            await uploadTripFile(queued.file, createdTrip.id);
+          }
+        } catch (uploadError) {
+          revokePending(pendingAttachments);
+          setPendingAttachments([]);
+          setAttachmentModal(null);
+          setViewPreview(null);
+          setNewTrip(emptyTripForm());
+          setIsAdding(false);
+          await loadTrips();
+          alert(uploadError instanceof Error ? uploadError.message : 'Trip saved, but a file failed to upload.');
+          return;
+        }
+        await loadTrips();
+      } else if (createdTrip) {
+        setTrips((prev) => [...prev, createdTrip]);
       } else {
         await loadTrips();
       }
+      revokePending(pendingAttachments);
+      setPendingAttachments([]);
+      setAttachmentModal(null);
+      setViewPreview(null);
       setNewTrip(emptyTripForm());
       setIsAdding(false);
     } catch {
@@ -1267,12 +1451,18 @@ export function TravelLogTool({ toolId }: TravelLogToolProps) {
   };
 
   const startEditing = (trip: TripRecord) => {
+    revokePending(pendingAttachments);
+    setPendingAttachments([]);
+    setAttachmentModal(null);
+    setViewPreview(null);
     setEditingId(trip.id);
     setEditingTrip(tripToForm(trip));
     setIsAdding(false);
   };
 
   const cancelEditing = () => {
+    setAttachmentModal(null);
+    setViewPreview(null);
     setEditingId(null);
     setEditingTrip(emptyTripForm());
   };
@@ -1855,7 +2045,13 @@ export function TravelLogTool({ toolId }: TravelLogToolProps) {
       <div key={trip.id} className={nestedCardClass}>
         {isEditing ? (
           <div className="space-y-4">
-            <h4 className={subsectionTitleClass}>Edit trip</h4>
+            <div className="flex items-center justify-between gap-3">
+              <h4 className={`${subsectionTitleClass} mb-0`}>Edit trip</h4>
+              <AttachmentButton
+                count={trips.find((entry) => entry.id === trip.id)?.attachments?.length || 0}
+                onClick={() => setAttachmentModal(trip.id)}
+              />
+            </div>
             {renderTripForm(editingTrip, setEditingTrip, 'edit')}
             <div className="flex gap-2">
               <button type="button" onClick={saveEdit} className={primaryButtonClass}>
@@ -1870,6 +2066,10 @@ export function TravelLogTool({ toolId }: TravelLogToolProps) {
           <div className="flex items-start justify-between gap-3">
             {renderTripSummary(trip)}
             <div className="flex shrink-0 items-center gap-1.5 ml-4">
+              <AttachmentButton
+                count={trip.attachments?.length || 0}
+                onClick={() => setAttachmentModal(trip.id)}
+              />
               <button
                 type="button"
                 onClick={() => startEditing(trip)}
@@ -1951,7 +2151,7 @@ export function TravelLogTool({ toolId }: TravelLogToolProps) {
 
           {!isAdding && !editingId && (
             <div className="flex justify-start">
-              <button type="button" onClick={() => setIsAdding(true)} className={primaryButtonClass}>
+              <button type="button" onClick={startAddingTrip} className={primaryButtonClass}>
                 + Add New Trip
               </button>
             </div>
@@ -1959,20 +2159,19 @@ export function TravelLogTool({ toolId }: TravelLogToolProps) {
 
           {isAdding && (
             <div className={cardClass}>
-              <h3 className={`${sectionTitleClass} mb-4`}>Add New Trip</h3>
+              <div className="mb-4 flex items-center justify-between gap-3">
+                <h3 className={sectionTitleClass}>Add New Trip</h3>
+                <AttachmentButton
+                  count={pendingAttachments.length}
+                  onClick={() => setAttachmentModal('add')}
+                />
+              </div>
               {renderTripForm(newTrip, setNewTrip, 'add')}
               <div className="flex gap-2 mt-6">
                 <button type="button" onClick={addTrip} className={primaryButtonClass}>
                   Add Trip
                 </button>
-                <button
-                  type="button"
-                  onClick={() => {
-                    setIsAdding(false);
-                    setNewTrip(emptyTripForm());
-                  }}
-                  className={secondaryButtonClass}
-                >
+                <button type="button" onClick={cancelAddingTrip} className={secondaryButtonClass}>
                   Cancel
                 </button>
               </div>
@@ -2049,7 +2248,7 @@ export function TravelLogTool({ toolId }: TravelLogToolProps) {
                 ⚠️ This action cannot be undone
               </p>
               <p className={`text-sm mt-1 ${isLight ? 'text-red-600' : 'text-red-200'}`}>
-                The trip and all lodging and journal notes will be permanently deleted.
+                The trip, attached files, lodging, and journal notes will be permanently deleted.
               </p>
             </div>
             <h3 className={`text-xl font-semibold mb-2 ${isLight ? 'text-slate-900' : 'text-slate-50'}`}>
@@ -2092,6 +2291,45 @@ export function TravelLogTool({ toolId }: TravelLogToolProps) {
           </div>
         </div>
       )}
+
+      <AttachmentModal
+        open={attachmentModal !== null}
+        onClose={() => {
+          setAttachmentModal(null);
+          setViewPreview(null);
+        }}
+        previewItem={viewPreview}
+        title={
+          attachmentModal === 'add'
+            ? newTrip.tripName.trim() || 'New trip'
+            : savedAttachmentTrip?.tripName || 'Trip'
+        }
+        files={modalFiles}
+        busy={attachmentBusy}
+        onAdd={(incoming) => {
+          if (attachmentModal === 'add') {
+            setPendingAttachments((prev) => [...prev, ...incoming.map(createPendingAttachment)]);
+            return;
+          }
+          if (attachmentModal) {
+            void addSavedTripFiles(attachmentModal, incoming);
+          }
+        }}
+        onRemove={(id) => {
+          if (attachmentModal === 'add') {
+            setPendingAttachments((prev) => {
+              const next = prev.filter((item) => item.id !== id);
+              const removed = prev.find((item) => item.id === id);
+              if (removed?.url) URL.revokeObjectURL(removed.url);
+              return next;
+            });
+            return;
+          }
+          void removeSavedTripFile(id);
+        }}
+        onView={handleViewAttachment}
+        onDownload={attachmentModal === 'add' ? undefined : handleDownloadAttachment}
+      />
     </div>
   );
 }

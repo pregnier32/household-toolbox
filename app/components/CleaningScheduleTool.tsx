@@ -2,6 +2,15 @@
 
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useTheme } from './AppThemeProvider';
+import { AttachmentButton } from './AttachmentButton';
+import { AttachmentModal } from './AttachmentModal';
+import {
+  canPreviewAttachment,
+  createPendingAttachment,
+  isImageAttachment,
+  isPdfAttachment,
+  type AttachmentItem,
+} from '@/lib/attachments';
 import {
   addDays,
   addMonthsSetDay,
@@ -68,6 +77,12 @@ type DeleteTarget =
   | { kind: 'item'; id: string }
   | { kind: 'category'; id: string }
   | { kind: 'schedule'; id: string };
+
+type AttachmentTarget =
+  | { kind: 'new-item' }
+  | { kind: 'item'; itemId: string }
+  | { kind: 'new-completion' }
+  | { kind: 'completion'; completionId: string };
 
 type OccurrenceRow = {
   taskId: string;
@@ -674,6 +689,11 @@ export function CleaningScheduleTool({ toolId }: CleaningScheduleToolProps) {
 
   const [completeOccurrence, setCompleteOccurrence] = useState<{ taskId: string; scheduledDate: string } | null>(null);
   const [completeBasis, setCompleteBasis] = useState<'today' | 'scheduled'>('today');
+  const [pendingItemAttachments, setPendingItemAttachments] = useState<AttachmentItem[]>([]);
+  const [pendingCompletionAttachments, setPendingCompletionAttachments] = useState<AttachmentItem[]>([]);
+  const [attachmentModal, setAttachmentModal] = useState<AttachmentTarget | null>(null);
+  const [attachmentBusy, setAttachmentBusy] = useState(false);
+  const [viewPreview, setViewPreview] = useState<AttachmentItem | null>(null);
 
   const [deleteTarget, setDeleteTarget] = useState<DeleteTarget | null>(null);
   const [deleteConfirmText, setDeleteConfirmText] = useState('');
@@ -689,14 +709,14 @@ export function CleaningScheduleTool({ toolId }: CleaningScheduleToolProps) {
   const applyData = useCallback((data: CleaningScheduleData) => {
     const nextCategories = data.categories ?? [];
     setCategories(nextCategories);
-    setLibraryItems(data.items ?? []);
+    setLibraryItems((data.items ?? []).map((item) => ({ ...item, attachments: item.attachments ?? [] })));
     setScheduledTasks(
       (data.tasks ?? []).map((task) => ({
         ...task,
         nextDueDate: asDateOnly(task.nextDueDate) || task.nextDueDate,
       }))
     );
-    setCompletions(data.completions ?? []);
+    setCompletions((data.completions ?? []).map((row) => ({ ...row, attachments: row.attachments ?? [] })));
     setLibraryCategoryId((prev) => {
       const active = nextCategories.filter((category) => category.isActive !== false);
       if (prev && active.some((category) => category.id === prev)) return prev;
@@ -729,6 +749,20 @@ export function CleaningScheduleTool({ toolId }: CleaningScheduleToolProps) {
     return () => window.clearTimeout(timer);
   }, [banner]);
 
+  const refreshData = useCallback(async () => {
+    if (!toolId) {
+      setCategories([]);
+      setLibraryItems([]);
+      setScheduledTasks([]);
+      setCompletions([]);
+      return;
+    }
+    const response = await fetch(`${API_BASE}?toolId=${encodeURIComponent(toolId)}`);
+    const data = await response.json().catch(() => ({ error: 'Failed to load Cleaning Schedule' }));
+    if (!response.ok) throw new Error(toErrorText(data?.error ?? data, 'Failed to load Cleaning Schedule'));
+    applyData(data as CleaningScheduleData);
+  }, [toolId, applyData]);
+
   useEffect(() => {
     const loadData = async () => {
       if (!toolId) {
@@ -740,10 +774,7 @@ export function CleaningScheduleTool({ toolId }: CleaningScheduleToolProps) {
       }
       setIsLoading(true);
       try {
-        const response = await fetch(`${API_BASE}?toolId=${encodeURIComponent(toolId)}`);
-        const data = await response.json().catch(() => ({ error: 'Failed to load Cleaning Schedule' }));
-        if (!response.ok) throw new Error(toErrorText(data?.error ?? data, 'Failed to load Cleaning Schedule'));
-        applyData(data as CleaningScheduleData);
+        await refreshData();
       } catch (error) {
         setCategories([]);
         setLibraryItems([]);
@@ -755,7 +786,7 @@ export function CleaningScheduleTool({ toolId }: CleaningScheduleToolProps) {
       }
     };
     loadData();
-  }, [toolId, applyData]);
+  }, [toolId, refreshData]);
 
   useEffect(() => {
     const onKey = (event: KeyboardEvent) => {
@@ -766,6 +797,11 @@ export function CleaningScheduleTool({ toolId }: CleaningScheduleToolProps) {
         return;
       }
       if (completeOccurrence) {
+        pendingCompletionAttachments.forEach((item) => {
+          if (item.url) URL.revokeObjectURL(item.url);
+        });
+        setPendingCompletionAttachments([]);
+        if (attachmentModal?.kind === 'new-completion') setAttachmentModal(null);
         setCompleteOccurrence(null);
         return;
       }
@@ -782,7 +818,7 @@ export function CleaningScheduleTool({ toolId }: CleaningScheduleToolProps) {
     };
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
-  }, [deleteTarget, completeOccurrence, activateItemIds, detailTaskId, showExportPopup]);
+  }, [deleteTarget, completeOccurrence, pendingCompletionAttachments, attachmentModal, activateItemIds, detailTaskId, showExportPopup]);
 
   const sortedCategories = useMemo(
     () => [...categories].sort((a, b) => a.name.localeCompare(b.name)),
@@ -798,6 +834,160 @@ export function CleaningScheduleTool({ toolId }: CleaningScheduleToolProps) {
   );
 
   const categoryName = (categoryId: string) => categories.find((category) => category.id === categoryId)?.name ?? 'Uncategorized';
+  const itemAttachmentCount = (itemId: string) =>
+    libraryItems.find((item) => item.id === itemId)?.attachments?.length ?? 0;
+
+  const savedItemForModal =
+    attachmentModal?.kind === 'item' ? libraryItems.find((item) => item.id === attachmentModal.itemId) : undefined;
+  const savedCompletionForModal =
+    attachmentModal?.kind === 'completion'
+      ? completions.find((row) => row.id === attachmentModal.completionId)
+      : undefined;
+
+  const modalFiles: AttachmentItem[] =
+    attachmentModal?.kind === 'new-item'
+      ? pendingItemAttachments
+      : attachmentModal?.kind === 'new-completion'
+        ? pendingCompletionAttachments
+        : attachmentModal?.kind === 'item'
+          ? (savedItemForModal?.attachments || []).map((item) => ({
+              id: item.id,
+              name: item.name,
+              size: item.size,
+              type: item.type,
+            }))
+          : attachmentModal?.kind === 'completion'
+            ? (savedCompletionForModal?.attachments || []).map((item) => ({
+                id: item.id,
+                name: item.name,
+                size: item.size,
+                type: item.type,
+              }))
+            : [];
+
+  const modalTitle =
+    attachmentModal?.kind === 'new-item'
+      ? itemForm.name.trim() || 'New cleaning item'
+      : attachmentModal?.kind === 'new-completion'
+        ? 'This completion'
+        : attachmentModal?.kind === 'item'
+          ? savedItemForModal?.name || 'Cleaning item'
+          : attachmentModal?.kind === 'completion'
+            ? savedCompletionForModal
+              ? `Completed ${formatDateForDisplay(savedCompletionForModal.completedDate)}`
+              : 'Completion'
+            : 'Attachments';
+
+  const fetchCleaningAttachmentBlob = async (attachmentId: string, inline = false) => {
+    const query = inline ? '?inline=1' : '';
+    const response = await fetch(`${API_BASE}/attachments/${attachmentId}${query}`);
+    if (!response.ok) {
+      const errorData = await response.json().catch(() => ({ error: 'Failed to open file' }));
+      throw new Error(errorData.error || 'Failed to open file');
+    }
+    return response.blob();
+  };
+
+  const handleViewAttachment = async (item: AttachmentItem) => {
+    if (item.file && item.url) {
+      if (isImageAttachment(item.type)) {
+        setViewPreview(item);
+        return;
+      }
+      if (isPdfAttachment(item.type, item.name)) {
+        window.open(item.url, '_blank', 'noopener,noreferrer');
+        return;
+      }
+      alert('This file type can’t be previewed in the browser. Use Download to save it.');
+      return;
+    }
+    try {
+      const blob = await fetchCleaningAttachmentBlob(item.id, true);
+      const type = blob.type || item.type || '';
+      if (!canPreviewAttachment(type, item.name)) {
+        alert('This file type can’t be previewed in the browser. Use Download to save it.');
+        return;
+      }
+      const url = window.URL.createObjectURL(blob);
+      if (isImageAttachment(type)) {
+        setViewPreview({ ...item, type, url, size: item.size || blob.size });
+        return;
+      }
+      if (isPdfAttachment(type, item.name)) {
+        window.open(url, '_blank', 'noopener,noreferrer');
+      }
+    } catch (error) {
+      showBanner('error', error instanceof Error ? error.message : 'Failed to open file');
+    }
+  };
+
+  const handleDownloadAttachment = async (item: AttachmentItem) => {
+    if (item.file) return;
+    try {
+      const blob = await fetchCleaningAttachmentBlob(item.id);
+      const url = window.URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = url;
+      link.download = item.name || 'attachment';
+      document.body.appendChild(link);
+      link.click();
+      window.URL.revokeObjectURL(url);
+      document.body.removeChild(link);
+    } catch (error) {
+      showBanner('error', error instanceof Error ? error.message : 'Failed to download file');
+    }
+  };
+
+  const addSavedItemFiles = async (itemId: string, files: File[]) => {
+    setAttachmentBusy(true);
+    try {
+      for (const file of files) {
+        await uploadCleaningFile(file, { itemId });
+      }
+      await refreshData();
+    } catch (error) {
+      showBanner('error', error instanceof Error ? error.message : 'Failed to add file');
+    } finally {
+      setAttachmentBusy(false);
+    }
+  };
+
+  const removeSavedItemFile = async (attachmentId: string) => {
+    if (!toolId) return;
+    setAttachmentBusy(true);
+    try {
+      const response = await fetch(`${API_BASE}/attachments`, {
+        method: 'DELETE',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ toolId, attachmentId }),
+      });
+      const data = await response.json().catch(() => ({}));
+      if (!response.ok) throw new Error(data.error || 'Failed to remove file');
+      await refreshData();
+    } catch (error) {
+      showBanner('error', error instanceof Error ? error.message : 'Failed to remove file');
+    } finally {
+      setAttachmentBusy(false);
+    }
+  };
+
+  const startAddingItem = () => {
+    revokePending(pendingItemAttachments);
+    setPendingItemAttachments([]);
+    setItemForm(emptyItemForm());
+    setIsAddingItem(true);
+  };
+
+  const cancelAddingItem = () => {
+    revokePending(pendingItemAttachments);
+    setPendingItemAttachments([]);
+    if (attachmentModal?.kind === 'new-item') {
+      setAttachmentModal(null);
+      setViewPreview(null);
+    }
+    setIsAddingItem(false);
+    setItemForm(emptyItemForm());
+  };
 
   const activeScheduleByItem = useMemo(() => {
     const map = new Map<string, CleaningScheduledTask>();
@@ -957,11 +1147,41 @@ export function CleaningScheduleTool({ toolId }: CleaningScheduleToolProps) {
     }
   };
 
+  const revokePending = (items: AttachmentItem[]) => {
+    items.forEach((item) => {
+      if (item.url) URL.revokeObjectURL(item.url);
+    });
+  };
+
+  const closeCompleteDialog = () => {
+    revokePending(pendingCompletionAttachments);
+    setPendingCompletionAttachments([]);
+    if (attachmentModal?.kind === 'new-completion') {
+      setAttachmentModal(null);
+      setViewPreview(null);
+    }
+    setCompleteOccurrence(null);
+  };
+
   const openComplete = (taskId: string, scheduledDate: string) => {
     setDetailTaskId(null);
     setDetailEditing(false);
+    revokePending(pendingCompletionAttachments);
+    setPendingCompletionAttachments([]);
     setCompleteOccurrence({ taskId, scheduledDate });
     setCompleteBasis('today');
+  };
+
+  const uploadCleaningFile = async (file: File, owner: { itemId?: string; completionId?: string }) => {
+    if (!toolId) throw new Error('Tool ID is required');
+    const formData = new FormData();
+    formData.append('toolId', toolId);
+    if (owner.itemId) formData.append('itemId', owner.itemId);
+    if (owner.completionId) formData.append('completionId', owner.completionId);
+    formData.append('file', file);
+    const response = await fetch(`${API_BASE}/attachments`, { method: 'POST', body: formData });
+    const data = await response.json().catch(() => ({}));
+    if (!response.ok) throw new Error(data.error || 'Failed to add file');
   };
 
   const confirmComplete = async () => {
@@ -978,6 +1198,33 @@ export function CleaningScheduleTool({ toolId }: CleaningScheduleToolProps) {
         completeBasis,
         completedDate: completeBasis === 'today' ? today : undefined,
       });
+      const completionId = typeof data.completionId === 'string' ? data.completionId : '';
+      if (completionId && pendingCompletionAttachments.length > 0) {
+        try {
+          for (const queued of pendingCompletionAttachments) {
+            if (!queued.file) continue;
+            await uploadCleaningFile(queued.file, { completionId });
+          }
+          await refreshData();
+        } catch (uploadError) {
+          revokePending(pendingCompletionAttachments);
+          setPendingCompletionAttachments([]);
+          if (attachmentModal?.kind === 'new-completion') {
+            setAttachmentModal(null);
+            setViewPreview(null);
+          }
+          setCompleteOccurrence(null);
+          setShowCompletionHistory(true);
+          showBanner('error', uploadError instanceof Error ? uploadError.message : 'Task completed, but a file failed to upload.');
+          return;
+        }
+      }
+      revokePending(pendingCompletionAttachments);
+      setPendingCompletionAttachments([]);
+      if (attachmentModal?.kind === 'new-completion') {
+        setAttachmentModal(null);
+        setViewPreview(null);
+      }
       setCompleteOccurrence(null);
       setShowCompletionHistory(true);
       const nextDueDate = typeof data.nextDueDate === 'string' ? data.nextDueDate : '';
@@ -1003,6 +1250,35 @@ export function CleaningScheduleTool({ toolId }: CleaningScheduleToolProps) {
         notes: itemForm.notes.trim(),
         ...itemCategoryPayload(itemForm),
       });
+      const createdItemId = typeof data.createdItemId === 'string' ? data.createdItemId : '';
+      if (createdItemId && pendingItemAttachments.length > 0) {
+        try {
+          for (const queued of pendingItemAttachments) {
+            if (!queued.file) continue;
+            await uploadCleaningFile(queued.file, { itemId: createdItemId });
+          }
+          await refreshData();
+        } catch (uploadError) {
+          revokePending(pendingItemAttachments);
+          setPendingItemAttachments([]);
+          if (attachmentModal?.kind === 'new-item') {
+            setAttachmentModal(null);
+            setViewPreview(null);
+          }
+          if (typeof data.createdCategoryId === 'string') setLibraryCategoryId(data.createdCategoryId);
+          else if (itemForm.categoryId) setLibraryCategoryId(itemForm.categoryId);
+          setItemForm(emptyItemForm());
+          setIsAddingItem(false);
+          showBanner('error', uploadError instanceof Error ? uploadError.message : 'Item saved, but a file failed to upload.');
+          return;
+        }
+      }
+      revokePending(pendingItemAttachments);
+      setPendingItemAttachments([]);
+      if (attachmentModal?.kind === 'new-item') {
+        setAttachmentModal(null);
+        setViewPreview(null);
+      }
       if (typeof data.createdCategoryId === 'string') setLibraryCategoryId(data.createdCategoryId);
       else if (itemForm.categoryId) setLibraryCategoryId(itemForm.categoryId);
       setItemForm(emptyItemForm());
@@ -1362,6 +1638,11 @@ export function CleaningScheduleTool({ toolId }: CleaningScheduleToolProps) {
           </p>
         </div>
         <div className="flex shrink-0 items-center gap-1.5 ml-4">
+          <AttachmentButton
+            count={itemAttachmentCount(row.itemId)}
+            onClick={() => setAttachmentModal({ kind: 'item', itemId: row.itemId })}
+            ariaLabel={`Library files for ${row.name}`}
+          />
           <button
             type="button"
             onClick={() => openComplete(row.taskId, row.date)}
@@ -1514,7 +1795,11 @@ export function CleaningScheduleTool({ toolId }: CleaningScheduleToolProps) {
                 return (
                   <div key={item.id} className={nestedCardClass}>
                     {renderItemFields(editItemForm, setEditItemForm, item)}
-                    <div className="flex gap-3 mt-4">
+                    <div className="flex flex-wrap items-center gap-3 mt-4">
+                      <AttachmentButton
+                        count={item.attachments?.length ?? 0}
+                        onClick={() => setAttachmentModal({ kind: 'item', itemId: item.id })}
+                      />
                       <button type="button" onClick={saveEditItem} disabled={!itemFormReady(editItemForm) || isSaving} className={primaryButtonClass}>
                         Save
                       </button>
@@ -1568,6 +1853,10 @@ export function CleaningScheduleTool({ toolId }: CleaningScheduleToolProps) {
                       {item.notes && <p className={`${subTextClass} italic mt-1`}>{item.notes}</p>}
                     </div>
                     <div className="flex shrink-0 items-center gap-1.5 ml-4">
+                      <AttachmentButton
+                        count={item.attachments?.length ?? 0}
+                        onClick={() => setAttachmentModal({ kind: 'item', itemId: item.id })}
+                      />
                       {mode === 'available' && (
                         <>
                           <button type="button" onClick={() => openActivate(item.id)} className={compactPrimaryClass}>
@@ -1763,16 +2052,23 @@ export function CleaningScheduleTool({ toolId }: CleaningScheduleToolProps) {
                 <div className="space-y-3">
                   {completionHistoryRows.map((row) => (
                     <div key={row.id} className={nestedCardClass}>
-                      <button type="button" onClick={() => openDetail(row.scheduledTaskId)} className="text-left w-full min-w-0">
-                        <div className="flex flex-wrap items-center gap-2 mb-1">
-                          <h4 className={headingSmClass}>{row.name}</h4>
-                          {row.categoryName && <span className={chipNeutralClass}>{row.categoryName}</span>}
-                          <span className={chipNeutralClass}>{row.lateness}</span>
-                        </div>
-                        <p className={subTextClass}>
-                          Scheduled {formatDateForDisplay(row.scheduledDate)} · Completed {formatDateForDisplay(row.completedDate)}
-                        </p>
-                      </button>
+                      <div className="flex items-start justify-between gap-3">
+                        <button type="button" onClick={() => openDetail(row.scheduledTaskId)} className="text-left min-w-0 flex-1">
+                          <div className="flex flex-wrap items-center gap-2 mb-1">
+                            <h4 className={headingSmClass}>{row.name}</h4>
+                            {row.categoryName && <span className={chipNeutralClass}>{row.categoryName}</span>}
+                            <span className={chipNeutralClass}>{row.lateness}</span>
+                          </div>
+                          <p className={subTextClass}>
+                            Scheduled {formatDateForDisplay(row.scheduledDate)} · Completed {formatDateForDisplay(row.completedDate)}
+                          </p>
+                        </button>
+                        <AttachmentButton
+                          count={row.attachments?.length ?? 0}
+                          onClick={() => setAttachmentModal({ kind: 'completion', completionId: row.id })}
+                          ariaLabel={`Completion files for ${row.name}`}
+                        />
+                      </div>
                     </div>
                   ))}
                 </div>
@@ -1815,6 +2111,11 @@ export function CleaningScheduleTool({ toolId }: CleaningScheduleToolProps) {
                             </p>
                           </button>
                           <div className="flex shrink-0 items-center gap-1.5 ml-4">
+                            <AttachmentButton
+                              count={item.attachments?.length ?? 0}
+                              onClick={() => setAttachmentModal({ kind: 'item', itemId: item.id })}
+                              ariaLabel={`Library files for ${item.name}`}
+                            />
                             <button
                               type="button"
                               onClick={() => reactivateTask(task.id)}
@@ -1850,27 +2151,26 @@ export function CleaningScheduleTool({ toolId }: CleaningScheduleToolProps) {
         <div className="space-y-6">
           {!isAddingItem && (
             <div className="flex justify-start">
-              <button type="button" onClick={() => setIsAddingItem(true)} className={primaryButtonClass}>
+              <button type="button" onClick={startAddingItem} className={primaryButtonClass}>
                 + Add New Cleaning Item
               </button>
             </div>
           )}
           {isAddingItem && (
             <div className={cardClass}>
-              <h3 className={`${sectionTitleClass} mb-4`}>Add New Cleaning Item</h3>
+              <div className="flex items-center justify-between gap-3 mb-4">
+                <h3 className={sectionTitleClass}>Add New Cleaning Item</h3>
+                <AttachmentButton
+                  count={pendingItemAttachments.length}
+                  onClick={() => setAttachmentModal({ kind: 'new-item' })}
+                />
+              </div>
               {renderItemFields(itemForm, setItemForm)}
               <div className="flex gap-3 mt-4">
                 <button type="button" onClick={addLibraryItem} disabled={!itemFormReady(itemForm) || isSaving} className={primaryButtonClass}>
                   Save
                 </button>
-                <button
-                  type="button"
-                  onClick={() => {
-                    setIsAddingItem(false);
-                    setItemForm(emptyItemForm());
-                  }}
-                  className={secondaryButtonClass}
-                >
+                <button type="button" onClick={cancelAddingItem} className={secondaryButtonClass}>
                   Cancel
                 </button>
               </div>
@@ -2233,15 +2533,22 @@ export function CleaningScheduleTool({ toolId }: CleaningScheduleToolProps) {
           <div className={modalCardClass}>
             <div className="flex items-center justify-between mb-4">
               <h3 className={sectionTitleClass}>Complete task</h3>
-              <button
-                type="button"
-                onClick={() => setCompleteOccurrence(null)}
-                aria-label="Close modal"
-                title="Close modal"
-                className={iconButtonClass}
-              >
-                <CloseIcon />
-              </button>
+              <div className="flex items-center gap-2">
+                <AttachmentButton
+                  count={pendingCompletionAttachments.length}
+                  onClick={() => setAttachmentModal({ kind: 'new-completion' })}
+                  ariaLabel="Files for this completion"
+                />
+                <button
+                  type="button"
+                  onClick={closeCompleteDialog}
+                  aria-label="Close modal"
+                  title="Close modal"
+                  className={iconButtonClass}
+                >
+                  <CloseIcon />
+                </button>
+              </div>
             </div>
             <p className={`${descClass} mb-4`}>Use today or the originally scheduled date as the completion date.</p>
             <div className="space-y-3 mb-6">
@@ -2270,7 +2577,7 @@ export function CleaningScheduleTool({ toolId }: CleaningScheduleToolProps) {
               <button type="button" onClick={confirmComplete} disabled={isSaving} className={`flex-1 ${primaryButtonClass}`}>
                 Complete
               </button>
-              <button type="button" onClick={() => setCompleteOccurrence(null)} className={secondaryButtonClass}>
+              <button type="button" onClick={closeCompleteDialog} className={secondaryButtonClass}>
                 Cancel
               </button>
             </div>
@@ -2283,18 +2590,25 @@ export function CleaningScheduleTool({ toolId }: CleaningScheduleToolProps) {
           <div className={modalCardLgClass}>
             <div className="flex items-center justify-between mb-4">
               <h3 className={sectionTitleClass}>{detailItem.name}</h3>
-              <button
-                type="button"
-                onClick={() => {
-                  setDetailTaskId(null);
-                  setDetailEditing(false);
-                }}
-                aria-label="Close modal"
-                title="Close modal"
-                className={iconButtonClass}
-              >
-                <CloseIcon />
-              </button>
+              <div className="flex items-center gap-2">
+                <AttachmentButton
+                  count={detailItem.attachments?.length ?? 0}
+                  onClick={() => setAttachmentModal({ kind: 'item', itemId: detailItem.id })}
+                  ariaLabel={`Library files for ${detailItem.name}`}
+                />
+                <button
+                  type="button"
+                  onClick={() => {
+                    setDetailTaskId(null);
+                    setDetailEditing(false);
+                  }}
+                  aria-label="Close modal"
+                  title="Close modal"
+                  className={iconButtonClass}
+                >
+                  <CloseIcon />
+                </button>
+              </div>
             </div>
 
             {detailEditing ? (
@@ -2419,6 +2733,7 @@ export function CleaningScheduleTool({ toolId }: CleaningScheduleToolProps) {
                         <th className="text-left px-3 py-2 font-medium">Scheduled date</th>
                         <th className="text-left px-3 py-2 font-medium">Completed date</th>
                         <th className="text-left px-3 py-2 font-medium">Lateness</th>
+                        <th className="text-right px-3 py-2 font-medium">Files</th>
                       </tr>
                     </thead>
                     <tbody>
@@ -2427,6 +2742,13 @@ export function CleaningScheduleTool({ toolId }: CleaningScheduleToolProps) {
                           <td className={`px-3 py-2 ${bodyTextClass}`}>{formatDateForDisplay(row.scheduledDate)}</td>
                           <td className={`px-3 py-2 ${bodyTextClass}`}>{formatDateForDisplay(row.completedDate)}</td>
                           <td className={`px-3 py-2 ${bodyTextClass}`}>{row.lateness}</td>
+                          <td className="px-3 py-2 text-right">
+                            <AttachmentButton
+                              count={row.attachments?.length ?? 0}
+                              onClick={() => setAttachmentModal({ kind: 'completion', completionId: row.id })}
+                              ariaLabel={`Completion files for ${formatDateForDisplay(row.completedDate)}`}
+                            />
+                          </td>
                         </tr>
                       ))}
                     </tbody>
@@ -2481,6 +2803,61 @@ export function CleaningScheduleTool({ toolId }: CleaningScheduleToolProps) {
           </div>
         </div>
       )}
+
+      <AttachmentModal
+        open={attachmentModal !== null}
+        onClose={() => {
+          setAttachmentModal(null);
+          setViewPreview(null);
+        }}
+        previewItem={viewPreview}
+        title={modalTitle}
+        files={modalFiles}
+        busy={attachmentBusy}
+        readOnly={attachmentModal?.kind === 'completion'}
+        onAdd={(incoming) => {
+          if (attachmentModal?.kind === 'new-item') {
+            setPendingItemAttachments((prev) => [...prev, ...incoming.map(createPendingAttachment)]);
+            return;
+          }
+          if (attachmentModal?.kind === 'new-completion') {
+            setPendingCompletionAttachments((prev) => [...prev, ...incoming.map(createPendingAttachment)]);
+            return;
+          }
+          if (attachmentModal?.kind === 'item') {
+            void addSavedItemFiles(attachmentModal.itemId, incoming);
+          }
+        }}
+        onRemove={(id) => {
+          if (attachmentModal?.kind === 'new-item') {
+            setPendingItemAttachments((prev) => {
+              const next = prev.filter((item) => item.id !== id);
+              const removed = prev.find((item) => item.id === id);
+              if (removed?.url) URL.revokeObjectURL(removed.url);
+              return next;
+            });
+            return;
+          }
+          if (attachmentModal?.kind === 'new-completion') {
+            setPendingCompletionAttachments((prev) => {
+              const next = prev.filter((item) => item.id !== id);
+              const removed = prev.find((item) => item.id === id);
+              if (removed?.url) URL.revokeObjectURL(removed.url);
+              return next;
+            });
+            return;
+          }
+          if (attachmentModal?.kind === 'item') {
+            void removeSavedItemFile(id);
+          }
+        }}
+        onView={handleViewAttachment}
+        onDownload={
+          attachmentModal?.kind === 'new-item' || attachmentModal?.kind === 'new-completion'
+            ? undefined
+            : handleDownloadAttachment
+        }
+      />
     </div>
   );
 }

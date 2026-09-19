@@ -1,6 +1,12 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getSession } from '@/lib/session';
 import { supabaseServer } from '@/lib/supabaseServer';
+import {
+  attachmentsByExpenseIds,
+  deleteAccountExpenseStorageFiles,
+  deleteExpenseStorageFiles,
+  type HsaAttachment,
+} from '@/lib/hsa-storage';
 
 type DepositSource = 'Payroll' | 'Employer' | 'Personal' | 'Other';
 type RecurrenceFrequency = 'weekly' | 'biweekly' | 'monthly' | 'quarterly' | 'yearly';
@@ -75,7 +81,7 @@ function mapDeposit(row: DepositRow) {
   };
 }
 
-function mapExpense(row: ExpenseRow) {
+function mapExpense(row: ExpenseRow, attachments: HsaAttachment[] = []) {
   return {
     id: row.id,
     name: row.name,
@@ -86,7 +92,7 @@ function mapExpense(row: ExpenseRow) {
     paymentMethod: row.payment_method as PaymentMethod,
     reimbursedYet: row.reimbursed ? ('Yes' as const) : ('No' as const),
     reimbursementDate: row.reimbursement_date,
-    receiptFileName: null as string | null,
+    attachments,
     warnUntilReceipt: !!row.warn_until_receipt,
     notes: row.notes ?? '',
   };
@@ -211,6 +217,8 @@ export async function GET(request: NextRequest) {
       expenses = (expensesRes.data ?? []) as ExpenseRow[];
     }
 
+    const attachmentMap = await attachmentsByExpenseIds(expenses.map((row) => row.id), user.id);
+
     const accountsWithData = accounts.map((a) => ({
       id: a.id,
       name: a.name,
@@ -219,7 +227,9 @@ export async function GET(request: NextRequest) {
         (a as { contribution_limits?: unknown }).contribution_limits
       ),
       deposits: deposits.filter((d) => d.account_id === a.id).map(mapDeposit),
-      expenses: expenses.filter((e) => e.account_id === a.id).map(mapExpense),
+      expenses: expenses
+        .filter((e) => e.account_id === a.id)
+        .map((e) => mapExpense(e, attachmentMap[e.id] || [])),
     }));
 
     return NextResponse.json({ accounts: accountsWithData });
@@ -388,6 +398,8 @@ export async function POST(request: NextRequest) {
           return NextResponse.json({ error: 'At least one HSA account is required' }, { status: 400 });
         }
 
+        await deleteAccountExpenseStorageFiles(accountId, user.id);
+
         const { error } = await supabaseServer
           .from('tools_hsa_accounts')
           .delete()
@@ -530,6 +542,8 @@ export async function POST(request: NextRequest) {
           return NextResponse.json({ error: 'Expense ID is required' }, { status: 400 });
         }
 
+        await deleteExpenseStorageFiles(expenseId, user.id);
+
         const { error } = await supabaseServer
           .from('tools_hsa_expenses')
           .delete()
@@ -618,7 +632,8 @@ export async function POST(request: NextRequest) {
           return NextResponse.json({ error: error.message }, { status: 500 });
         }
 
-        return NextResponse.json({ expense: mapExpense(data as ExpenseRow) });
+        const updateAttachments = await attachmentsByExpenseIds([data.id], user.id);
+        return NextResponse.json({ expense: mapExpense(data as ExpenseRow, updateAttachments[data.id] || []) });
       }
 
       const { data, error } = await supabaseServer
@@ -632,7 +647,7 @@ export async function POST(request: NextRequest) {
         return NextResponse.json({ error: error.message }, { status: 500 });
       }
 
-      return NextResponse.json({ expense: mapExpense(data as ExpenseRow) });
+      return NextResponse.json({ expense: mapExpense(data as ExpenseRow, []) });
     }
 
     return NextResponse.json({ error: 'Invalid resource or action' }, { status: 400 });

@@ -2,6 +2,15 @@
 
 import { useState, useEffect, useRef } from 'react';
 import { useTheme } from './AppThemeProvider';
+import { AttachmentButton } from './AttachmentButton';
+import { AttachmentModal } from './AttachmentModal';
+import {
+  canPreviewAttachment,
+  createPendingAttachment,
+  isImageAttachment,
+  isPdfAttachment,
+  type AttachmentItem,
+} from '@/lib/attachments';
 
 type Category = {
   id: string;
@@ -13,6 +22,13 @@ type Category = {
 type Priority = 'Low' | 'Medium' | 'High';
 type TaskStatus = 'Not Started' | 'In Progress' | 'Delayed' | 'Completed';
 
+type TaskAttachment = {
+  id: string;
+  name: string;
+  size: number;
+  type: string;
+};
+
 type Task = {
   id: string;
   categoryId: string;
@@ -21,7 +37,17 @@ type Task = {
   priority: Priority;
   notes: string;
   status: TaskStatus;
+  attachments: TaskAttachment[];
 };
+
+const emptyTaskDraft = (): Omit<Task, 'id' | 'categoryId'> => ({
+  taskName: '',
+  dueDate: '',
+  priority: 'Medium',
+  notes: '',
+  status: 'Not Started',
+  attachments: [],
+});
 
 type ToDoListToolProps = {
   toolId?: string;
@@ -146,13 +172,11 @@ export function ToDoListTool({ toolId }: ToDoListToolProps) {
 
   const [isAddingTask, setIsAddingTask] = useState(false);
   const [newTaskHasDueDate, setNewTaskHasDueDate] = useState(false);
-  const [newTask, setNewTask] = useState<Omit<Task, 'id' | 'categoryId'>>({
-    taskName: '',
-    dueDate: '',
-    priority: 'Medium',
-    notes: '',
-    status: 'Not Started',
-  });
+  const [newTask, setNewTask] = useState<Omit<Task, 'id' | 'categoryId'>>(emptyTaskDraft());
+  const [pendingAttachments, setPendingAttachments] = useState<AttachmentItem[]>([]);
+  const [attachmentModal, setAttachmentModal] = useState<null | 'add' | string>(null);
+  const [attachmentBusy, setAttachmentBusy] = useState(false);
+  const [viewPreview, setViewPreview] = useState<AttachmentItem | null>(null);
 
   const [editingTaskId, setEditingTaskId] = useState<string | null>(null);
   const [editingTask, setEditingTask] = useState<Task | null>(null);
@@ -207,7 +231,12 @@ export function ToDoListTool({ toolId }: ToDoListToolProps) {
       );
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || 'Failed to load tasks');
-      setTasks(data.tasks || []);
+      setTasks(
+        (data.tasks || []).map((task: Task) => ({
+          ...task,
+          attachments: task.attachments || [],
+        }))
+      );
     } catch (e) {
       showMessage('error', e instanceof Error ? e.message : 'Failed to load tasks');
       setTasks([]);
@@ -406,25 +435,20 @@ export function ToDoListTool({ toolId }: ToDoListToolProps) {
     }
     setIsAddingTask(true);
     setNewTaskHasDueDate(false);
-    setNewTask({
-      taskName: '',
-      dueDate: '',
-      priority: 'Medium',
-      notes: '',
-      status: 'Not Started',
-    });
+    setNewTask(emptyTaskDraft());
+    setPendingAttachments([]);
+    setAttachmentModal(null);
   };
 
   const cancelAddingTask = () => {
+    pendingAttachments.forEach((item) => {
+      if (item.url) URL.revokeObjectURL(item.url);
+    });
+    setPendingAttachments([]);
+    setAttachmentModal(null);
     setIsAddingTask(false);
     setNewTaskHasDueDate(false);
-    setNewTask({
-      taskName: '',
-      dueDate: '',
-      priority: 'Medium',
-      notes: '',
-      status: 'Not Started',
-    });
+    setNewTask(emptyTaskDraft());
   };
 
   const saveNewTask = async () => {
@@ -452,16 +476,30 @@ export function ToDoListTool({ toolId }: ToDoListToolProps) {
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || 'Failed to add task');
+      const createdTaskId = data.task?.id as string | undefined;
+      if (createdTaskId && pendingAttachments.length > 0) {
+        for (const item of pendingAttachments) {
+          if (!item.file) continue;
+          const formData = new FormData();
+          formData.append('toolId', toolId);
+          formData.append('taskId', createdTaskId);
+          formData.append('file', item.file);
+          const uploadResponse = await fetch('/api/tools/to-do-list/attachments', { method: 'POST', body: formData });
+          if (!uploadResponse.ok) {
+            const errorData = await uploadResponse.json().catch(() => ({}));
+            throw new Error(errorData.error || 'Task saved, but a file failed to upload.');
+          }
+        }
+      }
+      pendingAttachments.forEach((item) => {
+        if (item.url) URL.revokeObjectURL(item.url);
+      });
+      setPendingAttachments([]);
+      setAttachmentModal(null);
       await loadTasks(selectedCategoryId);
       setIsAddingTask(false);
       setNewTaskHasDueDate(false);
-      setNewTask({
-        taskName: '',
-        dueDate: '',
-        priority: 'Medium',
-        notes: '',
-        status: 'Not Started',
-      });
+      setNewTask(emptyTaskDraft());
       showMessage('success', 'Task added.');
     } catch (e) {
       showMessage('error', e instanceof Error ? e.message : 'Failed to add task');
@@ -514,6 +552,127 @@ export function ToDoListTool({ toolId }: ToDoListToolProps) {
   const cancelEditingTask = () => {
     setEditingTaskId(null);
     setEditingTask(null);
+  };
+
+  const savedAttachmentTask =
+    attachmentModal && attachmentModal !== 'add'
+      ? tasks.find((task) => task.id === attachmentModal) || null
+      : null;
+
+  const modalFiles: AttachmentItem[] =
+    attachmentModal === 'add'
+      ? pendingAttachments
+      : savedAttachmentTask
+        ? savedAttachmentTask.attachments.map((item) => ({
+            id: item.id,
+            name: item.name,
+            size: item.size,
+            type: item.type,
+          }))
+        : [];
+
+  const fetchTaskAttachmentBlob = async (attachmentId: string, inline = false) => {
+    const query = inline ? '?inline=1' : '';
+    const response = await fetch(`/api/tools/to-do-list/attachments/${attachmentId}${query}`);
+    if (!response.ok) {
+      const errorData = await response.json().catch(() => ({ error: 'Failed to open file' }));
+      throw new Error(errorData.error || 'Failed to open file');
+    }
+    return response.blob();
+  };
+
+  const handleViewAttachment = async (item: AttachmentItem) => {
+    if (item.file && item.url) {
+      if (isImageAttachment(item.type)) {
+        setViewPreview(item);
+        return;
+      }
+      if (isPdfAttachment(item.type, item.name)) {
+        window.open(item.url, '_blank', 'noopener,noreferrer');
+        return;
+      }
+      alert('This file type can’t be previewed in the browser. Use Download to save it.');
+      return;
+    }
+    try {
+      const blob = await fetchTaskAttachmentBlob(item.id, true);
+      const type = blob.type || item.type || '';
+      if (!canPreviewAttachment(type, item.name)) {
+        alert('This file type can’t be previewed in the browser. Use Download to save it.');
+        return;
+      }
+      const url = window.URL.createObjectURL(blob);
+      if (isImageAttachment(type)) {
+        setViewPreview({ ...item, type, url, size: item.size || blob.size });
+        return;
+      }
+      if (isPdfAttachment(type, item.name)) {
+        window.open(url, '_blank', 'noopener,noreferrer');
+      }
+    } catch (error) {
+      showMessage('error', error instanceof Error ? error.message : 'Failed to open file');
+    }
+  };
+
+  const handleDownloadAttachment = async (item: AttachmentItem) => {
+    if (item.file) return;
+    try {
+      const blob = await fetchTaskAttachmentBlob(item.id);
+      const url = window.URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = url;
+      link.download = item.name || 'attachment';
+      document.body.appendChild(link);
+      link.click();
+      window.URL.revokeObjectURL(url);
+      document.body.removeChild(link);
+    } catch (error) {
+      showMessage('error', error instanceof Error ? error.message : 'Failed to download file');
+    }
+  };
+
+  const addSavedTaskFiles = async (taskId: string, files: File[]) => {
+    if (!toolId) return;
+    setAttachmentBusy(true);
+    try {
+      for (const file of files) {
+        const formData = new FormData();
+        formData.append('toolId', toolId);
+        formData.append('taskId', taskId);
+        formData.append('file', file);
+        const response = await fetch('/api/tools/to-do-list/attachments', { method: 'POST', body: formData });
+        const data = await response.json().catch(() => ({}));
+        if (!response.ok) {
+          throw new Error(data.error || 'Failed to add file');
+        }
+      }
+      await loadTasks(selectedCategoryId);
+    } catch (error) {
+      showMessage('error', error instanceof Error ? error.message : 'Failed to add file');
+    } finally {
+      setAttachmentBusy(false);
+    }
+  };
+
+  const removeSavedTaskFile = async (attachmentId: string) => {
+    if (!toolId) return;
+    setAttachmentBusy(true);
+    try {
+      const response = await fetch('/api/tools/to-do-list/attachments', {
+        method: 'DELETE',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ toolId, attachmentId }),
+      });
+      const data = await response.json().catch(() => ({}));
+      if (!response.ok) {
+        throw new Error(data.error || 'Failed to remove file');
+      }
+      await loadTasks(selectedCategoryId);
+    } catch (error) {
+      showMessage('error', error instanceof Error ? error.message : 'Failed to remove file');
+    } finally {
+      setAttachmentBusy(false);
+    }
   };
 
   const deleteTask = async (taskId: string) => {
@@ -987,7 +1146,13 @@ export function ToDoListTool({ toolId }: ToDoListToolProps) {
             {/* Add task form */}
             {isAddingTask && (
             <div className={`${isLight ? 'border-t border-slate-200 pt-6 mb-6' : 'border-t border-slate-700/70 pt-6 mb-6'} print-only-hidden`}>
-              <h3 className={isLight ? 'text-lg font-semibold text-slate-900 mb-4' : 'text-lg font-semibold text-slate-50 mb-4'}>New task</h3>
+              <div className="mb-4 flex items-center justify-between gap-3">
+                <h3 className={isLight ? 'text-lg font-semibold text-slate-900' : 'text-lg font-semibold text-slate-50'}>New task</h3>
+                <AttachmentButton
+                  count={pendingAttachments.length}
+                  onClick={() => setAttachmentModal('add')}
+                />
+              </div>
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4 space-y-4">
                 <div className="md:col-span-2">
                   <label className={isLight ? 'block text-xs font-medium text-slate-700 mb-1.5' : 'block text-xs font-medium text-slate-300 mb-1.5'}>Task name <span className="text-red-400">*</span></label>
@@ -1085,7 +1250,13 @@ export function ToDoListTool({ toolId }: ToDoListToolProps) {
             {/* Edit task form */}
             {editingTaskId && editingTask && (
               <div className={`${isLight ? 'border-t border-slate-200 pt-6 mb-6' : 'border-t border-slate-700/70 pt-6 mb-6'} print-only-hidden`}>
-                <h3 className={isLight ? 'text-lg font-semibold text-slate-900 mb-4' : 'text-lg font-semibold text-slate-50 mb-4'}>Edit task</h3>
+                <div className="mb-4 flex items-center justify-between gap-3">
+                  <h3 className={isLight ? 'text-lg font-semibold text-slate-900' : 'text-lg font-semibold text-slate-50'}>Edit task</h3>
+                  <AttachmentButton
+                    count={(tasks.find((task) => task.id === editingTask.id)?.attachments.length) ?? editingTask.attachments.length}
+                    onClick={() => setAttachmentModal(editingTask.id)}
+                  />
+                </div>
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                   <div className="md:col-span-2">
                     <label className={isLight ? 'block text-xs font-medium text-slate-700 mb-1.5' : 'block text-xs font-medium text-slate-300 mb-1.5'}>Task name</label>
@@ -1199,7 +1370,7 @@ export function ToDoListTool({ toolId }: ToDoListToolProps) {
                         <th className={isLight ? 'text-left text-xs font-semibold uppercase tracking-wider text-slate-600 py-3 px-2' : 'text-left text-xs font-semibold uppercase tracking-wider text-slate-400 py-3 px-2'}>Due Date</th>
                         <th className={isLight ? 'text-left text-xs font-semibold uppercase tracking-wider text-slate-600 py-3 px-2' : 'text-left text-xs font-semibold uppercase tracking-wider text-slate-400 py-3 px-2'}>Priority</th>
                         <th className={isLight ? 'text-left text-xs font-semibold uppercase tracking-wider text-slate-600 py-3 px-2' : 'text-left text-xs font-semibold uppercase tracking-wider text-slate-400 py-3 px-2'}>Status</th>
-                        <th className={`${isLight ? 'w-20 text-right text-xs font-semibold uppercase tracking-wider text-slate-600 py-3 px-2' : 'w-20 text-right text-xs font-semibold uppercase tracking-wider text-slate-400 py-3 px-2'} print-only-hidden`}>Actions</th>
+                        <th className={`${isLight ? 'w-36 text-right text-xs font-semibold uppercase tracking-wider text-slate-600 py-3 px-2' : 'w-36 text-right text-xs font-semibold uppercase tracking-wider text-slate-400 py-3 px-2'} print-only-hidden`}>Actions</th>
                       </tr>
                     </thead>
                     <tbody>
@@ -1245,10 +1416,15 @@ export function ToDoListTool({ toolId }: ToDoListToolProps) {
                           </td>
                           <td className="py-3 px-2 text-right print-only-hidden">
                             <div className="flex items-center justify-end gap-1">
+                              <AttachmentButton
+                                count={task.attachments?.length || 0}
+                                onClick={() => setAttachmentModal(task.id)}
+                              />
                               <button
                                 onClick={() => startEditingTask(task)}
                                 className={rowIconEmeraldClass}
                                 aria-label="Edit task"
+                                title="Edit task"
                               >
                                 <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
@@ -1355,6 +1531,44 @@ export function ToDoListTool({ toolId }: ToDoListToolProps) {
         </>
       )}
 
+      <AttachmentModal
+        open={attachmentModal !== null}
+        onClose={() => {
+          setAttachmentModal(null);
+          setViewPreview(null);
+        }}
+        previewItem={viewPreview}
+        title={
+          attachmentModal === 'add'
+            ? newTask.taskName.trim() || 'New task'
+            : savedAttachmentTask?.taskName || 'Task'
+        }
+        files={modalFiles}
+        busy={attachmentBusy}
+        onAdd={(incoming) => {
+          if (attachmentModal === 'add') {
+            setPendingAttachments((prev) => [...prev, ...incoming.map(createPendingAttachment)]);
+            return;
+          }
+          if (attachmentModal) {
+            void addSavedTaskFiles(attachmentModal, incoming);
+          }
+        }}
+        onRemove={(id) => {
+          if (attachmentModal === 'add') {
+            setPendingAttachments((prev) => {
+              const next = prev.filter((item) => item.id !== id);
+              const removed = prev.find((item) => item.id === id);
+              if (removed?.url) URL.revokeObjectURL(removed.url);
+              return next;
+            });
+            return;
+          }
+          void removeSavedTaskFile(id);
+        }}
+        onView={handleViewAttachment}
+        onDownload={attachmentModal === 'add' ? undefined : handleDownloadAttachment}
+      />
     </div>
   );
 }

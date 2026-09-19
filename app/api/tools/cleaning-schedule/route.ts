@@ -4,6 +4,7 @@ import { supabaseServer } from '@/lib/supabaseServer';
 import {
   advanceFrom,
   asDateOnly,
+  CleaningAttachment,
   CleaningFrequency,
   CleaningScheduleData,
   completionDayForToday,
@@ -14,6 +15,12 @@ import {
   parseReminderDays,
   todayIso,
 } from '@/lib/cleaning-schedule';
+import {
+  attachmentsByCompletionIds,
+  attachmentsByItemIds,
+  deleteItemStorageFiles,
+  deleteTaskCompletionStorageFiles,
+} from '@/lib/cleaning-storage';
 
 type DbCategory = {
   id: string;
@@ -77,7 +84,9 @@ function mapData(
   categories: DbCategory[],
   items: DbItem[],
   tasks: DbTask[],
-  completions: DbCompletion[]
+  completions: DbCompletion[],
+  itemAttachments: Record<string, CleaningAttachment[]> = {},
+  completionAttachments: Record<string, CleaningAttachment[]> = {}
 ): CleaningScheduleData {
   return {
     categories: categories.map((row) => ({
@@ -95,6 +104,7 @@ function mapData(
       notes: row.notes ?? '',
       isDefault: row.is_default === true,
       isHidden: row.is_hidden === true,
+      attachments: itemAttachments[row.id] || [],
     })),
     tasks: tasks.map((row) => ({
       id: row.id,
@@ -113,6 +123,7 @@ function mapData(
       scheduledDate: asDateOnly(row.scheduled_date),
       completedDate: asDateOnly(row.completed_date),
       lateness: row.lateness,
+      attachments: completionAttachments[row.id] || [],
     })),
   };
 }
@@ -235,11 +246,20 @@ async function fetchAllData(userId: string, toolId: string): Promise<CleaningSch
   if (tasksRes.error) throw new Error(asErrorMessage(tasksRes.error, 'Failed to fetch tasks'));
   if (completionsRes.error) throw new Error(asErrorMessage(completionsRes.error, 'Failed to fetch completions'));
 
+  const items = (itemsRes.data ?? []) as DbItem[];
+  const completions = (completionsRes.data ?? []) as DbCompletion[];
+  const [itemAttachments, completionAttachments] = await Promise.all([
+    attachmentsByItemIds(items.map((row) => row.id), userId),
+    attachmentsByCompletionIds(completions.map((row) => row.id), userId),
+  ]);
+
   return mapData(
     (categoriesRes.data ?? []) as DbCategory[],
-    (itemsRes.data ?? []) as DbItem[],
+    items,
     (tasksRes.data ?? []) as DbTask[],
-    (completionsRes.data ?? []) as DbCompletion[]
+    completions,
+    itemAttachments,
+    completionAttachments
   );
 }
 
@@ -586,23 +606,32 @@ export async function POST(request: NextRequest) {
         return NextResponse.json({ error: category.error || 'Category is required' }, { status: 400 });
       }
 
-      const { error } = await supabaseServer.from('tools_cs_items').insert({
-        user_id: user.id,
-        tool_id: toolId,
-        category_id: category.id,
-        name: name.trim(),
-        description: (description ?? '').trim(),
-        notes: (notes ?? '').trim(),
-        is_default: false,
-        is_hidden: false,
-      });
+      const { data: created, error } = await supabaseServer
+        .from('tools_cs_items')
+        .insert({
+          user_id: user.id,
+          tool_id: toolId,
+          category_id: category.id,
+          name: name.trim(),
+          description: (description ?? '').trim(),
+          notes: (notes ?? '').trim(),
+          is_default: false,
+          is_hidden: false,
+        })
+        .select('id')
+        .single();
 
-      if (error) {
+      if (error || !created) {
         console.error('Error creating item:', error);
         return NextResponse.json({ error: 'Failed to create item' }, { status: 500 });
       }
 
-      return NextResponse.json({ success: true, createdCategoryId: category.id, ...(await fetchAllData(user.id, toolId)) });
+      return NextResponse.json({
+        success: true,
+        createdItemId: created.id,
+        createdCategoryId: category.id,
+        ...(await fetchAllData(user.id, toolId)),
+      });
     }
 
     if (action === 'updateItem' || action === 'updateSchedule') {
@@ -754,6 +783,8 @@ export async function POST(request: NextRequest) {
         return NextResponse.json({ error: 'Default items cannot be deleted' }, { status: 400 });
       }
 
+      await deleteItemStorageFiles(itemId, user.id);
+
       const { error } = await supabaseServer
         .from('tools_cs_items')
         .delete()
@@ -894,6 +925,8 @@ export async function POST(request: NextRequest) {
         return NextResponse.json({ error: 'Default scheduled tasks cannot be permanently deleted' }, { status: 400 });
       }
 
+      await deleteTaskCompletionStorageFiles(taskId, user.id);
+
       const { error } = await supabaseServer
         .from('tools_cs_tasks')
         .delete()
@@ -933,16 +966,20 @@ export async function POST(request: NextRequest) {
       const nextDue = advanceFrom(completedDate, frequency);
       const lateness = latenessFor(scheduled, completedDate);
 
-      const { error: completionError } = await supabaseServer.from('tools_cs_completions').insert({
-        user_id: user.id,
-        tool_id: toolId,
-        task_id: taskId,
-        scheduled_date: scheduled,
-        completed_date: completedDate,
-        lateness,
-      });
+      const { data: completion, error: completionError } = await supabaseServer
+        .from('tools_cs_completions')
+        .insert({
+          user_id: user.id,
+          tool_id: toolId,
+          task_id: taskId,
+          scheduled_date: scheduled,
+          completed_date: completedDate,
+          lateness,
+        })
+        .select('id')
+        .single();
 
-      if (completionError) {
+      if (completionError || !completion) {
         console.error('Error writing completion:', completionError);
         return NextResponse.json({ error: 'Failed to complete task' }, { status: 500 });
       }
@@ -964,6 +1001,7 @@ export async function POST(request: NextRequest) {
 
       return NextResponse.json({
         success: true,
+        completionId: completion.id,
         nextDueDate: nextDue,
         ...(await fetchAllData(user.id, toolId)),
       });

@@ -1259,6 +1259,10 @@ export function ImportantDocumentsTool({ toolId }: ImportantDocumentsToolProps) 
   const replaceSavedDocumentFile = async (documentId: string, file: File, password?: string) => {
     if (!toolId) return;
     const doc = documents.find((item) => item.id === documentId);
+    if (doc && !doc.isActive) {
+      alert('Restore this document to add or change files.');
+      return;
+    }
     if (doc?.requiresPasswordForDownload && !password) {
       promptDocumentPassword(doc, 'replace', file);
       return;
@@ -1287,6 +1291,10 @@ export function ImportantDocumentsTool({ toolId }: ImportantDocumentsToolProps) 
   const removeSavedDocumentFile = async (documentId: string, password?: string) => {
     if (!toolId) return;
     const doc = documents.find((item) => item.id === documentId);
+    if (doc && !doc.isActive) {
+      alert('Restore this document to add or change files.');
+      return;
+    }
     if (doc?.requiresPasswordForDownload && !password) {
       promptDocumentPassword(doc, 'remove');
       return;
@@ -2162,16 +2170,6 @@ export function ImportantDocumentsTool({ toolId }: ImportantDocumentsToolProps) 
                                 <span className="text-slate-400">Effective:</span> {formatLocalDate(document.effectiveDate)}
                               </span>
                             )}
-                            {document.fileName && (
-                              <span className="truncate max-w-xs">
-                                <span className="text-slate-400">File:</span> {document.fileName}
-                              </span>
-                            )}
-                            {document.fileSize && (
-                              <span>
-                                <span className="text-slate-400">Size:</span> {(document.fileSize / 1024 / 1024).toFixed(2)} MB
-                              </span>
-                            )}
                           </div>
                           {document.note && (
                             <div className="mt-1.5">
@@ -3021,6 +3019,7 @@ export function ImportantDocumentsTool({ toolId }: ImportantDocumentsToolProps) 
         files={modalFiles}
         maxFiles={1}
         busy={attachmentBusy}
+        readOnly={Boolean(savedAttachmentDoc && !savedAttachmentDoc.isActive)}
         onAdd={(incoming) => {
           const file = incoming[0];
           if (!file) return;

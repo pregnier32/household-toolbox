@@ -2,6 +2,15 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useTheme } from './AppThemeProvider';
+import { AttachmentButton } from './AttachmentButton';
+import { AttachmentModal } from './AttachmentModal';
+import {
+  canPreviewAttachment,
+  createPendingAttachment,
+  isImageAttachment,
+  isPdfAttachment,
+  type AttachmentItem,
+} from '@/lib/attachments';
 
 function generateId(): string {
   return typeof crypto !== 'undefined' && crypto.randomUUID
@@ -80,7 +89,7 @@ export type ExpenseRecord = {
   paymentMethod: PaymentMethod;
   reimbursedYet: 'Yes' | 'No';
   reimbursementDate: string | null;
-  receiptFileName: string | null;
+  attachments: Array<{ id: string; name: string; size: number; type: string }>;
   warnUntilReceipt: boolean;
   notes: string;
 };
@@ -321,6 +330,10 @@ export function HSATrackerTool({ toolId }: HSATrackerToolProps) {
       const loaded = ((data.accounts ?? []) as HsaAccount[]).map((a) => ({
         ...a,
         contributionLimits: a.contributionLimits ?? {},
+        expenses: (a.expenses ?? []).map((expense) => ({
+          ...expense,
+          attachments: expense.attachments ?? [],
+        })),
       }));
       setAccounts(loaded);
       writeAccountsCache(toolId, loaded);
@@ -531,8 +544,11 @@ export function HSATrackerTool({ toolId }: HSATrackerToolProps) {
     reimbursementDate: '',
     warnUntilReceipt: false,
     notes: '',
-    receiptFileName: null as string | null,
   });
+  const [pendingAttachments, setPendingAttachments] = useState<AttachmentItem[]>([]);
+  const [attachmentModal, setAttachmentModal] = useState<null | 'add' | string>(null);
+  const [attachmentBusy, setAttachmentBusy] = useState(false);
+  const [viewPreview, setViewPreview] = useState<AttachmentItem | null>(null);
 
   const [deleteDepositId, setDeleteDepositId] = useState<string | null>(null);
   const [deleteExpenseId, setDeleteExpenseId] = useState<string | null>(null);
@@ -572,9 +588,14 @@ export function HSATrackerTool({ toolId }: HSATrackerToolProps) {
       reimbursementDate: '',
       warnUntilReceipt: false,
       notes: '',
-      receiptFileName: null,
     });
   }, [summaryYear]);
+
+  const revokePending = (items: AttachmentItem[]) => {
+    items.forEach((item) => {
+      if (item.url) URL.revokeObjectURL(item.url);
+    });
+  };
 
   const selectAccount = (id: string) => {
     setSelectedAccountId(id);
@@ -825,16 +846,52 @@ export function HSATrackerTool({ toolId }: HSATrackerToolProps) {
         ...(editingExpenseId ? { expenseId: editingExpenseId } : {}),
       });
       if (!data?.expense) return;
-      const row = data.expense as ExpenseRecord;
-      setAccounts((prev) =>
-        prev.map((a) => {
-          if (a.id !== selectedAccountId) return a;
-          if (editingExpenseId) {
-            return { ...a, expenses: a.expenses.map((e) => (e.id === editingExpenseId ? row : e)) };
+      const row = { ...(data.expense as ExpenseRecord), attachments: (data.expense as ExpenseRecord).attachments ?? [] };
+      const createdExpenseId = row.id;
+      if (!editingExpenseId && createdExpenseId && pendingAttachments.length > 0) {
+        try {
+          for (const queued of pendingAttachments) {
+            if (!queued.file) continue;
+            const formData = new FormData();
+            formData.append('toolId', toolId);
+            formData.append('expenseId', createdExpenseId);
+            formData.append('file', queued.file);
+            const uploadResponse = await fetch('/api/tools/hsa-tracker/attachments', { method: 'POST', body: formData });
+            if (!uploadResponse.ok) {
+              const errorData = await uploadResponse.json().catch(() => ({}));
+              throw new Error(errorData.error || 'Expense saved, but a file failed to upload.');
+            }
           }
-          return { ...a, expenses: [...a.expenses, row] };
-        })
-      );
+        } catch (uploadError) {
+          revokePending(pendingAttachments);
+          setPendingAttachments([]);
+          setAttachmentModal(null);
+          setViewPreview(null);
+          resetExpenseForm();
+          setIsAddingExpense(false);
+          setEditingExpenseId(null);
+          await loadHsaData();
+          showMessage('error', uploadError instanceof Error ? uploadError.message : 'Expense saved, but a file failed to upload.');
+          return;
+        }
+      }
+      revokePending(pendingAttachments);
+      setPendingAttachments([]);
+      setAttachmentModal(null);
+      setViewPreview(null);
+      if (!editingExpenseId && pendingAttachments.length > 0) {
+        await loadHsaData();
+      } else {
+        setAccounts((prev) =>
+          prev.map((a) => {
+            if (a.id !== selectedAccountId) return a;
+            if (editingExpenseId) {
+              return { ...a, expenses: a.expenses.map((e) => (e.id === editingExpenseId ? { ...row, attachments: e.attachments } : e)) };
+            }
+            return { ...a, expenses: [...a.expenses, row] };
+          })
+        );
+      }
       setIsAddingExpense(false);
       setEditingExpenseId(null);
       resetExpenseForm();
@@ -845,7 +902,12 @@ export function HSATrackerTool({ toolId }: HSATrackerToolProps) {
     const row: ExpenseRecord = {
       id: editingExpenseId ?? generateId(),
       ...payload,
-      receiptFileName: expenseForm.receiptFileName,
+      attachments: pendingAttachments.map((item) => ({
+        id: item.id,
+        name: item.name,
+        size: item.size,
+        type: item.type,
+      })),
       reimbursementDate,
     };
 
@@ -863,7 +925,31 @@ export function HSATrackerTool({ toolId }: HSATrackerToolProps) {
     resetExpenseForm();
   };
 
+  const startAddingExpense = () => {
+    revokePending(pendingAttachments);
+    setPendingAttachments([]);
+    setAttachmentModal(null);
+    setViewPreview(null);
+    setEditingExpenseId(null);
+    resetExpenseForm();
+    setIsAddingExpense(true);
+  };
+
+  const cancelExpenseForm = () => {
+    revokePending(pendingAttachments);
+    setPendingAttachments([]);
+    setAttachmentModal(null);
+    setViewPreview(null);
+    setIsAddingExpense(false);
+    setEditingExpenseId(null);
+    resetExpenseForm();
+  };
+
   const startEditExpense = (e: ExpenseRecord) => {
+    revokePending(pendingAttachments);
+    setPendingAttachments([]);
+    setAttachmentModal(null);
+    setViewPreview(null);
     setEditingExpenseId(e.id);
     setIsAddingExpense(true);
     setExpenseForm({
@@ -877,8 +963,124 @@ export function HSATrackerTool({ toolId }: HSATrackerToolProps) {
       reimbursementDate: e.reimbursementDate ?? '',
       warnUntilReceipt: e.warnUntilReceipt,
       notes: e.notes,
-      receiptFileName: e.receiptFileName,
     });
+  };
+
+  const savedAttachmentExpense =
+    attachmentModal && attachmentModal !== 'add'
+      ? selectedAccount?.expenses.find((expense) => expense.id === attachmentModal) || null
+      : null;
+
+  const modalFiles: AttachmentItem[] =
+    attachmentModal === 'add'
+      ? pendingAttachments
+      : savedAttachmentExpense
+        ? (savedAttachmentExpense.attachments || []).map((item) => ({
+            id: item.id,
+            name: item.name,
+            size: item.size,
+            type: item.type,
+          }))
+        : [];
+
+  const fetchHsaAttachmentBlob = async (attachmentId: string, inline = false) => {
+    const query = inline ? '?inline=1' : '';
+    const response = await fetch(`/api/tools/hsa-tracker/attachments/${attachmentId}${query}`);
+    if (!response.ok) {
+      const errorData = await response.json().catch(() => ({ error: 'Failed to open file' }));
+      throw new Error(errorData.error || 'Failed to open file');
+    }
+    return response.blob();
+  };
+
+  const handleViewAttachment = async (item: AttachmentItem) => {
+    if (item.file && item.url) {
+      if (isImageAttachment(item.type)) {
+        setViewPreview(item);
+        return;
+      }
+      if (isPdfAttachment(item.type, item.name)) {
+        window.open(item.url, '_blank', 'noopener,noreferrer');
+        return;
+      }
+      alert('This file type can’t be previewed in the browser. Use Download to save it.');
+      return;
+    }
+    try {
+      const blob = await fetchHsaAttachmentBlob(item.id, true);
+      const type = blob.type || item.type || '';
+      if (!canPreviewAttachment(type, item.name)) {
+        alert('This file type can’t be previewed in the browser. Use Download to save it.');
+        return;
+      }
+      const url = window.URL.createObjectURL(blob);
+      if (isImageAttachment(type)) {
+        setViewPreview({ ...item, type, url, size: item.size || blob.size });
+        return;
+      }
+      if (isPdfAttachment(type, item.name)) {
+        window.open(url, '_blank', 'noopener,noreferrer');
+      }
+    } catch (error) {
+      showMessage('error', error instanceof Error ? error.message : 'Failed to open file');
+    }
+  };
+
+  const handleDownloadAttachment = async (item: AttachmentItem) => {
+    if (item.file) return;
+    try {
+      const blob = await fetchHsaAttachmentBlob(item.id);
+      const url = window.URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = url;
+      link.download = item.name || 'attachment';
+      document.body.appendChild(link);
+      link.click();
+      window.URL.revokeObjectURL(url);
+      document.body.removeChild(link);
+    } catch (error) {
+      showMessage('error', error instanceof Error ? error.message : 'Failed to download file');
+    }
+  };
+
+  const addSavedExpenseFiles = async (expenseId: string, files: File[]) => {
+    if (!toolId) return;
+    setAttachmentBusy(true);
+    try {
+      for (const file of files) {
+        const formData = new FormData();
+        formData.append('toolId', toolId);
+        formData.append('expenseId', expenseId);
+        formData.append('file', file);
+        const response = await fetch('/api/tools/hsa-tracker/attachments', { method: 'POST', body: formData });
+        const data = await response.json().catch(() => ({}));
+        if (!response.ok) throw new Error(data.error || 'Failed to add file');
+      }
+      await loadHsaData();
+    } catch (error) {
+      showMessage('error', error instanceof Error ? error.message : 'Failed to add file');
+    } finally {
+      setAttachmentBusy(false);
+    }
+  };
+
+  const removeSavedExpenseFile = async (attachmentId: string) => {
+    if (!toolId) return;
+    setAttachmentBusy(true);
+    try {
+      const response = await fetch('/api/tools/hsa-tracker/attachments', {
+        method: 'DELETE',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ toolId, attachmentId }),
+      });
+      const data = await response.json().catch(() => ({}));
+      if (!response.ok) throw new Error(data.error || 'Failed to remove file');
+      await loadHsaData();
+    } catch (error) {
+      showMessage('error', error instanceof Error ? error.message : 'Failed to remove file');
+    } finally {
+      setAttachmentBusy(false);
+    }
   };
 
   const removeExpense = async () => {
@@ -1755,11 +1957,7 @@ export function HSATrackerTool({ toolId }: HSATrackerToolProps) {
                 <div className="flex justify-start">
                   <button
                     type="button"
-                    onClick={() => {
-                      setEditingExpenseId(null);
-                      resetExpenseForm();
-                      setIsAddingExpense(true);
-                    }}
+                    onClick={startAddingExpense}
                     className={primaryButtonClass}
                   >
                     + Add New Expense
@@ -1767,9 +1965,19 @@ export function HSATrackerTool({ toolId }: HSATrackerToolProps) {
                 </div>
               ) : (
                 <div className={cardClass}>
-                  <h3 className={`text-lg font-semibold ${isLight ? 'text-slate-900' : 'text-slate-50'} mb-4`}>
-                    {editingExpenseId ? 'Edit expense' : 'New expense'}
-                  </h3>
+                  <div className="mb-4 flex items-center justify-between gap-3">
+                    <h3 className={`text-lg font-semibold ${isLight ? 'text-slate-900' : 'text-slate-50'}`}>
+                      {editingExpenseId ? 'Edit expense' : 'New expense'}
+                    </h3>
+                    <AttachmentButton
+                      count={
+                        editingExpenseId
+                          ? selectedAccount?.expenses.find((expense) => expense.id === editingExpenseId)?.attachments?.length || 0
+                          : pendingAttachments.length
+                      }
+                      onClick={() => setAttachmentModal(editingExpenseId || 'add')}
+                    />
+                  </div>
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                     <div>
                       <label className={labelClassSm}>
@@ -1875,42 +2083,6 @@ export function HSATrackerTool({ toolId }: HSATrackerToolProps) {
                         className={`${inputClassPad} disabled:opacity-50`}
                       />
                     </div>
-                    <div className="md:col-span-2">
-                      <label className={labelClassSm}>Upload receipt</label>
-                      <div className="relative">
-                        <input
-                          type="file"
-                          id="expense-receipt"
-                          accept="image/*,.pdf"
-                          className="absolute inset-0 h-full w-full cursor-pointer opacity-0"
-                          onChange={(e) => {
-                            const file = e.target.files?.[0];
-                            setExpenseForm((f) => ({
-                              ...f,
-                              receiptFileName: file ? file.name : null,
-                            }));
-                          }}
-                        />
-                        <label
-                          htmlFor="expense-receipt"
-                          className={`flex cursor-pointer items-center gap-2 rounded-lg border px-3 py-2 text-sm transition-colors ${
-                            isLight
-                              ? 'border-slate-300 bg-white text-slate-800 hover:bg-slate-50'
-                              : 'border-slate-700 bg-slate-900/70 text-slate-100 hover:bg-slate-800'
-                          }`}
-                        >
-                          <svg className="h-5 w-5 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path
-                              strokeLinecap="round"
-                              strokeLinejoin="round"
-                              strokeWidth={2}
-                              d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"
-                            />
-                          </svg>
-                          <span>{expenseForm.receiptFileName ?? 'Select file'}</span>
-                        </label>
-                      </div>
-                    </div>
                     <div className="md:col-span-2 flex items-start gap-2 rounded-lg border border-amber-500/40 bg-amber-500/10 px-3 py-2">
                       <input
                         type="checkbox"
@@ -1924,8 +2096,8 @@ export function HSATrackerTool({ toolId }: HSATrackerToolProps) {
                           Add a warning on this expense until a receipt is attached
                         </label>
                         <p className={`${mutedSmallClass} mt-0.5`}>
-                          Shows a yellow warning on this expense until you upload a receipt (clears automatically when a
-                          file is selected).
+                          Shows a yellow warning on this expense until a receipt is attached. The warning clears when a
+                          file is saved on the paperclip.
                         </p>
                       </div>
                     </div>
@@ -1945,11 +2117,7 @@ export function HSATrackerTool({ toolId }: HSATrackerToolProps) {
                     </button>
                     <button
                       type="button"
-                      onClick={() => {
-                        setIsAddingExpense(false);
-                        setEditingExpenseId(null);
-                        resetExpenseForm();
-                      }}
+                      onClick={cancelExpenseForm}
                       className={secondaryButtonClass}
                     >
                       Cancel
@@ -1965,7 +2133,7 @@ export function HSATrackerTool({ toolId }: HSATrackerToolProps) {
                   </div>
                 ) : (
                   sortedExpenses.map((ex) => {
-                    const showWarning = ex.warnUntilReceipt && !ex.receiptFileName;
+                    const showWarning = ex.warnUntilReceipt && (ex.attachments?.length ?? 0) === 0;
                     return (
                       <div key={ex.id} className={nestedRowCardClass}>
                         <div className="flex items-start justify-between gap-3">
@@ -1985,9 +2153,6 @@ export function HSATrackerTool({ toolId }: HSATrackerToolProps) {
                               Reimbursed: {ex.reimbursedYet}
                               {ex.reimbursementDate ? ` (${formatDateForDisplay(ex.reimbursementDate)})` : ''}
                             </p>
-                            {ex.receiptFileName ? (
-                              <p className={`${mutedSmallClass} mt-1`}>Receipt: {ex.receiptFileName}</p>
-                            ) : null}
                             {showWarning ? <ReceiptNeededWarning isLight={isLight} /> : null}
                             {ex.notes ? (
                               <p className={`mt-2 text-sm whitespace-pre-line ${isLight ? 'text-slate-600' : 'text-slate-400'}`}>
@@ -1996,6 +2161,10 @@ export function HSATrackerTool({ toolId }: HSATrackerToolProps) {
                             ) : null}
                           </div>
                           <div className="flex shrink-0 items-center gap-1.5 ml-4">
+                            <AttachmentButton
+                              count={ex.attachments?.length || 0}
+                              onClick={() => setAttachmentModal(ex.id)}
+                            />
                             <button
                               type="button"
                               onClick={() => startEditExpense(ex)}
@@ -2226,6 +2395,45 @@ export function HSATrackerTool({ toolId }: HSATrackerToolProps) {
           </div>
         </div>
       )}
+
+      <AttachmentModal
+        open={attachmentModal !== null}
+        onClose={() => {
+          setAttachmentModal(null);
+          setViewPreview(null);
+        }}
+        previewItem={viewPreview}
+        title={
+          attachmentModal === 'add'
+            ? expenseForm.name.trim() || 'New expense'
+            : savedAttachmentExpense?.name || 'Expense'
+        }
+        files={modalFiles}
+        busy={attachmentBusy}
+        onAdd={(incoming) => {
+          if (attachmentModal === 'add') {
+            setPendingAttachments((prev) => [...prev, ...incoming.map(createPendingAttachment)]);
+            return;
+          }
+          if (attachmentModal) {
+            void addSavedExpenseFiles(attachmentModal, incoming);
+          }
+        }}
+        onRemove={(id) => {
+          if (attachmentModal === 'add') {
+            setPendingAttachments((prev) => {
+              const next = prev.filter((item) => item.id !== id);
+              const removed = prev.find((item) => item.id === id);
+              if (removed?.url) URL.revokeObjectURL(removed.url);
+              return next;
+            });
+            return;
+          }
+          void removeSavedExpenseFile(id);
+        }}
+        onView={handleViewAttachment}
+        onDownload={attachmentModal === 'add' ? undefined : handleDownloadAttachment}
+      />
     </div>
   );
 }

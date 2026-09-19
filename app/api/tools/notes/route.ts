@@ -2,6 +2,50 @@ import { NextRequest, NextResponse } from 'next/server';
 import { getSession } from '@/lib/session';
 import { supabaseServer } from '@/lib/supabaseServer';
 import bcrypt from 'bcryptjs';
+import { isMissingRelationError, removeNotesStorageFiles } from '@/lib/notes-storage';
+
+async function attachmentsByNoteIds(noteIds: string[], userId: string) {
+  const map: Record<string, Array<{ id: string; name: string; size: number; type: string }>> = {};
+  if (noteIds.length === 0) return map;
+
+  const { data, error } = await supabaseServer
+    .from('tools_note_attachments')
+    .select('id, note_id, file_name, file_size, file_type')
+    .eq('user_id', userId)
+    .in('note_id', noteIds)
+    .order('created_at', { ascending: true });
+
+  if (error) {
+    if (!isMissingRelationError(error)) {
+      console.error('Error fetching note attachments:', error);
+    }
+    return map;
+  }
+
+  (data || []).forEach((row) => {
+    if (!map[row.note_id]) map[row.note_id] = [];
+    map[row.note_id].push({
+      id: row.id,
+      name: row.file_name,
+      size: row.file_size,
+      type: row.file_type,
+    });
+  });
+  return map;
+}
+
+async function deleteNoteStorageFiles(noteId: string, userId: string) {
+  const { data, error } = await supabaseServer
+    .from('tools_note_attachments')
+    .select('file_url')
+    .eq('note_id', noteId)
+    .eq('user_id', userId);
+  if (error) {
+    if (!isMissingRelationError(error)) console.error('Error loading note files for delete:', error);
+    return;
+  }
+  await removeNotesStorageFiles((data || []).map((row) => row.file_url), userId);
+}
 
 // Constants
 const SALT_ROUNDS = 10; // For password hashing
@@ -51,11 +95,14 @@ export async function GET(request: NextRequest) {
         .select('question_id')
         .eq('note_id', noteId);
 
+      const attachmentMap = await attachmentsByNoteIds([noteId], user.id);
+
       return NextResponse.json({
         note: {
           ...note,
           tags: tagIds,
-          securityQuestions: securityQuestions?.map(sq => ({ questionId: sq.question_id })) || []
+          securityQuestions: securityQuestions?.map(sq => ({ questionId: sq.question_id })) || [],
+          attachments: attachmentMap[noteId] || []
         }
       });
     }
@@ -105,9 +152,12 @@ export async function GET(request: NextRequest) {
     }
 
     // Transform notes to include tags
+    const attachmentMap = await attachmentsByNoteIds(noteIds, user.id);
+
     const notesWithTags = notes?.map(note => ({
       ...note,
-      tags: noteTagsMap[note.id] || []
+      tags: noteTagsMap[note.id] || [],
+      attachments: attachmentMap[note.id] || []
     })) || [];
 
     return NextResponse.json({
@@ -141,6 +191,7 @@ export async function POST(request: NextRequest) {
 
     // Handle delete action
     if (action === 'delete' && noteId) {
+      await deleteNoteStorageFiles(noteId, user.id);
       const { error } = await supabaseServer
         .from('tools_note_notes')
         .delete()
@@ -396,6 +447,8 @@ export async function DELETE(request: NextRequest) {
     if (!noteId || !toolId) {
       return NextResponse.json({ error: 'Note ID and Tool ID are required' }, { status: 400 });
     }
+
+    await deleteNoteStorageFiles(noteId, user.id);
 
     const { error } = await supabaseServer
       .from('tools_note_notes')

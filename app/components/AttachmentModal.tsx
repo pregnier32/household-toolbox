@@ -30,6 +30,7 @@ type AttachmentModalProps = {
   previewItem?: AttachmentItem | null;
   maxFiles?: number;
   busy?: boolean;
+  readOnly?: boolean;
 };
 
 export function AttachmentModal({
@@ -44,6 +45,7 @@ export function AttachmentModal({
   previewItem = null,
   maxFiles,
   busy = false,
+  readOnly = false,
 }: AttachmentModalProps) {
   const { resolvedTheme } = useTheme();
   const isLight = resolvedTheme === 'light';
@@ -96,7 +98,7 @@ export function AttachmentModal({
   const canAddMore = maxFiles == null || files.length < maxFiles;
 
   const addFiles = (incoming: File[]) => {
-    if (incoming.length === 0) return;
+    if (readOnly || incoming.length === 0) return;
     const { accepted, errors } = filterIncomingAttachments(incoming, {
       existingCount: maxFiles === 1 ? 0 : files.length,
       maxFiles,
@@ -194,7 +196,9 @@ export function AttachmentModal({
               </button>
             </div>
           ) : files.length === 0 ? (
-            <p className={`${mutedClass} mb-4`}>Add a file to keep it with this item.</p>
+            <p className={`${mutedClass} mb-4`}>
+              {readOnly ? 'Restore this item to add or change files.' : 'Add a file to keep it with this item.'}
+            </p>
           ) : (
             <ul className={`${listClass} mb-4`}>
               {files.map((item) => (
@@ -217,56 +221,64 @@ export function AttachmentModal({
                         Download
                       </button>
                     )}
-                    <button type="button" onClick={() => onRemove(item.id)} className={dangerActionClass} disabled={busy}>
-                      Remove
-                    </button>
+                    {!readOnly && (
+                      <button type="button" onClick={() => onRemove(item.id)} className={dangerActionClass} disabled={busy}>
+                        Remove
+                      </button>
+                    )}
                   </div>
                 </li>
               ))}
             </ul>
           )}
 
-          <div
-            className={dropClass}
-            onDragEnter={(event) => {
-              event.preventDefault();
-              setIsDragging(true);
-            }}
-            onDragOver={(event) => {
-              event.preventDefault();
-              setIsDragging(true);
-            }}
-            onDragLeave={() => setIsDragging(false)}
-            onDrop={(event) => {
-              event.preventDefault();
-              setIsDragging(false);
-              addFiles(Array.from(event.dataTransfer.files || []));
-            }}
-          >
-            <p className={isLight ? 'text-sm font-medium text-slate-800' : 'text-sm font-medium text-slate-200'}>
-              {canAddMore ? 'Drop files here' : maxFiles === 1 ? 'Replace the current file' : 'File limit reached'}
-            </p>
-            <p className={`${mutedClass} mt-1`}>Images, PDFs, Word, and Excel up to {formatAttachmentBytes(ATTACHMENT_MAX_FILE_BYTES)} each.</p>
-            <button
-              type="button"
-              className={browseClass}
-              disabled={busy}
-              onClick={() => inputRef.current?.click()}
-            >
-              {maxFiles === 1 && files.length > 0 ? 'Replace file' : 'Add files'}
-            </button>
-            <input
-              ref={inputRef}
-              type="file"
-              className="hidden"
-              accept={ATTACHMENT_ACCEPT}
-              multiple={maxFiles !== 1}
-              onChange={(event) => {
-                addFiles(Array.from(event.target.files || []));
-                event.target.value = '';
+          {readOnly ? (
+            files.length > 0 ? (
+              <p className={mutedClass}>Restore this item to add or change files.</p>
+            ) : null
+          ) : (
+            <div
+              className={dropClass}
+              onDragEnter={(event) => {
+                event.preventDefault();
+                setIsDragging(true);
               }}
-            />
-          </div>
+              onDragOver={(event) => {
+                event.preventDefault();
+                setIsDragging(true);
+              }}
+              onDragLeave={() => setIsDragging(false)}
+              onDrop={(event) => {
+                event.preventDefault();
+                setIsDragging(false);
+                addFiles(Array.from(event.dataTransfer.files || []));
+              }}
+            >
+              <p className={isLight ? 'text-sm font-medium text-slate-800' : 'text-sm font-medium text-slate-200'}>
+                {canAddMore ? 'Drop files here' : maxFiles === 1 ? 'Replace the current file' : 'File limit reached'}
+              </p>
+              <p className={`${mutedClass} mt-1`}>Images, PDFs, Word, and Excel up to {formatAttachmentBytes(ATTACHMENT_MAX_FILE_BYTES)} each.</p>
+              <button
+                type="button"
+                className={browseClass}
+                disabled={busy}
+                onClick={() => inputRef.current?.click()}
+              >
+                {maxFiles === 1 && files.length > 0 ? 'Replace file' : 'Add files'}
+              </button>
+              <input
+                ref={inputRef}
+                type="file"
+                className="hidden"
+                accept={ATTACHMENT_ACCEPT}
+                multiple={maxFiles !== 1}
+                onChange={(event) => {
+                  addFiles(Array.from(event.target.files || []));
+                  event.target.value = '';
+                }}
+              />
+            </div>
+          )}
         </div>
 
         {storage && (
