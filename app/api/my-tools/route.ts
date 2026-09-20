@@ -3,9 +3,22 @@ import { getSession } from '@/lib/session';
 import { supabaseServer } from '@/lib/supabaseServer';
 import { deleteUserTool } from '@/lib/user-data-deletion';
 
-function sortOwnedTools<T extends { tools: { name: string } | null }>(tools: T[]): T[] {
-  return [...tools].sort((a, b) =>
-    (a.tools?.name || '').localeCompare(b.tools?.name || '', undefined, { sensitivity: 'base' })
+type EmbeddedTool = {
+  id: string;
+  name: string;
+  tool_tip: string | null;
+};
+
+function asOwnedTool(tools: EmbeddedTool | EmbeddedTool[] | null | undefined): EmbeddedTool | null {
+  if (!tools) return null;
+  return Array.isArray(tools) ? tools[0] ?? null : tools;
+}
+
+function sortOwnedTools<T extends { tools?: EmbeddedTool | EmbeddedTool[] | null }>(rows: T[]): T[] {
+  return [...rows].sort((a, b) =>
+    (asOwnedTool(a.tools)?.name || '').localeCompare(asOwnedTool(b.tools)?.name || '', undefined, {
+      sensitivity: 'base',
+    })
   );
 }
 
@@ -47,7 +60,10 @@ export async function GET() {
     }
 
     return NextResponse.json({
-      tools: sortOwnedTools(userTools || []),
+      tools: sortOwnedTools(userTools || []).map((row) => ({
+        ...row,
+        tools: asOwnedTool(row.tools),
+      })),
     });
   } catch (error) {
     console.error('Error in my-tools API:', error);
