@@ -98,7 +98,7 @@ export default function Home() {
             {/* Coming Soon Message */}
             <div className="mt-8 inline-flex items-center rounded-lg border border-emerald-400/30 bg-emerald-400/10 px-6 py-4">
               <p className="text-lg font-semibold text-emerald-200">
-                Coming Soon in 2026
+                Coming in 2026
               </p>
             </div>
           </div>

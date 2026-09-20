@@ -74,6 +74,11 @@ export async function removePetCareStorageFiles(
   await refreshUserStorageUsage(userId);
 }
 
+function ownerIdFromRow(row: object, ownerColumn: string): string {
+  const value = (row as Record<string, unknown>)[ownerColumn];
+  return typeof value === 'string' ? value : String(value ?? '');
+}
+
 export function mapPetCareAttachment(row: {
   id: string;
   file_name: string;
@@ -109,7 +114,8 @@ async function attachmentsByOwnerIds(
   }
 
   (data || []).forEach((row) => {
-    const ownerId = row[ownerColumn] as string;
+    const ownerId = ownerIdFromRow(row, ownerColumn);
+    if (!ownerId) return;
     if (!map[ownerId]) map[ownerId] = [];
     map[ownerId].push(mapPetCareAttachment(row));
   });
@@ -279,7 +285,7 @@ export async function lookupAttachmentById(attachmentId: string, userId: string)
     if (data) {
       return {
         store,
-        ownerId: data[ownerColumn] as string,
+        ownerId: ownerIdFromRow(data, ownerColumn),
         attachment: data as { id: string; file_url: string; file_name: string; file_type: string },
       };
     }
