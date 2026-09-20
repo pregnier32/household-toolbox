@@ -24,6 +24,9 @@ function extractStoragePath(fileUrl: string, bucket: string): string | null {
   }
 }
 
+type StorageDelete = { bucket: string; path: string };
+type FileUrlRow = { file_url: string | null };
+
 async function removeStoragePaths(bucket: string, paths: string[]): Promise<void> {
   if (paths.length === 0) return;
 
@@ -39,12 +42,60 @@ async function removeStoragePaths(bucket: string, paths: string[]): Promise<void
   }
 }
 
+async function flushStorageDeletes(storageDeletes: StorageDelete[]): Promise<void> {
+  const grouped = storageDeletes.reduce<Record<string, string[]>>((acc, item) => {
+    if (!acc[item.bucket]) acc[item.bucket] = [];
+    acc[item.bucket].push(item.path);
+    return acc;
+  }, {});
+
+  for (const [bucket, paths] of Object.entries(grouped)) {
+    await removeStoragePaths(bucket, paths);
+  }
+}
+
+function pushFileUrl(dest: StorageDelete[], fileUrl: string | null | undefined, bucket: string): void {
+  const path = fileUrl ? extractStoragePath(fileUrl, bucket) : null;
+  if (path) dest.push({ bucket, path });
+}
+
+function pushFileUrlRows(dest: StorageDelete[], rows: FileUrlRow[] | null, bucket: string): void {
+  (rows || []).forEach((row) => pushFileUrl(dest, row.file_url, bucket));
+}
+
+async function collectUserFileUrls(
+  table: string,
+  userId: string,
+  bucket: string,
+  dest: StorageDelete[]
+): Promise<void> {
+  const { data, error } = await supabaseServer
+    .from(table as 'tools_id_documents')
+    .select('file_url')
+    .eq('user_id', userId);
+  if (error && !isMissingRelationError(error)) throw error;
+  pushFileUrlRows(dest, data, bucket);
+}
+
+async function deleteUserToolRows(table: string, userId: string, toolId: string): Promise<void> {
+  const { error } = await supabaseServer
+    .from(table as 'tools_id_documents')
+    .delete()
+    .eq('user_id', userId)
+    .eq('tool_id', toolId);
+  if (error && !isMissingRelationError(error)) throw error;
+}
+
 /**
  * Shared account erasure used by:
  * - `app/api/admin/users/route.ts` (DELETE)
  * - `app/api/account/delete/route.ts` (DELETE)
  *
+ * Per-tool counterpart: `deleteUserTool` / `delete_user_tool` (same storage + row
+ * coverage, scoped to one catalog tool; does not delete the user).
+ *
  * Flow: remove storage objects referenced by the user, then delete `users` (FK CASCADE).
+ * `user_tool_entitlements` is removed with the user, not with per-tool Remove.
  *
  * Storage cleanup (this file) — query tables for file URLs, then remove from bucket:
  * | Tool                    | Tables (file columns)                                              | Bucket                 | Schema / storage script |
@@ -544,3 +595,297 @@ export async function deleteUserAndAssociatedData(userId: string): Promise<void>
 
   if (deleteUserError) throw deleteUserError;
 }
+
+export type DeletedUserTool = {
+  userId: string;
+  toolId: string;
+  toolName: string;
+};
+
+/**
+ * Wipe one user's data and Storage files for a single catalog tool.
+ *
+ * Used as `delete_user_tool(userId, toolId)` — `toolId` is `tools.id`, not `users_tools.id`.
+ * Does not delete the user, `users_tools` ownership, `user_tool_entitlements`,
+ * `tool_icons`, or global seed tables.
+ * Calendar pins for that user + tool are removed.
+ *
+ * Cleaning Schedule / Home Maintenance: unflag `is_default` then delete items before categories
+ * (same trigger/RESTRICT pattern as full-account erase). Event Budget Planner: delete events first.
+ */
+export async function deleteUserTool(userId: string, toolId: string): Promise<DeletedUserTool> {
+  if (!userId) throw new Error('userId is required');
+  if (!toolId) throw new Error('toolId is required');
+
+  const { data: tool, error: toolError } = await supabaseServer
+    .from('tools')
+    .select('id, name')
+    .eq('id', toolId)
+    .maybeSingle();
+  if (toolError) throw toolError;
+  if (!tool) throw new Error(`Tool not found: ${toolId}`);
+
+  const toolName = tool.name;
+  const storageDeletes: StorageDelete[] = [];
+
+  switch (toolName) {
+    case 'Important Documents': {
+      await collectUserFileUrls('tools_id_documents', userId, 'important-documents', storageDeletes);
+      await deleteUserToolRows('tools_id_documents', userId, toolId);
+      await deleteUserToolRows('tools_id_tags', userId, toolId);
+      break;
+    }
+    case 'Notes': {
+      await collectUserFileUrls('tools_note_attachments', userId, 'notes', storageDeletes);
+      await deleteUserToolRows('tools_note_notes', userId, toolId);
+      await deleteUserToolRows('tools_note_tags', userId, toolId);
+      break;
+    }
+    case 'To Do List': {
+      await collectUserFileUrls('tools_tdl_attachments', userId, 'to-do-list', storageDeletes);
+      await deleteUserToolRows('tools_tdl_tasks', userId, toolId);
+      await deleteUserToolRows('tools_tdl_categories', userId, toolId);
+      break;
+    }
+    case 'Repair History': {
+      const { data: rhRecords, error: rhError } = await supabaseServer
+        .from('tools_rh_records')
+        .select('id, receipt_file_url, warranty_file_url')
+        .eq('user_id', userId)
+        .eq('tool_id', toolId);
+      if (rhError && !isMissingRelationError(rhError)) throw rhError;
+
+      const rhRecordIds = (rhRecords || []).map((row: { id: string }) => row.id);
+      (rhRecords || []).forEach((row: { receipt_file_url: string | null; warranty_file_url: string | null }) => {
+        pushFileUrl(storageDeletes, row.receipt_file_url, 'repair-history');
+        pushFileUrl(storageDeletes, row.warranty_file_url, 'repair-history');
+      });
+
+      await collectUserFileUrls('tools_rh_record_attachments', userId, 'repair-history', storageDeletes);
+
+      if (rhRecordIds.length > 0) {
+        const { data: rhPictures, error: rhPicturesError } = await supabaseServer
+          .from('tools_rh_repair_pictures')
+          .select('file_url')
+          .in('record_id', rhRecordIds);
+        if (rhPicturesError && !isMissingRelationError(rhPicturesError)) throw rhPicturesError;
+        pushFileUrlRows(storageDeletes, rhPictures, 'repair-history');
+      }
+
+      await deleteUserToolRows('tools_rh_headers', userId, toolId);
+      await deleteUserToolRows('tools_rh_items', userId, toolId);
+      break;
+    }
+    case 'Healthcare Appts and History':
+    case 'Healthcare Appts & History': {
+      const { data: hcahHeaders, error: hcahHeadersError } = await supabaseServer
+        .from('tools_hcah_headers')
+        .select('id')
+        .eq('user_id', userId)
+        .eq('tool_id', toolId);
+      if (hcahHeadersError && !isMissingRelationError(hcahHeadersError)) throw hcahHeadersError;
+
+      const hcahHeaderIds = (hcahHeaders || []).map((row: { id: string }) => row.id);
+      if (hcahHeaderIds.length > 0) {
+        const { data: hcahRecords, error: hcahRecordsError } = await supabaseServer
+          .from('tools_hcah_records')
+          .select('id')
+          .in('header_id', hcahHeaderIds);
+        if (hcahRecordsError && !isMissingRelationError(hcahRecordsError)) throw hcahRecordsError;
+
+        const hcahRecordIds = (hcahRecords || []).map((row: { id: string }) => row.id);
+        if (hcahRecordIds.length > 0) {
+          const { data: hcahDocs, error: hcahDocsError } = await supabaseServer
+            .from('tools_hcah_documents')
+            .select('file_url')
+            .in('record_id', hcahRecordIds);
+          if (hcahDocsError && !isMissingRelationError(hcahDocsError)) throw hcahDocsError;
+          pushFileUrlRows(storageDeletes, hcahDocs, 'healthcare-appt-history');
+        }
+      }
+
+      await deleteUserToolRows('tools_hcah_headers', userId, toolId);
+      break;
+    }
+    case 'Pet Care Schedule': {
+      for (const table of [
+        'tools_pcs_pet_attachments',
+        'tools_pcs_document_attachments',
+        'tools_pcs_veterinary_attachments',
+        'tools_pcs_vaccination_attachments',
+        'tools_pcs_appointment_attachments',
+      ] as const) {
+        await collectUserFileUrls(table, userId, 'pet-care-schedule', storageDeletes);
+      }
+
+      const { data: pets, error: petsError } = await supabaseServer
+        .from('tools_pcs_pets')
+        .select('id')
+        .eq('user_id', userId)
+        .eq('tool_id', toolId);
+      if (petsError && !isMissingRelationError(petsError)) throw petsError;
+
+      const petIds = (pets || []).map((row: { id: string }) => row.id);
+      if (petIds.length > 0) {
+        const { data: petDocs, error: petDocsError } = await supabaseServer
+          .from('tools_pcs_documents')
+          .select('file_url')
+          .in('pet_id', petIds);
+        if (petDocsError && !isMissingRelationError(petDocsError)) throw petDocsError;
+        pushFileUrlRows(storageDeletes, petDocs, 'pet-care-schedule');
+      }
+
+      await deleteUserToolRows('tools_pcs_pets', userId, toolId);
+      break;
+    }
+    case 'HSA Tracker': {
+      const { data: hsaExpenses, error: hsaExpensesError } = await supabaseServer
+        .from('tools_hsa_expenses')
+        .select('id')
+        .eq('user_id', userId)
+        .eq('tool_id', toolId);
+      if (hsaExpensesError && !isMissingRelationError(hsaExpensesError)) throw hsaExpensesError;
+
+      const hsaExpenseIds = (hsaExpenses || []).map((row: { id: string }) => row.id);
+      if (hsaExpenseIds.length > 0) {
+        const { data: hsaReceipts, error: hsaReceiptsError } = await supabaseServer
+          .from('tools_hsa_expense_receipts')
+          .select('file_url')
+          .in('expense_id', hsaExpenseIds);
+        if (hsaReceiptsError && !isMissingRelationError(hsaReceiptsError)) throw hsaReceiptsError;
+        pushFileUrlRows(storageDeletes, hsaReceipts, 'hsa-tracker');
+      }
+
+      await deleteUserToolRows('tools_hsa_deposits', userId, toolId);
+      await deleteUserToolRows('tools_hsa_expenses', userId, toolId);
+      await deleteUserToolRows('tools_hsa_accounts', userId, toolId);
+      break;
+    }
+    case 'Travel Log': {
+      await collectUserFileUrls('tools_tl_trip_attachments', userId, 'travel-log', storageDeletes);
+      await deleteUserToolRows('tools_tl_trips', userId, toolId);
+      break;
+    }
+    case 'Event Budget Planner': {
+      await collectUserFileUrls('tools_ebp_event_attachments', userId, 'event-budget-planner', storageDeletes);
+      await collectUserFileUrls('tools_ebp_expense_attachments', userId, 'event-budget-planner', storageDeletes);
+      await deleteUserToolRows('tools_ebp_events', userId, toolId);
+      await deleteUserToolRows('tools_ebp_categories', userId, toolId);
+      await deleteUserToolRows('tools_ebp_types', userId, toolId);
+      await deleteUserToolRows('tools_ebp_vendors', userId, toolId);
+      break;
+    }
+    case 'Meal Planner': {
+      await collectUserFileUrls('tools_mp_meal_attachments', userId, 'meal-planner', storageDeletes);
+      await deleteUserToolRows('tools_mp_plans', userId, toolId);
+      await deleteUserToolRows('tools_mp_meals', userId, toolId);
+      await deleteUserToolRows('tools_mp_meal_types', userId, toolId);
+      await deleteUserToolRows('tools_mp_items', userId, toolId);
+      break;
+    }
+    case 'Shopping List': {
+      await collectUserFileUrls('tools_sl_list_attachments', userId, 'shopping-list', storageDeletes);
+      await deleteUserToolRows('tools_sl_lists', userId, toolId);
+      await deleteUserToolRows('tools_sl_items', userId, toolId);
+      break;
+    }
+    case 'Goals Tracking': {
+      await collectUserFileUrls('tools_gt_goal_attachments', userId, 'goals-tracking', storageDeletes);
+      await collectUserFileUrls('tools_gt_update_attachments', userId, 'goals-tracking', storageDeletes);
+      await deleteUserToolRows('tools_gt_goals', userId, toolId);
+      await deleteUserToolRows('tools_gt_categories', userId, toolId);
+      break;
+    }
+    case 'Calendar Events': {
+      await collectUserFileUrls('tools_ce_event_attachments', userId, 'calendar-events', storageDeletes);
+      await deleteUserToolRows('tools_ce_events', userId, toolId);
+      await deleteUserToolRows('tools_ce_categories', userId, toolId);
+      break;
+    }
+    case 'Subscription Tracker': {
+      await collectUserFileUrls('tools_st_subscription_attachments', userId, 'subscription-tracker', storageDeletes);
+      await deleteUserToolRows('tools_st_subscriptions', userId, toolId);
+      break;
+    }
+    case 'Address Book': {
+      await collectUserFileUrls('tools_ab_address_attachments', userId, 'address-book', storageDeletes);
+      await deleteUserToolRows('tools_ab_addresses', userId, toolId);
+      await deleteUserToolRows('tools_ab_tags', userId, toolId);
+      break;
+    }
+    case 'Cleaning Schedule': {
+      await collectUserFileUrls('tools_cs_item_attachments', userId, 'cleaning-schedule', storageDeletes);
+      await collectUserFileUrls('tools_cs_completion_attachments', userId, 'cleaning-schedule', storageDeletes);
+
+      const { error: csItemsUnflagError } = await supabaseServer
+        .from('tools_cs_items')
+        .update({ is_default: false })
+        .eq('user_id', userId)
+        .eq('tool_id', toolId);
+      if (csItemsUnflagError && !isMissingRelationError(csItemsUnflagError)) throw csItemsUnflagError;
+
+      const { error: csCategoriesUnflagError } = await supabaseServer
+        .from('tools_cs_categories')
+        .update({ is_default: false })
+        .eq('user_id', userId)
+        .eq('tool_id', toolId);
+      if (csCategoriesUnflagError && !isMissingRelationError(csCategoriesUnflagError)) throw csCategoriesUnflagError;
+
+      await deleteUserToolRows('tools_cs_items', userId, toolId);
+      await deleteUserToolRows('tools_cs_categories', userId, toolId);
+      break;
+    }
+    case 'Home Maintenance Schedule': {
+      await collectUserFileUrls('tools_hms_item_attachments', userId, 'home-maintenance-schedule', storageDeletes);
+      await collectUserFileUrls('tools_hms_completion_attachments', userId, 'home-maintenance-schedule', storageDeletes);
+
+      const { error: hmsItemsUnflagError } = await supabaseServer
+        .from('tools_hms_items')
+        .update({ is_default: false })
+        .eq('user_id', userId)
+        .eq('tool_id', toolId);
+      if (hmsItemsUnflagError && !isMissingRelationError(hmsItemsUnflagError)) throw hmsItemsUnflagError;
+
+      const { error: hmsCategoriesUnflagError } = await supabaseServer
+        .from('tools_hms_categories')
+        .update({ is_default: false })
+        .eq('user_id', userId)
+        .eq('tool_id', toolId);
+      if (hmsCategoriesUnflagError && !isMissingRelationError(hmsCategoriesUnflagError)) throw hmsCategoriesUnflagError;
+
+      await deleteUserToolRows('tools_hms_items', userId, toolId);
+      await deleteUserToolRows('tools_hms_categories', userId, toolId);
+      break;
+    }
+    case 'End of Life Planner': {
+      for (const table of [
+        'tools_eolp_document_attachments',
+        'tools_eolp_insurance_attachments',
+        'tools_eolp_letter_attachments',
+        'tools_eolp_personal_item_attachments',
+        'tools_eolp_other_record_attachments',
+      ] as const) {
+        await collectUserFileUrls(table, userId, 'end-of-life-planner', storageDeletes);
+      }
+      await deleteUserToolRows('tools_eolp_plans', userId, toolId);
+      break;
+    }
+    case 'Percent of my Order':
+      break;
+    default:
+      throw new Error(`delete_user_tool has no wipe mapping for tool "${toolName}"`);
+  }
+
+  await flushStorageDeletes(storageDeletes);
+
+  const { error: pinsError } = await supabaseServer
+    .from('calendar_pins')
+    .delete()
+    .eq('user_id', userId)
+    .eq('tool_id', toolId);
+  if (pinsError && !isMissingRelationError(pinsError)) throw pinsError;
+
+  return { userId, toolId, toolName };
+}
+
+export const delete_user_tool = deleteUserTool;

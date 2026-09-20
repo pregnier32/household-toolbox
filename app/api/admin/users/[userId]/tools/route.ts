@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getSession } from '@/lib/session';
 import { supabaseServer } from '@/lib/supabaseServer';
+import { ensureToolEntitlement, toolOffersTrial } from '@/lib/user-tool-entitlements';
 
 // GET - Fetch tools for a specific user (admin only)
 export async function GET(
@@ -201,7 +202,7 @@ export async function POST(
     // Fetch the tool to get its price and status
     const { data: tool, error: toolError } = await supabaseServer
       .from('tools')
-      .select('id, price, status')
+      .select('id, name, price, status')
       .eq('id', toolId)
       .single();
 
@@ -255,6 +256,7 @@ export async function POST(
           return NextResponse.json({ error: 'Failed to reactivate tool' }, { status: 500 });
         }
 
+        await ensureToolEntitlement(userId, tool.id, { grantTrial: false });
         return NextResponse.json({ tool: updatedTool, message: 'Tool reactivated successfully' });
       } else {
         return NextResponse.json(
@@ -296,6 +298,9 @@ export async function POST(
       return NextResponse.json({ error: 'Failed to assign tool' }, { status: 500 });
     }
 
+    await ensureToolEntitlement(userId, tool.id, {
+      grantTrial: toolOffersTrial(tool),
+    });
     return NextResponse.json({ tool: newUserTool, message: 'Tool assigned successfully' }, { status: 201 });
   } catch (error) {
     console.error('Error in assign tool API:', error);

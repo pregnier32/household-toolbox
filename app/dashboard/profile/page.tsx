@@ -36,6 +36,29 @@ export default function Profile() {
     ? 'inline-flex items-center rounded-full border border-emerald-200 bg-emerald-100 px-2 py-1 text-xs font-semibold text-emerald-900'
     : 'inline-flex items-center rounded-full px-2 py-1 text-xs font-medium bg-emerald-400/10 text-emerald-300';
 
+  const modalBackdropClass = 'fixed inset-0 z-[60] flex items-center justify-center bg-black/60 p-4';
+  const modalCardClass = isLight
+    ? 'w-full max-w-lg rounded-lg border border-slate-200 bg-white p-6 shadow-xl'
+    : 'w-full max-w-lg rounded-lg border border-slate-700 bg-slate-900 p-6 shadow-xl';
+  const modalTitleClass = isLight ? 'mb-2 text-xl font-semibold text-slate-900' : 'mb-2 text-xl font-semibold text-slate-50';
+  const modalBodyClass = isLight ? 'text-sm text-slate-700' : 'text-sm text-slate-300';
+  const warningBoxClass = isLight
+    ? 'mb-4 rounded-lg border border-red-300 bg-red-50 px-4 py-3'
+    : 'mb-4 rounded-lg border border-red-500/50 bg-red-500/10 px-4 py-3';
+  const warningTitleClass = isLight ? 'mb-2 font-semibold text-red-700' : 'mb-2 font-semibold text-red-300';
+  const warningTextClass = isLight ? 'text-sm text-red-600' : 'text-sm text-red-200';
+  const checkboxLabelClass = isLight
+    ? 'mb-4 flex items-start gap-3 text-sm text-slate-800'
+    : 'mb-4 flex items-start gap-3 text-sm text-slate-200';
+  const modalInputClass = isLight
+    ? 'mb-4 w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900 placeholder-slate-500 focus:border-red-500/50 focus:outline-none focus:ring-1 focus:ring-red-500/50'
+    : 'mb-4 w-full rounded-lg border border-slate-700 bg-slate-900/70 px-3 py-2 text-sm text-slate-100 placeholder-slate-500 focus:border-red-500/50 focus:outline-none focus:ring-1 focus:ring-red-500/50';
+  const cancelButtonClass = isLight
+    ? 'rounded-lg border border-slate-300 bg-white px-4 py-2 text-sm font-medium text-slate-700 transition-colors hover:bg-slate-100 disabled:opacity-50'
+    : 'rounded-lg border border-slate-700 bg-slate-800 px-4 py-2 text-sm font-medium text-slate-300 transition-colors hover:bg-slate-700 disabled:opacity-50';
+  const confirmDangerButtonClass =
+    'rounded-lg bg-red-600 px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-red-700 disabled:cursor-not-allowed disabled:opacity-50';
+
   const [user, setUser] = useState<User | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [isEditing, setIsEditing] = useState(false);
@@ -43,8 +66,12 @@ export default function Profile() {
   const [isSaving, setIsSaving] = useState(false);
   const [isChangingPasswordLoading, setIsChangingPasswordLoading] = useState(false);
   const [isDeletingAccount, setIsDeletingAccount] = useState(false);
-  const [showDeleteAccountConfirm, setShowDeleteAccountConfirm] = useState(false);
+  const [ownedToolCount, setOwnedToolCount] = useState(0);
+  const [deleteStep, setDeleteStep] = useState<'warn' | 'final' | null>(null);
+  const [toolsRemovedAck, setToolsRemovedAck] = useState(false);
   const [deleteAccountConfirmText, setDeleteAccountConfirmText] = useState('');
+  const [finalAck, setFinalAck] = useState(false);
+  const [agreeConfirmText, setAgreeConfirmText] = useState('');
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
   const [passwordError, setPasswordError] = useState<string | null>(null);
@@ -75,6 +102,7 @@ export default function Profile() {
             lastName: data.user.lastName || '',
             email: data.user.email,
           });
+          void loadOwnedToolCount();
         } else {
           router.push('/');
         }
@@ -190,18 +218,51 @@ export default function Profile() {
     }
   };
 
-  const openDeleteAccountConfirm = () => {
+  const loadOwnedToolCount = async () => {
+    try {
+      const response = await fetch('/api/my-tools');
+      const data = await response.json();
+      if (response.ok) {
+        const count = (data.tools || []).length;
+        setOwnedToolCount(count);
+        return count;
+      }
+    } catch (err) {
+      console.error('Error loading owned tools:', err);
+    }
+    return ownedToolCount;
+  };
+
+  const resetDeleteFlow = () => {
+    setDeleteStep(null);
+    setToolsRemovedAck(false);
     setDeleteAccountConfirmText('');
-    setShowDeleteAccountConfirm(true);
+    setFinalAck(false);
+    setAgreeConfirmText('');
+  };
+
+  const openDeleteAccountConfirm = async () => {
+    setError(null);
+    setSuccess(null);
+    setToolsRemovedAck(false);
+    setDeleteAccountConfirmText('');
+    setFinalAck(false);
+    setAgreeConfirmText('');
+    await loadOwnedToolCount();
+    setDeleteStep('warn');
   };
 
   const handleDeleteAccount = async () => {
-    if (deleteAccountConfirmText.toLowerCase() !== 'delete') return;
+    if (agreeConfirmText !== 'I Agree' || !finalAck) return;
+
+    const remainingTools = await loadOwnedToolCount();
+    if (remainingTools > 0) {
+      setDeleteStep('warn');
+      return;
+    }
 
     setError(null);
     setSuccess(null);
-    setShowDeleteAccountConfirm(false);
-    setDeleteAccountConfirmText('');
     setIsDeletingAccount(true);
 
     try {
@@ -216,6 +277,8 @@ export default function Profile() {
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to delete account');
       setIsDeletingAccount(false);
+      await loadOwnedToolCount();
+      setDeleteStep('warn');
     }
   };
 
@@ -259,7 +322,7 @@ export default function Profile() {
                   d="M10 19l-7-7m0 0l7-7m-7 7h18"
                 />
               </svg>
-              <span>Back to Dashboard</span>
+              <span>Back to Toolbox</span>
             </button>
             <UserMenu
               userName={`${user.firstName} ${user.lastName || ''}`.trim()}
@@ -438,16 +501,6 @@ export default function Profile() {
                   >
                     Change Password
                   </button>
-                  {user.userStatus !== 'superadmin' && (
-                    <button
-                      type="button"
-                      onClick={openDeleteAccountConfirm}
-                      disabled={isDeletingAccount}
-                      className="w-full rounded-lg border border-red-500/50 bg-red-500/10 px-4 py-2.5 text-sm font-medium text-red-300 transition-colors hover:bg-red-500/20 disabled:cursor-not-allowed disabled:opacity-50"
-                    >
-                      {isDeletingAccount ? 'Deleting Account...' : 'Delete My Account & Data'}
-                    </button>
-                  )}
                 </div>
               ) : (
                 <form ref={passwordFormRef} onSubmit={handlePasswordSubmit} className="space-y-4">
@@ -537,81 +590,169 @@ export default function Profile() {
               )}
             </div>
           )}
+
+          <div className="border-t border-slate-800 pt-6 mt-6">
+            <h2 className="text-lg font-semibold text-slate-100 mb-2">Delete Account</h2>
+            <p className="mb-4 text-sm text-slate-400">
+              Permanently delete your profile and remaining account data. You must remove every tool from My Tools first.
+            </p>
+            <button
+              type="button"
+              onClick={() => void openDeleteAccountConfirm()}
+              disabled={isDeletingAccount}
+              className="w-full rounded-lg border border-red-500/50 bg-red-500/10 px-4 py-2.5 text-sm font-medium text-red-300 transition-colors hover:bg-red-500/20 disabled:cursor-not-allowed disabled:opacity-50"
+            >
+              {isDeletingAccount ? 'Deleting Account...' : 'Delete My Account & Data'}
+            </button>
+          </div>
         </div>
       </div>
 
-      {showDeleteAccountConfirm && (
-        <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/60">
+      {deleteStep === 'warn' && (
+        <div className={modalBackdropClass} onClick={() => !isDeletingAccount && resetDeleteFlow()}>
           <div
-            className={
-              isLight
-                ? 'w-full max-w-md rounded-lg border border-slate-200 bg-white p-6 shadow-xl'
-                : 'w-full max-w-md rounded-lg border border-slate-700 bg-slate-900 p-6 shadow-xl'
-            }
+            className={modalCardClass}
             role="dialog"
             aria-modal="true"
-            aria-labelledby="profile-delete-account-title"
+            aria-labelledby="profile-delete-account-warn-title"
+            onClick={(event) => event.stopPropagation()}
           >
-            <h3
-              id="profile-delete-account-title"
-              className={isLight ? 'mb-2 text-xl font-semibold text-slate-900' : 'mb-2 text-xl font-semibold text-slate-50'}
-            >
-              Delete Account
+            <h3 id="profile-delete-account-warn-title" className={modalTitleClass}>
+              Delete account
             </h3>
-            <div
-              className={
-                isLight
-                  ? 'mb-4 rounded-lg border border-red-300 bg-red-50 px-4 py-3'
-                  : 'mb-4 rounded-lg border border-red-500/50 bg-red-500/10 px-4 py-3'
-              }
-            >
-              <p className={isLight ? 'mb-2 font-semibold text-red-700' : 'mb-2 font-semibold text-red-300'}>
-                Warning: This action cannot be undone.
-              </p>
-              <p className={isLight ? 'text-sm text-red-600' : 'text-sm text-red-200'}>
-                This will permanently delete your account and all associated data and documents.
+            <div className={warningBoxClass}>
+              <p className={warningTitleClass}>You must remove all tools first.</p>
+              <p className={warningTextClass}>
+                Before you can delete your profile, go to My Tools and Remove every tool. That permanently deletes
+                each tool&apos;s records and documents. After that, deleting your account cannot be undone.
               </p>
             </div>
-            <p className={isLight ? 'mb-4 text-slate-700' : 'mb-4 text-slate-300'}>
-              Type <strong className={isLight ? 'text-slate-900' : 'text-slate-200'}>delete</strong> to confirm:
+            {ownedToolCount > 0 ? (
+              <>
+                <p className={`${modalBodyClass} mb-4`}>
+                  You still have <strong>{ownedToolCount}</strong> {ownedToolCount === 1 ? 'tool' : 'tools'}.
+                  Continue stays disabled until those tools are removed.
+                </p>
+                <div className="flex justify-end gap-3">
+                  <button type="button" onClick={resetDeleteFlow} className={cancelButtonClass}>
+                    Cancel
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => router.push('/dashboard/my-tools')}
+                    className="rounded-lg bg-emerald-500 px-4 py-2 text-sm font-semibold text-slate-950 transition-colors hover:bg-emerald-400"
+                  >
+                    Go to My Tools
+                  </button>
+                </div>
+              </>
+            ) : (
+              <>
+                <p className={`${modalBodyClass} mb-4`}>
+                  You currently have no tools. Confirm that you have removed them all, then continue.
+                </p>
+                <label className={checkboxLabelClass}>
+                  <input
+                    type="checkbox"
+                    checked={toolsRemovedAck}
+                    onChange={(event) => setToolsRemovedAck(event.target.checked)}
+                    className="mt-1 h-4 w-4 rounded border-slate-400"
+                  />
+                  <span>I have removed all tools and I understand there is no undo.</span>
+                </label>
+                <p className={`${modalBodyClass} mb-2`}>
+                  Type <strong>delete</strong> to continue:
+                </p>
+                <input
+                  type="text"
+                  value={deleteAccountConfirmText}
+                  onChange={(event) => setDeleteAccountConfirmText(event.target.value)}
+                  placeholder="Type 'delete' to continue"
+                  autoFocus
+                  onKeyDown={(event) => {
+                    if (event.key === 'Escape') resetDeleteFlow();
+                  }}
+                  className={modalInputClass}
+                />
+                <div className="flex justify-end gap-3">
+                  <button type="button" onClick={resetDeleteFlow} className={cancelButtonClass}>
+                    Cancel
+                  </button>
+                  <button
+                    type="button"
+                    disabled={!toolsRemovedAck || deleteAccountConfirmText.toLowerCase() !== 'delete'}
+                    onClick={() => {
+                      setFinalAck(false);
+                      setAgreeConfirmText('');
+                      setDeleteStep('final');
+                    }}
+                    className={confirmDangerButtonClass}
+                  >
+                    Continue
+                  </button>
+                </div>
+              </>
+            )}
+          </div>
+        </div>
+      )}
+
+      {deleteStep === 'final' && (
+        <div className={modalBackdropClass}>
+          <div
+            className={modalCardClass}
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="profile-delete-account-final-title"
+          >
+            <h3 id="profile-delete-account-final-title" className={modalTitleClass}>
+              Final confirmation
+            </h3>
+            <div className={warningBoxClass}>
+              <p className={warningTitleClass}>Last chance to keep this account.</p>
+              <p className={warningTextClass}>
+                Your profile and all remaining account data will be permanently removed. This cannot be undone.
+              </p>
+            </div>
+            <label className={checkboxLabelClass}>
+              <input
+                type="checkbox"
+                checked={finalAck}
+                onChange={(event) => setFinalAck(event.target.checked)}
+                className="mt-1 h-4 w-4 rounded border-slate-400"
+              />
+              <span>I understand that all data for this account will be permanently removed.</span>
+            </label>
+            <p className={`${modalBodyClass} mb-2`}>
+              Type <strong>I Agree</strong> to delete this account:
             </p>
             <input
               type="text"
-              value={deleteAccountConfirmText}
-              onChange={(e) => setDeleteAccountConfirmText(e.target.value)}
-              placeholder="Type 'delete' to confirm"
+              value={agreeConfirmText}
+              onChange={(event) => setAgreeConfirmText(event.target.value)}
+              placeholder='Type "I Agree"'
               autoFocus
-              onKeyDown={(e) => {
-                if (e.key === 'Escape') {
-                  setShowDeleteAccountConfirm(false);
-                  setDeleteAccountConfirmText('');
-                }
+              onKeyDown={(event) => {
+                if (event.key === 'Escape' && !isDeletingAccount) setDeleteStep('warn');
               }}
-              className={
-                isLight
-                  ? 'mb-4 w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900 placeholder-slate-500 focus:border-red-500/50 focus:outline-none focus:ring-1 focus:ring-red-500/50'
-                  : 'mb-4 w-full rounded-lg border border-slate-700 bg-slate-900/70 px-3 py-2 text-sm text-slate-100 placeholder-slate-500 focus:border-red-500/50 focus:outline-none focus:ring-1 focus:ring-red-500/50'
-              }
+              className={modalInputClass}
             />
-            <div className="flex gap-3">
+            <div className="flex justify-end gap-3">
               <button
                 type="button"
-                onClick={() => void handleDeleteAccount()}
-                disabled={deleteAccountConfirmText.toLowerCase() !== 'delete' || isDeletingAccount}
-                className="flex-1 rounded-lg bg-red-600 px-4 py-2 font-medium text-white transition-colors hover:bg-red-700 disabled:cursor-not-allowed disabled:opacity-50"
+                onClick={() => !isDeletingAccount && setDeleteStep('warn')}
+                disabled={isDeletingAccount}
+                className={cancelButtonClass}
               >
-                {isDeletingAccount ? 'Deleting...' : 'Delete account'}
+                Back
               </button>
               <button
                 type="button"
-                onClick={() => {
-                  setShowDeleteAccountConfirm(false);
-                  setDeleteAccountConfirmText('');
-                }}
-                disabled={isDeletingAccount}
-                className={secondaryOutlineButtonClass}
+                disabled={!finalAck || agreeConfirmText !== 'I Agree' || isDeletingAccount}
+                onClick={() => void handleDeleteAccount()}
+                className={confirmDangerButtonClass}
               >
-                Cancel
+                {isDeletingAccount ? 'Deleting...' : 'Delete account'}
               </button>
             </div>
           </div>

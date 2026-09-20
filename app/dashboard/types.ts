@@ -25,6 +25,7 @@ export type Tool = {
   updated_at: string | null;
   isOwned?: boolean;
   isActive?: boolean;
+  trialEligible?: boolean;
   trialStatus?: string | null;
   trialEndDate?: string | null;
   icons: {

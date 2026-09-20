@@ -58,6 +58,8 @@ AS $$
 $$;
 
 REVOKE ALL ON FUNCTION get_user_storage_usage(uuid) FROM PUBLIC;
+REVOKE ALL ON FUNCTION get_user_storage_usage(uuid) FROM anon;
+REVOKE ALL ON FUNCTION get_user_storage_usage(uuid) FROM authenticated;
 GRANT EXECUTE ON FUNCTION get_user_storage_usage(uuid) TO service_role;
 
 COMMIT;

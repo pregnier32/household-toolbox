@@ -1,6 +1,13 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getSession } from '@/lib/session';
 import { supabaseServer } from '@/lib/supabaseServer';
+import { deleteUserTool } from '@/lib/user-data-deletion';
+
+function sortOwnedTools<T extends { tools: { name: string } | null }>(tools: T[]): T[] {
+  return [...tools].sort((a, b) =>
+    (a.tools?.name || '').localeCompare(b.tools?.name || '', undefined, { sensitivity: 'base' })
+  );
+}
 
 // GET - Fetch current user's owned tools (active and inactive) with details
 export async function GET() {
@@ -39,8 +46,8 @@ export async function GET() {
       }, { status: 500 });
     }
 
-    return NextResponse.json({ 
-      tools: userTools || []
+    return NextResponse.json({
+      tools: sortOwnedTools(userTools || []),
     });
   } catch (error) {
     console.error('Error in my-tools API:', error);
@@ -48,9 +55,8 @@ export async function GET() {
   }
 }
 
-// PUT - Inactivate a user's tool
-export async function PUT(request: NextRequest) {
-  // Check if user is authenticated
+// DELETE - Permanently wipe one tool's records/files, then drop ownership
+export async function DELETE(request: NextRequest) {
   const user = await getSession();
 
   if (!user) {
@@ -65,66 +71,44 @@ export async function PUT(request: NextRequest) {
       return NextResponse.json({ error: 'Tool ID is required' }, { status: 400 });
     }
 
-    // Verify the tool belongs to the user
     const { data: userTool, error: fetchError } = await supabaseServer
       .from('users_tools')
-      .select('id, user_id, status')
+      .select('id, tool_id')
       .eq('id', toolId)
       .eq('user_id', user.id)
+      .in('status', ['active', 'inactive'])
       .single();
 
     if (fetchError || !userTool) {
       return NextResponse.json({ error: 'Tool not found or access denied' }, { status: 404 });
     }
 
-    if (userTool.status !== 'active' && userTool.status !== 'inactive') {
-      return NextResponse.json(
-        { error: 'Invalid tool status' },
-        { status: 400 }
-      );
-    }
+    const deleted = await deleteUserTool(user.id, userTool.tool_id);
 
-    if (userTool.status === 'inactive') {
-      const { data: reactivatedTool, error: reactivateError } = await supabaseServer
-        .from('users_tools')
-        .update({
-          status: 'active',
-          updated_at: new Date().toISOString(),
-        })
-        .eq('id', toolId)
-        .eq('user_id', user.id)
-        .select()
-        .single();
+    // Drop current ownership only. user_tool_entitlements stays so a later
+    // re-buy cannot start another 7-day trial.
 
-      if (reactivateError) {
-        console.error('Error reactivating tool:', reactivateError);
-        return NextResponse.json({ error: 'Failed to reactivate tool' }, { status: 500 });
-      }
-
-      return NextResponse.json({ success: true, tool: reactivatedTool, message: 'Tool reactivated' });
-    }
-
-    // Update tool status to inactive immediately
-    const { data: updatedTool, error: updateError } = await supabaseServer
+    const { error: ownershipError } = await supabaseServer
       .from('users_tools')
-      .update({
-        status: 'inactive',
-        updated_at: new Date().toISOString(),
-      })
+      .delete()
       .eq('id', toolId)
-      .eq('user_id', user.id)
-      .select()
-      .single();
+      .eq('user_id', user.id);
 
-    if (updateError) {
-      console.error('Error inactivating tool:', updateError);
-      return NextResponse.json({ error: 'Failed to inactivate tool' }, { status: 500 });
+    if (ownershipError) {
+      console.error('Error removing tool ownership after data wipe:', ownershipError);
+      return NextResponse.json({ error: 'Failed to remove tool' }, { status: 500 });
     }
 
-    return NextResponse.json({ success: true, tool: updatedTool });
+    return NextResponse.json({
+      success: true,
+      toolName: deleted.toolName,
+      message: `${deleted.toolName} was removed`,
+    });
   } catch (error) {
-    console.error('Error in my-tools API:', error);
-    return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
+    console.error('Error removing user tool:', error);
+    return NextResponse.json({
+      error: error instanceof Error ? error.message : 'Failed to remove tool',
+    }, { status: 500 });
   }
 }
 

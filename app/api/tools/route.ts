@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import { getSession } from '@/lib/session';
 import { supabaseServer } from '@/lib/supabaseServer';
+import { getUsedTrialToolIds, toolOffersTrial } from '@/lib/user-tool-entitlements';
 
 // GET - Fetch all tools with their icons for authenticated users
 export async function GET() {
@@ -117,13 +118,22 @@ export async function GET() {
       (userTools || []).filter((ut) => ut.status === 'active').map((ut) => ut.tool_id)
     );
 
+    let usedTrialToolIds = new Set<string>();
+    try {
+      usedTrialToolIds = await getUsedTrialToolIds(user.id);
+    } catch (entitlementError) {
+      console.error('Error fetching tool entitlements:', entitlementError);
+    }
+
     // Attach icons to tools and mark if user owns them
     const toolsWithIcons = allTools?.map((tool) => {
+      const offersTrial = toolOffersTrial(tool);
       return {
         ...tool,
         icons: iconsByTool[tool.id] || {},
         isOwned: ownedToolIds.has(tool.id),
         isActive: activeToolIds.has(tool.id),
+        trialEligible: offersTrial && !usedTrialToolIds.has(tool.id),
         trialStatus: null,
         trialEndDate: null,
       };

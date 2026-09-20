@@ -1,6 +1,23 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getSession } from '@/lib/session';
 import { supabaseServer } from '@/lib/supabaseServer';
+import { ensureToolEntitlement, toolOffersTrial } from '@/lib/user-tool-entitlements';
+
+function purchaseMessage(trialGranted: boolean, isReturning: boolean): string {
+  if (trialGranted) {
+    return '7-day free trial started. You will not be charged until after 7 days.';
+  }
+  if (isReturning) {
+    return 'Tool added. Your 7-day trial for this tool was already used, so billing starts with this purchase.';
+  }
+  return 'Tool purchased successfully';
+}
+
+async function recordEntitlement(userId: string, tool: { id: string; name: string; price: number }) {
+  return ensureToolEntitlement(userId, tool.id, {
+    grantTrial: toolOffersTrial(tool),
+  });
+}
 
 // POST - Purchase a tool (add to users_tools table)
 export async function POST(request: NextRequest) {
@@ -22,7 +39,7 @@ export async function POST(request: NextRequest) {
     // Fetch the tool to get its price
     const { data: tool, error: toolError } = await supabaseServer
       .from('tools')
-      .select('id, price, status')
+      .select('id, name, price, status')
       .eq('id', toolId)
       .single();
 
@@ -69,7 +86,7 @@ export async function POST(request: NextRequest) {
         );
       }
 
-      // Reactivate inactive subscription
+      // Reactivate inactive subscription (no new trial)
       const { data: updatedUserTool, error: updateError } = await supabaseServer
         .from('users_tools')
         .update({
@@ -86,11 +103,16 @@ export async function POST(request: NextRequest) {
         return NextResponse.json({ error: 'Failed to reactivate tool' }, { status: 500 });
       }
 
+      const entitlement = await recordEntitlement(user.id, tool);
       return NextResponse.json({
-        message: 'Tool reactivated',
-        userTool: updatedUserTool
+        message: purchaseMessage(false, true),
+        userTool: updatedUserTool,
+        trialGranted: false,
+        trialUsed: entitlement.trialUsed,
       });
     }
+
+    const entitlement = await recordEntitlement(user.id, tool);
 
     // Insert new record into users_tools table as active
     const insertData = {
@@ -115,7 +137,12 @@ export async function POST(request: NextRequest) {
     }
 
     return NextResponse.json(
-      { message: 'Tool purchased successfully', userTool: newUserTool },
+      {
+        message: purchaseMessage(entitlement.trialGranted, !entitlement.isFirstStart),
+        userTool: newUserTool,
+        trialGranted: entitlement.trialGranted,
+        trialUsed: entitlement.trialUsed,
+      },
       { status: 201 }
     );
   } catch (error) {

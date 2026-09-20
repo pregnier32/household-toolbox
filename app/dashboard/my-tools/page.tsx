@@ -76,13 +76,32 @@ export default function MyToolsPage() {
     ? 'text-right text-sm font-medium text-emerald-700'
     : 'text-right text-sm font-medium text-emerald-400';
 
-  const reactivateButtonClass = isLight
-    ? 'rounded bg-emerald-100 px-3 py-1 text-xs font-semibold text-emerald-900 transition-colors hover:bg-emerald-200 disabled:opacity-50'
-    : 'rounded bg-emerald-500/20 px-3 py-1 text-xs font-medium text-emerald-300 transition-colors hover:bg-emerald-500/30 disabled:opacity-50';
+  const removeButtonClass = isLight
+    ? 'rounded bg-red-600 px-3 py-1 text-xs font-semibold text-white transition-colors hover:bg-red-700 disabled:opacity-50'
+    : 'rounded bg-red-600 px-3 py-1 text-xs font-semibold text-white transition-colors hover:bg-red-500 disabled:opacity-50';
 
-  const inactivateButtonClass = isLight
-    ? 'rounded bg-red-100 px-3 py-1 text-xs font-semibold text-red-900 transition-colors hover:bg-red-200 disabled:opacity-50'
-    : 'rounded bg-red-500/20 px-3 py-1 text-xs font-medium text-red-300 transition-colors hover:bg-red-500/30 disabled:opacity-50';
+  const modalBackdropClass = 'fixed inset-0 z-[60] flex items-center justify-center bg-black/60 p-4';
+  const modalCardClass = isLight
+    ? 'w-full max-w-lg rounded-lg border border-slate-200 bg-white p-6 shadow-xl'
+    : 'w-full max-w-lg rounded-lg border border-slate-700 bg-slate-900 p-6 shadow-xl';
+  const modalTitleClass = isLight ? 'mb-2 text-xl font-semibold text-slate-900' : 'mb-2 text-xl font-semibold text-slate-50';
+  const modalBodyClass = isLight ? 'text-sm text-slate-700' : 'text-sm text-slate-300';
+  const warningBoxClass = isLight
+    ? 'mb-4 rounded-lg border border-red-300 bg-red-50 px-4 py-3'
+    : 'mb-4 rounded-lg border border-red-500/50 bg-red-500/10 px-4 py-3';
+  const warningTitleClass = isLight ? 'mb-2 font-semibold text-red-700' : 'mb-2 font-semibold text-red-300';
+  const warningTextClass = isLight ? 'text-sm text-red-600' : 'text-sm text-red-200';
+  const checkboxLabelClass = isLight
+    ? 'mb-4 flex items-start gap-3 text-sm text-slate-800'
+    : 'mb-4 flex items-start gap-3 text-sm text-slate-200';
+  const modalInputClass = isLight
+    ? 'mb-4 w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900 placeholder-slate-500 focus:border-red-500/50 focus:outline-none focus:ring-1 focus:ring-red-500/50'
+    : 'mb-4 w-full rounded-lg border border-slate-700 bg-slate-900/70 px-3 py-2 text-sm text-slate-100 placeholder-slate-500 focus:border-red-500/50 focus:outline-none focus:ring-1 focus:ring-red-500/50';
+  const cancelButtonClass = isLight
+    ? 'rounded-lg border border-slate-300 bg-white px-4 py-2 text-sm font-medium text-slate-700 transition-colors hover:bg-slate-100 disabled:opacity-50'
+    : 'rounded-lg border border-slate-700 bg-slate-800 px-4 py-2 text-sm font-medium text-slate-300 transition-colors hover:bg-slate-700 disabled:opacity-50';
+  const confirmDangerButtonClass =
+    'rounded-lg bg-red-600 px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-red-700 disabled:cursor-not-allowed disabled:opacity-50';
 
   const totalBoxClass = isLight
     ? 'rounded-lg border border-emerald-200 bg-emerald-50 p-6'
@@ -115,7 +134,13 @@ export default function MyToolsPage() {
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
   const [user, setUser] = useState<{ id?: string; firstName?: string; lastName?: string } | null>(null);
-  const [inactivatingId, setInactivatingId] = useState<string | null>(null);
+  const [removeTool, setRemoveTool] = useState<UserTool | null>(null);
+  const [removeStep, setRemoveStep] = useState<'warn' | 'final' | null>(null);
+  const [exportedAck, setExportedAck] = useState(false);
+  const [deleteConfirmText, setDeleteConfirmText] = useState('');
+  const [finalAck, setFinalAck] = useState(false);
+  const [agreeConfirmText, setAgreeConfirmText] = useState('');
+  const [isRemoving, setIsRemoving] = useState(false);
   const router = useRouter();
 
   useEffect(() => {
@@ -149,7 +174,10 @@ export default function MyToolsPage() {
         throw new Error(data.error || 'Failed to load tools');
       }
 
-      setTools(data.tools || []);
+      const sorted = [...(data.tools || [])].sort((a: UserTool, b: UserTool) =>
+        (a.tools?.name || '').localeCompare(b.tools?.name || '', undefined, { sensitivity: 'base' })
+      );
+      setTools(sorted);
       setIsLoading(false);
     } catch (err) {
       console.error('Error loading tools:', err);
@@ -178,44 +206,72 @@ export default function MyToolsPage() {
     }).format(amount);
   };
 
-  const handleToggleActive = async (toolId: string) => {
-    if (!toolId) return;
+  const daysOwnedLabel = (createdAt: string) => {
+    const start = new Date(createdAt);
+    if (Number.isNaN(start.getTime())) return 'an unknown number of days';
+    const days = Math.max(0, Math.floor((Date.now() - start.getTime()) / (1000 * 60 * 60 * 24)));
+    if (days === 0) return 'less than a day';
+    if (days === 1) return '1 day';
+    return `${days} days`;
+  };
 
-    setInactivatingId(toolId);
+  const resetRemoveFlow = () => {
+    setRemoveTool(null);
+    setRemoveStep(null);
+    setExportedAck(false);
+    setDeleteConfirmText('');
+    setFinalAck(false);
+    setAgreeConfirmText('');
+    setIsRemoving(false);
+  };
+
+  const openRemoveFlow = (tool: UserTool) => {
+    setError(null);
+    setSuccess(null);
+    setRemoveTool(tool);
+    setRemoveStep('warn');
+    setExportedAck(false);
+    setDeleteConfirmText('');
+    setFinalAck(false);
+    setAgreeConfirmText('');
+  };
+
+  const handleRemoveTool = async () => {
+    if (!removeTool) return;
+    if (agreeConfirmText !== 'I Agree' || !finalAck) return;
+
+    setIsRemoving(true);
     setError(null);
     setSuccess(null);
 
     try {
       const response = await fetch('/api/my-tools', {
-        method: 'PUT',
+        method: 'DELETE',
         headers: {
           'Content-Type': 'application/json',
         },
         body: JSON.stringify({
-          toolId: toolId,
+          toolId: removeTool.id,
         }),
       });
 
       const data = await response.json();
 
       if (!response.ok) {
-        throw new Error(data.error || 'Failed to update tool');
+        throw new Error(data.error || 'Failed to remove tool');
       }
 
-      const currentTool = tools.find(t => t.id === toolId);
-      const isInactive = currentTool?.status === 'inactive';
-      setSuccess(isInactive ? 'Tool reactivated successfully' : 'Tool inactivated successfully');
-
-      // Reload tools after a short delay to show success message
+      const removedName = data.toolName || removeTool.tools?.name || 'Tool';
+      resetRemoveFlow();
+      setSuccess(`${removedName} was removed. All records and documents for that tool are gone.`);
+      loadTools();
       setTimeout(() => {
-        loadTools();
         setSuccess(null);
-      }, 1500);
+      }, 2500);
     } catch (err) {
-      console.error('Error updating tool:', err);
-      setError(err instanceof Error ? err.message : 'Failed to update tool');
-    } finally {
-      setInactivatingId(null);
+      console.error('Error removing tool:', err);
+      setError(err instanceof Error ? err.message : 'Failed to remove tool');
+      setIsRemoving(false);
     }
   };
 
@@ -262,7 +318,7 @@ export default function MyToolsPage() {
                   d="M10 19l-7-7m0 0l7-7m-7 7h18"
                 />
               </svg>
-              <span>Back to Dashboard</span>
+              <span>Back to Toolbox</span>
             </button>
             <UserMenu
               userName={`${user?.firstName || ''} ${user?.lastName || ''}`.trim() || 'Account'}
@@ -353,16 +409,12 @@ export default function MyToolsPage() {
                           <td className="px-6 py-4 text-right">
                             <button
                               type="button"
-                              onClick={() => handleToggleActive(tool.id)}
-                              disabled={inactivatingId === tool.id}
-                              className={isInactive ? reactivateButtonClass : inactivateButtonClass}
-                              title={tool.status === 'inactive' ? 'Reactivate tool' : 'Inactivate tool'}
+                              onClick={() => openRemoveFlow(tool)}
+                              disabled={isRemoving}
+                              className={removeButtonClass}
+                              title="Remove tool and delete all of its data"
                             >
-                              {inactivatingId === tool.id
-                                ? 'Updating...'
-                                : tool.status === 'inactive'
-                                  ? 'Reactivate'
-                                  : 'Inactivate'}
+                              Remove
                             </button>
                           </td>
                         </tr>
@@ -399,6 +451,138 @@ export default function MyToolsPage() {
           </>
         )}
       </div>
+
+      {removeTool && removeStep === 'warn' && (
+        <div className={modalBackdropClass} onClick={() => !isRemoving && resetRemoveFlow()}>
+          <div
+            className={modalCardClass}
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="my-tools-remove-warn-title"
+            onClick={(event) => event.stopPropagation()}
+          >
+            <h3 id="my-tools-remove-warn-title" className={modalTitleClass}>
+              Remove {removeTool.tools?.name || 'this tool'}
+            </h3>
+            <div className={warningBoxClass}>
+              <p className={warningTitleClass}>This permanently deletes this tool&apos;s data.</p>
+              <p className={warningTextClass}>
+                Removing {removeTool.tools?.name || 'this tool'} deletes all of its records, documents, and calendar pins
+                for your account. Your other tools are not affected. There is no undo.
+              </p>
+            </div>
+            <p className={`${modalBodyClass} mb-3`}>
+              You have had this tool for <strong>{daysOwnedLabel(removeTool.created_at)}</strong>
+              {removeTool.created_at ? ` (since ${formatDate(removeTool.created_at)})` : ''}.
+            </p>
+            <p className={`${modalBodyClass} mb-4`}>
+              Export this tool to PDF from the tool itself before you continue. Removing it will not create a backup.
+            </p>
+            <label className={checkboxLabelClass}>
+              <input
+                type="checkbox"
+                checked={exportedAck}
+                onChange={(event) => setExportedAck(event.target.checked)}
+                className="mt-1 h-4 w-4 rounded border-slate-400"
+              />
+              <span>I have exported this tool to PDF and I understand there is no undo.</span>
+            </label>
+            <p className={`${modalBodyClass} mb-2`}>
+              Type <strong>delete</strong> to continue:
+            </p>
+            <input
+              type="text"
+              value={deleteConfirmText}
+              onChange={(event) => setDeleteConfirmText(event.target.value)}
+              placeholder="Type 'delete' to continue"
+              autoFocus
+              onKeyDown={(event) => {
+                if (event.key === 'Escape') resetRemoveFlow();
+              }}
+              className={modalInputClass}
+            />
+            <div className="flex justify-end gap-3">
+              <button type="button" onClick={resetRemoveFlow} className={cancelButtonClass}>
+                Cancel
+              </button>
+              <button
+                type="button"
+                disabled={!exportedAck || deleteConfirmText.toLowerCase() !== 'delete'}
+                onClick={() => {
+                  setFinalAck(false);
+                  setAgreeConfirmText('');
+                  setRemoveStep('final');
+                }}
+                className={confirmDangerButtonClass}
+              >
+                Continue
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {removeTool && removeStep === 'final' && (
+        <div className={modalBackdropClass}>
+          <div
+            className={modalCardClass}
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="my-tools-remove-final-title"
+          >
+            <h3 id="my-tools-remove-final-title" className={modalTitleClass}>
+              Final confirmation
+            </h3>
+            <div className={warningBoxClass}>
+              <p className={warningTitleClass}>Last chance to keep this data.</p>
+              <p className={warningTextClass}>
+                All data for {removeTool.tools?.name || 'this tool'} will be permanently removed. This cannot be undone.
+              </p>
+            </div>
+            <label className={checkboxLabelClass}>
+              <input
+                type="checkbox"
+                checked={finalAck}
+                onChange={(event) => setFinalAck(event.target.checked)}
+                className="mt-1 h-4 w-4 rounded border-slate-400"
+              />
+              <span>I understand that all data for this tool will be permanently removed.</span>
+            </label>
+            <p className={`${modalBodyClass} mb-2`}>
+              Type <strong>I Agree</strong> to remove this tool:
+            </p>
+            <input
+              type="text"
+              value={agreeConfirmText}
+              onChange={(event) => setAgreeConfirmText(event.target.value)}
+              placeholder='Type "I Agree"'
+              autoFocus
+              onKeyDown={(event) => {
+                if (event.key === 'Escape' && !isRemoving) setRemoveStep('warn');
+              }}
+              className={modalInputClass}
+            />
+            <div className="flex justify-end gap-3">
+              <button
+                type="button"
+                onClick={() => !isRemoving && setRemoveStep('warn')}
+                disabled={isRemoving}
+                className={cancelButtonClass}
+              >
+                Back
+              </button>
+              <button
+                type="button"
+                disabled={!finalAck || agreeConfirmText !== 'I Agree' || isRemoving}
+                onClick={() => void handleRemoveTool()}
+                className={confirmDangerButtonClass}
+              >
+                {isRemoving ? 'Removing...' : 'Remove tool'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </main>
   );
 }
