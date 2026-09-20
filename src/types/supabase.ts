@@ -94,6 +94,62 @@ export type Database = {
           },
         ]
       }
+      release_notes: {
+        Row: {
+          category: string
+          content: string | null
+          created_at: string
+          created_by: string | null
+          featured: boolean
+          id: string
+          link_text: string | null
+          link_url: string | null
+          publish_date: string
+          status: string
+          summary: string
+          title: string
+          updated_at: string
+        }
+        Insert: {
+          category: string
+          content?: string | null
+          created_at?: string
+          created_by?: string | null
+          featured?: boolean
+          id?: string
+          link_text?: string | null
+          link_url?: string | null
+          publish_date?: string
+          status?: string
+          summary: string
+          title: string
+          updated_at?: string
+        }
+        Update: {
+          category?: string
+          content?: string | null
+          created_at?: string
+          created_by?: string | null
+          featured?: boolean
+          id?: string
+          link_text?: string | null
+          link_url?: string | null
+          publish_date?: string
+          status?: string
+          summary?: string
+          title?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "release_notes_created_by_fkey"
+            columns: ["created_by"]
+            isOneToOne: false
+            referencedRelation: "users"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       settings: {
         Row: {
           created_at: string | null
@@ -8062,6 +8118,42 @@ export type Database = {
           user_status?: string
         }
         Relationships: []
+      }
+      user_release_note_reads: {
+        Row: {
+          last_viewed_id: string | null
+          last_viewed_publish_date: string
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          last_viewed_id?: string | null
+          last_viewed_publish_date: string
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          last_viewed_id?: string | null
+          last_viewed_publish_date?: string
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "user_release_note_reads_last_viewed_id_fkey"
+            columns: ["last_viewed_id"]
+            isOneToOne: false
+            referencedRelation: "release_notes"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "user_release_note_reads_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: true
+            referencedRelation: "users"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       user_tool_entitlements: {
         Row: {

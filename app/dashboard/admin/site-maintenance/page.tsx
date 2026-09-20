@@ -164,7 +164,7 @@ export default function SiteMaintenancePage() {
           </div>
         )}
 
-        <div className="grid gap-4 md:grid-cols-3">
+        <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
           <button
             onClick={() => setOpenModal('user-registration')}
             className="rounded-lg border border-slate-800 bg-slate-900/70 p-6 text-left hover:border-emerald-500/50 transition-colors"
@@ -197,6 +197,24 @@ export default function SiteMaintenancePage() {
             </div>
             <div className="flex items-center justify-between">
               <span className="text-xs text-slate-400">Manage users</span>
+              <svg className="h-5 w-5 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+              </svg>
+            </div>
+          </button>
+
+          <button
+            onClick={() => router.push('/dashboard/admin/release-notes')}
+            className="rounded-lg border border-slate-800 bg-slate-900/70 p-6 text-left hover:border-emerald-500/50 transition-colors"
+          >
+            <div className="mb-4">
+              <h2 className="text-lg font-semibold text-slate-50 mb-2">Release Notes</h2>
+              <p className="text-sm text-slate-400">
+                Publish What&apos;s New updates for tools, features, and important fixes
+              </p>
+            </div>
+            <div className="flex items-center justify-between">
+              <span className="text-xs text-slate-400">Manage updates</span>
               <svg className="h-5 w-5 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
               </svg>
