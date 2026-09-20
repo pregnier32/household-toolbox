@@ -2,13 +2,24 @@
 
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useTheme } from './AppThemeProvider';
+import { useAppNotice } from './AppNotice';
+import { AttachmentButton } from './AttachmentButton';
+import { AttachmentModal } from './AttachmentModal';
+import {
+  canPreviewAttachment,
+  createPendingAttachment,
+  isImageAttachment,
+  isPdfAttachment,
+  type AttachmentItem,
+} from '@/lib/attachments';
 import {
   addDays,
   addMonthsSetDay,
-  advanceFrom,
   compareIso,
   emptyServiceProvider,
+  expandOccurrences,
   formatCost,
+  HmsAttachment,
   HmsCategory,
   HmsCompletion,
   HmsFrequency,
@@ -36,6 +47,7 @@ import {
 const API_BASE = '/api/tools/home-maintenance-schedule';
 
 export type {
+  HmsAttachment,
   HmsCategory,
   HmsCompletion,
   HmsFrequency,
@@ -87,6 +99,12 @@ type DeleteTarget =
   | { kind: 'item'; id: string }
   | { kind: 'category'; id: string }
   | { kind: 'schedule'; id: string };
+
+type AttachmentTarget =
+  | { kind: 'new-item' }
+  | { kind: 'item'; itemId: string }
+  | { kind: 'new-completion' }
+  | { kind: 'completion'; completionId: string };
 
 type OccurrenceRow = {
   taskId: string;
@@ -172,20 +190,6 @@ function endOfMonth(iso: string): string {
   const date = parseLocalDate(iso);
   const last = new Date(date.getFullYear(), date.getMonth() + 1, 0);
   return `${last.getFullYear()}-${String(last.getMonth() + 1).padStart(2, '0')}-${String(last.getDate()).padStart(2, '0')}`;
-}
-
-function expandOccurrences(nextDueDate: string, frequency: HmsFrequency, windowStart: string, windowEnd: string): string[] {
-  const dates: string[] = [];
-  let cursor = nextDueDate;
-  let guard = 0;
-  while (compareIso(cursor, windowEnd) <= 0 && guard < 200) {
-    if (compareIso(cursor, windowStart) >= 0) dates.push(cursor);
-    const next = advanceFrom(cursor, frequency);
-    if (compareIso(next, cursor) <= 0) break;
-    cursor = next;
-    guard += 1;
-  }
-  return dates;
 }
 
 function occurrenceStatus(date: string, today: string): OccurrenceStatus {
@@ -743,7 +747,57 @@ function reminderSummary(days: number | null | undefined): string {
   return `${days} day${days === 1 ? '' : 's'} before due`;
 }
 
+function DashboardCalendarSwitch({
+  isOn,
+  onToggle,
+  isLight,
+}: {
+  isOn: boolean;
+  onToggle: () => void;
+  isLight: boolean;
+}) {
+  return (
+    <label className="flex items-center gap-2 cursor-pointer" title="Add to dashboard calendar">
+      <span className={`text-xs whitespace-nowrap ${isLight ? 'text-slate-600' : 'text-slate-400'}`}>
+        Add to dashboard calendar
+      </span>
+      <button
+        type="button"
+        role="switch"
+        aria-checked={isOn}
+        aria-label="Add to dashboard calendar"
+        title="Add to dashboard calendar"
+        onClick={onToggle}
+        className={`relative inline-flex h-6 w-11 flex-shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors focus:outline-none focus:ring-2 focus:ring-emerald-500/50 focus:ring-offset-2 ${
+          isLight ? 'focus:ring-offset-white' : 'focus:ring-offset-slate-900'
+        } ${isOn ? 'bg-emerald-500' : isLight ? 'bg-slate-300' : 'bg-slate-700'}`}
+      >
+        <span
+          className={`pointer-events-none inline-block h-5 w-5 transform rounded-full bg-white shadow ring-0 transition ${
+            isOn ? 'translate-x-5' : 'translate-x-1'
+          }`}
+        />
+      </button>
+    </label>
+  );
+}
+
+function OnCalendarChip({ isLight }: { isLight: boolean }) {
+  return (
+    <span
+      className={
+        isLight
+          ? 'inline-flex items-center rounded-full bg-emerald-100 px-2 py-0.5 text-xs font-medium text-emerald-800'
+          : 'inline-flex items-center rounded-full bg-emerald-500/20 px-2 py-0.5 text-xs font-medium text-emerald-300'
+      }
+    >
+      On calendar
+    </span>
+  );
+}
+
 export function HomeMaintenanceScheduleTool({ toolId }: HomeMaintenanceScheduleToolProps) {
+  const { showError } = useAppNotice();
 
   const { resolvedTheme } = useTheme();
   const isLight = resolvedTheme === 'light';
@@ -866,6 +920,7 @@ export function HomeMaintenanceScheduleTool({ toolId }: HomeMaintenanceScheduleT
   const [activateNotes, setActivateNotes] = useState('');
   const [activateProvider, setActivateProvider] = useState<HmsServiceProvider>(emptyServiceProvider);
   const [activateReminderDays, setActivateReminderDays] = useState<number | null>(null);
+  const [activateAddToDashboard, setActivateAddToDashboard] = useState(false);
   const [showActivateOptional, setShowActivateOptional] = useState(false);
 
   const [detailTaskId, setDetailTaskId] = useState<string | null>(null);
@@ -878,12 +933,18 @@ export function HomeMaintenanceScheduleTool({ toolId }: HomeMaintenanceScheduleT
   const [detailDescription, setDetailDescription] = useState('');
   const [detailProvider, setDetailProvider] = useState<HmsServiceProvider>(emptyServiceProvider);
   const [detailReminderDays, setDetailReminderDays] = useState<number | null>(null);
+  const [detailAddToDashboard, setDetailAddToDashboard] = useState(false);
 
   const [completeOccurrence, setCompleteOccurrence] = useState<{ taskId: string; scheduledDate: string } | null>(null);
   const [completeBasis, setCompleteBasis] = useState<'today' | 'scheduled'>('today');
   const [completeNotes, setCompleteNotes] = useState('');
   const [completeCost, setCompleteCost] = useState('');
   const [showCompleteOptional, setShowCompleteOptional] = useState(false);
+  const [pendingItemAttachments, setPendingItemAttachments] = useState<AttachmentItem[]>([]);
+  const [pendingCompletionAttachments, setPendingCompletionAttachments] = useState<AttachmentItem[]>([]);
+  const [attachmentModal, setAttachmentModal] = useState<AttachmentTarget | null>(null);
+  const [attachmentBusy, setAttachmentBusy] = useState(false);
+  const [viewPreview, setViewPreview] = useState<AttachmentItem | null>(null);
 
   const [deleteTarget, setDeleteTarget] = useState<DeleteTarget | null>(null);
   const [deleteConfirmText, setDeleteConfirmText] = useState('');
@@ -899,9 +960,9 @@ export function HomeMaintenanceScheduleTool({ toolId }: HomeMaintenanceScheduleT
   const applyData = useCallback((data: HmsScheduleData) => {
     const nextCategories = data.categories ?? [];
     setCategories(nextCategories);
-    setLibraryItems(data.items ?? []);
+    setLibraryItems((data.items ?? []).map((item) => ({ ...item, attachments: item.attachments ?? [] })));
     setScheduledTasks(data.tasks ?? []);
-    setCompletions(data.completions ?? []);
+    setCompletions((data.completions ?? []).map((row) => ({ ...row, attachments: row.attachments ?? [] })));
     setLibraryCategoryId((prev) => {
       if (prev && nextCategories.some((category) => category.id === prev)) return prev;
       return [...nextCategories].sort((a, b) => a.name.localeCompare(b.name))[0]?.id ?? '';
@@ -933,6 +994,20 @@ export function HomeMaintenanceScheduleTool({ toolId }: HomeMaintenanceScheduleT
     return () => window.clearTimeout(timer);
   }, [banner]);
 
+  const refreshData = useCallback(async () => {
+    if (!toolId) {
+      setCategories([]);
+      setLibraryItems([]);
+      setScheduledTasks([]);
+      setCompletions([]);
+      return;
+    }
+    const response = await fetch(`${API_BASE}?toolId=${encodeURIComponent(toolId)}`);
+    const data = await response.json().catch(() => ({ error: 'Failed to load Home Maintenance Schedule' }));
+    if (!response.ok) throw new Error(data.error || 'Failed to load Home Maintenance Schedule');
+    applyData(data as HmsScheduleData);
+  }, [toolId, applyData]);
+
   useEffect(() => {
     const loadData = async () => {
       if (!toolId) {
@@ -944,10 +1019,7 @@ export function HomeMaintenanceScheduleTool({ toolId }: HomeMaintenanceScheduleT
       }
       setIsLoading(true);
       try {
-        const response = await fetch(`${API_BASE}?toolId=${encodeURIComponent(toolId)}`);
-        const data = await response.json().catch(() => ({ error: 'Failed to load Home Maintenance Schedule' }));
-        if (!response.ok) throw new Error(data.error || 'Failed to load Home Maintenance Schedule');
-        applyData(data as HmsScheduleData);
+        await refreshData();
       } catch (error) {
         setCategories([]);
         setLibraryItems([]);
@@ -959,17 +1031,26 @@ export function HomeMaintenanceScheduleTool({ toolId }: HomeMaintenanceScheduleT
       }
     };
     loadData();
-  }, [toolId, applyData]);
+  }, [toolId, refreshData]);
 
   useEffect(() => {
     const onKey = (event: KeyboardEvent) => {
       if (event.key !== 'Escape') return;
+      if (attachmentModal) {
+        setAttachmentModal(null);
+        setViewPreview(null);
+        return;
+      }
       if (deleteTarget) {
         setDeleteTarget(null);
         setDeleteConfirmText('');
         return;
       }
       if (completeOccurrence) {
+        pendingCompletionAttachments.forEach((item) => {
+          if (item.url) URL.revokeObjectURL(item.url);
+        });
+        setPendingCompletionAttachments([]);
         setCompleteOccurrence(null);
         return;
       }
@@ -986,7 +1067,7 @@ export function HomeMaintenanceScheduleTool({ toolId }: HomeMaintenanceScheduleT
     };
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
-  }, [deleteTarget, completeOccurrence, activateItemId, detailTaskId, showExportPopup]);
+  }, [attachmentModal, deleteTarget, completeOccurrence, pendingCompletionAttachments, activateItemId, detailTaskId, showExportPopup]);
 
   const sortedCategories = useMemo(
     () => [...categories].sort((a, b) => a.name.localeCompare(b.name)),
@@ -994,6 +1075,182 @@ export function HomeMaintenanceScheduleTool({ toolId }: HomeMaintenanceScheduleT
   );
 
   const categoryName = (categoryId: string) => categories.find((category) => category.id === categoryId)?.name ?? 'Uncategorized';
+  const itemAttachmentCount = (itemId: string) =>
+    libraryItems.find((item) => item.id === itemId)?.attachments?.length ?? 0;
+  const completionAttachmentCount = (completionId: string) =>
+    completions.find((row) => row.id === completionId)?.attachments?.length ?? 0;
+
+  const savedItemForModal =
+    attachmentModal?.kind === 'item' ? libraryItems.find((item) => item.id === attachmentModal.itemId) : undefined;
+  const savedCompletionForModal =
+    attachmentModal?.kind === 'completion'
+      ? completions.find((row) => row.id === attachmentModal.completionId)
+      : undefined;
+
+  const modalFiles: AttachmentItem[] =
+    attachmentModal?.kind === 'new-item'
+      ? pendingItemAttachments
+      : attachmentModal?.kind === 'new-completion'
+        ? pendingCompletionAttachments
+        : attachmentModal?.kind === 'item'
+          ? (savedItemForModal?.attachments || []).map((item) => ({
+              id: item.id,
+              name: item.name,
+              size: item.size,
+              type: item.type,
+            }))
+          : attachmentModal?.kind === 'completion'
+            ? (savedCompletionForModal?.attachments || []).map((item) => ({
+                id: item.id,
+                name: item.name,
+                size: item.size,
+                type: item.type,
+              }))
+            : [];
+
+  const modalTitle =
+    attachmentModal?.kind === 'new-item'
+      ? itemForm.name.trim() || 'New maintenance item'
+      : attachmentModal?.kind === 'new-completion'
+        ? 'This completion'
+        : attachmentModal?.kind === 'item'
+          ? savedItemForModal?.name || 'Maintenance item'
+          : attachmentModal?.kind === 'completion'
+            ? savedCompletionForModal
+              ? `Completed ${formatDateForDisplay(savedCompletionForModal.completedDate)}`
+              : 'Completion'
+            : 'Attachments';
+
+  const fetchHmsAttachmentBlob = async (attachmentId: string, inline = false) => {
+    const query = inline ? '?inline=1' : '';
+    const response = await fetch(`${API_BASE}/attachments/${attachmentId}${query}`);
+    if (!response.ok) {
+      const errorData = await response.json().catch(() => ({ error: 'Failed to open file' }));
+      throw new Error(errorData.error || 'Failed to open file');
+    }
+    return response.blob();
+  };
+
+  const handleViewAttachment = async (item: AttachmentItem) => {
+    if (item.file && item.url) {
+      if (isImageAttachment(item.type)) {
+        setViewPreview(item);
+        return;
+      }
+      if (isPdfAttachment(item.type, item.name)) {
+        window.open(item.url, '_blank', 'noopener,noreferrer');
+        return;
+      }
+      showError('This file type can’t be previewed in the browser. Use Download to save it.');
+      return;
+    }
+    try {
+      const blob = await fetchHmsAttachmentBlob(item.id, true);
+      const type = blob.type || item.type || '';
+      if (!canPreviewAttachment(type, item.name)) {
+        showError('This file type can’t be previewed in the browser. Use Download to save it.');
+        return;
+      }
+      const url = window.URL.createObjectURL(blob);
+      if (isImageAttachment(type)) {
+        setViewPreview({ ...item, type, url, size: item.size || blob.size });
+        return;
+      }
+      if (isPdfAttachment(type, item.name)) {
+        window.open(url, '_blank', 'noopener,noreferrer');
+      }
+    } catch (error) {
+      showBanner('error', error instanceof Error ? error.message : 'Failed to open file');
+    }
+  };
+
+  const handleDownloadAttachment = async (item: AttachmentItem): Promise<boolean> => {
+    if (item.file) return false;
+    try {
+      const blob = await fetchHmsAttachmentBlob(item.id);
+      const url = window.URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = url;
+      link.download = item.name || 'attachment';
+      document.body.appendChild(link);
+      link.click();
+      window.URL.revokeObjectURL(url);
+      document.body.removeChild(link);
+      return true;
+    } catch (error) {
+      showBanner('error', error instanceof Error ? error.message : 'Failed to download file');
+      return false;
+    }
+  };
+
+  const uploadHmsFile = async (file: File, owner: { itemId?: string; completionId?: string }) => {
+    if (!toolId) throw new Error('Tool ID is required');
+    const formData = new FormData();
+    formData.append('toolId', toolId);
+    if (owner.itemId) formData.append('itemId', owner.itemId);
+    if (owner.completionId) formData.append('completionId', owner.completionId);
+    formData.append('file', file);
+    const response = await fetch(`${API_BASE}/attachments`, { method: 'POST', body: formData });
+    const data = await response.json().catch(() => ({}));
+    if (!response.ok) throw new Error(data.error || 'Failed to add file');
+  };
+
+  const addSavedItemFiles = async (itemId: string, files: File[]) => {
+    setAttachmentBusy(true);
+    try {
+      for (const file of files) {
+        await uploadHmsFile(file, { itemId });
+      }
+      await refreshData();
+    } catch (error) {
+      showBanner('error', error instanceof Error ? error.message : 'Failed to add file');
+    } finally {
+      setAttachmentBusy(false);
+    }
+  };
+
+  const removeSavedItemFile = async (attachmentId: string) => {
+    if (!toolId) return;
+    setAttachmentBusy(true);
+    try {
+      const response = await fetch(`${API_BASE}/attachments`, {
+        method: 'DELETE',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ toolId, attachmentId }),
+      });
+      const data = await response.json().catch(() => ({}));
+      if (!response.ok) throw new Error(data.error || 'Failed to remove file');
+      await refreshData();
+    } catch (error) {
+      showBanner('error', error instanceof Error ? error.message : 'Failed to remove file');
+    } finally {
+      setAttachmentBusy(false);
+    }
+  };
+
+  const revokePending = (items: AttachmentItem[]) => {
+    items.forEach((item) => {
+      if (item.url) URL.revokeObjectURL(item.url);
+    });
+  };
+
+  const startAddingItem = () => {
+    revokePending(pendingItemAttachments);
+    setPendingItemAttachments([]);
+    setItemForm(emptyItemForm());
+    setIsAddingItem(true);
+  };
+
+  const cancelAddingItem = () => {
+    revokePending(pendingItemAttachments);
+    setPendingItemAttachments([]);
+    if (attachmentModal?.kind === 'new-item') {
+      setAttachmentModal(null);
+      setViewPreview(null);
+    }
+    setIsAddingItem(false);
+    setItemForm(emptyItemForm());
+  };
 
   const activeScheduleByItem = useMemo(() => {
     const map = new Map<string, HmsScheduledTask>();
@@ -1033,6 +1290,7 @@ export function HomeMaintenanceScheduleTool({ toolId }: HomeMaintenanceScheduleT
     setActivateNotes(existing?.notes || '');
     setActivateProvider(existing?.serviceProvider ? { ...existing.serviceProvider } : emptyServiceProvider());
     setActivateReminderDays(existing?.reminderDays ?? null);
+    setActivateAddToDashboard(existing?.addToDashboard === true);
     setShowActivateOptional(false);
   };
 
@@ -1051,6 +1309,7 @@ export function HomeMaintenanceScheduleTool({ toolId }: HomeMaintenanceScheduleT
         scheduleNotes: activateNotes.trim(),
         reminderDays: activateReminderDays,
         serviceProvider: activateProvider,
+        addToDashboard: activateAddToDashboard,
       });
       setActivateItemId(null);
       showBanner('success', `${item.name} is now on the schedule.`);
@@ -1074,6 +1333,7 @@ export function HomeMaintenanceScheduleTool({ toolId }: HomeMaintenanceScheduleT
     setDetailDescription(item.isDefault ? task.descriptionOverride : item.description);
     setDetailProvider({ ...task.serviceProvider });
     setDetailReminderDays(task.reminderDays);
+    setDetailAddToDashboard(task.addToDashboard === true);
     setDetailItemForm({
       name: item.name,
       categoryId: item.categoryId,
@@ -1109,6 +1369,7 @@ export function HomeMaintenanceScheduleTool({ toolId }: HomeMaintenanceScheduleT
         descriptionOverride: item.isDefault ? detailDescription.trim() : '',
         reminderDays: detailReminderDays,
         serviceProvider: detailProvider,
+        addToDashboard: detailAddToDashboard,
       });
       setDetailEditing(false);
       showBanner('success', 'Schedule updated.');
@@ -1148,9 +1409,21 @@ export function HomeMaintenanceScheduleTool({ toolId }: HomeMaintenanceScheduleT
     }
   };
 
+  const closeCompleteDialog = () => {
+    revokePending(pendingCompletionAttachments);
+    setPendingCompletionAttachments([]);
+    if (attachmentModal?.kind === 'new-completion') {
+      setAttachmentModal(null);
+      setViewPreview(null);
+    }
+    setCompleteOccurrence(null);
+  };
+
   const openComplete = (taskId: string, scheduledDate: string) => {
     setDetailTaskId(null);
     setDetailEditing(false);
+    revokePending(pendingCompletionAttachments);
+    setPendingCompletionAttachments([]);
     setCompleteOccurrence({ taskId, scheduledDate });
     setCompleteBasis('today');
     setCompleteNotes('');
@@ -1179,6 +1452,32 @@ export function HomeMaintenanceScheduleTool({ toolId }: HomeMaintenanceScheduleT
         completionNotes: completeNotes.trim(),
         cost,
       });
+      const completionId = typeof data.completionId === 'string' ? data.completionId : '';
+      if (completionId && pendingCompletionAttachments.length > 0) {
+        try {
+          for (const queued of pendingCompletionAttachments) {
+            if (!queued.file) continue;
+            await uploadHmsFile(queued.file, { completionId });
+          }
+          await refreshData();
+        } catch (uploadError) {
+          revokePending(pendingCompletionAttachments);
+          setPendingCompletionAttachments([]);
+          if (attachmentModal?.kind === 'new-completion') {
+            setAttachmentModal(null);
+            setViewPreview(null);
+          }
+          setCompleteOccurrence(null);
+          showBanner('error', uploadError instanceof Error ? uploadError.message : 'Task completed, but a file failed to upload.');
+          return;
+        }
+      }
+      revokePending(pendingCompletionAttachments);
+      setPendingCompletionAttachments([]);
+      if (attachmentModal?.kind === 'new-completion') {
+        setAttachmentModal(null);
+        setViewPreview(null);
+      }
       setCompleteOccurrence(null);
       const nextDueDate = typeof data.nextDueDate === 'string' ? data.nextDueDate : '';
       showBanner(
@@ -1204,6 +1503,35 @@ export function HomeMaintenanceScheduleTool({ toolId }: HomeMaintenanceScheduleT
         defaultLocation: itemForm.defaultLocation.trim(),
         ...itemCategoryPayload(itemForm),
       });
+      const createdItemId = typeof data.createdItemId === 'string' ? data.createdItemId : '';
+      if (createdItemId && pendingItemAttachments.length > 0) {
+        try {
+          for (const queued of pendingItemAttachments) {
+            if (!queued.file) continue;
+            await uploadHmsFile(queued.file, { itemId: createdItemId });
+          }
+          await refreshData();
+        } catch (uploadError) {
+          revokePending(pendingItemAttachments);
+          setPendingItemAttachments([]);
+          if (attachmentModal?.kind === 'new-item') {
+            setAttachmentModal(null);
+            setViewPreview(null);
+          }
+          if (typeof data.createdCategoryId === 'string') setLibraryCategoryId(data.createdCategoryId);
+          else if (itemForm.categoryId) setLibraryCategoryId(itemForm.categoryId);
+          setItemForm(emptyItemForm());
+          setIsAddingItem(false);
+          showBanner('error', uploadError instanceof Error ? uploadError.message : 'Item saved, but a file failed to upload.');
+          return;
+        }
+      }
+      revokePending(pendingItemAttachments);
+      setPendingItemAttachments([]);
+      if (attachmentModal?.kind === 'new-item') {
+        setAttachmentModal(null);
+        setViewPreview(null);
+      }
       if (typeof data.createdCategoryId === 'string') setLibraryCategoryId(data.createdCategoryId);
       else if (itemForm.categoryId) setLibraryCategoryId(itemForm.categoryId);
       setItemForm(emptyItemForm());
@@ -1684,7 +2012,11 @@ export function HomeMaintenanceScheduleTool({ toolId }: HomeMaintenanceScheduleT
                 return (
                   <div key={item.id} className={nestedCardClass}>
                     {renderItemFields(editItemForm, setEditItemForm, item)}
-                    <div className="flex gap-3 mt-4">
+                    <div className="flex flex-wrap items-center gap-3 mt-4">
+                      <AttachmentButton
+                        count={item.attachments?.length ?? 0}
+                        onClick={() => setAttachmentModal({ kind: 'item', itemId: item.id })}
+                      />
                       <button type="button" onClick={saveEditItem} disabled={!itemFormReady(editItemForm) || isSaving} className={primaryButtonClass}>
                         Save
                       </button>
@@ -1718,12 +2050,18 @@ export function HomeMaintenanceScheduleTool({ toolId }: HomeMaintenanceScheduleT
                         <h4 className={headingSmClass}>{item.name}</h4>
                         {item.isDefault && <span className={defaultBadgeClass}>Default</span>}
                         {schedule && <span className={chipNeutralClass}>Next {formatDateForDisplay(schedule.nextDueDate)}</span>}
+                        {schedule?.addToDashboard && <OnCalendarChip isLight={isLight} />}
                       </div>
                       {item.description && <p className={subTextClass}>{item.description}</p>}
                       {item.notes && <p className={`${subTextClass} italic mt-1`}>{item.notes}</p>}
                       {item.defaultLocation && <p className={`${subTextClass} mt-1`}>{item.defaultLocation}</p>}
                     </div>
                     <div className="flex shrink-0 items-center gap-1.5 ml-4">
+                      <AttachmentButton
+                        count={item.attachments?.length ?? 0}
+                        onClick={() => setAttachmentModal({ kind: 'item', itemId: item.id })}
+                        ariaLabel={`Library files for ${item.name}`}
+                      />
                       {mode === 'available' && (
                         <>
                           <button type="button" onClick={() => openActivate(item.id)} className={compactPrimaryClass}>
@@ -1877,6 +2215,9 @@ export function HomeMaintenanceScheduleTool({ toolId }: HomeMaintenanceScheduleT
                             <h4 className={headingSmClass}>{row.name}</h4>
                             <span className={chipNeutralClass}>{row.categoryName}</span>
                             <span className={statusBadgeClass('Completed')}>Completed</span>
+                            {scheduledTasks.find((task) => task.id === row.taskId)?.addToDashboard && (
+                              <OnCalendarChip isLight={isLight} />
+                            )}
                           </div>
                           <p className={subTextClass}>
                             Scheduled {formatDateForDisplay(row.scheduledDate)} · Completed {formatDateForDisplay(row.completedDate)} · {row.lateness}
@@ -1885,6 +2226,11 @@ export function HomeMaintenanceScheduleTool({ toolId }: HomeMaintenanceScheduleT
                           {row.notes && <p className={`${subTextClass} italic mt-1`}>{snippet(row.notes)}</p>}
                         </div>
                         <div className="flex shrink-0 items-center gap-1.5 ml-4">
+                          <AttachmentButton
+                            count={completionAttachmentCount(row.completionId)}
+                            onClick={() => setAttachmentModal({ kind: 'completion', completionId: row.completionId })}
+                            ariaLabel={`Completion files for ${row.name}`}
+                          />
                           <button
                             type="button"
                             onClick={() => openDetail(row.taskId)}
@@ -1913,12 +2259,20 @@ export function HomeMaintenanceScheduleTool({ toolId }: HomeMaintenanceScheduleT
                           {row.location && <span className={chipNeutralClass}>Location: {row.location}</span>}
                           <span className={chipNeutralClass}>Category: {row.categoryName}</span>
                           <span className={statusBadgeClass(row.status)}>{row.status}</span>
+                          {scheduledTasks.find((task) => task.id === row.taskId)?.addToDashboard && (
+                            <OnCalendarChip isLight={isLight} />
+                          )}
                         </div>
                         <p className={subTextClass}>
                           {formatDateForDisplay(row.date)} · {row.frequencyLabel}
                         </p>
                       </div>
                       <div className="flex shrink-0 items-center gap-1.5 ml-4">
+                        <AttachmentButton
+                          count={itemAttachmentCount(row.itemId)}
+                          onClick={() => setAttachmentModal({ kind: 'item', itemId: row.itemId })}
+                          ariaLabel={`Library files for ${row.name}`}
+                        />
                         <button
                           type="button"
                           onClick={() => openComplete(row.taskId, row.date)}
@@ -1978,6 +2332,9 @@ export function HomeMaintenanceScheduleTool({ toolId }: HomeMaintenanceScheduleT
                             <h4 className={headingSmClass}>{row.name}</h4>
                             <span className={chipNeutralClass}>{row.categoryName}</span>
                             <span className={statusBadgeClass('Completed')}>Completed</span>
+                            {scheduledTasks.find((task) => task.id === row.taskId)?.addToDashboard && (
+                              <OnCalendarChip isLight={isLight} />
+                            )}
                           </div>
                           <p className={subTextClass}>
                             Scheduled {formatDateForDisplay(row.scheduledDate)} · Completed {formatDateForDisplay(row.completedDate)} · {row.lateness}
@@ -1986,6 +2343,11 @@ export function HomeMaintenanceScheduleTool({ toolId }: HomeMaintenanceScheduleT
                           {row.notes && <p className={`${subTextClass} italic mt-1`}>{snippet(row.notes)}</p>}
                         </button>
                         <div className="flex shrink-0 items-center gap-1.5 ml-4">
+                          <AttachmentButton
+                            count={completionAttachmentCount(row.completionId)}
+                            onClick={() => setAttachmentModal({ kind: 'completion', completionId: row.completionId })}
+                            ariaLabel={`Completion files for ${row.name}`}
+                          />
                           <button
                             type="button"
                             onClick={() => openDetail(row.taskId)}
@@ -2009,6 +2371,7 @@ export function HomeMaintenanceScheduleTool({ toolId }: HomeMaintenanceScheduleT
                             <div className="flex flex-wrap items-center gap-2 mb-1">
                               <h4 className={headingSmClass}>{item.name}</h4>
                               <span className={chipNeutralClass}>{categoryName(item.categoryId)}</span>
+                              {task.addToDashboard && <OnCalendarChip isLight={isLight} />}
                             </div>
                             <p className={subTextClass}>
                               {frequencyLabel(task.frequency)}
@@ -2016,6 +2379,11 @@ export function HomeMaintenanceScheduleTool({ toolId }: HomeMaintenanceScheduleT
                             </p>
                           </button>
                           <div className="flex shrink-0 items-center gap-1.5 ml-4">
+                            <AttachmentButton
+                              count={item.attachments?.length ?? 0}
+                              onClick={() => setAttachmentModal({ kind: 'item', itemId: item.id })}
+                              ariaLabel={`Library files for ${item.name}`}
+                            />
                             <button
                               type="button"
                               onClick={() => reactivateTask(task.id)}
@@ -2051,27 +2419,26 @@ export function HomeMaintenanceScheduleTool({ toolId }: HomeMaintenanceScheduleT
         <div className="space-y-6">
           {!isAddingItem && (
             <div className="flex justify-start">
-              <button type="button" onClick={() => setIsAddingItem(true)} className={primaryButtonClass}>
+              <button type="button" onClick={startAddingItem} className={primaryButtonClass}>
                 + Add New Maintenance Item
               </button>
             </div>
           )}
           {isAddingItem && (
             <div className={cardClass}>
-              <h3 className={`${sectionTitleClass} mb-4`}>Add New Maintenance Item</h3>
+              <div className="flex items-center justify-between gap-3 mb-4">
+                <h3 className={sectionTitleClass}>Add New Maintenance Item</h3>
+                <AttachmentButton
+                  count={pendingItemAttachments.length}
+                  onClick={() => setAttachmentModal({ kind: 'new-item' })}
+                />
+              </div>
               {renderItemFields(itemForm, setItemForm)}
               <div className="flex gap-3 mt-4">
                 <button type="button" onClick={addLibraryItem} disabled={!itemFormReady(itemForm) || isSaving} className={primaryButtonClass}>
                   Save
                 </button>
-                <button
-                  type="button"
-                  onClick={() => {
-                    setIsAddingItem(false);
-                    setItemForm(emptyItemForm());
-                  }}
-                  className={secondaryButtonClass}
-                >
+                <button type="button" onClick={cancelAddingItem} className={secondaryButtonClass}>
                   Cancel
                 </button>
               </div>
@@ -2423,6 +2790,11 @@ export function HomeMaintenanceScheduleTool({ toolId }: HomeMaintenanceScheduleT
                   <ProviderFields provider={activateProvider} onChange={setActivateProvider} classes={frequencyClasses} idPrefix="hms-activate" />
                 </div>
               )}
+              <DashboardCalendarSwitch
+                isOn={activateAddToDashboard}
+                isLight={isLight}
+                onToggle={() => setActivateAddToDashboard((prev) => !prev)}
+              />
               <div className="flex gap-3 pt-2">
                 <button
                   type="button"
@@ -2446,15 +2818,22 @@ export function HomeMaintenanceScheduleTool({ toolId }: HomeMaintenanceScheduleT
           <div className={`${modalCardClass} min-h-0`}>
             <div className="flex items-center justify-between mb-4">
               <h3 className={sectionTitleClass}>Complete task</h3>
-              <button
-                type="button"
-                onClick={() => setCompleteOccurrence(null)}
-                aria-label="Close modal"
-                title="Close modal"
-                className={iconButtonClass}
-              >
-                <CloseIcon />
-              </button>
+              <div className="flex items-center gap-2">
+                <AttachmentButton
+                  count={pendingCompletionAttachments.length}
+                  onClick={() => setAttachmentModal({ kind: 'new-completion' })}
+                  ariaLabel="Files for this completion"
+                />
+                <button
+                  type="button"
+                  onClick={closeCompleteDialog}
+                  aria-label="Close modal"
+                  title="Close modal"
+                  className={iconButtonClass}
+                >
+                  <CloseIcon />
+                </button>
+              </div>
             </div>
             <p className={`${descClass} mb-4`}>Use today or the originally scheduled date as the completion date.</p>
             <div className="space-y-3 mb-4">
@@ -2523,7 +2902,7 @@ export function HomeMaintenanceScheduleTool({ toolId }: HomeMaintenanceScheduleT
               >
                 Complete
               </button>
-              <button type="button" onClick={() => setCompleteOccurrence(null)} className={secondaryButtonClass}>
+              <button type="button" onClick={closeCompleteDialog} className={secondaryButtonClass}>
                 Cancel
               </button>
             </div>
@@ -2536,18 +2915,25 @@ export function HomeMaintenanceScheduleTool({ toolId }: HomeMaintenanceScheduleT
           <div className={modalCardLgClass}>
             <div className="flex items-center justify-between mb-4">
               <h3 className={sectionTitleClass}>{detailItem.name}</h3>
-              <button
-                type="button"
-                onClick={() => {
-                  setDetailTaskId(null);
-                  setDetailEditing(false);
-                }}
-                aria-label="Close modal"
-                title="Close modal"
-                className={iconButtonClass}
-              >
-                <CloseIcon />
-              </button>
+              <div className="flex items-center gap-2">
+                <AttachmentButton
+                  count={detailItem.attachments?.length ?? 0}
+                  onClick={() => setAttachmentModal({ kind: 'item', itemId: detailItem.id })}
+                  ariaLabel={`Library files for ${detailItem.name}`}
+                />
+                <button
+                  type="button"
+                  onClick={() => {
+                    setDetailTaskId(null);
+                    setDetailEditing(false);
+                  }}
+                  aria-label="Close modal"
+                  title="Close modal"
+                  className={iconButtonClass}
+                >
+                  <CloseIcon />
+                </button>
+              </div>
             </div>
 
             {detailEditing ? (
@@ -2616,6 +3002,11 @@ export function HomeMaintenanceScheduleTool({ toolId }: HomeMaintenanceScheduleT
                   />
                 </div>
                 <ProviderFields provider={detailProvider} onChange={setDetailProvider} classes={frequencyClasses} idPrefix="hms-detail" />
+                <DashboardCalendarSwitch
+                  isOn={detailAddToDashboard}
+                  isLight={isLight}
+                  onToggle={() => setDetailAddToDashboard((prev) => !prev)}
+                />
                 <div className="flex gap-3">
                   <button
                     type="button"
@@ -2625,7 +3016,14 @@ export function HomeMaintenanceScheduleTool({ toolId }: HomeMaintenanceScheduleT
                   >
                     Save
                   </button>
-                  <button type="button" onClick={() => setDetailEditing(false)} className={secondaryButtonClass}>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setDetailAddToDashboard(detailTask.addToDashboard === true);
+                      setDetailEditing(false);
+                    }}
+                    className={secondaryButtonClass}
+                  >
                     Cancel
                   </button>
                 </div>
@@ -2652,6 +3050,10 @@ export function HomeMaintenanceScheduleTool({ toolId }: HomeMaintenanceScheduleT
                   <div>
                     <p className={compactLabelClass}>Reminder</p>
                     <p className={bodyTextClass}>{reminderSummary(detailTask.reminderDays)}</p>
+                  </div>
+                  <div>
+                    <p className={compactLabelClass}>Dashboard calendar</p>
+                    <p className={bodyTextClass}>{detailTask.addToDashboard ? 'On calendar' : 'Off'}</p>
                   </div>
                   <div>
                     <p className={compactLabelClass}>Last completed</p>
@@ -2727,6 +3129,7 @@ export function HomeMaintenanceScheduleTool({ toolId }: HomeMaintenanceScheduleT
                         <th className="text-left px-3 py-2 font-medium">Lateness</th>
                         <th className="text-left px-3 py-2 font-medium">Notes</th>
                         <th className="text-left px-3 py-2 font-medium">Cost</th>
+                        <th className="text-right px-3 py-2 font-medium">Files</th>
                       </tr>
                     </thead>
                     <tbody>
@@ -2737,6 +3140,13 @@ export function HomeMaintenanceScheduleTool({ toolId }: HomeMaintenanceScheduleT
                           <td className={`px-3 py-2 ${bodyTextClass}`}>{row.lateness}</td>
                           <td className={`px-3 py-2 ${bodyTextClass}`}>{row.notes || '—'}</td>
                           <td className={`px-3 py-2 ${bodyTextClass}`}>{formatCost(row.cost)}</td>
+                          <td className="px-3 py-2 text-right">
+                            <AttachmentButton
+                              count={row.attachments?.length ?? 0}
+                              onClick={() => setAttachmentModal({ kind: 'completion', completionId: row.id })}
+                              ariaLabel={`Completion files for ${formatDateForDisplay(row.completedDate)}`}
+                            />
+                          </td>
                         </tr>
                       ))}
                     </tbody>
@@ -2791,6 +3201,61 @@ export function HomeMaintenanceScheduleTool({ toolId }: HomeMaintenanceScheduleT
           </div>
         </div>
       )}
+
+      <AttachmentModal
+        open={attachmentModal !== null}
+        onClose={() => {
+          setAttachmentModal(null);
+          setViewPreview(null);
+        }}
+        previewItem={viewPreview}
+        title={modalTitle}
+        files={modalFiles}
+        busy={attachmentBusy}
+        readOnly={attachmentModal?.kind === 'completion'}
+        onAdd={(incoming) => {
+          if (attachmentModal?.kind === 'new-item') {
+            setPendingItemAttachments((prev) => [...prev, ...incoming.map(createPendingAttachment)]);
+            return;
+          }
+          if (attachmentModal?.kind === 'new-completion') {
+            setPendingCompletionAttachments((prev) => [...prev, ...incoming.map(createPendingAttachment)]);
+            return;
+          }
+          if (attachmentModal?.kind === 'item') {
+            void addSavedItemFiles(attachmentModal.itemId, incoming);
+          }
+        }}
+        onRemove={(id) => {
+          if (attachmentModal?.kind === 'new-item') {
+            setPendingItemAttachments((prev) => {
+              const next = prev.filter((item) => item.id !== id);
+              const removed = prev.find((item) => item.id === id);
+              if (removed?.url) URL.revokeObjectURL(removed.url);
+              return next;
+            });
+            return;
+          }
+          if (attachmentModal?.kind === 'new-completion') {
+            setPendingCompletionAttachments((prev) => {
+              const next = prev.filter((item) => item.id !== id);
+              const removed = prev.find((item) => item.id === id);
+              if (removed?.url) URL.revokeObjectURL(removed.url);
+              return next;
+            });
+            return;
+          }
+          if (attachmentModal?.kind === 'item') {
+            void removeSavedItemFile(id);
+          }
+        }}
+        onView={handleViewAttachment}
+        onDownload={
+          attachmentModal?.kind === 'new-item' || attachmentModal?.kind === 'new-completion'
+            ? undefined
+            : handleDownloadAttachment
+        }
+      />
     </div>
   );
 }

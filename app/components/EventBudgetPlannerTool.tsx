@@ -75,6 +75,7 @@ type EventRecord = {
   isActive: boolean;
   dateAdded: string;
   dateInactivated?: string;
+  addToDashboard: boolean;
 };
 
 type EventBudgetPlannerToolProps = {
@@ -241,7 +242,56 @@ const BIRTHDAY_TYPE_NAME = 'Birthday';
 const EVENT_TYPE_PLACEHOLDER = '__select_a_type__';
 
 function emptyEventForm() {
-  return { name: '', date: todayIso(), typeId: '', notes: '' };
+  return { name: '', date: todayIso(), typeId: '', notes: '', addToDashboard: false };
+}
+
+function DashboardCalendarSwitch({
+  isOn,
+  onToggle,
+  isLight,
+}: {
+  isOn: boolean;
+  onToggle: () => void;
+  isLight: boolean;
+}) {
+  return (
+    <label className="flex items-center gap-2 cursor-pointer" title="Add to dashboard calendar">
+      <span className={`text-xs whitespace-nowrap ${isLight ? 'text-slate-600' : 'text-slate-400'}`}>
+        Add to dashboard calendar
+      </span>
+      <button
+        type="button"
+        role="switch"
+        aria-checked={isOn}
+        aria-label="Add to dashboard calendar"
+        title="Add to dashboard calendar"
+        onClick={onToggle}
+        className={`relative inline-flex h-6 w-11 flex-shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors focus:outline-none focus:ring-2 focus:ring-emerald-500/50 focus:ring-offset-2 ${
+          isLight ? 'focus:ring-offset-white' : 'focus:ring-offset-slate-900'
+        } ${isOn ? 'bg-emerald-500' : isLight ? 'bg-slate-300' : 'bg-slate-700'}`}
+      >
+        <span
+          className={`pointer-events-none inline-block h-5 w-5 transform rounded-full bg-white shadow ring-0 transition ${
+            isOn ? 'translate-x-5' : 'translate-x-1'
+          }`}
+        />
+      </button>
+    </label>
+  );
+}
+
+function OnCalendarChip({ isLight }: { isLight: boolean }) {
+  return (
+    <span
+      className={
+        isLight
+          ? 'inline-flex items-center rounded-full bg-emerald-100 px-2 py-0.5 text-xs font-medium text-emerald-800'
+          : 'inline-flex items-center rounded-full bg-emerald-500/20 px-2 py-0.5 text-xs font-medium text-emerald-300'
+      }
+    >
+      On calendar
+    </span>
+  );
 }
 
 const BIRTHDAY_STARTER_BUDGETS: { name: string; amount: number }[] = [
@@ -413,6 +463,7 @@ export function EventBudgetPlannerTool({ toolId }: EventBudgetPlannerToolProps) 
     setEvents(
       (data.events ?? []).map((event) => ({
         ...event,
+        addToDashboard: event.addToDashboard === true,
         attachments: event.attachments ?? [],
         expenses: (event.expenses ?? []).map((expense) => ({
           ...expense,
@@ -642,6 +693,7 @@ export function EventBudgetPlannerTool({ toolId }: EventBudgetPlannerToolProps) 
         date: eventForm.date,
         typeId: eventForm.typeId,
         notes: eventForm.notes,
+        addToDashboard: eventForm.addToDashboard,
       });
       const createdEventId = data.event?.id as string | undefined;
       if (createdEventId && pendingEventAttachments.length > 0) {
@@ -670,16 +722,19 @@ export function EventBudgetPlannerTool({ toolId }: EventBudgetPlannerToolProps) 
       setIsAddingEvent(false);
       setAddingEventCategoryForId(null);
       if (createdEventId) {
+        const shouldApplyBirthday = applyBirthdayTemplateOnCreate;
         setEditingEventId(createdEventId);
-        if (applyBirthdayTemplateOnCreate) {
+        setApplyBirthdayTemplateOnCreate(false);
+        if (shouldApplyBirthday) {
           try {
             await applyBirthdayStarterBudgets(createdEventId, data.event);
           } catch (templateError: unknown) {
             showError(templateError instanceof Error ? templateError.message : 'Failed to apply Birthday starter template.');
           }
         }
+      } else {
+        resetEventForm();
       }
-      resetEventForm();
     } catch (error: unknown) {
       showError(error instanceof Error ? error.message : 'Failed to create event.');
     } finally {
@@ -703,6 +758,7 @@ export function EventBudgetPlannerTool({ toolId }: EventBudgetPlannerToolProps) 
       date: event.date,
       typeId: event.typeId,
       notes: event.notes,
+      addToDashboard: event.addToDashboard === true,
     });
   };
 
@@ -717,6 +773,7 @@ export function EventBudgetPlannerTool({ toolId }: EventBudgetPlannerToolProps) 
         date: eventForm.date,
         typeId: eventForm.typeId,
         notes: eventForm.notes,
+        addToDashboard: eventForm.addToDashboard,
       });
     } catch (error: unknown) {
       showError(error instanceof Error ? error.message : 'Failed to save event.');
@@ -1780,6 +1837,11 @@ export function EventBudgetPlannerTool({ toolId }: EventBudgetPlannerToolProps) 
           placeholder="Optional notes about this event"
         />
       </div>
+      <DashboardCalendarSwitch
+        isOn={eventForm.addToDashboard}
+        isLight={isLight}
+        onToggle={() => setEventForm((f) => ({ ...f, addToDashboard: !f.addToDashboard }))}
+      />
     </div>
   );
 
@@ -2195,7 +2257,10 @@ export function EventBudgetPlannerTool({ toolId }: EventBudgetPlannerToolProps) 
                       <div key={event.id} className={nestedCardClass}>
                         <div className="flex items-start justify-between gap-3">
                           <div className="flex-1 min-w-0">
-                            <h4 className={`text-base font-semibold ${bodyTextClass}`}>{event.name}</h4>
+                            <div className="flex items-center gap-2 flex-wrap">
+                              <h4 className={`text-base font-semibold ${bodyTextClass}`}>{event.name}</h4>
+                              {event.addToDashboard && <OnCalendarChip isLight={isLight} />}
+                            </div>
                             <div className={`flex flex-wrap gap-x-4 gap-y-1 mt-1 ${subTextClass}`}>
                               <span>{formatDisplayDate(event.date)}</span>
                               <span>{getTypeName(event.typeId)}</span>
@@ -2267,7 +2332,10 @@ export function EventBudgetPlannerTool({ toolId }: EventBudgetPlannerToolProps) 
                         <div key={event.id} className={`${nestedCardClass} opacity-75`}>
                           <div className="flex items-start justify-between gap-3">
                             <div className="flex-1 min-w-0">
-                              <h4 className={`text-base font-semibold ${mutedTextClass}`}>{event.name}</h4>
+                              <div className="flex items-center gap-2 flex-wrap">
+                                <h4 className={`text-base font-semibold ${mutedTextClass}`}>{event.name}</h4>
+                                {event.addToDashboard && <OnCalendarChip isLight={isLight} />}
+                              </div>
                               <div className={`flex flex-wrap gap-x-4 gap-y-1 mt-1 ${subTextClass}`}>
                                 <span>{formatDisplayDate(event.date)}</span>
                                 <span>{getTypeName(event.typeId)}</span>

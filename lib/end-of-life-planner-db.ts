@@ -5,6 +5,7 @@ import {
   emptyHomeAccess,
   emptyPlanData,
   emptyProperty,
+  EolAttachment,
   EolBuiltInSectionId,
   EolCustomSection,
   EolCustomTemplate,
@@ -18,6 +19,11 @@ import {
   seedPlanHistory,
   withSecret,
 } from '@/lib/end-of-life-planner';
+import {
+  attachmentsByOwnerIds,
+  deletePlanStorageFiles,
+  deleteStorageForRemovedRows,
+} from '@/lib/end-of-life-planner-storage';
 
 type SectionRow = {
   id: string;
@@ -81,6 +87,10 @@ async function syncRows(options: {
   const keep = new Set(options.rows.map((row) => String(row.id || '')).filter(Boolean));
   const remove = (existing || []).map((row) => row.id).filter((id) => !keep.has(id));
   if (remove.length) {
+    const { data: owner } = await supabaseServer.from(options.table).select('user_id').eq('id', remove[0]).maybeSingle();
+    if (owner?.user_id) {
+      await deleteStorageForRemovedRows(options.table, remove, owner.user_id);
+    }
     const { error } = await supabaseServer.from(options.table).delete().in('id', remove);
     await throwIfError(error, `delete ${options.table}`);
   }
@@ -160,6 +170,7 @@ export async function createEolPlan(
 }
 
 export async function deleteEolPlan(userId: string, toolId: string, planId: string): Promise<void> {
+  await deletePlanStorageFiles(planId, userId);
   const { error } = await supabaseServer
     .from('tools_eolp_plans')
     .delete()
@@ -1017,6 +1028,10 @@ async function syncScopedList(table: string, planId: string, sectionId: string |
   await syncRows({ table, planId, rows, scope: { column: 'section_id', value: sectionId } });
 }
 
+function withFiles<T extends { id: string }>(item: T, files: Record<string, EolAttachment[]>): T & { attachments: EolAttachment[] } {
+  return { ...item, attachments: files[item.id] || [] };
+}
+
 async function hydratePlan(_userId: string, _toolId: string, row: Record<string, unknown>): Promise<EolPlan> {
   const planId = String(row.id);
   const [
@@ -1082,6 +1097,14 @@ async function hydratePlan(_userId: string, _toolId: string, row: Record<string,
   const { data: customFields } = otherIds.length
     ? await supabaseServer.from('tools_eolp_other_custom_fields').select('*').in('record_id', otherIds)
     : { data: [] };
+
+  const [documentFiles, insuranceFiles, letterFiles, personalItemFiles, otherFiles] = await Promise.all([
+    attachmentsByOwnerIds('document', (documentsRes.data || []).map((item) => item.id), _userId),
+    attachmentsByOwnerIds('insurance', (insuranceRes.data || []).map((item) => item.id), _userId),
+    attachmentsByOwnerIds('letter', (lettersRes.data || []).map((item) => item.id), _userId),
+    attachmentsByOwnerIds('personal-item', (itemsRes.data || []).map((item) => item.id), _userId),
+    attachmentsByOwnerIds('other', otherIds, _userId),
+  ]);
 
   const data = emptyPlanData();
   const personal = personalRes.data || {};
@@ -1175,10 +1198,10 @@ async function hydratePlan(_userId: string, _toolId: string, row: Record<string,
     .map(mapOnline);
   data.documents = (documentsRes.data || [])
     .filter((item) => !item.section_id || item.section_id === builtin.get('documents')?.id)
-    .map(mapDocument);
+    .map((item) => withFiles(mapDocument(item), documentFiles));
   data.insurance = (insuranceRes.data || [])
     .filter((item) => !item.section_id || item.section_id === builtin.get('insurance')?.id)
-    .map(mapInsurance);
+    .map((item) => withFiles(mapInsurance(item), insuranceFiles));
 
   data.financial = {
     bankAccounts: (banksRes.data || []).map((item) => ({
@@ -1370,21 +1393,26 @@ async function hydratePlan(_userId: string, _toolId: string, row: Record<string,
     onlinePresence: text(mine.online_presence),
     thankedRemembered: text(mine.thanked_remembered),
     doNotWant: text(mine.do_not_want),
-    personalItems: (itemsRes.data || []).map((item) => ({
-      id: item.id,
-      item: text(item.item),
-      description: text(item.description),
-      location: text(item.location),
-      recipient: text(item.recipient),
-      reason: text(item.reason),
-      photoReference: text(item.photo_reference),
-      specialInstructions: text(item.special_instructions),
-    })),
+    personalItems: (itemsRes.data || []).map((item) =>
+      withFiles(
+        {
+          id: item.id,
+          item: text(item.item),
+          description: text(item.description),
+          location: text(item.location),
+          recipient: text(item.recipient),
+          reason: text(item.reason),
+          photoReference: text(item.photo_reference),
+          specialInstructions: text(item.special_instructions),
+        },
+        personalItemFiles
+      )
+    ),
   };
 
   data.letters = (lettersRes.data || [])
     .filter((item) => !item.section_id || item.section_id === builtin.get('letters')?.id)
-    .map(mapLetter);
+    .map((item) => withFiles(mapLetter(item), letterFiles));
   const fieldsByRecord = new Map<string, { id: string; label: string; value: string }[]>();
   (customFields || []).forEach((field) => {
     const list = fieldsByRecord.get(field.record_id) || [];
@@ -1393,7 +1421,7 @@ async function hydratePlan(_userId: string, _toolId: string, row: Record<string,
   });
   data.otherRecords = (otherRes.data || [])
     .filter((item) => !item.section_id || item.section_id === builtin.get('other')?.id)
-    .map((item) => mapOther(item, fieldsByRecord.get(item.id) || []));
+    .map((item) => withFiles(mapOther(item, fieldsByRecord.get(item.id) || []), otherFiles));
 
   sections.forEach((section) => {
     if (section.kind === 'builtin' && section.builtin_key) {
@@ -1422,13 +1450,13 @@ async function hydratePlan(_userId: string, _toolId: string, row: Record<string,
     if (section.modeled_after === 'contacts') custom.contacts = (contactsRes.data || []).filter((item) => item.section_id === section.id).map(mapContact);
     if (section.modeled_after === 'devices') custom.devices = (devicesRes.data || []).filter((item) => item.section_id === section.id).map(mapDevice);
     if (section.modeled_after === 'online') custom.onlineAccounts = (onlineRes.data || []).filter((item) => item.section_id === section.id).map(mapOnline);
-    if (section.modeled_after === 'documents') custom.documents = (documentsRes.data || []).filter((item) => item.section_id === section.id).map(mapDocument);
-    if (section.modeled_after === 'insurance') custom.insurance = (insuranceRes.data || []).filter((item) => item.section_id === section.id).map(mapInsurance);
-    if (section.modeled_after === 'letters') custom.letters = (lettersRes.data || []).filter((item) => item.section_id === section.id).map(mapLetter);
+    if (section.modeled_after === 'documents') custom.documents = (documentsRes.data || []).filter((item) => item.section_id === section.id).map((item) => withFiles(mapDocument(item), documentFiles));
+    if (section.modeled_after === 'insurance') custom.insurance = (insuranceRes.data || []).filter((item) => item.section_id === section.id).map((item) => withFiles(mapInsurance(item), insuranceFiles));
+    if (section.modeled_after === 'letters') custom.letters = (lettersRes.data || []).filter((item) => item.section_id === section.id).map((item) => withFiles(mapLetter(item), letterFiles));
     if (section.modeled_after === 'other') {
       custom.otherRecords = (otherRes.data || [])
         .filter((item) => item.section_id === section.id)
-        .map((item) => mapOther(item, fieldsByRecord.get(item.id) || []));
+        .map((item) => withFiles(mapOther(item, fieldsByRecord.get(item.id) || []), otherFiles));
     }
     return custom;
   });

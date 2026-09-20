@@ -8,6 +8,12 @@ import {
   deleteGoalStorageFiles,
   deleteUpdateStorageFiles,
 } from '@/lib/goals-tracking-storage';
+import { CALENDAR_SOURCE_GOAL } from '@/lib/calendarPins';
+import {
+  deleteCalendarPinsForSources,
+  getPinnedSourceIds,
+  syncCalendarPin,
+} from '@/lib/calendarPinsServer';
 
 const FALLBACK_STOCK_CATEGORY_NAMES = ['Home', 'Finance', 'Health', 'Career', 'Personal'];
 
@@ -86,6 +92,7 @@ function mapGoalRow(
     reminderDays: g.reminder_days ?? null,
     lastUpdateDate: g.last_update_date ?? null,
     useTaskProgressForPercent: !!g.use_task_progress_for_percent,
+    addToDashboard: false,
     phases: phases
       .filter((p) => p.goal_id === g.id)
       .sort((a, b) => a.display_order - b.display_order)
@@ -114,6 +121,34 @@ function mapGoalRow(
       })),
     attachments: [] as { id: string; name: string; size: number; type: string }[],
   };
+}
+
+function withDashboardFlag<T extends { id: string }>(goal: T, pinned: boolean): T & { addToDashboard: boolean } {
+  return { ...goal, addToDashboard: pinned };
+}
+
+async function applyGoalPin({
+  userId,
+  toolId,
+  goalId,
+  pinned,
+  targetDate,
+}: {
+  userId: string;
+  toolId: string;
+  goalId: string;
+  pinned: boolean;
+  targetDate?: string | null;
+}): Promise<{ error: string | null; pinned: boolean }> {
+  const wantsPin = pinned && Boolean(targetDate);
+  const pinResult = await syncCalendarPin({
+    userId,
+    toolId,
+    sourceType: CALENDAR_SOURCE_GOAL,
+    sourceId: goalId,
+    pinned: wantsPin,
+  });
+  return { error: pinResult.error, pinned: wantsPin };
 }
 
 async function hydrateGoalAttachments<T extends ReturnType<typeof mapGoalRow>>(goals: T[], userId: string) {
@@ -191,13 +226,23 @@ export async function GET(request: NextRequest) {
       notes = (notesRes.data ?? []) as typeof notes;
     }
 
+    const { ids: pinnedIds } = await getPinnedSourceIds({
+      userId: user.id,
+      sourceType: CALENDAR_SOURCE_GOAL,
+      sourceIds: goalIds,
+      toolId,
+    });
+
     const goals = await hydrateGoalAttachments(
       (goalsRows ?? []).map((g: Record<string, unknown>) =>
-        mapGoalRow(
-          g as Parameters<typeof mapGoalRow>[0],
-          phases,
-          tasks,
-          notes
+        withDashboardFlag(
+          mapGoalRow(
+            g as Parameters<typeof mapGoalRow>[0],
+            phases,
+            tasks,
+            notes
+          ),
+          pinnedIds.has(String((g as { id: string }).id))
         )
       ),
       user.id
@@ -309,6 +354,17 @@ export async function POST(request: NextRequest) {
         if (isStockCategoryName(existing.name, defaults)) {
           return NextResponse.json({ error: 'Default categories cannot be deleted' }, { status: 400 });
         }
+        const { data: categoryGoals } = await supabaseServer
+          .from('tools_gt_goals')
+          .select('id')
+          .eq('category_id', categoryId)
+          .eq('user_id', user.id)
+          .eq('tool_id', toolId);
+        await deleteCalendarPinsForSources({
+          userId: user.id,
+          sourceType: CALENDAR_SOURCE_GOAL,
+          sourceIds: (categoryGoals || []).map((row) => row.id),
+        });
         await deleteCategoryStorageFiles(categoryId, user.id);
         const { error } = await supabaseServer
           .from('tools_gt_categories')
@@ -333,6 +389,7 @@ export async function POST(request: NextRequest) {
           targetDate,
           priority,
           status,
+          addToDashboard,
         } = body as {
           categoryId: string;
           title: string;
@@ -340,6 +397,7 @@ export async function POST(request: NextRequest) {
           targetDate?: string;
           priority?: string;
           status?: string;
+          addToDashboard?: boolean;
         };
         if (!categoryId || !title?.trim()) {
           return NextResponse.json({ error: 'Category and title are required' }, { status: 400 });
@@ -362,12 +420,30 @@ export async function POST(request: NextRequest) {
           console.error('Error creating goal:', error);
           return NextResponse.json({ error: error.message }, { status: 500 });
         }
+
+        const pinResult = await applyGoalPin({
+          userId: user.id,
+          toolId,
+          goalId: data.id,
+          pinned: addToDashboard === true,
+          targetDate: data.target_date,
+        });
+        if (pinResult.error) {
+          return NextResponse.json(
+            { error: 'Goal saved, but failed to add it to the dashboard calendar' },
+            { status: 500 }
+          );
+        }
+
         return NextResponse.json({
-          goal: mapGoalRow(
-            data as Parameters<typeof mapGoalRow>[0],
-            [],
-            [],
-            []
+          goal: withDashboardFlag(
+            mapGoalRow(
+              data as Parameters<typeof mapGoalRow>[0],
+              [],
+              [],
+              []
+            ),
+            pinResult.pinned
           ),
         });
       }
@@ -383,6 +459,7 @@ export async function POST(request: NextRequest) {
           showOnDashboard,
           reminderDays,
           useTaskProgressForPercent,
+          addToDashboard,
         } = body as {
           goalId: string;
           title?: string;
@@ -394,6 +471,7 @@ export async function POST(request: NextRequest) {
           showOnDashboard?: boolean;
           reminderDays?: number | null;
           useTaskProgressForPercent?: boolean;
+          addToDashboard?: boolean;
         };
         if (!goalId) {
           return NextResponse.json({ error: 'Goal ID is required' }, { status: 400 });
@@ -420,16 +498,45 @@ export async function POST(request: NextRequest) {
           console.error('Error updating goal:', error);
           return NextResponse.json({ error: error.message }, { status: 500 });
         }
+        const resultingDate = data.target_date ?? null;
+        let pinned = false;
+        if (typeof addToDashboard === 'boolean' || (targetDate !== undefined && !resultingDate)) {
+          const pinResult = await applyGoalPin({
+            userId: user.id,
+            toolId,
+            goalId: data.id,
+            pinned: addToDashboard === true,
+            targetDate: resultingDate,
+          });
+          if (pinResult.error) {
+            return NextResponse.json(
+              { error: 'Goal saved, but failed to update the dashboard calendar' },
+              { status: 500 }
+            );
+          }
+          pinned = pinResult.pinned;
+        } else {
+          const { ids } = await getPinnedSourceIds({
+            userId: user.id,
+            sourceType: CALENDAR_SOURCE_GOAL,
+            sourceIds: [data.id],
+          });
+          pinned = ids.has(data.id);
+        }
+
         const { data: phases } = await supabaseServer.from('tools_gt_phases').select('*').eq('goal_id', goalId);
         const { data: tasks } = await supabaseServer.from('tools_gt_tasks').select('*').eq('goal_id', goalId);
         const { data: notes } = await supabaseServer.from('tools_gt_update_notes').select('*').eq('goal_id', goalId);
         const [goal] = await hydrateGoalAttachments(
           [
-            mapGoalRow(
-              data as Parameters<typeof mapGoalRow>[0],
-              (phases ?? []) as Parameters<typeof mapGoalRow>[1],
-              (tasks ?? []) as Parameters<typeof mapGoalRow>[2],
-              (notes ?? []) as Parameters<typeof mapGoalRow>[3]
+            withDashboardFlag(
+              mapGoalRow(
+                data as Parameters<typeof mapGoalRow>[0],
+                (phases ?? []) as Parameters<typeof mapGoalRow>[1],
+                (tasks ?? []) as Parameters<typeof mapGoalRow>[2],
+                (notes ?? []) as Parameters<typeof mapGoalRow>[3]
+              ),
+              pinned
             ),
           ],
           user.id
@@ -442,6 +549,11 @@ export async function POST(request: NextRequest) {
           return NextResponse.json({ error: 'Goal ID is required' }, { status: 400 });
         }
         await deleteGoalStorageFiles(goalId, user.id);
+        await deleteCalendarPinsForSources({
+          userId: user.id,
+          sourceType: CALENDAR_SOURCE_GOAL,
+          sourceIds: [goalId],
+        });
         const { error } = await supabaseServer
           .from('tools_gt_goals')
           .delete()

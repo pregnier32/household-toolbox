@@ -71,6 +71,7 @@ export type Goal = {
   reminderDays: number | null;
   lastUpdateDate: string | null;
   useTaskProgressForPercent: boolean;
+  addToDashboard: boolean;
   phases: Phase[];
   tasks: Task[];
   updateNotes: UpdateNote[];
@@ -119,12 +120,73 @@ function pickOpenCategoryId(list: { id: string }[], currentId: string | null): s
 function normalizeGoal(goal: Goal): Goal {
   return {
     ...goal,
+    addToDashboard: goal.addToDashboard === true,
     attachments: goal.attachments || [],
     updateNotes: (goal.updateNotes || []).map((note) => ({
       ...note,
       attachments: note.attachments || [],
     })),
   };
+}
+
+function DashboardCalendarSwitch({
+  isOn,
+  onToggle,
+  isLight,
+  disabled = false,
+}: {
+  isOn: boolean;
+  onToggle: () => void;
+  isLight: boolean;
+  disabled?: boolean;
+}) {
+  return (
+    <label
+      className={`flex items-center gap-2 ${disabled ? 'cursor-not-allowed' : 'cursor-pointer'}`}
+      title={disabled ? 'Set a target date to add this goal to the dashboard calendar' : 'Add to dashboard calendar'}
+    >
+      <span className={`text-xs whitespace-nowrap ${isLight ? 'text-slate-600' : 'text-slate-400'}`}>
+        Add to dashboard calendar
+      </span>
+      <button
+        type="button"
+        role="switch"
+        aria-checked={isOn}
+        aria-disabled={disabled}
+        aria-label="Add to dashboard calendar"
+        title={disabled ? 'Set a target date to add this goal to the dashboard calendar' : 'Add to dashboard calendar'}
+        disabled={disabled}
+        onClick={() => {
+          if (!disabled) onToggle();
+        }}
+        className={`relative inline-flex h-6 w-11 flex-shrink-0 rounded-full border-2 border-transparent transition-colors focus:outline-none focus:ring-2 focus:ring-emerald-500/50 focus:ring-offset-2 ${
+          disabled ? 'cursor-not-allowed opacity-50' : 'cursor-pointer'
+        } ${isLight ? 'focus:ring-offset-white' : 'focus:ring-offset-slate-900'} ${
+          isOn ? 'bg-emerald-500' : isLight ? 'bg-slate-300' : 'bg-slate-700'
+        }`}
+      >
+        <span
+          className={`pointer-events-none inline-block h-5 w-5 transform rounded-full bg-white shadow ring-0 transition ${
+            isOn ? 'translate-x-5' : 'translate-x-1'
+          }`}
+        />
+      </button>
+    </label>
+  );
+}
+
+function OnCalendarChip({ isLight }: { isLight: boolean }) {
+  return (
+    <span
+      className={
+        isLight
+          ? 'inline-flex items-center rounded-full bg-emerald-100 px-2 py-0.5 text-xs font-medium text-emerald-800'
+          : 'inline-flex items-center rounded-full bg-emerald-500/20 px-2 py-0.5 text-xs font-medium text-emerald-300'
+      }
+    >
+      On calendar
+    </span>
+  );
 }
 
 // --- Shared context for dashboard to show goals ---
@@ -562,6 +624,7 @@ export function GoalsTrackingTool({ toolId }: GoalsTrackingToolProps) {
     targetDate: new Date().toISOString().split('T')[0],
     priority: 'Medium' as Priority,
     status: 'Not Started' as GoalStatus,
+    addToDashboard: false,
   });
 
   // Edit goal
@@ -758,6 +821,7 @@ export function GoalsTrackingTool({ toolId }: GoalsTrackingToolProps) {
       targetDate: new Date().toISOString().split('T')[0],
       priority: 'Medium',
       status: 'Not Started',
+      addToDashboard: false,
     });
   };
 
@@ -778,6 +842,7 @@ export function GoalsTrackingTool({ toolId }: GoalsTrackingToolProps) {
         targetDate: newGoal.targetDate,
         priority: newGoal.priority,
         status: newGoal.status,
+        addToDashboard: newGoal.addToDashboard === true && Boolean(newGoal.targetDate),
       });
       if (!data?.goal) return;
       setGoals((prev) => [...prev, normalizeGoal({ ...data.goal, attachments: [] })]);
@@ -807,6 +872,7 @@ export function GoalsTrackingTool({ toolId }: GoalsTrackingToolProps) {
         reminderDays: null,
         lastUpdateDate: null,
         useTaskProgressForPercent: false,
+        addToDashboard: newGoal.addToDashboard === true && Boolean(newGoal.targetDate),
         phases: [],
         tasks: [],
         updateNotes: [],
@@ -824,6 +890,7 @@ export function GoalsTrackingTool({ toolId }: GoalsTrackingToolProps) {
       targetDate: new Date().toISOString().split('T')[0],
       priority: 'Medium',
       status: 'Not Started',
+      addToDashboard: false,
     });
   };
 
@@ -856,6 +923,7 @@ export function GoalsTrackingTool({ toolId }: GoalsTrackingToolProps) {
         showOnDashboard: false,
         reminderDays: editingGoal.reminderDays,
         useTaskProgressForPercent: editingGoal.useTaskProgressForPercent,
+        addToDashboard: editingGoal.addToDashboard === true && Boolean(editingGoal.targetDate),
       });
       if (!data?.goal) return;
       setGoals((prev) => prev.map((g) => (g.id === editingGoal.id ? normalizeGoal(data.goal) : g)));
@@ -1578,6 +1646,7 @@ export function GoalsTrackingTool({ toolId }: GoalsTrackingToolProps) {
                       }`}
                     >
                       <span className="min-w-0 flex-1 truncate">{goal.title}</span>
+                      {goal.addToDashboard && <OnCalendarChip isLight={isLight} />}
                       {isGoalReminderOverdue(goal) && (
                         <span
                           className="inline-flex text-amber-400 shrink-0"
@@ -1642,7 +1711,13 @@ export function GoalsTrackingTool({ toolId }: GoalsTrackingToolProps) {
                     <input
                       type="date"
                       value={newGoal.targetDate}
-                      onChange={(e) => setNewGoal((p) => ({ ...p, targetDate: e.target.value }))}
+                      onChange={(e) =>
+                        setNewGoal((p) => ({
+                          ...p,
+                          targetDate: e.target.value,
+                          addToDashboard: e.target.value ? p.addToDashboard : false,
+                        }))
+                      }
                       className={inputClassPad}
                     />
                   </div>
@@ -1672,6 +1747,12 @@ export function GoalsTrackingTool({ toolId }: GoalsTrackingToolProps) {
                     </select>
                   </div>
                 </div>
+                <DashboardCalendarSwitch
+                  isOn={newGoal.addToDashboard}
+                  isLight={isLight}
+                  disabled={!newGoal.targetDate}
+                  onToggle={() => setNewGoal((p) => ({ ...p, addToDashboard: !p.addToDashboard }))}
+                />
                 <div className="flex gap-2">
                   <button
                     type="button"
@@ -1719,6 +1800,11 @@ export function GoalsTrackingTool({ toolId }: GoalsTrackingToolProps) {
                         >
                           <div>
                             <h3 className={`${goalTitleHeroClass} mb-3`}>{goal.title}</h3>
+                            {goal.addToDashboard && (
+                              <div className="flex justify-center mb-3">
+                                <OnCalendarChip isLight={isLight} />
+                              </div>
+                            )}
                             {showReminderWarning && (
                               <div className="flex items-center justify-center gap-1.5 text-amber-400 mb-3">
                                 <svg className="h-5 w-5 shrink-0" fill="currentColor" viewBox="0 0 24 24" aria-hidden="true">
@@ -2009,7 +2095,12 @@ export function GoalsTrackingTool({ toolId }: GoalsTrackingToolProps) {
                       <input
                         type="date"
                         value={editingGoal.targetDate}
-                        onChange={(e) => updateEditingGoal({ targetDate: e.target.value })}
+                        onChange={(e) =>
+                          updateEditingGoal({
+                            targetDate: e.target.value,
+                            addToDashboard: e.target.value ? editingGoal.addToDashboard : false,
+                          })
+                        }
                         className={inputClassPad}
                       />
                     </div>
@@ -2312,6 +2403,13 @@ export function GoalsTrackingTool({ toolId }: GoalsTrackingToolProps) {
                       <span className={`text-sm ${mutedSmallClass}`}>days</span>
                     </div>
                   </div>
+
+                  <DashboardCalendarSwitch
+                    isOn={editingGoal.addToDashboard}
+                    isLight={isLight}
+                    disabled={!editingGoal.targetDate}
+                    onToggle={() => updateEditingGoal({ addToDashboard: !editingGoal.addToDashboard })}
+                  />
 
                   <div className={`flex flex-col-reverse sm:flex-row sm:items-center sm:justify-between gap-4 pt-4 mt-4 border-t ${borderDividerClass}`}>
                     <button

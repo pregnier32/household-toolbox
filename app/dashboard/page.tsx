@@ -532,6 +532,15 @@ function CalendarView({
                     typeof event.metadata?.subscriptionName === 'string'
                       ? event.metadata.subscriptionName.trim()
                       : '';
+                  const memberName =
+                    typeof event.metadata?.memberName === 'string' ? event.metadata.memberName.trim() : '';
+                  const petName =
+                    typeof event.metadata?.petName === 'string' ? event.metadata.petName.trim() : '';
+                  const headerName =
+                    typeof event.metadata?.headerName === 'string' ? event.metadata.headerName.trim() : '';
+                  const categoryName =
+                    typeof event.metadata?.categoryName === 'string' ? event.metadata.categoryName.trim() : '';
+                  const forName = memberName || petName || headerName || categoryName;
                   const detailName = subscriptionName || event.title;
                   const priorityColors = {
                     high: 'text-red-400',
@@ -551,6 +560,11 @@ function CalendarView({
                           </span>
                         )}
                       </div>
+                      {forName && (
+                        <p className="text-xs text-slate-400 mb-2">
+                          <span className="text-slate-500">For:</span> {forName}
+                        </p>
+                      )}
                       {event.description && (
                         <p className="text-xs text-slate-400 mb-2">{event.description}</p>
                       )}
@@ -770,9 +784,55 @@ export default function Dashboard() {
     const monthParam = month || new Date().toISOString().slice(0, 7); // YYYY-MM format
     
     try {
-      const calendarEventsResponse = await fetch(`/api/dashboard/items/calendar-events?month=${monthParam}`);
-      const calendarEventsData = await calendarEventsResponse.json();
-      const calendarEventsItems = calendarEventsData.items || [];
+      const [
+        calendarEventsResponse,
+        cleaningScheduleResponse,
+        eventBudgetResponse,
+        goalsResponse,
+        healthcareResponse,
+        homeMaintenanceResponse,
+        petCareResponse,
+        repairHistoryResponse,
+        subscriptionResponse,
+        toDoListResponse,
+        travelLogResponse,
+      ] = await Promise.all([
+        fetch(`/api/dashboard/items/calendar-events?month=${monthParam}`),
+        fetch(`/api/dashboard/items/cleaning-schedule?month=${monthParam}`),
+        fetch(`/api/dashboard/items/event-budget-planner?month=${monthParam}`),
+        fetch(`/api/dashboard/items/goals-tracking?month=${monthParam}`),
+        fetch(`/api/dashboard/items/healthcare-appts?month=${monthParam}`),
+        fetch(`/api/dashboard/items/home-maintenance-schedule?month=${monthParam}`),
+        fetch(`/api/dashboard/items/pet-care-schedule?month=${monthParam}`),
+        fetch(`/api/dashboard/items/repair-history?month=${monthParam}`),
+        fetch(`/api/dashboard/items/subscription-tracker?month=${monthParam}`),
+        fetch(`/api/dashboard/items/to-do-list?month=${monthParam}`),
+        fetch(`/api/dashboard/items/travel-log?month=${monthParam}`),
+      ]);
+      const calendarEventsData = await calendarEventsResponse.json().catch(() => ({ items: [] }));
+      const cleaningScheduleData = await cleaningScheduleResponse.json().catch(() => ({ items: [] }));
+      const eventBudgetData = await eventBudgetResponse.json().catch(() => ({ items: [] }));
+      const goalsData = await goalsResponse.json().catch(() => ({ items: [] }));
+      const healthcareData = await healthcareResponse.json().catch(() => ({ items: [] }));
+      const homeMaintenanceData = await homeMaintenanceResponse.json().catch(() => ({ items: [] }));
+      const petCareData = await petCareResponse.json().catch(() => ({ items: [] }));
+      const repairHistoryData = await repairHistoryResponse.json().catch(() => ({ items: [] }));
+      const subscriptionData = await subscriptionResponse.json().catch(() => ({ items: [] }));
+      const toDoListData = await toDoListResponse.json().catch(() => ({ items: [] }));
+      const travelLogData = await travelLogResponse.json().catch(() => ({ items: [] }));
+      const calendarEventsItems = [
+        ...(calendarEventsData.items || []),
+        ...(cleaningScheduleData.items || []),
+        ...(eventBudgetData.items || []),
+        ...(goalsData.items || []),
+        ...(healthcareData.items || []),
+        ...(homeMaintenanceData.items || []),
+        ...(petCareData.items || []),
+        ...(repairHistoryData.items || []),
+        ...(subscriptionData.items || []),
+        ...(toDoListData.items || []),
+        ...(travelLogData.items || []),
+      ];
 
       calendarEventsItems.sort((a: { scheduled_date?: string; due_date?: string }, b: { scheduled_date?: string; due_date?: string }) => {
         const dateA = new Date(a.scheduled_date || a.due_date || 0).getTime();

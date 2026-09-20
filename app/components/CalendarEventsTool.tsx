@@ -2,6 +2,18 @@
 
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { useTheme } from './AppThemeProvider';
+import { useAppNotice } from './AppNotice';
+import { AttachmentButton } from './AttachmentButton';
+import { AttachmentModal } from './AttachmentModal';
+import {
+  canPreviewAttachment,
+  createPendingAttachment,
+  isImageAttachment,
+  isPdfAttachment,
+  type AttachmentItem,
+} from '@/lib/attachments';
+
+const API_BASE = '/api/tools/calendar-events';
 
 type CalendarCategory = {
   id: string;
@@ -24,6 +36,7 @@ type CalendarEvent = {
   dayOfMonth?: number; // 1-31
   dateInactivated?: string | null;
   addToDashboard: boolean;
+  attachments: AttachmentItem[];
 };
 
 type EventFormState = {
@@ -69,6 +82,7 @@ function mapDbEvent(e: any): CalendarEvent {
     dayOfMonth: e.day_of_month || undefined,
     dateInactivated: e.date_inactivated || null,
     addToDashboard: !!e.addToDashboard,
+    attachments: Array.isArray(e.attachments) ? e.attachments : [],
   };
 }
 
@@ -234,6 +248,7 @@ type CalendarEventsToolProps = {
 
 export function CalendarEventsTool({ toolId }: CalendarEventsToolProps) {
   const { resolvedTheme } = useTheme();
+  const { showError } = useAppNotice();
   const isLight = resolvedTheme === 'light';
   const cardClass = isLight
     ? 'rounded-2xl border border-slate-200 bg-white p-6 shadow-sm'
@@ -340,6 +355,7 @@ export function CalendarEventsTool({ toolId }: CalendarEventsToolProps) {
 
   // Holiday selection modal
   const [showHolidayModal, setShowHolidayModal] = useState(false);
+  const [showAddEventModal, setShowAddEventModal] = useState(false);
   
   // History state
   const [showHistory, setShowHistory] = useState(false);
@@ -347,6 +363,11 @@ export function CalendarEventsTool({ toolId }: CalendarEventsToolProps) {
   // Export state
   const [showExportPopup, setShowExportPopup] = useState(false);
   const [includeHistory, setIncludeHistory] = useState(false);
+
+  const [pendingAttachments, setPendingAttachments] = useState<AttachmentItem[]>([]);
+  const [attachmentModal, setAttachmentModal] = useState<null | 'add' | string>(null);
+  const [attachmentBusy, setAttachmentBusy] = useState(false);
+  const [viewPreview, setViewPreview] = useState<AttachmentItem | null>(null);
 
   // Initialize default categories on mount
   useEffect(() => {
@@ -488,6 +509,11 @@ export function CalendarEventsTool({ toolId }: CalendarEventsToolProps) {
     if (category) {
       if (selectedCategoryId !== categoryId) {
         setNewEvent(EMPTY_EVENT_FORM);
+        setShowAddEventModal(false);
+        setShowHolidayModal(false);
+        revokePending(pendingAttachments);
+        setPendingAttachments([]);
+        if (attachmentModal === 'add') closeAttachmentModal();
       }
       setSelectedCategoryId(categoryId);
       await loadCategoryEvents(categoryId);
@@ -693,6 +719,9 @@ export function CalendarEventsTool({ toolId }: CalendarEventsToolProps) {
       // Remove category and its events from local state
       setCategories(prev => prev.filter(cat => cat.id !== deleteConfirmCategoryId));
       setCalendarEvents(prev => prev.filter(event => event.categoryId !== deleteConfirmCategoryId));
+      if (attachmentModal && attachmentModal !== 'add') {
+        closeAttachmentModal();
+      }
       
       // If the deleted category was selected, clear selection
       if (selectedCategoryId === deleteConfirmCategoryId) {
@@ -767,11 +796,34 @@ export function CalendarEventsTool({ toolId }: CalendarEventsToolProps) {
         throw new Error(data.error || 'Failed to create calendar event');
       }
 
-      if (data.event) {
-        setCalendarEvents(prev => [...prev, mapDbEvent(data.event)]);
+      const created = data.event ? mapDbEvent(data.event) : null;
+      if (created && pendingAttachments.length > 0) {
+        try {
+          const uploaded: AttachmentItem[] = [];
+          for (const queued of pendingAttachments) {
+            if (!queued.file) continue;
+            uploaded.push(await uploadEventFile(queued.file, created.id));
+          }
+          created.attachments = uploaded;
+        } catch (uploadError) {
+          setCalendarEvents((prev) => [...prev, created]);
+          setNewEvent(EMPTY_EVENT_FORM);
+          setShowAddEventModal(false);
+          setShowHolidayModal(false);
+          clearPendingAttachments();
+          showError(uploadError instanceof Error ? uploadError.message : 'Event saved, but a file failed to upload.');
+          return;
+        }
       }
-      
+
+      if (created) {
+        setCalendarEvents((prev) => [...prev, created]);
+      }
+
       setNewEvent(EMPTY_EVENT_FORM);
+      setShowAddEventModal(false);
+      setShowHolidayModal(false);
+      clearPendingAttachments();
       setSaveMessage({ type: 'success', text: 'Calendar event added successfully!' });
       setTimeout(() => setSaveMessage(null), 3000);
     } catch (error) {
@@ -844,7 +896,7 @@ export function CalendarEventsTool({ toolId }: CalendarEventsToolProps) {
       if (data.event) {
         const updatedEvent = mapDbEvent(data.event);
         setCalendarEvents(prev => prev.map(event =>
-          event.id === editingEventId ? updatedEvent : event
+          event.id === editingEventId ? { ...updatedEvent, attachments: event.attachments } : event
         ));
       }
       
@@ -960,6 +1012,7 @@ export function CalendarEventsTool({ toolId }: CalendarEventsToolProps) {
       }
 
       setCalendarEvents(prev => prev.filter(event => event.id !== eventId));
+      if (attachmentModal === eventId) closeAttachmentModal();
       setSaveMessage({ type: 'success', text: 'Calendar event deleted' });
       setTimeout(() => setSaveMessage(null), 3000);
     } catch (error) {
@@ -1204,9 +1257,185 @@ export function CalendarEventsTool({ toolId }: CalendarEventsToolProps) {
     setShowHolidayModal(false);
   };
 
+  const openAddEventModal = () => {
+    setNewEvent(EMPTY_EVENT_FORM);
+    setShowHolidayModal(false);
+    setShowAddEventModal(true);
+  };
+
+  const revokePending = (items: AttachmentItem[]) => {
+    items.forEach((item) => {
+      if (item.url) URL.revokeObjectURL(item.url);
+    });
+  };
+
+  const closeAttachmentModal = () => {
+    setAttachmentModal(null);
+    setViewPreview(null);
+  };
+
+  const clearPendingAttachments = () => {
+    revokePending(pendingAttachments);
+    setPendingAttachments([]);
+    if (attachmentModal === 'add') closeAttachmentModal();
+  };
+
+  const closeAddEventModal = () => {
+    if (isSavingRef.current) return;
+    setShowAddEventModal(false);
+    setShowHolidayModal(false);
+    setNewEvent(EMPTY_EVENT_FORM);
+    clearPendingAttachments();
+  };
+
+  const uploadEventFile = async (file: File, eventId: string): Promise<AttachmentItem> => {
+    if (!toolId) throw new Error('Tool ID is required');
+    const formData = new FormData();
+    formData.append('toolId', toolId);
+    formData.append('eventId', eventId);
+    formData.append('file', file);
+    const response = await fetch(`${API_BASE}/attachments`, { method: 'POST', body: formData });
+    const data = await response.json().catch(() => ({}));
+    if (!response.ok) throw new Error(data.error || 'Failed to add file');
+    return data.attachment as AttachmentItem;
+  };
+
+  const fetchEventAttachmentBlob = async (attachmentId: string, inline = false) => {
+    const query = inline ? '?inline=1' : '';
+    const response = await fetch(`${API_BASE}/attachments/${attachmentId}${query}`);
+    if (!response.ok) {
+      const errorData = await response.json().catch(() => ({ error: 'Failed to open file' }));
+      throw new Error(errorData.error || 'Failed to open file');
+    }
+    return response.blob();
+  };
+
+  const handleViewAttachment = async (item: AttachmentItem) => {
+    if (item.file && item.url) {
+      if (isImageAttachment(item.type)) {
+        setViewPreview(item);
+        return;
+      }
+      if (isPdfAttachment(item.type, item.name)) {
+        window.open(item.url, '_blank', 'noopener,noreferrer');
+        return;
+      }
+      showError('This file type can’t be previewed in the browser. Use Download to save it.');
+      return;
+    }
+    try {
+      const blob = await fetchEventAttachmentBlob(item.id, true);
+      const type = blob.type || item.type || '';
+      if (!canPreviewAttachment(type, item.name)) {
+        showError('This file type can’t be previewed in the browser. Use Download to save it.');
+        return;
+      }
+      const url = window.URL.createObjectURL(blob);
+      if (isImageAttachment(type)) {
+        setViewPreview({ ...item, type, url, size: item.size || blob.size });
+        return;
+      }
+      if (isPdfAttachment(type, item.name)) {
+        window.open(url, '_blank', 'noopener,noreferrer');
+      }
+    } catch (error) {
+      showError(error instanceof Error ? error.message : 'Failed to open file');
+    }
+  };
+
+  const handleDownloadAttachment = async (item: AttachmentItem): Promise<boolean> => {
+    if (item.file) return false;
+    try {
+      const blob = await fetchEventAttachmentBlob(item.id);
+      const url = window.URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = url;
+      link.download = item.name || 'attachment';
+      document.body.appendChild(link);
+      link.click();
+      window.URL.revokeObjectURL(url);
+      document.body.removeChild(link);
+      return true;
+    } catch (error) {
+      showError(error instanceof Error ? error.message : 'Failed to download file');
+      return false;
+    }
+  };
+
+  const addSavedEventFiles = async (eventId: string, files: File[]) => {
+    setAttachmentBusy(true);
+    try {
+      const uploaded: AttachmentItem[] = [];
+      for (const file of files) {
+        uploaded.push(await uploadEventFile(file, eventId));
+      }
+      setCalendarEvents((prev) =>
+        prev.map((event) =>
+          event.id === eventId
+            ? { ...event, attachments: [...(event.attachments || []), ...uploaded] }
+            : event
+        )
+      );
+    } catch (error) {
+      showError(error instanceof Error ? error.message : 'Failed to add file');
+    } finally {
+      setAttachmentBusy(false);
+    }
+  };
+
+  const removeSavedEventFile = async (attachmentId: string) => {
+    if (!toolId) return;
+    setAttachmentBusy(true);
+    try {
+      const response = await fetch(`${API_BASE}/attachments`, {
+        method: 'DELETE',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ toolId, attachmentId }),
+      });
+      const data = await response.json().catch(() => ({}));
+      if (!response.ok) throw new Error(data.error || 'Failed to remove file');
+      setCalendarEvents((prev) =>
+        prev.map((event) => ({
+          ...event,
+          attachments: (event.attachments || []).filter((item) => item.id !== attachmentId),
+        }))
+      );
+    } catch (error) {
+      showError(error instanceof Error ? error.message : 'Failed to remove file');
+    } finally {
+      setAttachmentBusy(false);
+    }
+  };
+
+  useEffect(() => {
+    if (!showAddEventModal) return;
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.key === 'Escape' && !showHolidayModal && attachmentModal === null) {
+        closeAddEventModal();
+      }
+    };
+    window.addEventListener('keydown', onKeyDown);
+    return () => window.removeEventListener('keydown', onKeyDown);
+  }, [showAddEventModal, showHolidayModal, attachmentModal]);
+
   const selectedCategory = selectedCategoryId ? categories.find(c => c.id === selectedCategoryId) : null;
   const activeEvents = selectedCategoryId ? calendarEvents.filter(e => e.categoryId === selectedCategoryId && e.isActive) : [];
   const historyEvents = selectedCategoryId ? calendarEvents.filter(e => e.categoryId === selectedCategoryId && !e.isActive) : [];
+  const savedAttachmentEvent =
+    attachmentModal && attachmentModal !== 'add'
+      ? calendarEvents.find((event) => event.id === attachmentModal) || null
+      : null;
+  const modalFiles: AttachmentItem[] =
+    attachmentModal === 'add'
+      ? pendingAttachments
+      : savedAttachmentEvent
+        ? (savedAttachmentEvent.attachments || []).map((item) => ({
+            id: item.id,
+            name: item.name,
+            size: item.size,
+            type: item.type,
+          }))
+        : [];
 
   return (
     <div className="space-y-6">
@@ -1400,6 +1629,8 @@ export function CalendarEventsTool({ toolId }: CalendarEventsToolProps) {
                 setIsCreatingNewCategory(true);
                 setSelectedCategoryId(null);
                 setEditingCategoryId(null);
+                setShowAddEventModal(false);
+                setShowHolidayModal(false);
               }}
               className={isLight ? 'px-4 py-3 rounded-lg border border-slate-300 bg-white text-slate-700 hover:border-emerald-500/50 hover:bg-emerald-50 hover:text-emerald-800 transition-all duration-200 flex items-center justify-center min-w-[60px]' : 'px-4 py-3 rounded-lg border border-slate-700 bg-slate-800/50 text-slate-300 hover:border-emerald-500/50 hover:bg-emerald-500/10 hover:text-emerald-300 transition-all duration-200 flex items-center justify-center min-w-[60px]'}
               title="Add New Category"
@@ -1573,198 +1804,45 @@ export function CalendarEventsTool({ toolId }: CalendarEventsToolProps) {
         <>
           {/* Category Header */}
           <div className={cardClass}>
-            <div className="flex items-center justify-between mb-4">
+            <div className="flex items-center gap-2 mb-4">
               <h3 className={subtitleClass}>
                 {selectedCategory.name} Calendar Events
               </h3>
-            </div>
-
-            {/* Add New Event Form */}
-            <div className="space-y-4 mb-6">
-              {/* Add Common Holiday Button - Only show for Holiday category */}
-              {selectedCategory.name === 'Holiday' && (
-                <div className="mb-4">
-                  <button
-                    onClick={() => setShowHolidayModal(true)}
-                    className={isLight ? 'px-4 py-2 rounded-lg border border-emerald-300 bg-emerald-50 text-emerald-900 hover:bg-emerald-100 transition-colors flex items-center gap-2' : 'px-4 py-2 rounded-lg border border-emerald-500/50 bg-emerald-500/10 text-emerald-300 hover:bg-emerald-500/20 transition-colors flex items-center gap-2'}
-                  >
-                    <svg className="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 6v6m0 0v6m0-6h6m-6 0H6" />
-                    </svg>
-                    Add Common Holiday
-                  </button>
-                </div>
-              )}
-              {/* Title - Full width */}
-              <div>
-                <label className={labelClass}>
-                  Title <span className="text-red-400">*</span>
-                </label>
-                <input
-                  type="text"
-                  value={newEvent.title}
-                  onChange={(e) => setNewEvent({ ...newEvent, title: e.target.value })}
-                  placeholder="Enter event title"
-                  className={inputClass}
-                />
-              </div>
-
-              {/* Date and Time - Side by side */}
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <div>
-                  <label className={labelClass}>
-                    Date <span className="text-red-400">*</span>
-                  </label>
-                  <input
-                    type="date"
-                    value={newEvent.date}
-                    onChange={(e) => setNewEvent({ ...newEvent, date: e.target.value })}
-                    className={inputClass}
-                  />
-                </div>
-                <div>
-                  <label className={labelClass}>
-                    Time (Optional)
-                  </label>
-                  <input
-                    type="time"
-                    value={newEvent.time || ''}
-                    onChange={(e) => setNewEvent({ ...newEvent, time: e.target.value || null })}
-                    className={inputClass}
-                  />
-                  <p className={`text-xs ${mutedTextClass} mt-1`}>Leave empty for all-day event</p>
-                </div>
-              </div>
-
-              {/* Row 2: Frequency and conditional inputs */}
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <div>
-                  <label className={labelClass}>
-                    Frequency <span className="text-red-400">*</span>
-                  </label>
-                  <select
-                    value={newEvent.frequency}
-                    onChange={(e) => {
-                      const newFreq = e.target.value as typeof newEvent.frequency;
-                      setNewEvent({ 
-                        ...newEvent, 
-                        frequency: newFreq,
-                        // Reset conditional fields when frequency changes
-                        daysOfWeek: newFreq === 'Weekly' ? newEvent.daysOfWeek : [],
-                        dayOfMonth: newFreq === 'Monthly' ? newEvent.dayOfMonth : undefined
-                      });
-                    }}
-                    className={inputClass}
-                  >
-                    {FREQUENCY_OPTIONS.map(freq => (
-                      <option key={freq} value={freq}>{freq}</option>
-                    ))}
-                  </select>
-                </div>
-                
-                {/* Days of Week - Only for Weekly frequency */}
-                {newEvent.frequency === 'Weekly' && (
-                  <div>
-                    <label className={labelClass}>
-                      Days of Week
-                    </label>
-                    <div className="flex flex-wrap gap-2">
-                      {DAYS_OF_WEEK.map(day => (
-                        <button
-                          key={day.value}
-                          type="button"
-                          onClick={() => {
-                            const isSelected = newEvent.daysOfWeek?.includes(day.value);
-                            setNewEvent({
-                              ...newEvent,
-                              daysOfWeek: isSelected
-                                ? newEvent.daysOfWeek?.filter(d => d !== day.value) || []
-                                : [...(newEvent.daysOfWeek || []), day.value]
-                            });
-                          }}
-                          className={`px-3 py-2 rounded-lg border transition-colors ${
-                            newEvent.daysOfWeek?.includes(day.value)
-                              ? isLight ? 'border-emerald-400 bg-emerald-100 text-emerald-900' : 'border-emerald-500 bg-emerald-500/20 text-emerald-300'
-                              : isLight ? 'border-slate-300 bg-white text-slate-700 hover:border-slate-400' : 'border-slate-700 bg-slate-800/50 text-slate-300 hover:border-slate-600'
-                          }`}
-                        >
-                          {day.short}
-                        </button>
-                      ))}
-                    </div>
-                    {newEvent.daysOfWeek && newEvent.daysOfWeek.length === 0 && (
-                      <p className={`text-xs ${mutedTextClass} mt-1`}>Select at least one day</p>
-                    )}
-                  </div>
-                )}
-
-                {/* Day of Month - Only for Monthly frequency */}
-                {newEvent.frequency === 'Monthly' && (
-                  <div>
-                    <label className={labelClass}>
-                      Day of Month
-                    </label>
-                    <select
-                      value={newEvent.dayOfMonth || ''}
-                      onChange={(e) => setNewEvent({ ...newEvent, dayOfMonth: e.target.value ? parseInt(e.target.value) : undefined })}
-                      className={inputClass}
-                    >
-                      <option value="">Select day of month</option>
-                      {Array.from({ length: 31 }, (_, i) => i + 1).map(day => (
-                        <option key={day} value={day}>{day}</option>
-                      ))}
-                    </select>
-                  </div>
-                )}
-              </div>
-
-              {/* End Date - Optional for all frequencies */}
-              <div>
-                <label className={labelClass}>
-                  End Date (Optional)
-                </label>
-                <input
-                  type="date"
-                  value={newEvent.endDate || ''}
-                  onChange={(e) => setNewEvent({ ...newEvent, endDate: e.target.value || null })}
-                  className={inputClass}
-                />
-                <p className={`text-xs ${mutedTextClass} mt-1`}>Leave empty for no end date</p>
-              </div>
-
-              <div>
-                <label className={labelClass}>Notes (Optional)</label>
-                <textarea
-                  value={newEvent.notes}
-                  onChange={(e) => setNewEvent({ ...newEvent, notes: e.target.value })}
-                  placeholder="Add any additional notes..."
-                  rows={3}
-                  className={`${inputClass} resize-none`}
-                />
-              </div>
-              <DashboardCalendarSwitch
-                isOn={newEvent.addToDashboard}
-                isLight={isLight}
-                onToggle={() => setNewEvent({ ...newEvent, addToDashboard: !newEvent.addToDashboard })}
-              />
               <button
-                onClick={addCalendarEvent}
-                disabled={!newEvent.title.trim() || !newEvent.date || isSaving}
-                className={primaryButtonClass}
+                type="button"
+                onClick={openAddEventModal}
+                className={
+                  isLight
+                    ? 'inline-flex items-center justify-center rounded-md border-2 border-emerald-600 p-0.5 text-emerald-600 transition-colors hover:bg-emerald-50 hover:text-emerald-800'
+                    : 'inline-flex items-center justify-center rounded-md border-2 border-emerald-400 p-0.5 text-emerald-400 transition-colors hover:bg-emerald-500/15 hover:text-emerald-300'
+                }
+                aria-label="Add calendar event"
+                title="Add calendar event"
               >
-                {isSaving ? 'Saving...' : 'Add Calendar Event'}
+                <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden>
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
+                </svg>
               </button>
             </div>
 
             {/* Active Events List */}
-            {activeEvents.length > 0 && (
-              <div className="mt-6">
-                <h4 className={isLight ? 'text-md font-semibold text-slate-900 mb-4' : 'text-md font-semibold text-slate-50 mb-4'}>Active Events</h4>
+            <div>
+              <h4 className={isLight ? 'text-md font-semibold text-slate-900 mb-4' : 'text-md font-semibold text-slate-50 mb-4'}>Active Events</h4>
+              {activeEvents.length > 0 ? (
                 <div className="space-y-4">
                   {activeEvents.map(event => (
                     <div key={event.id} className={nestedCardClass}>
                       {editingEventId === event.id ? (
                         <div className="space-y-4">
+                          <div className="flex items-center justify-between gap-3">
+                            <h4 className={isLight ? 'text-md font-semibold text-slate-900' : 'text-md font-semibold text-slate-50'}>
+                              Edit Event
+                            </h4>
+                            <AttachmentButton
+                              count={event.attachments?.length || 0}
+                              onClick={() => setAttachmentModal(event.id)}
+                            />
+                          </div>
                           {/* Title - Full width */}
                           <div>
                             <label className="block text-sm font-medium text-slate-300 mb-2">Title</label>
@@ -1962,6 +2040,10 @@ export function CalendarEventsTool({ toolId }: CalendarEventsToolProps) {
                             )}
                           </div>
                           <div className="flex shrink-0 items-center gap-1.5 ml-4">
+                            <AttachmentButton
+                              count={event.attachments?.length || 0}
+                              onClick={() => setAttachmentModal(event.id)}
+                            />
                             <button
                               type="button"
                               onClick={() => startEditingEvent(event)}
@@ -2000,8 +2082,10 @@ export function CalendarEventsTool({ toolId }: CalendarEventsToolProps) {
                     </div>
                   ))}
                 </div>
-              </div>
-            )}
+              ) : (
+                <p className={`${mutedTextClass} text-center py-8`}>No calendar events yet. Click + to add one.</p>
+              )}
+            </div>
 
             {/* History Events List */}
             <div className={`mt-6 ${cardClass}`}>
@@ -2076,6 +2160,10 @@ export function CalendarEventsTool({ toolId }: CalendarEventsToolProps) {
                             )}
                           </div>
                           <div className="flex shrink-0 items-center gap-1.5 ml-4">
+                            <AttachmentButton
+                              count={event.attachments?.length || 0}
+                              onClick={() => setAttachmentModal(event.id)}
+                            />
                             <button
                               type="button"
                               onClick={() => reactivateEvent(event.id)}
@@ -2122,18 +2210,224 @@ export function CalendarEventsTool({ toolId }: CalendarEventsToolProps) {
               )}
             </div>
 
-            {activeEvents.length === 0 && !showHistory && (
-              <div className="text-center py-8">
-                <p className={mutedTextClass}>No calendar events yet. Add your first event above.</p>
-              </div>
-            )}
           </div>
         </>
       )}
 
+      {/* Add Event Modal */}
+      {showAddEventModal && selectedCategory && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+          <div className={isLight ? 'rounded-2xl border border-slate-200 bg-white p-6 max-w-2xl w-full mx-4 max-h-[90vh] overflow-y-auto shadow-xl' : 'rounded-2xl border border-slate-800 bg-slate-900 p-6 max-w-2xl w-full mx-4 max-h-[90vh] overflow-y-auto'}>
+            <div className="flex items-center justify-between mb-4">
+              <h3 className={isLight ? 'text-xl font-semibold text-slate-900' : 'text-xl font-semibold text-slate-50'}>
+                Add {selectedCategory.name} Event
+              </h3>
+              <div className="flex items-center gap-2">
+                <AttachmentButton
+                  count={pendingAttachments.length}
+                  onClick={() => setAttachmentModal('add')}
+                />
+                <button
+                  type="button"
+                  onClick={closeAddEventModal}
+                  className={isLight ? 'text-slate-600 hover:text-slate-900 transition-colors' : 'text-slate-400 hover:text-slate-200 transition-colors'}
+                  title="Close"
+                  aria-label="Close"
+                >
+                  <svg className="h-6 w-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                  </svg>
+                </button>
+              </div>
+            </div>
+
+            <div className="space-y-4">
+              {selectedCategory.name === 'Holiday' && (
+                <div>
+                  <button
+                    type="button"
+                    onClick={() => setShowHolidayModal(true)}
+                    className={isLight ? 'px-4 py-2 rounded-lg border border-emerald-300 bg-emerald-50 text-emerald-900 hover:bg-emerald-100 transition-colors flex items-center gap-2' : 'px-4 py-2 rounded-lg border border-emerald-500/50 bg-emerald-500/10 text-emerald-300 hover:bg-emerald-500/20 transition-colors flex items-center gap-2'}
+                  >
+                    <svg className="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 6v6m0 0v6m0-6h6m-6 0H6" />
+                    </svg>
+                    Add Common Holiday
+                  </button>
+                </div>
+              )}
+
+              <div>
+                <label className={labelClass}>
+                  Title <span className="text-red-400">*</span>
+                </label>
+                <input
+                  type="text"
+                  value={newEvent.title}
+                  onChange={(e) => setNewEvent({ ...newEvent, title: e.target.value })}
+                  placeholder="Enter event title"
+                  className={inputClass}
+                />
+              </div>
+
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div>
+                  <label className={labelClass}>
+                    Date <span className="text-red-400">*</span>
+                  </label>
+                  <input
+                    type="date"
+                    value={newEvent.date}
+                    onChange={(e) => setNewEvent({ ...newEvent, date: e.target.value })}
+                    className={inputClass}
+                  />
+                </div>
+                <div>
+                  <label className={labelClass}>
+                    Time (Optional)
+                  </label>
+                  <input
+                    type="time"
+                    value={newEvent.time || ''}
+                    onChange={(e) => setNewEvent({ ...newEvent, time: e.target.value || null })}
+                    className={inputClass}
+                  />
+                  <p className={`text-xs ${mutedTextClass} mt-1`}>Leave empty for all-day event</p>
+                </div>
+              </div>
+
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div>
+                  <label className={labelClass}>
+                    Frequency <span className="text-red-400">*</span>
+                  </label>
+                  <select
+                    value={newEvent.frequency}
+                    onChange={(e) => {
+                      const newFreq = e.target.value as typeof newEvent.frequency;
+                      setNewEvent({
+                        ...newEvent,
+                        frequency: newFreq,
+                        daysOfWeek: newFreq === 'Weekly' ? newEvent.daysOfWeek : [],
+                        dayOfMonth: newFreq === 'Monthly' ? newEvent.dayOfMonth : undefined
+                      });
+                    }}
+                    className={inputClass}
+                  >
+                    {FREQUENCY_OPTIONS.map(freq => (
+                      <option key={freq} value={freq}>{freq}</option>
+                    ))}
+                  </select>
+                </div>
+
+                {newEvent.frequency === 'Weekly' && (
+                  <div>
+                    <label className={labelClass}>
+                      Days of Week
+                    </label>
+                    <div className="flex flex-wrap gap-2">
+                      {DAYS_OF_WEEK.map(day => (
+                        <button
+                          key={day.value}
+                          type="button"
+                          onClick={() => {
+                            const isSelected = newEvent.daysOfWeek?.includes(day.value);
+                            setNewEvent({
+                              ...newEvent,
+                              daysOfWeek: isSelected
+                                ? newEvent.daysOfWeek?.filter(d => d !== day.value) || []
+                                : [...(newEvent.daysOfWeek || []), day.value]
+                            });
+                          }}
+                          className={`px-3 py-2 rounded-lg border transition-colors ${
+                            newEvent.daysOfWeek?.includes(day.value)
+                              ? isLight ? 'border-emerald-400 bg-emerald-100 text-emerald-900' : 'border-emerald-500 bg-emerald-500/20 text-emerald-300'
+                              : isLight ? 'border-slate-300 bg-white text-slate-700 hover:border-slate-400' : 'border-slate-700 bg-slate-800/50 text-slate-300 hover:border-slate-600'
+                          }`}
+                        >
+                          {day.short}
+                        </button>
+                      ))}
+                    </div>
+                    {newEvent.daysOfWeek && newEvent.daysOfWeek.length === 0 && (
+                      <p className={`text-xs ${mutedTextClass} mt-1`}>Select at least one day</p>
+                    )}
+                  </div>
+                )}
+
+                {newEvent.frequency === 'Monthly' && (
+                  <div>
+                    <label className={labelClass}>
+                      Day of Month
+                    </label>
+                    <select
+                      value={newEvent.dayOfMonth || ''}
+                      onChange={(e) => setNewEvent({ ...newEvent, dayOfMonth: e.target.value ? parseInt(e.target.value) : undefined })}
+                      className={inputClass}
+                    >
+                      <option value="">Select day of month</option>
+                      {Array.from({ length: 31 }, (_, i) => i + 1).map(day => (
+                        <option key={day} value={day}>{day}</option>
+                      ))}
+                    </select>
+                  </div>
+                )}
+              </div>
+
+              <div>
+                <label className={labelClass}>
+                  End Date (Optional)
+                </label>
+                <input
+                  type="date"
+                  value={newEvent.endDate || ''}
+                  onChange={(e) => setNewEvent({ ...newEvent, endDate: e.target.value || null })}
+                  className={inputClass}
+                />
+                <p className={`text-xs ${mutedTextClass} mt-1`}>Leave empty for no end date</p>
+              </div>
+
+              <div>
+                <label className={labelClass}>Notes (Optional)</label>
+                <textarea
+                  value={newEvent.notes}
+                  onChange={(e) => setNewEvent({ ...newEvent, notes: e.target.value })}
+                  placeholder="Add any additional notes..."
+                  rows={3}
+                  className={`${inputClass} resize-none`}
+                />
+              </div>
+              <DashboardCalendarSwitch
+                isOn={newEvent.addToDashboard}
+                isLight={isLight}
+                onToggle={() => setNewEvent({ ...newEvent, addToDashboard: !newEvent.addToDashboard })}
+              />
+              <div className="flex gap-2 pt-2">
+                <button
+                  type="button"
+                  onClick={addCalendarEvent}
+                  disabled={!newEvent.title.trim() || !newEvent.date || isSaving || (newEvent.frequency === 'Weekly' && (!newEvent.daysOfWeek || newEvent.daysOfWeek.length === 0))}
+                  className={primaryButtonClass}
+                >
+                  {isSaving ? 'Saving...' : 'Add Calendar Event'}
+                </button>
+                <button
+                  type="button"
+                  onClick={closeAddEventModal}
+                  disabled={isSaving}
+                  className={secondaryButtonClass}
+                >
+                  Cancel
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Holiday Selection Modal */}
       {showHolidayModal && (
-        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-[60]">
           <div className={isLight ? 'rounded-2xl border border-slate-200 bg-white p-6 max-w-2xl w-full mx-4 max-h-[80vh] overflow-y-auto shadow-xl' : 'rounded-2xl border border-slate-800 bg-slate-900 p-6 max-w-2xl w-full mx-4 max-h-[80vh] overflow-y-auto'}>
             <div className="flex items-center justify-between mb-4">
               <h3 className={isLight ? 'text-xl font-semibold text-slate-900' : 'text-xl font-semibold text-slate-50'}>Select a Common US Holiday</h3>
@@ -2246,6 +2540,43 @@ export function CalendarEventsTool({ toolId }: CalendarEventsToolProps) {
           </div>
         </div>
       )}
+
+      <AttachmentModal
+        open={attachmentModal !== null}
+        onClose={closeAttachmentModal}
+        previewItem={viewPreview}
+        title={
+          attachmentModal === 'add'
+            ? newEvent.title.trim() || `New ${selectedCategory?.name || ''} event`.trim() || 'New event'
+            : savedAttachmentEvent?.title || 'Calendar event'
+        }
+        files={modalFiles}
+        busy={attachmentBusy}
+        readOnly={Boolean(savedAttachmentEvent && !savedAttachmentEvent.isActive)}
+        onAdd={(incoming) => {
+          if (attachmentModal === 'add') {
+            setPendingAttachments((prev) => [...prev, ...incoming.map(createPendingAttachment)]);
+            return;
+          }
+          if (attachmentModal) {
+            void addSavedEventFiles(attachmentModal, incoming);
+          }
+        }}
+        onRemove={(id) => {
+          if (attachmentModal === 'add') {
+            setPendingAttachments((prev) => {
+              const next = prev.filter((item) => item.id !== id);
+              const removed = prev.find((item) => item.id === id);
+              if (removed?.url) URL.revokeObjectURL(removed.url);
+              return next;
+            });
+            return;
+          }
+          void removeSavedEventFile(id);
+        }}
+        onView={handleViewAttachment}
+        onDownload={attachmentModal === 'add' ? undefined : handleDownloadAttachment}
+      />
     </div>
   );
 }

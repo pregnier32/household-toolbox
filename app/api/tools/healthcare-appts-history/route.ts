@@ -2,6 +2,39 @@ import { NextRequest, NextResponse } from 'next/server';
 import { getSession } from '@/lib/session';
 import { supabaseServer } from '@/lib/supabaseServer';
 import { attachmentsByRecordIds, deleteHeaderRecordStorageFiles, deleteRecordStorageFiles, removeHealthcareStorageFiles } from '@/lib/healthcare-storage';
+import { CALENDAR_SOURCE_HEALTHCARE_APPOINTMENT } from '@/lib/calendarPins';
+import {
+  deleteCalendarPinsForSources,
+  getPinnedSourceIds,
+  syncCalendarPin,
+} from '@/lib/calendarPinsServer';
+
+async function attachDashboardFlags<T extends { id: string }>(
+  records: T[],
+  userId: string,
+  toolId?: string
+): Promise<(T & { addToDashboard: boolean })[]> {
+  const { ids } = await getPinnedSourceIds({
+    userId,
+    sourceType: CALENDAR_SOURCE_HEALTHCARE_APPOINTMENT,
+    sourceIds: records.map((record) => record.id),
+    toolId,
+  });
+  return records.map((record) => ({ ...record, addToDashboard: ids.has(record.id) }));
+}
+
+async function deletePinsForHeader(userId: string, headerId: string) {
+  const { data } = await supabaseServer
+    .from('tools_hcah_records')
+    .select('id')
+    .eq('header_id', headerId)
+    .eq('user_id', userId);
+  await deleteCalendarPinsForSources({
+    userId,
+    sourceType: CALENDAR_SOURCE_HEALTHCARE_APPOINTMENT,
+    sourceIds: (data || []).map((row) => row.id),
+  });
+}
 
 const STOCK_MEMBER_NAMES = ['Family1', 'Family2'];
 
@@ -78,12 +111,12 @@ export async function GET(request: NextRequest) {
           .single();
         if (recErr || !record) return NextResponse.json({ error: 'Record not found' }, { status: 404 });
         const attachmentMap = await attachmentsByRecordIds([recordId]);
-        return NextResponse.json({
-          record: {
-            ...record,
-            documents: attachmentMap[recordId] || [],
-          },
-        });
+        const [withPin] = await attachDashboardFlags(
+          [{ ...record, documents: attachmentMap[recordId] || [] }],
+          user.id,
+          toolId
+        );
+        return NextResponse.json({ record: withPin });
       }
 
       let query = supabaseServer
@@ -97,10 +130,14 @@ export async function GET(request: NextRequest) {
 
       const list = records || [];
       const attachmentMap = await attachmentsByRecordIds(list.map((r) => r.id));
-      const recordsWithDocs = list.map((r) => ({
-        ...r,
-        documents: attachmentMap[r.id] || [],
-      }));
+      const recordsWithDocs = await attachDashboardFlags(
+        list.map((r) => ({
+          ...r,
+          documents: attachmentMap[r.id] || [],
+        })),
+        user.id,
+        toolId
+      );
       if (resource === 'records') return NextResponse.json({ records: recordsWithDocs });
     }
 
@@ -129,6 +166,7 @@ export async function POST(request: NextRequest) {
       const cardColor = (formData.get('cardColor') as string) || '#10b981';
 
       if (action === 'delete' && headerId) {
+        await deletePinsForHeader(user.id, headerId);
         await deleteHeaderRecordStorageFiles(headerId, user.id);
         const { error } = await supabaseServer
           .from('tools_hcah_headers')
@@ -182,8 +220,16 @@ export async function POST(request: NextRequest) {
       const totalBilled = (formData.get('totalBilled') as string)?.trim() || null;
       const insurancePaid = (formData.get('insurancePaid') as string)?.trim() || null;
       const currentAmountDue = (formData.get('currentAmountDue') as string)?.trim() || null;
+      const addToDashboardRaw = formData.get('addToDashboard');
+      const hasPinFlag = addToDashboardRaw !== null;
+      const addToDashboard = addToDashboardRaw === 'true';
 
       if (action === 'delete' && recordId) {
+        await deleteCalendarPinsForSources({
+          userId: user.id,
+          sourceType: CALENDAR_SOURCE_HEALTHCARE_APPOINTMENT,
+          sourceIds: [recordId],
+        });
         await deleteRecordStorageFiles(recordId, user.id);
         const { error } = await supabaseServer
           .from('tools_hcah_records')
@@ -232,6 +278,27 @@ export async function POST(request: NextRequest) {
         finalRecordId = data.id;
       }
 
+      if (finalRecordId && (action === 'create' || (action === 'update' && hasPinFlag))) {
+        const pinResult = await syncCalendarPin({
+          userId: user.id,
+          toolId,
+          sourceType: CALENDAR_SOURCE_HEALTHCARE_APPOINTMENT,
+          sourceId: finalRecordId,
+          pinned: action === 'create' ? addToDashboard === true : addToDashboard,
+        });
+        if (pinResult.error) {
+          return NextResponse.json(
+            {
+              error:
+                action === 'create'
+                  ? 'Appointment saved, but failed to add it to the dashboard calendar'
+                  : 'Appointment saved, but failed to update the dashboard calendar',
+            },
+            { status: 500 }
+          );
+        }
+      }
+
       return NextResponse.json({ success: true, recordId: finalRecordId });
     }
 
@@ -276,6 +343,7 @@ export async function DELETE(request: NextRequest) {
 
   try {
     if (resource === 'header') {
+      await deletePinsForHeader(user.id, id);
       await deleteHeaderRecordStorageFiles(id, user.id);
       const { error } = await supabaseServer
         .from('tools_hcah_headers')
@@ -287,6 +355,11 @@ export async function DELETE(request: NextRequest) {
       return NextResponse.json({ success: true });
     }
     if (resource === 'record') {
+      await deleteCalendarPinsForSources({
+        userId: user.id,
+        sourceType: CALENDAR_SOURCE_HEALTHCARE_APPOINTMENT,
+        sourceIds: [id],
+      });
       await deleteRecordStorageFiles(id, user.id);
       const { error } = await supabaseServer
         .from('tools_hcah_records')

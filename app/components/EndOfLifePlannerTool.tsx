@@ -8,6 +8,17 @@
 
 import { useCallback, useEffect, useId, useMemo, useRef, useState, type ReactNode } from 'react';
 import { useTheme } from './AppThemeProvider';
+import { useAppNotice } from './AppNotice';
+import { AttachmentButton } from './AttachmentButton';
+import { AttachmentModal } from './AttachmentModal';
+import {
+  canPreviewAttachment,
+  createPendingAttachment,
+  isImageAttachment,
+  isPdfAttachment,
+  type AttachmentItem,
+} from '@/lib/attachments';
+import type { EolAttachmentStore } from '@/lib/end-of-life-planner-storage';
 import {
   ACCOUNT_DISPOSITIONS,
   BANK_ACCOUNT_TYPES,
@@ -47,6 +58,7 @@ import {
   EOL_RELATIONSHIPS,
   EOL_TOOL_DESCRIPTION,
   EOL_TOOL_TITLE,
+  EolAttachment,
   EolBankAccount,
   EolBuiltInSectionId,
   EolContact,
@@ -625,13 +637,18 @@ function RecordTableList<T extends { id: string }>(props: {
   requiredValue: (item: T) => boolean;
   titleOf: (item: T) => string;
   addRequestKey?: number;
-  onCommit: (next: T[], immediate?: boolean) => void;
+  onCommit: (next: T[], immediate?: boolean) => void | Promise<void>;
+  onAfterCommit?: (draft: T, mode: 'add' | 'edit') => void | Promise<void>;
   onDelete: (label: string, onConfirm: () => void) => void;
   renderForm: (item: T, onChange: (next: T) => void, prefix: string) => ReactNode;
   renderFormExtra?: (item: T, onChange: (next: T) => void, helpers: { prefix: string; close: () => void }) => ReactNode;
   formExtra?: ReactNode;
   hideDelete?: (item: T) => boolean;
   onInactivate?: (item: T) => void;
+  attachmentCount?: (item: T) => number;
+  onOpenAttachments?: (item: T, draft?: boolean) => void;
+  draftAttachmentCount?: (item: T) => number;
+  attachmentOpen?: boolean;
   bodyTextClass: string;
   mutedTextClass: string;
   primaryButtonClass: string;
@@ -661,26 +678,31 @@ function RecordTableList<T extends { id: string }>(props: {
 
   useEffect(() => {
     const onKey = (event: KeyboardEvent) => {
-      if (event.key === 'Escape' && editor) setEditor(null);
+      if (event.key !== 'Escape' || !editor) return;
+      if (props.attachmentOpen) return;
+      setEditor(null);
     };
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
-  }, [editor]);
+  }, [editor, props.attachmentOpen]);
 
   useEffect(() => {
     if (!props.addRequestKey) return;
     setEditor({ mode: 'add', draft: props.createDraft() });
   }, [props.addRequestKey]);
 
-  const saveEditor = () => {
+  const saveEditor = async () => {
     if (!editor || !props.requiredValue(editor.draft)) return;
-    props.onCommit(
-      editor.mode === 'add'
-        ? [...props.records, editor.draft]
-        : replaceListItem(props.records, editor.draft.id, editor.draft),
-      true
+    const draft = editor.draft;
+    const mode = editor.mode;
+    await Promise.resolve(
+      props.onCommit(
+        mode === 'add' ? [...props.records, draft] : replaceListItem(props.records, draft.id, draft),
+        true
+      )
     );
     setEditor(null);
+    await Promise.resolve(props.onAfterCommit?.(draft, mode));
   };
 
   return (
@@ -705,7 +727,7 @@ function RecordTableList<T extends { id: string }>(props: {
                   {column.label}
                 </th>
               ))}
-              <th className="w-28 py-2 text-right font-semibold">
+              <th className={`${props.onOpenAttachments ? 'w-36' : 'w-28'} py-2 text-right font-semibold`}>
                 <span className="sr-only">Actions</span>
               </th>
             </tr>
@@ -736,6 +758,13 @@ function RecordTableList<T extends { id: string }>(props: {
                   ))}
                   <td className="py-2.5">
                     <div className="flex justify-end gap-2">
+                      {props.onOpenAttachments ? (
+                        <AttachmentButton
+                          count={props.attachmentCount?.(item) ?? 0}
+                          onClick={() => props.onOpenAttachments?.(item)}
+                          ariaLabel={`Files for ${props.titleOf(item) || props.itemLabel}`}
+                        />
+                      ) : null}
                       <button
                         type="button"
                         className={props.rowIconSecondaryClass}
@@ -784,15 +813,28 @@ function RecordTableList<T extends { id: string }>(props: {
           <div className={props.modalCardClass}>
             <div className="mb-4 flex items-center justify-between">
               <h3 className={props.sectionTitleClass}>{editor.mode === 'add' ? props.addTitle : props.editTitle}</h3>
-              <button
-                type="button"
-                onClick={() => setEditor(null)}
-                className={props.iconButtonClass}
-                aria-label="Close modal"
-                title="Close modal"
-              >
-                <OutlineIcon d={ICON.close} />
-              </button>
+              <div className="flex items-center gap-2">
+                {props.onOpenAttachments ? (
+                  <AttachmentButton
+                    count={
+                      editor.mode === 'add'
+                        ? props.draftAttachmentCount?.(editor.draft) ?? 0
+                        : props.attachmentCount?.(editor.draft) ?? 0
+                    }
+                    onClick={() => props.onOpenAttachments?.(editor.draft, editor.mode === 'add')}
+                    ariaLabel={`Files for ${props.titleOf(editor.draft) || props.itemLabel}`}
+                  />
+                ) : null}
+                <button
+                  type="button"
+                  onClick={() => setEditor(null)}
+                  className={props.iconButtonClass}
+                  aria-label="Close modal"
+                  title="Close modal"
+                >
+                  <OutlineIcon d={ICON.close} />
+                </button>
+              </div>
             </div>
             <div className="space-y-4">
               {props.renderForm(editor.draft, (next) => setEditor({ ...editor, draft: next }), 'record-editor')}
@@ -850,6 +892,7 @@ function statusBadgeClass(status: string, isLight: boolean): string {
 }
 
 export function EndOfLifePlannerTool({ toolId }: EndOfLifePlannerToolProps) {
+  const { showError } = useAppNotice();
   const { resolvedTheme } = useTheme();
   const isLight = resolvedTheme === 'light';
 
@@ -982,6 +1025,15 @@ export function EndOfLifePlannerTool({ toolId }: EndOfLifePlannerToolProps) {
   const [renameValue, setRenameValue] = useState('');
   const [menuOpenSubsectionId, setMenuOpenSubsectionId] = useState<string | null>(null);
   const [familyAddRequestKey, setFamilyAddRequestKey] = useState<Record<string, number>>({});
+  const [pendingAttachments, setPendingAttachments] = useState<Record<string, AttachmentItem[]>>({});
+  const [attachmentModal, setAttachmentModal] = useState<{
+    store: EolAttachmentStore;
+    ownerId: string;
+    draft?: boolean;
+    title: string;
+  } | null>(null);
+  const [attachmentBusy, setAttachmentBusy] = useState(false);
+  const [viewPreview, setViewPreview] = useState<AttachmentItem | null>(null);
 
   const persistTimer = useRef<number | null>(null);
   const persistGeneration = useRef(0);
@@ -1032,13 +1084,11 @@ export function EndOfLifePlannerTool({ toolId }: EndOfLifePlannerToolProps) {
     };
     if (persistTimer.current) window.clearTimeout(persistTimer.current);
     setSaveStatus('saving');
-    if (immediate) {
-      void write();
-      return;
-    }
+    if (immediate) return write();
     persistTimer.current = window.setTimeout(() => {
       void write();
     }, 700);
+    return Promise.resolve();
   }, [toolId]);
 
   useEffect(() => {
@@ -1094,6 +1144,11 @@ export function EndOfLifePlannerTool({ toolId }: EndOfLifePlannerToolProps) {
   useEffect(() => {
     const onKey = (event: KeyboardEvent) => {
       if (event.key !== 'Escape') return;
+      if (attachmentModal) {
+        setAttachmentModal(null);
+        setViewPreview(null);
+        return;
+      }
       if (deleteTarget) {
         setDeleteTarget(null);
         setDeleteConfirmText('');
@@ -1117,7 +1172,7 @@ export function EndOfLifePlannerTool({ toolId }: EndOfLifePlannerToolProps) {
     };
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
-  }, [archiveConfirmPlanId, deleteTarget, showExportPopup, renamingSectionId, menuOpenPlanId, menuOpenTabId, menuOpenSubsectionId]);
+  }, [attachmentModal, archiveConfirmPlanId, deleteTarget, showExportPopup, renamingSectionId, menuOpenPlanId, menuOpenTabId, menuOpenSubsectionId]);
 
   const visiblePlans = useMemo(() => {
     const query = planSearchQuery.trim().toLowerCase();
@@ -1161,26 +1216,272 @@ export function EndOfLifePlannerTool({ toolId }: EndOfLifePlannerToolProps) {
   const patchSelected = useCallback(
     (updater: (plan: EolPlan) => EolPlan, immediate = false) => {
       const currentId = selectedPlanIdRef.current;
-      if (!currentId) return;
+      if (!currentId) return Promise.resolve();
+      let nextPlans: EolPlan[] = [];
       setPlans((prev) => {
-        const next = prev.map((plan) => {
+        nextPlans = prev.map((plan) => {
           if (plan.id !== currentId) return plan;
           const updated = touchPlan(updater(plan));
           return immediate ? appendPlanHistory(updated, 'edit', 'Edited plan') : updated;
         });
-        persist(next, currentId, immediate, { planIds: [currentId] });
-        return next;
+        return nextPlans;
       });
+      return persist(nextPlans, currentId, immediate, { planIds: [currentId] });
     },
     [persist]
   );
 
   const patchData = useCallback(
     (updater: (data: EolPlanData) => EolPlanData, immediate = false) => {
-      patchSelected((plan) => ({ ...plan, data: updater(plan.data) }), immediate);
+      return patchSelected((plan) => ({ ...plan, data: updater(plan.data) }), immediate);
     },
     [patchSelected]
   );
+
+  const revokePending = (items: AttachmentItem[]) => {
+    items.forEach((item) => {
+      if (item.url) URL.revokeObjectURL(item.url);
+    });
+  };
+
+  const ownerFormField = (store: EolAttachmentStore) => {
+    if (store === 'document') return 'documentId';
+    if (store === 'insurance') return 'insuranceId';
+    if (store === 'letter') return 'letterId';
+    if (store === 'personal-item') return 'personalItemId';
+    return 'otherId';
+  };
+
+  const findAttachedRecord = (data: EolPlanData, store: EolAttachmentStore, ownerId: string) => {
+    const lists =
+      store === 'document'
+        ? [...data.documents, ...data.customSections.flatMap((section) => section.documents)]
+        : store === 'insurance'
+          ? [...data.insurance, ...data.customSections.flatMap((section) => section.insurance)]
+          : store === 'letter'
+            ? [...data.letters, ...data.customSections.flatMap((section) => section.letters)]
+            : store === 'personal-item'
+              ? data.myWishes.personalItems
+              : [...data.otherRecords, ...data.customSections.flatMap((section) => section.otherRecords)];
+    return lists.find((item) => item.id === ownerId);
+  };
+
+  const patchAttachedFiles = (data: EolPlanData, store: EolAttachmentStore, ownerId: string, files: EolAttachment[]): EolPlanData => {
+    const patch = <T extends { id: string; attachments?: EolAttachment[] }>(list: T[]) =>
+      list.map((item) => (item.id === ownerId ? { ...item, attachments: files } : item));
+    if (store === 'document') {
+      return {
+        ...data,
+        documents: patch(data.documents),
+        customSections: data.customSections.map((section) => ({ ...section, documents: patch(section.documents) })),
+      };
+    }
+    if (store === 'insurance') {
+      return {
+        ...data,
+        insurance: patch(data.insurance),
+        customSections: data.customSections.map((section) => ({ ...section, insurance: patch(section.insurance) })),
+      };
+    }
+    if (store === 'letter') {
+      return {
+        ...data,
+        letters: patch(data.letters),
+        customSections: data.customSections.map((section) => ({ ...section, letters: patch(section.letters) })),
+      };
+    }
+    if (store === 'personal-item') {
+      return { ...data, myWishes: { ...data.myWishes, personalItems: patch(data.myWishes.personalItems) } };
+    }
+    return {
+      ...data,
+      otherRecords: patch(data.otherRecords),
+      customSections: data.customSections.map((section) => ({ ...section, otherRecords: patch(section.otherRecords) })),
+    };
+  };
+
+  const setLocalAttachments = (store: EolAttachmentStore, ownerId: string, files: EolAttachment[]) => {
+    setPlans((prev) =>
+      prev.map((plan) =>
+        plan.id === selectedPlanIdRef.current ? { ...plan, data: patchAttachedFiles(plan.data, store, ownerId, files) } : plan
+      )
+    );
+  };
+
+  const uploadEolFile = async (file: File, store: EolAttachmentStore, ownerId: string) => {
+    if (!toolId) throw new Error('Tool ID is required');
+    const formData = new FormData();
+    formData.append('toolId', toolId);
+    formData.append(ownerFormField(store), ownerId);
+    formData.append('file', file);
+    const response = await fetch('/api/tools/end-of-life-planner/attachments', { method: 'POST', body: formData });
+    const data = await response.json().catch(() => ({}));
+    if (!response.ok) throw new Error(data.error || 'Failed to add file');
+    return data.attachment as EolAttachment;
+  };
+
+  const persistQueuedFiles = async (store: EolAttachmentStore, ownerId: string) => {
+    const queued = pendingAttachments[ownerId] || [];
+    if (queued.length === 0) return;
+    try {
+      const uploaded: EolAttachment[] = [];
+      for (const item of queued) {
+        if (!item.file) continue;
+        uploaded.push(await uploadEolFile(item.file, store, ownerId));
+      }
+      revokePending(queued);
+      setPendingAttachments((prev) => {
+        const next = { ...prev };
+        delete next[ownerId];
+        return next;
+      });
+      if (attachmentModal?.ownerId === ownerId) {
+        setAttachmentModal((current) => (current ? { ...current, draft: false } : current));
+        setViewPreview(null);
+      }
+      setPlans((prev) =>
+        prev.map((plan) => {
+          if (plan.id !== selectedPlanIdRef.current) return plan;
+          const current = findAttachedRecord(plan.data, store, ownerId);
+          return { ...plan, data: patchAttachedFiles(plan.data, store, ownerId, [...(current?.attachments || []), ...uploaded]) };
+        })
+      );
+    } catch (error) {
+      revokePending(queued);
+      setPendingAttachments((prev) => {
+        const next = { ...prev };
+        delete next[ownerId];
+        return next;
+      });
+      showError(error instanceof Error ? error.message : 'Record saved, but a file failed to upload.');
+    }
+  };
+
+  const addSavedFiles = async (store: EolAttachmentStore, ownerId: string, incoming: File[]) => {
+    setAttachmentBusy(true);
+    try {
+      const plan = plans.find((item) => item.id === selectedPlanIdRef.current);
+      let existing = plan ? findAttachedRecord(plan.data, store, ownerId)?.attachments || [] : [];
+      if (store === 'document' && existing.length > 0) {
+        for (const file of existing) {
+          const response = await fetch('/api/tools/end-of-life-planner/attachments', {
+            method: 'DELETE',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ toolId, attachmentId: file.id }),
+          });
+          const data = await response.json().catch(() => ({}));
+          if (!response.ok) throw new Error(data.error || 'Failed to replace file');
+        }
+        existing = [];
+      }
+      const uploaded: EolAttachment[] = [];
+      for (const file of incoming) {
+        uploaded.push(await uploadEolFile(file, store, ownerId));
+      }
+      setLocalAttachments(store, ownerId, [...existing, ...uploaded]);
+    } catch (error) {
+      showError(error instanceof Error ? error.message : 'Failed to add file');
+    } finally {
+      setAttachmentBusy(false);
+    }
+  };
+
+  const removeSavedFile = async (store: EolAttachmentStore, ownerId: string, attachmentId: string) => {
+    if (!toolId) return;
+    setAttachmentBusy(true);
+    try {
+      const response = await fetch('/api/tools/end-of-life-planner/attachments', {
+        method: 'DELETE',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ toolId, attachmentId }),
+      });
+      const data = await response.json().catch(() => ({}));
+      if (!response.ok) throw new Error(data.error || 'Failed to remove file');
+      const plan = plans.find((item) => item.id === selectedPlanIdRef.current);
+      const existing = plan ? findAttachedRecord(plan.data, store, ownerId)?.attachments || [] : [];
+      setLocalAttachments(
+        store,
+        ownerId,
+        existing.filter((file) => file.id !== attachmentId)
+      );
+      if (viewPreview?.id === attachmentId) setViewPreview(null);
+    } catch (error) {
+      showError(error instanceof Error ? error.message : 'Failed to remove file');
+    } finally {
+      setAttachmentBusy(false);
+    }
+  };
+
+  const fetchEolAttachmentBlob = async (attachmentId: string, inline = false) => {
+    const query = inline ? '?inline=1' : '';
+    const response = await fetch(`/api/tools/end-of-life-planner/attachments/${attachmentId}${query}`);
+    if (!response.ok) {
+      const errorData = await response.json().catch(() => ({ error: 'Failed to open file' }));
+      throw new Error(errorData.error || 'Failed to open file');
+    }
+    return response.blob();
+  };
+
+  const handleViewAttachment = async (item: AttachmentItem) => {
+    if (item.file && item.url) {
+      if (isImageAttachment(item.type)) {
+        setViewPreview(item);
+        return;
+      }
+      if (isPdfAttachment(item.type, item.name)) {
+        window.open(item.url, '_blank', 'noopener,noreferrer');
+        return;
+      }
+      showError('This file type can’t be previewed in the browser. Use Download to save it.');
+      return;
+    }
+    try {
+      const blob = await fetchEolAttachmentBlob(item.id, true);
+      const type = blob.type || item.type || '';
+      if (!canPreviewAttachment(type, item.name)) {
+        showError('This file type can’t be previewed in the browser. Use Download to save it.');
+        return;
+      }
+      const url = window.URL.createObjectURL(blob);
+      if (isImageAttachment(type)) {
+        setViewPreview({ ...item, type, url, size: item.size || blob.size });
+        return;
+      }
+      if (isPdfAttachment(type, item.name)) {
+        window.open(url, '_blank', 'noopener,noreferrer');
+      }
+    } catch (error) {
+      showError(error instanceof Error ? error.message : 'Failed to open file');
+    }
+  };
+
+  const handleDownloadAttachment = async (item: AttachmentItem): Promise<boolean> => {
+    if (item.file) return false;
+    try {
+      const blob = await fetchEolAttachmentBlob(item.id);
+      const url = window.URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = url;
+      link.download = item.name || 'attachment';
+      document.body.appendChild(link);
+      link.click();
+      window.URL.revokeObjectURL(url);
+      document.body.removeChild(link);
+      return true;
+    } catch (error) {
+      showError(error instanceof Error ? error.message : 'Failed to download file');
+      return false;
+    }
+  };
+
+  const attachmentListProps = (store: EolAttachmentStore, titleOf: (item: { id: string }) => string) => ({
+    attachmentCount: (item: { id: string; attachments?: EolAttachment[] }) => item.attachments?.length ?? 0,
+    draftAttachmentCount: (item: { id: string }) => pendingAttachments[item.id]?.length ?? 0,
+    attachmentOpen: attachmentModal !== null,
+    onOpenAttachments: (item: { id: string; attachments?: EolAttachment[] }, draft?: boolean) =>
+      setAttachmentModal({ store, ownerId: item.id, draft: Boolean(draft), title: titleOf(item) || 'Record' }),
+    onAfterCommit: async (draft: { id: string }) => persistQueuedFiles(store, draft.id),
+  });
 
   const startCreatePlan = () => {
     setIsCreatingPlan(true);
@@ -2230,6 +2531,7 @@ export function EndOfLifePlannerTool({ toolId }: EndOfLifePlannerToolProps) {
         </div>
       }
       {...tableListChrome}
+      {...attachmentListProps('document', (item) => ('name' in item ? String(item.name || '') : ''))}
     />
   );
 
@@ -2257,6 +2559,7 @@ export function EndOfLifePlannerTool({ toolId }: EndOfLifePlannerToolProps) {
       onCommit={onCommit}
       renderForm={(item, onChange, prefix) => renderGrid(item, insuranceFields, onChange, prefix)}
       {...tableListChrome}
+      {...attachmentListProps('insurance', (item) => ('company' in item ? String(item.company || '') : ''))}
     />
   );
 
@@ -2588,10 +2891,8 @@ export function EndOfLifePlannerTool({ toolId }: EndOfLifePlannerToolProps) {
       titleOf={(item) => item.item}
       onCommit={onCommit}
       renderForm={(item, onChange, prefix) => renderGrid(item, personalItemFields, onChange, prefix)}
-      formExtra={
-        <p className={helperClass}>Photo and document uploads are not available in this pass. Use a text reference only.</p>
-      }
       {...tableListChrome}
+      {...attachmentListProps('personal-item', (item) => ('item' in item ? String(item.item || '') : ''))}
     />
   );
 
@@ -2673,12 +2974,12 @@ export function EndOfLifePlannerTool({ toolId }: EndOfLifePlannerToolProps) {
                 <p className={mutedTextClass}>•••••••• Letter hidden</p>
               )}
               {secretHelper}
-              <p className={helperClass}>Attachments will be available in a later update.</p>
             </div>
           </div>
         );
       }}
       {...tableListChrome}
+      {...attachmentListProps('letter', (item) => ('title' in item ? String(item.title || '') : ''))}
     />
   );
 
@@ -2776,12 +3077,13 @@ export function EndOfLifePlannerTool({ toolId }: EndOfLifePlannerToolProps) {
       renderForm={(item, onChange, prefix) => renderGrid(item, otherFields, onChange, prefix)}
       renderFormExtra={(item, onChange) => otherExtra(item, onChange)}
       {...tableListChrome}
+      {...attachmentListProps('other', (item) => ('title' in item ? String(item.title || '') : ''))}
     />
   );
 
   const renderCustomSection = (section: EolCustomSection) => {
     const updateSection = (next: EolCustomSection, immediate = false) => {
-      patchData(
+      return patchData(
         (data) => ({
           ...data,
           customSections: replaceListItem(data.customSections, section.id, next),
@@ -4758,6 +5060,58 @@ export function EndOfLifePlannerTool({ toolId }: EndOfLifePlannerToolProps) {
           </div>
         </div>
       ) : null}
+
+      <AttachmentModal
+        open={attachmentModal !== null}
+        onClose={() => {
+          setAttachmentModal(null);
+          setViewPreview(null);
+        }}
+        previewItem={viewPreview}
+        title={attachmentModal?.title || 'Files'}
+        files={
+          attachmentModal
+            ? attachmentModal.draft
+              ? pendingAttachments[attachmentModal.ownerId] || []
+              : selectedPlan
+                ? findAttachedRecord(selectedPlan.data, attachmentModal.store, attachmentModal.ownerId)?.attachments || []
+                : []
+            : []
+        }
+        busy={attachmentBusy}
+        maxFiles={attachmentModal?.store === 'document' ? 1 : undefined}
+        onAdd={(incoming) => {
+          if (!attachmentModal) return;
+          if (attachmentModal.draft) {
+            setPendingAttachments((prev) => {
+              const current = prev[attachmentModal.ownerId] || [];
+              const nextItems = incoming.map(createPendingAttachment);
+              if (attachmentModal.store === 'document') {
+                revokePending(current);
+                return { ...prev, [attachmentModal.ownerId]: nextItems.slice(0, 1) };
+              }
+              return { ...prev, [attachmentModal.ownerId]: [...current, ...nextItems] };
+            });
+            return;
+          }
+          void addSavedFiles(attachmentModal.store, attachmentModal.ownerId, incoming);
+        }}
+        onRemove={(id) => {
+          if (!attachmentModal) return;
+          if (attachmentModal.draft) {
+            setPendingAttachments((prev) => {
+              const current = prev[attachmentModal.ownerId] || [];
+              const removed = current.find((item) => item.id === id);
+              if (removed?.url) URL.revokeObjectURL(removed.url);
+              return { ...prev, [attachmentModal.ownerId]: current.filter((item) => item.id !== id) };
+            });
+            return;
+          }
+          void removeSavedFile(attachmentModal.store, attachmentModal.ownerId, id);
+        }}
+        onView={handleViewAttachment}
+        onDownload={attachmentModal?.draft ? undefined : handleDownloadAttachment}
+      />
     </div>
   );
 }

@@ -8,6 +8,7 @@ import {
   dbToFrequency,
   emptyServiceProvider,
   frequencyToDb,
+  HmsAttachment,
   HmsFrequency,
   HmsScheduleData,
   HmsServiceProvider,
@@ -16,6 +17,18 @@ import {
   parseReminderDays,
   todayIso,
 } from '@/lib/home-maintenance-schedule';
+import { CALENDAR_SOURCE_HOME_MAINTENANCE_TASK } from '@/lib/calendarPins';
+import {
+  deleteCalendarPinsForSources,
+  getPinnedSourceIds,
+  syncCalendarPin,
+} from '@/lib/calendarPinsServer';
+import {
+  attachmentsByCompletionIds,
+  attachmentsByItemIds,
+  deleteItemStorageFiles,
+  deleteTaskCompletionStorageFiles,
+} from '@/lib/home-maintenance-storage';
 
 type DbCategory = {
   id: string;
@@ -88,7 +101,10 @@ function mapData(
   categories: DbCategory[],
   items: DbItem[],
   tasks: DbTask[],
-  completions: DbCompletion[]
+  completions: DbCompletion[],
+  itemAttachments: Record<string, HmsAttachment[]> = {},
+  completionAttachments: Record<string, HmsAttachment[]> = {},
+  pinnedTaskIds: Set<string> = new Set()
 ): HmsScheduleData {
   return {
     categories: categories.map((row) => ({
@@ -105,6 +121,7 @@ function mapData(
       defaultLocation: row.default_location ?? '',
       isDefault: row.is_default === true,
       isHidden: row.is_hidden === true,
+      attachments: itemAttachments[row.id] || [],
     })),
     tasks: tasks.map((row) => ({
       id: row.id,
@@ -120,6 +137,7 @@ function mapData(
       dateAdded: asDateOnly(row.date_added) || todayIso(),
       dateInactivated: row.date_inactivated ? asDateOnly(row.date_inactivated) : undefined,
       reminderDays: parseReminderDays(row.reminder_days),
+      addToDashboard: pinnedTaskIds.has(row.id),
     })),
     completions: completions.map((row) => ({
       id: row.id,
@@ -129,6 +147,7 @@ function mapData(
       notes: row.notes ?? '',
       cost: parseStoredCost(row.cost),
       lateness: row.lateness,
+      attachments: completionAttachments[row.id] || [],
     })),
   };
 }
@@ -262,11 +281,28 @@ async function fetchAllData(userId: string, toolId: string): Promise<HmsSchedule
   if (tasksRes.error) throw tasksRes.error;
   if (completionsRes.error) throw completionsRes.error;
 
+  const items = (itemsRes.data ?? []) as DbItem[];
+  const tasks = (tasksRes.data ?? []) as DbTask[];
+  const completions = (completionsRes.data ?? []) as DbCompletion[];
+  const [itemAttachments, completionAttachments, pinned] = await Promise.all([
+    attachmentsByItemIds(items.map((row) => row.id), userId),
+    attachmentsByCompletionIds(completions.map((row) => row.id), userId),
+    getPinnedSourceIds({
+      userId,
+      sourceType: CALENDAR_SOURCE_HOME_MAINTENANCE_TASK,
+      sourceIds: tasks.map((row) => row.id),
+      toolId,
+    }),
+  ]);
+
   return mapData(
     (categoriesRes.data ?? []) as DbCategory[],
-    (itemsRes.data ?? []) as DbItem[],
-    (tasksRes.data ?? []) as DbTask[],
-    (completionsRes.data ?? []) as DbCompletion[]
+    items,
+    tasks,
+    completions,
+    itemAttachments,
+    completionAttachments,
+    pinned.ids
   );
 }
 
@@ -403,6 +439,7 @@ export async function POST(request: NextRequest) {
       cost,
       reminderDays,
       serviceProvider,
+      addToDashboard,
     } = body as {
       toolId?: string;
       action?: string;
@@ -426,6 +463,7 @@ export async function POST(request: NextRequest) {
       cost?: number | string | null;
       reminderDays?: number | null;
       serviceProvider?: HmsServiceProvider;
+      addToDashboard?: boolean;
     };
 
     if (!toolId) {
@@ -568,24 +606,33 @@ export async function POST(request: NextRequest) {
         return NextResponse.json({ error: category.error || 'Category is required' }, { status: 400 });
       }
 
-      const { error } = await supabaseServer.from('tools_hms_items').insert({
-        user_id: user.id,
-        tool_id: toolId,
-        category_id: category.id,
-        name: name.trim(),
-        description: (description ?? '').trim(),
-        notes: (notes ?? '').trim(),
-        default_location: (defaultLocation ?? '').trim(),
-        is_default: false,
-        is_hidden: false,
-      });
+      const { data: created, error } = await supabaseServer
+        .from('tools_hms_items')
+        .insert({
+          user_id: user.id,
+          tool_id: toolId,
+          category_id: category.id,
+          name: name.trim(),
+          description: (description ?? '').trim(),
+          notes: (notes ?? '').trim(),
+          default_location: (defaultLocation ?? '').trim(),
+          is_default: false,
+          is_hidden: false,
+        })
+        .select('id')
+        .single();
 
-      if (error) {
+      if (error || !created) {
         console.error('Error creating item:', error);
         return NextResponse.json({ error: 'Failed to create item' }, { status: 500 });
       }
 
-      return NextResponse.json({ success: true, createdCategoryId: category.id, ...(await fetchAllData(user.id, toolId)) });
+      return NextResponse.json({
+        success: true,
+        createdItemId: created.id,
+        createdCategoryId: category.id,
+        ...(await fetchAllData(user.id, toolId)),
+      });
     }
 
     if (action === 'updateItem' || action === 'updateSchedule') {
@@ -687,6 +734,22 @@ export async function POST(request: NextRequest) {
           console.error('Error updating task:', taskError);
           return NextResponse.json({ error: 'Failed to update schedule' }, { status: 500 });
         }
+
+        if (typeof addToDashboard === 'boolean' && taskId) {
+          const pinResult = await syncCalendarPin({
+            userId: user.id,
+            toolId,
+            sourceType: CALENDAR_SOURCE_HOME_MAINTENANCE_TASK,
+            sourceId: taskId,
+            pinned: addToDashboard,
+          });
+          if (pinResult.error) {
+            return NextResponse.json(
+              { error: 'Schedule saved, but failed to update the dashboard calendar' },
+              { status: 500 }
+            );
+          }
+        }
       }
 
       return NextResponse.json({ success: true, createdCategoryId: category.id, ...(await fetchAllData(user.id, toolId)) });
@@ -747,6 +810,21 @@ export async function POST(request: NextRequest) {
         return NextResponse.json({ error: 'Default items cannot be deleted' }, { status: 400 });
       }
 
+      const { data: itemTasks } = await supabaseServer
+        .from('tools_hms_tasks')
+        .select('id')
+        .eq('item_id', itemId)
+        .eq('user_id', user.id)
+        .eq('tool_id', toolId);
+
+      await deleteCalendarPinsForSources({
+        userId: user.id,
+        sourceType: CALENDAR_SOURCE_HOME_MAINTENANCE_TASK,
+        sourceIds: (itemTasks || []).map((row) => row.id),
+      });
+
+      await deleteItemStorageFiles(itemId, user.id);
+
       const { error } = await supabaseServer
         .from('tools_hms_items')
         .delete()
@@ -806,13 +884,29 @@ export async function POST(request: NextRequest) {
         .eq('tool_id', toolId)
         .maybeSingle();
 
-      const { error } = existing
-        ? await supabaseServer.from('tools_hms_tasks').update(payload).eq('id', existing.id)
-        : await supabaseServer.from('tools_hms_tasks').insert(payload);
+      const { data: saved, error } = existing
+        ? await supabaseServer.from('tools_hms_tasks').update(payload).eq('id', existing.id).select('id').single()
+        : await supabaseServer.from('tools_hms_tasks').insert(payload).select('id').single();
 
-      if (error) {
+      if (error || !saved) {
         console.error('Error activating task:', error);
         return NextResponse.json({ error: 'Failed to activate task' }, { status: 500 });
+      }
+
+      if (typeof addToDashboard === 'boolean') {
+        const pinResult = await syncCalendarPin({
+          userId: user.id,
+          toolId,
+          sourceType: CALENDAR_SOURCE_HOME_MAINTENANCE_TASK,
+          sourceId: saved.id,
+          pinned: addToDashboard,
+        });
+        if (pinResult.error) {
+          return NextResponse.json(
+            { error: 'Task saved, but failed to update the dashboard calendar' },
+            { status: 500 }
+          );
+        }
       }
 
       return NextResponse.json({ success: true, ...(await fetchAllData(user.id, toolId)) });
@@ -869,6 +963,14 @@ export async function POST(request: NextRequest) {
         return NextResponse.json({ error: 'Default scheduled tasks cannot be permanently deleted' }, { status: 400 });
       }
 
+      await deleteCalendarPinsForSources({
+        userId: user.id,
+        sourceType: CALENDAR_SOURCE_HOME_MAINTENANCE_TASK,
+        sourceIds: [taskId],
+      });
+
+      await deleteTaskCompletionStorageFiles(taskId, user.id);
+
       const { error } = await supabaseServer
         .from('tools_hms_tasks')
         .delete()
@@ -913,18 +1015,22 @@ export async function POST(request: NextRequest) {
       const nextDue = advanceFrom(completedDate, frequency);
       const lateness = latenessFor(scheduled, completedDate);
 
-      const { error: completionError } = await supabaseServer.from('tools_hms_completions').insert({
-        user_id: user.id,
-        tool_id: toolId,
-        task_id: taskId,
-        scheduled_date: scheduled,
-        completed_date: completedDate,
-        notes: (completionNotes ?? '').trim(),
-        cost: parsedCost.cost,
-        lateness,
-      });
+      const { data: completion, error: completionError } = await supabaseServer
+        .from('tools_hms_completions')
+        .insert({
+          user_id: user.id,
+          tool_id: toolId,
+          task_id: taskId,
+          scheduled_date: scheduled,
+          completed_date: completedDate,
+          notes: (completionNotes ?? '').trim(),
+          cost: parsedCost.cost,
+          lateness,
+        })
+        .select('id')
+        .single();
 
-      if (completionError) {
+      if (completionError || !completion) {
         console.error('Error writing completion:', completionError);
         return NextResponse.json({ error: 'Failed to complete task' }, { status: 500 });
       }
@@ -946,6 +1052,7 @@ export async function POST(request: NextRequest) {
 
       return NextResponse.json({
         success: true,
+        completionId: completion.id,
         nextDueDate: nextDue,
         ...(await fetchAllData(user.id, toolId)),
       });

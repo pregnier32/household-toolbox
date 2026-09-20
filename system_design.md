@@ -12,6 +12,7 @@ This document defines design standards, UX patterns, database conventions, and p
 - [Record row actions (Active / History icons)](#record-row-actions-active-and-history)
 - [Components — forms](#components---forms)
 - [UX rules](#ux-rules)
+- [Add to Dashboard Calendar](#add-to-dashboard-calendar)
 - [Attachments](#attachments)
 - [Accessibility](#accessibility)
 - [Database standards](#database-standards)
@@ -473,6 +474,7 @@ Use this standard design for any "display on dashboard" or similar on/off toggle
 </label>
 ```
 - **Use For**: "Display on dashboard" and any similar boolean toggle where the standard is a switch (not a checkbox).
+- **Dashboard Calendar**: When the switch opts a *record* onto the Dashboard Calendar, use the label **Add to dashboard calendar**, default **off**, and follow **Add to Dashboard Calendar**. Do not reuse a generic "Dashboard" label for calendar pins.
 - **Track**: 
   - Size: `h-6 w-11` (24px height, 44px width) — capsule shape via `rounded-full`
   - On state: `bg-emerald-500` (green)
@@ -493,7 +495,8 @@ Use this standard design for any "display on dashboard" or similar on/off toggle
   + Add New [Item Name]
 </button>
 ```
-- **Use For**: Adding new records/items in tool apps (e.g., "+ Add New Subscription", "+ Add New Record")
+- **Use For**: Adding new records/items in simple single-list tools that are **not** pinning to the Dashboard Calendar (e.g., "+ Add New Subscription", "+ Add New Record").
+- **Do not use** this filled button for category-scoped, calendar-pinnable records. Those tools use the green plus + popup in **Add to Dashboard Calendar**.
 - **Styling**: 
   - Emerald green background (`bg-emerald-500`) with dark text (`text-slate-950`)
   - Font weight: `font-semibold` (not `font-medium`)
@@ -684,6 +687,111 @@ For dropdowns that need to display items organized by categories or areas (e.g.,
 - **Close Button**: Position in top-right with `aria-label="Close modal"`
 - **Keyboard**: Support Escape key to close (implement with `useEffect`)
 - **Stacking**: The Attachment modal uses `z-50`. Any password, forgot-password, or confirm overlay that can open *from* attachments must use `z-[70]` (or higher) so it is never hidden behind the Attachment modal.
+
+### Add to Dashboard Calendar
+
+Standard for tools that let a user create a record and optionally show it on the Dashboard Calendar. **Reference:** Calendar Events (`app/components/CalendarEventsTool.tsx`), pin helpers in `lib/calendarPins.ts` and `lib/calendarPinsServer.ts`, table `calendar_pins` (`supabase/create-calendar-pins-table.sql`).
+
+Future tools that can appear on the Dashboard Calendar must follow this flow. Do not add a `show_on_dashboard` / `add_to_dashboard` column on the source table, and do not copy dates or titles into a calendar table.
+
+#### Default view
+
+Selecting a category (or equivalent scope) shows the **active list**, not an add form. Empty copy: “No calendar events yet. Click + to add one.” (Adapt the noun to the tool.) History stays collapsed below the active list.
+
+#### Green plus on the section title
+
+Place a small emerald plus immediately to the right of the section heading (`Anniversary Calendar Events`, `Upcoming Appointments`, etc.). This is the same control used next to End of Life Planner subsection titles.
+
+```tsx
+<div className="flex items-center gap-2 mb-4">
+  <h3 className={subtitleClass}>{selectedCategory.name} Calendar Events</h3>
+  <button
+    type="button"
+    onClick={openAddModal}
+    className={
+      isLight
+        ? 'inline-flex items-center justify-center rounded-md border-2 border-emerald-600 p-0.5 text-emerald-600 transition-colors hover:bg-emerald-50 hover:text-emerald-800'
+        : 'inline-flex items-center justify-center rounded-md border-2 border-emerald-400 p-0.5 text-emerald-400 transition-colors hover:bg-emerald-500/15 hover:text-emerald-300'
+    }
+    aria-label="Add calendar event"
+    title="Add calendar event"
+  >
+    <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden>
+      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
+    </svg>
+  </button>
+</div>
+```
+
+- **Not** the large square “+” used to add a *category* / header card.
+- **Not** the filled “+ Add New [Item]” primary button.
+- Hide or disable the plus only if adding is impossible in the current state.
+
+#### Add popup
+
+Clicking the plus opens a modal. The user fills the record there, then Save or Cancel. After a successful save, close the modal, reset the form, and return to the active list.
+
+- Overlay: `fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4`
+- Card: `rounded-2xl border … p-6 max-w-2xl w-full mx-4 max-h-[90vh] overflow-y-auto` (use `max-w-lg` only if the form is short). Light: `border-slate-200 bg-white shadow-xl`. Dark: `border-slate-800 bg-slate-900`.
+- Title: `Add [Category] Event` (or the tool’s record name). Close X top-right with `aria-label="Close"` and `title="Close"`.
+- Escape closes the add modal unless a stacked picker (holiday list, attachments) is open. Stack those pickers at `z-[60]` or higher.
+- Primary **Add …** + secondary **Cancel**. Do not keep an inline add form on the list screen.
+
+#### Add to dashboard calendar switch
+
+Last optional control in the add and edit forms, after Notes and before the save buttons. **Default off.** Creating or prefilling a record (including holiday / template pickers) must not turn it on.
+
+Use the **Dashboard Toggle (Switch)** track and thumb. Label and light-mode track:
+
+```tsx
+<label className="flex items-center gap-2 cursor-pointer" title="Add to dashboard calendar">
+  <span className={`text-xs whitespace-nowrap ${isLight ? 'text-slate-600' : 'text-slate-400'}`}>
+    Add to dashboard calendar
+  </span>
+  <button
+    type="button"
+    role="switch"
+    aria-checked={isOn}
+    aria-label="Add to dashboard calendar"
+    title="Add to dashboard calendar"
+    onClick={() => toggle()}
+    className={`relative inline-flex h-6 w-11 flex-shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors focus:outline-none focus:ring-2 focus:ring-emerald-500/50 focus:ring-offset-2 ${
+      isLight ? 'focus:ring-offset-white' : 'focus:ring-offset-slate-900'
+    } ${isOn ? 'bg-emerald-500' : isLight ? 'bg-slate-300' : 'bg-slate-700'}`}
+  >
+    <span
+      className={`pointer-events-none inline-block h-5 w-5 transform rounded-full bg-white shadow ring-0 transition ${
+        isOn ? 'translate-x-5' : 'translate-x-1'
+      }`}
+    />
+  </button>
+</label>
+```
+
+#### On calendar chip
+
+When a saved row is pinned, show a compact chip next to the title on the collapsed row (active and history):
+
+```tsx
+<span
+  className={
+    isLight
+      ? 'inline-flex items-center rounded-full bg-emerald-100 px-2 py-0.5 text-xs font-medium text-emerald-800'
+      : 'inline-flex items-center rounded-full bg-emerald-500/20 px-2 py-0.5 text-xs font-medium text-emerald-300'
+  }
+>
+  On calendar
+</span>
+```
+
+#### Pin storage and dashboard feed
+
+- One `calendar_pins` row per pin: `user_id`, `tool_id`, `source_type` (e.g. `calendar_event`), `source_id` (the tool row), `pin_kind` (usually `default`; use `start` / `end` / `warranty` when one source row has several dates).
+- Unique on `(user_id, source_type, source_id, pin_kind)`. Dates and titles stay on the source row.
+- Use `syncCalendarPin` on create/update. Existing records stay off the calendar until the user turns the switch on.
+- Inactivate / archive: keep the pin so reactivate can restore dashboard presence. The dashboard feed must also require the source row to be active.
+- Delete the source row or its category: delete the matching pins.
+- Dashboard Calendar APIs expand **pinned + active** source rows only.
 
 ### In-app notices and confirmations
 
@@ -1385,6 +1493,28 @@ Two file stores. Do not attach files to scheduled tasks — a task is 1:1 with i
 - **Completion files** (`tools_cs_completion_attachments`, path `{userId}/completions/{completionId}/...`): dated proof for one occurrence. Queue in the Complete dialog; after save they are read-only in completion History. No add/remove after complete.
 - No paperclip on categories or Activate.
 
+### Home Maintenance Schedule
+
+Two file stores. Do not attach files to scheduled tasks — a task is 1:1 with its library item, so task-level files would duplicate the item store. Provider fields are columns on the task; do not add a second upload control.
+
+- **Library item files** (`tools_hms_item_attachments`, bucket `home-maintenance-schedule`, path `{userId}/items/{itemId}/...`): standing manuals, invoices, and photos for the item. Library add/edit/cards, schedule rows, View/Edit, and archived (moved-to-history) paperclips all open this store. Files stay editable when a task is archived. Files stay when a task is deleted; permanent item delete removes them.
+- **Completion files** (`tools_hms_completion_attachments`, path `{userId}/completions/{completionId}/...`): dated proof for one occurrence. Queue in the Complete dialog; after save they are View/Download only on the Completed chip, History completion rows, and the in-modal Completion history table. No add/remove after complete.
+- No paperclip on categories, Activate, Export, search/filter, or provider fields.
+
+### End of Life Planner
+
+Five file stores on list rows that already had a place for scans. Do not attach files to contacts, device/online logins, financial rows, home/utility/provider/vehicle rows, next steps, 1:1 wish blobs, custom fields, sections, or plan cards.
+
+- **Document files** (`tools_eolp_document_attachments`, bucket `end-of-life-planner`, path `{userId}/documents/{documentId}/...`): one scan per Important Documents row (`maxFiles={1}`). Paperclip on add/edit header and the row (paperclip → Edit → Delete). Custom tabs modeled after documents use the same store.
+- **Insurance files** (`tools_eolp_insurance_attachments`, path `{userId}/insurance/{insuranceId}/...`): multiple cards/PDFs per policy. Same paperclip surfaces; custom insurance tabs included.
+- **Letter files** (`tools_eolp_letter_attachments`, path `{userId}/letters/{letterId}/...`): multiple optional scans per letter.
+- **Personal item files** (`tools_eolp_personal_item_attachments`, path `{userId}/personal-items/{itemId}/...`): multiple photos/docs on My Wishes → Personal Items.
+- **Other record files** (`tools_eolp_other_record_attachments`, path `{userId}/other/{recordId}/...`): multiple files on the Other record, never on custom fields (those rebuild on save).
+- Keep `digital_location`, `document_location`, and `photo_reference` as optional text. Paperclip is the only file control.
+- Archived plans stay editable (Show archived plans still has Edit). Files stay editable. No paperclip on Archive / Restore.
+- No record-password overlay. Secret fields stay as they are.
+- No paperclip on Categories-style chrome, Export, search, or plan History.
+
 ### HSA Tracker
 
 Expense receipts only. Do not attach files to accounts, deposits, Summary KPIs, or Reports.
@@ -1469,6 +1599,48 @@ Appointment files only. Wrap the existing `tools_hcah_documents` store. Do not a
 - Add to HSA creates an HSA expense only. Do not copy files and do not add a second upload shortcut.
 - View/Download go through the authenticated route (`inline=1` vs download). Existing objects may still live at `documents/{userId}/...`.
 - No paperclip on family-member chips, Report/Export, or the dashboard pin.
+
+### Pet Care Schedule
+
+Pet files, Documents-tab files, veterinary contacts, vaccinations, and appointments. Do not attach files to food, care plan, or notes — those children are still deleted and re-inserted on every pet save.
+
+- **Pet files** (`tools_pcs_pet_attachments`, bucket `pet-care-schedule`, path `{userId}/pets/{petId}/...`): pet photo and other pet-level files. Paperclip on Add Pet, Edit Pet, each pet card, and the Pet Info header. The photo is an image in the shared modal — no separate avatar uploader.
+- **Document files** (`tools_pcs_document_attachments`, path `{userId}/documents/{documentId}/...`): files for one named Documents-tab record. Paperclip on Add Document, Edit, and the document row. Replace the old file picker and row Download icon. Multiple files per document are allowed. Existing `tools_pcs_documents.file_url` rows are migrated into this store.
+- **Veterinary / vaccination / appointment files** (`tools_pcs_veterinary_attachments`, `tools_pcs_vaccination_attachments`, `tools_pcs_appointment_attachments`): paperclip on add/edit and on the row (paperclip → Edit → Move to history if present → Delete). Those four child tables upsert by id so files stay linked.
+- History stays editable. Veterinary/food/care/notes History still has Edit. Appointments “History” is past dates. Vaccinations titled “Vaccination History” is the live list.
+- Queue files on create; persist immediately on saved pets and child records. Save does not require a file.
+- No paperclip on Food, Care Plan, Notes, Export, or the dashboard pin.
+
+### Calendar Events
+
+Event-series files only (`tools_ce_event_attachments`, bucket `calendar-events`, path `{userId}/{eventId}/...`). Recurring events are frequency on the same `tools_ce_events` row — there are no occurrence records, so files belong to the series.
+
+- Paperclip on Add Event (queue until save), Edit Event, each Active row (paperclip → Edit → Move to history), and each History row (View/Download only).
+- History is `is_active = false` and has no Edit (Reactivate + Delete only). The modal is read-only and the API rejects add/remove until the event is reactivated. Reactivate restores the same files as editable.
+- Queue files on create; persist immediately on saved events. Save does not require a file.
+- Delete event or category removes storage objects before the rows.
+- No paperclip on categories, Export, or calendar pins.
+
+### Subscription Tracker
+
+Subscription files only (`tools_st_subscription_attachments`, bucket `subscription-tracker`, path `{userId}/{subscriptionId}/...`). Receipts, contracts, and renewal notices share this one store.
+
+- Paperclip on Add New Subscription (queue until save), Edit Subscription, each Active row (paperclip → Edit → Move to history), and each History row (View/Download only).
+- History is `is_active = false` and has no Edit (Reactivate + Delete only). The modal is read-only and the API rejects add/remove until the subscription is reactivated. Reactivate restores the same files as editable.
+- Queue files on create; persist immediately on saved subscriptions. Save does not require a file.
+- Delete subscription removes storage objects before the row.
+- No paperclip on categories, search, Export, billed/renewal dates, or calendar pins. Do not add a “Has attachments” filter or Export attachment index yet.
+
+### Address Book
+
+Address files only (`tools_ab_address_attachments`, bucket `address-book`, path `{userId}/{addressId}/...`). Do not attach files to tags — `tools_ab_address_tags` is deleted and re-inserted on every save.
+
+- Paperclip on Add New Address (queue until save), Edit Address, View Address (header, beside Close), each Active row (paperclip → View → Edit → Move to history), and each History row (View/Download only).
+- History is `is_active = false` and has no Edit (Restore + Delete only). The modal is read-only and the API rejects add/remove until the address is restored. Restore brings back the same files as editable.
+- Queue files on create; persist immediately on saved addresses. Save does not require a file.
+- Render `AttachmentModal` after the View Address dialog so it stacks on top (both use `z-50`).
+- Delete address removes storage objects before the row.
+- No paperclip on the Tags tab, tag chips, Add/Edit tag, or Tag History.
 
 ---
 

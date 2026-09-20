@@ -38,6 +38,7 @@ type Task = {
   priority: Priority;
   notes: string;
   status: TaskStatus;
+  addToDashboard: boolean;
   attachments: TaskAttachment[];
 };
 
@@ -47,8 +48,69 @@ const emptyTaskDraft = (): Omit<Task, 'id' | 'categoryId'> => ({
   priority: 'Medium',
   notes: '',
   status: 'Not Started',
+  addToDashboard: false,
   attachments: [],
 });
+
+function DashboardCalendarSwitch({
+  isOn,
+  onToggle,
+  isLight,
+  disabled = false,
+}: {
+  isOn: boolean;
+  onToggle: () => void;
+  isLight: boolean;
+  disabled?: boolean;
+}) {
+  return (
+    <label
+      className={`flex items-center gap-2 ${disabled ? 'cursor-not-allowed' : 'cursor-pointer'}`}
+      title={disabled ? 'Set a due date to add this task to the dashboard calendar' : 'Add to dashboard calendar'}
+    >
+      <span className={`text-xs whitespace-nowrap ${isLight ? 'text-slate-600' : 'text-slate-400'}`}>
+        Add to dashboard calendar
+      </span>
+      <button
+        type="button"
+        role="switch"
+        aria-checked={isOn}
+        aria-disabled={disabled}
+        aria-label="Add to dashboard calendar"
+        title={disabled ? 'Set a due date to add this task to the dashboard calendar' : 'Add to dashboard calendar'}
+        disabled={disabled}
+        onClick={() => {
+          if (!disabled) onToggle();
+        }}
+        className={`relative inline-flex h-6 w-11 flex-shrink-0 rounded-full border-2 border-transparent transition-colors focus:outline-none focus:ring-2 focus:ring-emerald-500/50 focus:ring-offset-2 ${
+          disabled ? 'cursor-not-allowed opacity-50' : 'cursor-pointer'
+        } ${isLight ? 'focus:ring-offset-white' : 'focus:ring-offset-slate-900'} ${
+          isOn ? 'bg-emerald-500' : isLight ? 'bg-slate-300' : 'bg-slate-700'
+        }`}
+      >
+        <span
+          className={`pointer-events-none inline-block h-5 w-5 transform rounded-full bg-white shadow ring-0 transition ${
+            isOn ? 'translate-x-5' : 'translate-x-1'
+          }`}
+        />
+      </button>
+    </label>
+  );
+}
+
+function OnCalendarChip({ isLight }: { isLight: boolean }) {
+  return (
+    <span
+      className={
+        isLight
+          ? 'inline-flex items-center rounded-full bg-emerald-100 px-2 py-0.5 text-xs font-medium text-emerald-800'
+          : 'inline-flex items-center rounded-full bg-emerald-500/20 px-2 py-0.5 text-xs font-medium text-emerald-300'
+      }
+    >
+      On calendar
+    </span>
+  );
+}
 
 type ToDoListToolProps = {
   toolId?: string;
@@ -236,6 +298,7 @@ export function ToDoListTool({ toolId }: ToDoListToolProps) {
       setTasks(
         (data.tasks || []).map((task: Task) => ({
           ...task,
+          addToDashboard: task.addToDashboard === true,
           attachments: task.attachments || [],
         }))
       );
@@ -474,6 +537,7 @@ export function ToDoListTool({ toolId }: ToDoListToolProps) {
           priority: newTask.priority,
           notes: newTask.notes || undefined,
           status: newTask.status,
+          addToDashboard: newTask.addToDashboard === true && Boolean(dueDate),
         }),
       });
       const data = await res.json();
@@ -536,6 +600,7 @@ export function ToDoListTool({ toolId }: ToDoListToolProps) {
           priority: editingTask.priority,
           notes: editingTask.notes || undefined,
           status: editingTask.status,
+          addToDashboard: editingTask.addToDashboard === true && Boolean(editingTask.dueDate),
         }),
       });
       const data = await res.json();
@@ -1179,7 +1244,7 @@ export function ToDoListTool({ toolId }: ToDoListToolProps) {
                         if (checked && !newTask.dueDate) {
                           setNewTask((p) => ({ ...p, dueDate: new Date().toISOString().split('T')[0] }));
                         } else if (!checked) {
-                          setNewTask((p) => ({ ...p, dueDate: '' }));
+                          setNewTask((p) => ({ ...p, dueDate: '', addToDashboard: false }));
                         }
                       }}
                       className={isLight ? 'rounded border-slate-400 bg-white text-emerald-600 focus:ring-emerald-500 focus:ring-offset-white w-5 h-5' : 'rounded border-slate-600 bg-slate-700 text-emerald-500 focus:ring-emerald-500 focus:ring-offset-slate-800 w-5 h-5'}
@@ -1192,7 +1257,13 @@ export function ToDoListTool({ toolId }: ToDoListToolProps) {
                       <input
                         type="date"
                         value={newTask.dueDate}
-                        onChange={(e) => setNewTask((p) => ({ ...p, dueDate: e.target.value }))}
+                        onChange={(e) =>
+                          setNewTask((p) => ({
+                            ...p,
+                            dueDate: e.target.value,
+                            addToDashboard: e.target.value ? p.addToDashboard : false,
+                          }))
+                        }
                         className={inputClass}
                       />
                     </div>
@@ -1230,6 +1301,14 @@ export function ToDoListTool({ toolId }: ToDoListToolProps) {
                     placeholder="Notes"
                     rows={3}
                     className={textareaClass}
+                  />
+                </div>
+                <div className="md:col-span-2">
+                  <DashboardCalendarSwitch
+                    isOn={newTask.addToDashboard}
+                    isLight={isLight}
+                    disabled={!newTaskHasDueDate || !newTask.dueDate}
+                    onToggle={() => setNewTask((p) => ({ ...p, addToDashboard: !p.addToDashboard }))}
                   />
                 </div>
               </div>
@@ -1285,6 +1364,7 @@ export function ToDoListTool({ toolId }: ToDoListToolProps) {
                                   dueDate: checked
                                     ? p.dueDate || new Date().toISOString().split('T')[0]
                                     : '',
+                                  addToDashboard: checked ? p.addToDashboard : false,
                                 }
                               : null
                           );
@@ -1299,7 +1379,17 @@ export function ToDoListTool({ toolId }: ToDoListToolProps) {
                         <input
                           type="date"
                           value={editingTask.dueDate}
-                          onChange={(e) => setEditingTask((p) => (p ? { ...p, dueDate: e.target.value } : null))}
+                          onChange={(e) =>
+                            setEditingTask((p) =>
+                              p
+                                ? {
+                                    ...p,
+                                    dueDate: e.target.value,
+                                    addToDashboard: e.target.value ? p.addToDashboard : false,
+                                  }
+                                : null
+                            )
+                          }
                           className={inputClass}
                         />
                       </div>
@@ -1336,6 +1426,16 @@ export function ToDoListTool({ toolId }: ToDoListToolProps) {
                       onChange={(e) => setEditingTask((p) => p ? { ...p, notes: e.target.value } : null)}
                       rows={3}
                       className={textareaClass}
+                    />
+                  </div>
+                  <div className="md:col-span-2">
+                    <DashboardCalendarSwitch
+                      isOn={editingTask.addToDashboard}
+                      isLight={isLight}
+                      disabled={!editingTask.dueDate}
+                      onToggle={() =>
+                        setEditingTask((p) => (p ? { ...p, addToDashboard: !p.addToDashboard } : null))
+                      }
                     />
                   </div>
                 </div>
@@ -1384,7 +1484,10 @@ export function ToDoListTool({ toolId }: ToDoListToolProps) {
                           className={isLight ? 'border-b border-slate-200 hover:bg-slate-50 transition-colors' : 'border-b border-slate-800 hover:bg-slate-800/30 transition-colors'}
                         >
                           <td className="py-3 px-2">
-                            <div className={`${isLight ? 'font-medium text-slate-900' : 'font-medium text-slate-100'}${task.status === 'Completed' ? ' line-through' : ''}`}>{task.taskName}</div>
+                            <div className="flex items-center gap-2 min-w-0">
+                              <div className={`${isLight ? 'font-medium text-slate-900' : 'font-medium text-slate-100'}${task.status === 'Completed' ? ' line-through' : ''}`}>{task.taskName}</div>
+                              {task.addToDashboard && <OnCalendarChip isLight={isLight} />}
+                            </div>
                             {task.notes && (
                               <div className={isLight ? 'text-xs text-slate-600 mt-0.5 line-clamp-2' : 'text-xs text-slate-400 mt-0.5 line-clamp-2'}>{task.notes}</div>
                             )}

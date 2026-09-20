@@ -7,6 +7,12 @@ import {
   deleteEventStorageFiles,
   deleteExpenseStorageFiles,
 } from '@/lib/ebp-storage';
+import { CALENDAR_SOURCE_BUDGET_EVENT } from '@/lib/calendarPins';
+import {
+  deleteCalendarPinsForSources,
+  getPinnedSourceIds,
+  syncCalendarPin,
+} from '@/lib/calendarPinsServer';
 
 type DbNamed = {
   id: string;
@@ -331,6 +337,13 @@ async function fetchAllData(userId: string, toolId: string) {
     attachmentsByExpenseIds(expenses.map((expense) => expense.id), userId),
   ]);
 
+  const { ids: pinnedIds } = await getPinnedSourceIds({
+    userId,
+    sourceType: CALENDAR_SOURCE_BUDGET_EVENT,
+    sourceIds: eventIds,
+    toolId,
+  });
+
   const mappedEvents = events.map((event) => ({
     id: event.id,
     name: event.name,
@@ -340,6 +353,7 @@ async function fetchAllData(userId: string, toolId: string) {
     isActive: event.is_active !== false,
     dateAdded: event.date_added || event.created_at?.split('T')[0] || todayIso(),
     dateInactivated: event.date_inactivated || undefined,
+    addToDashboard: pinnedIds.has(event.id),
     attachments: eventAttachmentMap[event.id] || [],
     categoryBudgets: budgets
       .filter((b) => b.event_id === event.id)
@@ -423,6 +437,7 @@ export async function POST(request: NextRequest) {
       note,
       expenseDate,
       vendorSplits,
+      addToDashboard,
     } = body as {
       toolId?: string;
       action?: string;
@@ -440,6 +455,7 @@ export async function POST(request: NextRequest) {
       note?: string;
       expenseDate?: string;
       vendorSplits?: VendorSplitPart[];
+      addToDashboard?: boolean;
     };
 
     if (!toolId) {
@@ -470,6 +486,22 @@ export async function POST(request: NextRequest) {
         return NextResponse.json({ error: 'Failed to create event' }, { status: 500 });
       }
 
+      if (addToDashboard === true) {
+        const pinResult = await syncCalendarPin({
+          userId: user.id,
+          toolId,
+          sourceType: CALENDAR_SOURCE_BUDGET_EVENT,
+          sourceId: created.id,
+          pinned: true,
+        });
+        if (pinResult.error) {
+          return NextResponse.json(
+            { error: 'Event saved, but failed to add it to the dashboard calendar' },
+            { status: 500 }
+          );
+        }
+      }
+
       const data = await fetchAllData(user.id, toolId);
       const event = data.events.find((e) => e.id === created.id);
       return NextResponse.json({ success: true, event, ...data });
@@ -495,6 +527,22 @@ export async function POST(request: NextRequest) {
       if (error) {
         console.error('Error updating event:', error);
         return NextResponse.json({ error: 'Failed to update event' }, { status: 500 });
+      }
+
+      if (typeof addToDashboard === 'boolean') {
+        const pinResult = await syncCalendarPin({
+          userId: user.id,
+          toolId,
+          sourceType: CALENDAR_SOURCE_BUDGET_EVENT,
+          sourceId: eventId,
+          pinned: addToDashboard,
+        });
+        if (pinResult.error) {
+          return NextResponse.json(
+            { error: 'Event saved, but failed to update the dashboard calendar' },
+            { status: 500 }
+          );
+        }
       }
 
       return NextResponse.json({ success: true, ...(await fetchAllData(user.id, toolId)) });
@@ -546,6 +594,11 @@ export async function POST(request: NextRequest) {
       }
 
       await deleteEventStorageFiles(eventId, user.id);
+      await deleteCalendarPinsForSources({
+        userId: user.id,
+        sourceType: CALENDAR_SOURCE_BUDGET_EVENT,
+        sourceIds: [eventId],
+      });
 
       const { error } = await supabaseServer
         .from('tools_ebp_events')

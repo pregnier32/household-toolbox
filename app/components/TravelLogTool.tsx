@@ -69,11 +69,61 @@ export type TripRecord = {
   wouldReturn: YesNoMaybe | '';
   wouldRecommend: YesNoMaybe | '';
   includeInTravelCounts: YesNo | '';
+  addToDashboard: boolean;
   dateAdded: string;
   attachments: Array<{ id: string; name: string; size: number; type: string }>;
 };
 
 type TripFormState = Omit<TripRecord, 'id' | 'dateAdded' | 'attachments'>;
+
+function DashboardCalendarSwitch({
+  isOn,
+  onToggle,
+  isLight,
+}: {
+  isOn: boolean;
+  onToggle: () => void;
+  isLight: boolean;
+}) {
+  return (
+    <label className="flex items-center gap-2 cursor-pointer" title="Add to dashboard calendar">
+      <span className={`text-xs whitespace-nowrap ${isLight ? 'text-slate-600' : 'text-slate-400'}`}>
+        Add to dashboard calendar
+      </span>
+      <button
+        type="button"
+        role="switch"
+        aria-checked={isOn}
+        aria-label="Add to dashboard calendar"
+        title="Add to dashboard calendar"
+        onClick={onToggle}
+        className={`relative inline-flex h-6 w-11 flex-shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors focus:outline-none focus:ring-2 focus:ring-emerald-500/50 focus:ring-offset-2 ${
+          isLight ? 'focus:ring-offset-white' : 'focus:ring-offset-slate-900'
+        } ${isOn ? 'bg-emerald-500' : isLight ? 'bg-slate-300' : 'bg-slate-700'}`}
+      >
+        <span
+          className={`pointer-events-none inline-block h-5 w-5 transform rounded-full bg-white shadow ring-0 transition ${
+            isOn ? 'translate-x-5' : 'translate-x-1'
+          }`}
+        />
+      </button>
+    </label>
+  );
+}
+
+function OnCalendarChip({ isLight }: { isLight: boolean }) {
+  return (
+    <span
+      className={
+        isLight
+          ? 'inline-flex items-center rounded-full bg-emerald-100 px-2 py-0.5 text-xs font-medium text-emerald-800'
+          : 'inline-flex items-center rounded-full bg-emerald-500/20 px-2 py-0.5 text-xs font-medium text-emerald-300'
+      }
+    >
+      On calendar
+    </span>
+  );
+}
 
 type LodgingDraft = {
   name: string;
@@ -201,6 +251,7 @@ function normalizeTripRecord(trip: TripRecord): TripRecord {
     ...trip,
     plannedBudget: currencyFromUnknown(raw.plannedBudget ?? raw.planned_budget),
     totalTripCost: currencyFromUnknown(raw.totalTripCost ?? raw.total_trip_cost),
+    addToDashboard: trip.addToDashboard === true,
     attachments: trip.attachments ?? [],
   };
 }
@@ -249,6 +300,7 @@ function emptyTripForm(): TripFormState {
     wouldReturn: '',
     wouldRecommend: '',
     includeInTravelCounts: '',
+    addToDashboard: false,
   };
 }
 
@@ -277,6 +329,7 @@ function tripToForm(trip: TripRecord): TripFormState {
     wouldReturn: trip.wouldReturn,
     wouldRecommend: trip.wouldRecommend,
     includeInTravelCounts: trip.includeInTravelCounts ?? '',
+    addToDashboard: trip.addToDashboard === true,
   };
 }
 
@@ -1385,6 +1438,7 @@ export function TravelLogTool({ toolId }: TravelLogToolProps) {
     bestMemory: form.bestMemory.trim(),
     biggestSurprise: form.biggestSurprise.trim(),
     highlightOfTrip: form.highlightOfTrip.trim(),
+    addToDashboard: form.addToDashboard === true,
   });
 
   const addTrip = async () => {
@@ -1930,6 +1984,12 @@ export function TravelLogTool({ toolId }: TravelLogToolProps) {
           {renderYesNoMaybe('wouldRecommend', form, setForm, 'Would you recommend?')}
           {renderYesNo('includeInTravelCounts', form, setForm, 'Include this trip in your travel counts?')}
         </div>
+
+        <DashboardCalendarSwitch
+          isOn={form.addToDashboard}
+          isLight={isLight}
+          onToggle={() => setForm((prev) => ({ ...prev, addToDashboard: !prev.addToDashboard }))}
+        />
       </div>
     );
   };
@@ -1947,6 +2007,7 @@ export function TravelLogTool({ toolId }: TravelLogToolProps) {
           <h4 className={isLight ? 'text-lg font-semibold text-slate-900' : 'text-lg font-semibold text-slate-100'}>
             {trip.tripName}
           </h4>
+          {trip.addToDashboard && <OnCalendarChip isLight={isLight} />}
           {trip.tripType && <span className={tagChipClass}>{trip.tripType}</span>}
           {goalDisplay && <span className={tagChipNeutralClass}>{goalDisplay}</span>}
         </div>

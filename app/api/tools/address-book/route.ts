@@ -1,6 +1,10 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getSession } from '@/lib/session';
 import { supabaseServer } from '@/lib/supabaseServer';
+import {
+  attachmentsByAddressIds,
+  deleteAddressStorageFiles,
+} from '@/lib/address-book-storage';
 
 type AddressFields = {
   mailingName?: string;
@@ -111,11 +115,13 @@ export async function GET(request: NextRequest) {
 
     const addressIds = addresses?.map((a) => a.id) || [];
     const addressTagsMap = await attachTagsToAddresses(addressIds);
+    const attachmentsByAddress = await attachmentsByAddressIds(addressIds, user.id);
 
     const addressesWithTags =
       addresses?.map((address) => ({
         ...address,
         tags: addressTagsMap[address.id] || [],
+        attachments: attachmentsByAddress[address.id] || [],
       })) || [];
 
     return NextResponse.json({
@@ -160,6 +166,7 @@ export async function POST(request: NextRequest) {
     }
 
     if (action === 'delete' && addressId) {
+      await deleteAddressStorageFiles(addressId, user.id);
       const { error } = await supabaseServer
         .from('tools_ab_addresses')
         .delete()
@@ -251,7 +258,7 @@ export async function POST(request: NextRequest) {
 
       await replaceAddressTags(newAddress.id, tagIds);
 
-      return NextResponse.json({ address: newAddress });
+      return NextResponse.json({ address: { ...newAddress, attachments: [] } });
     }
 
     if (tagIds.length === 0) {
@@ -297,6 +304,8 @@ export async function DELETE(request: NextRequest) {
     if (!addressId || !toolId) {
       return NextResponse.json({ error: 'Address ID and Tool ID are required' }, { status: 400 });
     }
+
+    await deleteAddressStorageFiles(addressId, user.id);
 
     const { error } = await supabaseServer
       .from('tools_ab_addresses')

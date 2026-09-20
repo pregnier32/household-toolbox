@@ -7,6 +7,11 @@ import {
   getPinnedSourceIds,
   syncCalendarPin,
 } from '@/lib/calendarPinsServer';
+import {
+  attachmentsByEventIds,
+  deleteCategoryEventStorageFiles,
+  deleteEventStorageFiles,
+} from '@/lib/calendar-events-storage';
 
 function withDashboardFlag<T extends { id: string }>(event: T, pinned: boolean) {
   return { ...event, addToDashboard: pinned };
@@ -78,9 +83,17 @@ export async function GET(request: NextRequest) {
       toolId,
     });
 
+    const attachmentsByEvent = await attachmentsByEventIds(
+      events.map((event) => event.id),
+      user.id
+    );
+
     return NextResponse.json({
       categories: categories || [],
-      events: events.map((event) => withDashboardFlag(event, pinnedIds.has(event.id))),
+      events: events.map((event) => ({
+        ...withDashboardFlag(event, pinnedIds.has(event.id)),
+        attachments: attachmentsByEvent[event.id] || [],
+      })),
     });
   } catch (error) {
     console.error('Error in calendar events GET:', error);
@@ -161,6 +174,7 @@ export async function POST(request: NextRequest) {
           sourceType: CALENDAR_SOURCE_CALENDAR_EVENT,
           sourceIds: categoryEventIds,
         });
+        await deleteCategoryEventStorageFiles(category.id, user.id, toolId);
       }
 
       // Explicitly remove events attached to this category before deleting category.
@@ -236,7 +250,7 @@ export async function POST(request: NextRequest) {
         }
       }
 
-      return NextResponse.json({ event: withDashboardFlag(data, wantsPin) });
+      return NextResponse.json({ event: { ...withDashboardFlag(data, wantsPin), attachments: [] } });
     }
 
     if (action === 'update_event' && event) {
@@ -339,6 +353,7 @@ export async function POST(request: NextRequest) {
         sourceType: CALENDAR_SOURCE_CALENDAR_EVENT,
         sourceIds: [event.id],
       });
+      await deleteEventStorageFiles(event.id, user.id);
 
       const { error } = await supabaseServer
         .from('tools_ce_events')

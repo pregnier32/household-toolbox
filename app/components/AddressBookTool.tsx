@@ -3,6 +3,17 @@
 import { useState, useEffect, useCallback } from 'react';
 import { useTheme } from './AppThemeProvider';
 import { useAppNotice } from './AppNotice';
+import { AttachmentButton } from './AttachmentButton';
+import { AttachmentModal } from './AttachmentModal';
+import {
+  canPreviewAttachment,
+  createPendingAttachment,
+  isImageAttachment,
+  isPdfAttachment,
+  type AttachmentItem,
+} from '@/lib/attachments';
+
+const API_BASE = '/api/tools/address-book';
 
 const DEFAULT_TAGS = ['Family', 'Friends', 'Services', 'School'];
 
@@ -30,6 +41,7 @@ export type AddressRecord = {
   isActive: boolean;
   dateAdded: string;
   dateInactivated?: string;
+  attachments: AttachmentItem[];
 };
 
 type AddressFormState = {
@@ -91,6 +103,7 @@ function transformAddressFromDb(row: Record<string, unknown>): AddressRecord {
     isActive: row.is_active !== false,
     dateAdded: (row.date_added as string) ?? '',
     dateInactivated: (row.date_inactivated as string) || undefined,
+    attachments: Array.isArray(row.attachments) ? (row.attachments as AttachmentItem[]) : [],
   };
 }
 
@@ -225,6 +238,10 @@ export function AddressBookTool({ toolId }: AddressBookToolProps) {
   const [deleteTagConfirmId, setDeleteTagConfirmId] = useState<string | null>(null);
   const [deleteTagConfirmText, setDeleteTagConfirmText] = useState('');
   const [viewAddressModal, setViewAddressModal] = useState<AddressRecord | null>(null);
+  const [pendingAttachments, setPendingAttachments] = useState<AttachmentItem[]>([]);
+  const [attachmentModal, setAttachmentModal] = useState<null | 'add' | string>(null);
+  const [attachmentBusy, setAttachmentBusy] = useState(false);
+  const [viewPreview, setViewPreview] = useState<AttachmentItem | null>(null);
 
   const getTagName = useCallback(
     (tagId: string) => tags.find((t) => t.id === tagId)?.name ?? 'Unknown',
@@ -327,11 +344,135 @@ export function AddressBookTool({ toolId }: AddressBookToolProps) {
 
   const reloadAddresses = useCallback(async () => {
     if (!toolId) return;
-    const response = await fetch(`/api/tools/address-book?toolId=${toolId}`);
+    const response = await fetch(`${API_BASE}?toolId=${toolId}`);
     if (!response.ok) return;
     const data = await response.json();
     setAddresses((data.addresses || []).map((row: Record<string, unknown>) => transformAddressFromDb(row)));
   }, [toolId]);
+
+  const revokePending = (items: AttachmentItem[]) => {
+    items.forEach((item) => {
+      if (item.url) URL.revokeObjectURL(item.url);
+    });
+  };
+
+  const closeAttachmentModal = () => {
+    setAttachmentModal(null);
+    setViewPreview(null);
+  };
+
+  const clearPendingAttachments = () => {
+    revokePending(pendingAttachments);
+    setPendingAttachments([]);
+    if (attachmentModal === 'add') closeAttachmentModal();
+  };
+
+  const uploadAddressFile = async (file: File, addressId: string): Promise<AttachmentItem> => {
+    if (!toolId) throw new Error('Tool ID is required');
+    const formData = new FormData();
+    formData.append('toolId', toolId);
+    formData.append('addressId', addressId);
+    formData.append('file', file);
+    const response = await fetch(`${API_BASE}/attachments`, { method: 'POST', body: formData });
+    const data = await response.json().catch(() => ({}));
+    if (!response.ok) throw new Error(data.error || 'Failed to add file');
+    return data.attachment as AttachmentItem;
+  };
+
+  const fetchAddressAttachmentBlob = async (attachmentId: string, inline = false) => {
+    const query = inline ? '?inline=1' : '';
+    const response = await fetch(`${API_BASE}/attachments/${attachmentId}${query}`);
+    if (!response.ok) {
+      const errorData = await response.json().catch(() => ({ error: 'Failed to open file' }));
+      throw new Error(errorData.error || 'Failed to open file');
+    }
+    return response.blob();
+  };
+
+  const handleViewAttachment = async (item: AttachmentItem) => {
+    if (item.file && item.url) {
+      if (isImageAttachment(item.type)) {
+        setViewPreview(item);
+        return;
+      }
+      if (isPdfAttachment(item.type, item.name)) {
+        window.open(item.url, '_blank', 'noopener,noreferrer');
+        return;
+      }
+      showError('This file type can’t be previewed in the browser. Use Download to save it.');
+      return;
+    }
+    try {
+      const blob = await fetchAddressAttachmentBlob(item.id, true);
+      const type = blob.type || item.type || '';
+      if (!canPreviewAttachment(type, item.name)) {
+        showError('This file type can’t be previewed in the browser. Use Download to save it.');
+        return;
+      }
+      const url = window.URL.createObjectURL(blob);
+      if (isImageAttachment(type)) {
+        setViewPreview({ ...item, type, url, size: item.size || blob.size });
+        return;
+      }
+      if (isPdfAttachment(type, item.name)) {
+        window.open(url, '_blank', 'noopener,noreferrer');
+      }
+    } catch (error) {
+      showError(error instanceof Error ? error.message : 'Failed to open file');
+    }
+  };
+
+  const handleDownloadAttachment = async (item: AttachmentItem): Promise<boolean> => {
+    if (item.file) return false;
+    try {
+      const blob = await fetchAddressAttachmentBlob(item.id);
+      const url = window.URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = url;
+      link.download = item.name || 'attachment';
+      document.body.appendChild(link);
+      link.click();
+      window.URL.revokeObjectURL(url);
+      document.body.removeChild(link);
+      return true;
+    } catch (error) {
+      showError(error instanceof Error ? error.message : 'Failed to download file');
+      return false;
+    }
+  };
+
+  const addSavedAddressFiles = async (addressId: string, files: File[]) => {
+    setAttachmentBusy(true);
+    try {
+      for (const file of files) {
+        await uploadAddressFile(file, addressId);
+      }
+      await reloadAddresses();
+    } catch (error) {
+      showError(error instanceof Error ? error.message : 'Failed to add file');
+    } finally {
+      setAttachmentBusy(false);
+    }
+  };
+
+  const removeSavedAddressFile = async (attachmentId: string) => {
+    if (!toolId) return;
+    setAttachmentBusy(true);
+    try {
+      const response = await fetch(`${API_BASE}/attachments`, {
+        method: 'DELETE',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ toolId, attachmentId }),
+      });
+      const data = await response.json().catch(() => ({}));
+      if (!response.ok) throw new Error(data.error || 'Failed to remove file');
+      await reloadAddresses();
+    } catch (error) {
+      showError(error instanceof Error ? error.message : 'Failed to remove file');
+    } finally {
+      setAttachmentBusy(false);
+    }
+  };
 
   const reloadTags = useCallback(async () => {
     if (!toolId) return;
@@ -405,13 +546,30 @@ export function AddressBookTool({ toolId }: AddressBookToolProps) {
         }),
       });
 
+      const data = await response.json().catch(() => ({}));
       if (response.ok) {
+        const createdId = data.address?.id as string | undefined;
+        if (createdId && pendingAttachments.length > 0) {
+          try {
+            for (const queued of pendingAttachments) {
+              if (!queued.file) continue;
+              await uploadAddressFile(queued.file, createdId);
+            }
+          } catch (uploadError) {
+            clearPendingAttachments();
+            await reloadAddresses();
+            setNewAddress(emptyAddressForm());
+            setIsAdding(false);
+            showError(uploadError instanceof Error ? uploadError.message : 'Address saved, but a file failed to upload.');
+            return;
+          }
+        }
+        clearPendingAttachments();
         await reloadAddresses();
         setNewAddress(emptyAddressForm());
         setIsAdding(false);
       } else {
-        const errorData = await response.json().catch(() => ({ error: 'Unknown error' }));
-        showError(errorData.error || 'Failed to add address.');
+        showError(data.error || 'Failed to add address.');
       }
     } catch {
       showError('Error adding address. Please try again.');
@@ -520,6 +678,8 @@ export function AddressBookTool({ toolId }: AddressBookToolProps) {
 
       if (response.ok) {
         await reloadAddresses();
+        if (attachmentModal === deleteConfirmId) closeAttachmentModal();
+        if (viewAddressModal?.id === deleteConfirmId) setViewAddressModal(null);
         setDeleteConfirmId(null);
         setDeleteConfirmText('');
       } else {
@@ -691,6 +851,10 @@ export function AddressBookTool({ toolId }: AddressBookToolProps) {
   useEffect(() => {
     const onKeyDown = (e: KeyboardEvent) => {
       if (e.key !== 'Escape') return;
+      if (attachmentModal !== null) {
+        closeAttachmentModal();
+        return;
+      }
       if (deleteConfirmId) {
         setDeleteConfirmId(null);
         setDeleteConfirmText('');
@@ -703,7 +867,7 @@ export function AddressBookTool({ toolId }: AddressBookToolProps) {
     };
     window.addEventListener('keydown', onKeyDown);
     return () => window.removeEventListener('keydown', onKeyDown);
-  }, [deleteConfirmId, deleteTagConfirmId, viewAddressModal]);
+  }, [deleteConfirmId, deleteTagConfirmId, viewAddressModal, attachmentModal]);
 
   const renderAddressFields = (
     form: AddressFormState,
@@ -872,6 +1036,13 @@ export function AddressBookTool({ toolId }: AddressBookToolProps) {
       return (
         <div key={record.id} className={nestedCardClass}>
           <div className="space-y-4">
+            <div className="flex items-center justify-between gap-3">
+              <h4 className={sectionTitleClass}>Edit Address</h4>
+              <AttachmentButton
+                count={record.attachments?.length || 0}
+                onClick={() => setAttachmentModal(record.id)}
+              />
+            </div>
             {renderAddressFields(editingAddress, setEditingAddress, true)}
             <div className="flex gap-2">
               <button
@@ -928,6 +1099,10 @@ export function AddressBookTool({ toolId }: AddressBookToolProps) {
             </p>
           </div>
           <div className="flex gap-1.5 flex-shrink-0">
+            <AttachmentButton
+              count={record.attachments?.length || 0}
+              onClick={() => setAttachmentModal(record.id)}
+            />
             <button
               type="button"
               onClick={() => setViewAddressModal(record)}
@@ -996,6 +1171,25 @@ export function AddressBookTool({ toolId }: AddressBookToolProps) {
       </div>
     );
   };
+
+  const savedAttachmentAddress =
+    attachmentModal && attachmentModal !== 'add'
+      ? addresses.find((address) => address.id === attachmentModal) || null
+      : null;
+  const liveViewAddress = viewAddressModal
+    ? addresses.find((address) => address.id === viewAddressModal.id) || viewAddressModal
+    : null;
+  const modalFiles: AttachmentItem[] =
+    attachmentModal === 'add'
+      ? pendingAttachments
+      : savedAttachmentAddress
+        ? (savedAttachmentAddress.attachments || []).map((item) => ({
+            id: item.id,
+            name: item.name,
+            size: item.size,
+            type: item.type,
+          }))
+        : [];
 
   return (
     <div className="space-y-6">
@@ -1082,7 +1276,13 @@ export function AddressBookTool({ toolId }: AddressBookToolProps) {
             </div>
           ) : (
             <div className={cardClass}>
-              <h3 className={`${sectionTitleClass} mb-4`}>Add New Address</h3>
+              <div className="flex items-center justify-between gap-3 mb-4">
+                <h3 className={sectionTitleClass}>Add New Address</h3>
+                <AttachmentButton
+                  count={pendingAttachments.length}
+                  onClick={() => setAttachmentModal('add')}
+                />
+              </div>
               {renderAddressFields(newAddress, setNewAddress, false)}
               <div className="flex gap-2 mt-4">
                 <button
@@ -1097,6 +1297,7 @@ export function AddressBookTool({ toolId }: AddressBookToolProps) {
                   onClick={() => {
                     setIsAdding(false);
                     setNewAddress(emptyAddressForm());
+                    clearPendingAttachments();
                   }}
                   className={secondaryButtonClass}
                 >
@@ -1493,13 +1694,21 @@ export function AddressBookTool({ toolId }: AddressBookToolProps) {
           <div className={modalCardLgClass}>
             <div className="flex items-center justify-between mb-4">
               <h3 className={sectionTitleClass}>View Address</h3>
-              <button
-                type="button"
-                onClick={() => setViewAddressModal(null)}
-                className={isLight ? 'text-slate-500 hover:text-slate-800' : 'text-slate-400 hover:text-slate-200'}
-              >
-                ✕
-              </button>
+              <div className="flex items-center gap-2">
+                <AttachmentButton
+                  count={liveViewAddress?.attachments?.length || 0}
+                  onClick={() => setAttachmentModal(viewAddressModal.id)}
+                />
+                <button
+                  type="button"
+                  onClick={() => setViewAddressModal(null)}
+                  className={isLight ? 'text-slate-500 hover:text-slate-800' : 'text-slate-400 hover:text-slate-200'}
+                  title="Close"
+                  aria-label="Close"
+                >
+                  ✕
+                </button>
+              </div>
             </div>
             <div className="space-y-3">
               {[
@@ -1552,6 +1761,43 @@ export function AddressBookTool({ toolId }: AddressBookToolProps) {
           </div>
         </div>
       )}
+
+      <AttachmentModal
+        open={attachmentModal !== null}
+        onClose={closeAttachmentModal}
+        previewItem={viewPreview}
+        title={
+          attachmentModal === 'add'
+            ? newAddress.mailingName.trim() || 'New address'
+            : savedAttachmentAddress?.mailingName || savedAttachmentAddress?.firstName || 'Address'
+        }
+        files={modalFiles}
+        busy={attachmentBusy}
+        readOnly={Boolean(savedAttachmentAddress && !savedAttachmentAddress.isActive)}
+        onAdd={(incoming) => {
+          if (attachmentModal === 'add') {
+            setPendingAttachments((prev) => [...prev, ...incoming.map(createPendingAttachment)]);
+            return;
+          }
+          if (attachmentModal) {
+            void addSavedAddressFiles(attachmentModal, incoming);
+          }
+        }}
+        onRemove={(id) => {
+          if (attachmentModal === 'add') {
+            setPendingAttachments((prev) => {
+              const next = prev.filter((item) => item.id !== id);
+              const removed = prev.find((item) => item.id === id);
+              if (removed?.url) URL.revokeObjectURL(removed.url);
+              return next;
+            });
+            return;
+          }
+          void removeSavedAddressFile(id);
+        }}
+        onView={handleViewAttachment}
+        onDownload={attachmentModal === 'add' ? undefined : handleDownloadAttachment}
+      />
     </div>
   );
 }

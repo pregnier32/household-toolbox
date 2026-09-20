@@ -3,6 +3,17 @@
 import { useState, useEffect } from 'react';
 import { useTheme } from './AppThemeProvider';
 import { useAppNotice } from './AppNotice';
+import { AttachmentButton } from './AttachmentButton';
+import { AttachmentModal } from './AttachmentModal';
+import {
+  canPreviewAttachment,
+  createPendingAttachment,
+  isImageAttachment,
+  isPdfAttachment,
+  type AttachmentItem,
+} from '@/lib/attachments';
+
+const API_BASE = '/api/tools/subscription-tracker';
 
 type SubscriptionFrequency = 'monthly' | 'quarterly' | 'annual';
 
@@ -19,7 +30,101 @@ type Subscription = {
   isActive: boolean;
   dateAdded: string;
   dateInactivated?: string;
+  addToDashboard: boolean;
+  attachments: AttachmentItem[];
 };
+
+type SubscriptionFormState = {
+  name: string;
+  category: string;
+  customCategory: string;
+  frequency: SubscriptionFrequency;
+  amount: string;
+  dayOfMonth: string;
+  billedDate: string;
+  renewalDate: string;
+  notes: string;
+  addToDashboard: boolean;
+};
+
+function emptySubscriptionForm(): SubscriptionFormState {
+  return {
+    name: '',
+    category: '',
+    customCategory: '',
+    frequency: 'monthly',
+    amount: '',
+    dayOfMonth: '',
+    billedDate: '',
+    renewalDate: '',
+    notes: '',
+    addToDashboard: false,
+  };
+}
+
+function canPinFrequency(frequency: SubscriptionFrequency): boolean {
+  return frequency === 'monthly' || frequency === 'annual';
+}
+
+function DashboardCalendarSwitch({
+  isOn,
+  onToggle,
+  isLight,
+  disabled = false,
+}: {
+  isOn: boolean;
+  onToggle: () => void;
+  isLight: boolean;
+  disabled?: boolean;
+}) {
+  return (
+    <label
+      className={`flex items-center gap-2 ${disabled ? 'cursor-not-allowed' : 'cursor-pointer'}`}
+      title={disabled ? 'Quarterly subscriptions cannot be added to the dashboard calendar yet' : 'Add to dashboard calendar'}
+    >
+      <span className={`text-xs whitespace-nowrap ${isLight ? 'text-slate-600' : 'text-slate-400'}`}>
+        Add to dashboard calendar
+      </span>
+      <button
+        type="button"
+        role="switch"
+        aria-checked={isOn}
+        aria-disabled={disabled}
+        aria-label="Add to dashboard calendar"
+        title={disabled ? 'Quarterly subscriptions cannot be added to the dashboard calendar yet' : 'Add to dashboard calendar'}
+        disabled={disabled}
+        onClick={() => {
+          if (!disabled) onToggle();
+        }}
+        className={`relative inline-flex h-6 w-11 flex-shrink-0 rounded-full border-2 border-transparent transition-colors focus:outline-none focus:ring-2 focus:ring-emerald-500/50 focus:ring-offset-2 ${
+          disabled ? 'cursor-not-allowed opacity-50' : 'cursor-pointer'
+        } ${isLight ? 'focus:ring-offset-white' : 'focus:ring-offset-slate-900'} ${
+          isOn ? 'bg-emerald-500' : isLight ? 'bg-slate-300' : 'bg-slate-700'
+        }`}
+      >
+        <span
+          className={`pointer-events-none inline-block h-5 w-5 transform rounded-full bg-white shadow ring-0 transition ${
+            isOn ? 'translate-x-5' : 'translate-x-1'
+          }`}
+        />
+      </button>
+    </label>
+  );
+}
+
+function OnCalendarChip({ isLight }: { isLight: boolean }) {
+  return (
+    <span
+      className={
+        isLight
+          ? 'inline-flex items-center rounded-full bg-emerald-100 px-2 py-0.5 text-xs font-medium text-emerald-800'
+          : 'inline-flex items-center rounded-full bg-emerald-500/20 px-2 py-0.5 text-xs font-medium text-emerald-300'
+      }
+    >
+      On calendar
+    </span>
+  );
+}
 
 const DEFAULT_CATEGORIES = [
   'Auto',
@@ -45,6 +150,25 @@ function parseLocalDate(isoDate: string): Date | null {
 function formatLocalDate(isoDate: string): string {
   const d = parseLocalDate(isoDate);
   return d ? d.toLocaleDateString() : isoDate;
+}
+
+function mapDbSubscription(sub: any): Subscription {
+  return {
+    id: sub.id,
+    name: sub.name,
+    category: sub.category,
+    frequency: sub.frequency,
+    amount: parseFloat(sub.amount),
+    dayOfMonth: sub.day_of_month,
+    billedDate: sub.billed_date,
+    renewalDate: sub.renewal_date,
+    notes: sub.notes || '',
+    isActive: sub.is_active !== false,
+    dateAdded: sub.date_added,
+    dateInactivated: sub.date_inactivated,
+    addToDashboard: sub.addToDashboard === true,
+    attachments: Array.isArray(sub.attachments) ? sub.attachments : [],
+  };
 }
 
 type SubscriptionTrackerToolProps = {
@@ -98,34 +222,14 @@ export function SubscriptionTrackerTool({ toolId }: SubscriptionTrackerToolProps
   const [includeHistory, setIncludeHistory] = useState(false);
   
   // Form state
-  const [newSubscription, setNewSubscription] = useState({
-    name: '',
-    category: '',
-    customCategory: '',
-    frequency: 'monthly' as SubscriptionFrequency,
-    amount: '',
-    dayOfMonth: '',
-    billedDate: '',
-    renewalDate: '',
-    notes: ''
-  });
+  const [newSubscription, setNewSubscription] = useState<SubscriptionFormState>(emptySubscriptionForm());
   const [showCustomCategory, setShowCustomCategory] = useState(false);
   const [extraCategories, setExtraCategories] = useState<string[]>([]);
   const [isAdding, setIsAdding] = useState(false);
   
   // Edit state
   const [editingId, setEditingId] = useState<string | null>(null);
-  const [editingSubscription, setEditingSubscription] = useState({
-    name: '',
-    category: '',
-    customCategory: '',
-    frequency: 'monthly' as SubscriptionFrequency,
-    amount: '',
-    dayOfMonth: '',
-    billedDate: '',
-    renewalDate: '',
-    notes: ''
-  });
+  const [editingSubscription, setEditingSubscription] = useState<SubscriptionFormState>(emptySubscriptionForm());
   const [showCustomCategoryEdit, setShowCustomCategoryEdit] = useState(false);
   
   const [searchQuery, setSearchQuery] = useState('');
@@ -135,7 +239,143 @@ export function SubscriptionTrackerTool({ toolId }: SubscriptionTrackerToolProps
   const [showHistory, setShowHistory] = useState(false);
   const [deleteConfirmId, setDeleteConfirmId] = useState<string | null>(null);
   const [deleteConfirmText, setDeleteConfirmText] = useState('');
-  
+  const [pendingAttachments, setPendingAttachments] = useState<AttachmentItem[]>([]);
+  const [attachmentModal, setAttachmentModal] = useState<null | 'add' | string>(null);
+  const [attachmentBusy, setAttachmentBusy] = useState(false);
+  const [viewPreview, setViewPreview] = useState<AttachmentItem | null>(null);
+
+  const reloadSubscriptions = async () => {
+    if (!toolId) return;
+    const response = await fetch(`${API_BASE}?toolId=${toolId}`);
+    if (!response.ok) return;
+    const data = await response.json();
+    setSubscriptions((data.subscriptions || []).map(mapDbSubscription));
+  };
+
+  const revokePending = (items: AttachmentItem[]) => {
+    items.forEach((item) => {
+      if (item.url) URL.revokeObjectURL(item.url);
+    });
+  };
+
+  const closeAttachmentModal = () => {
+    setAttachmentModal(null);
+    setViewPreview(null);
+  };
+
+  const clearPendingAttachments = () => {
+    revokePending(pendingAttachments);
+    setPendingAttachments([]);
+    if (attachmentModal === 'add') closeAttachmentModal();
+  };
+
+  const uploadSubscriptionFile = async (file: File, subscriptionId: string): Promise<AttachmentItem> => {
+    if (!toolId) throw new Error('Tool ID is required');
+    const formData = new FormData();
+    formData.append('toolId', toolId);
+    formData.append('subscriptionId', subscriptionId);
+    formData.append('file', file);
+    const response = await fetch(`${API_BASE}/attachments`, { method: 'POST', body: formData });
+    const data = await response.json().catch(() => ({}));
+    if (!response.ok) throw new Error(data.error || 'Failed to add file');
+    return data.attachment as AttachmentItem;
+  };
+
+  const fetchSubscriptionAttachmentBlob = async (attachmentId: string, inline = false) => {
+    const query = inline ? '?inline=1' : '';
+    const response = await fetch(`${API_BASE}/attachments/${attachmentId}${query}`);
+    if (!response.ok) {
+      const errorData = await response.json().catch(() => ({ error: 'Failed to open file' }));
+      throw new Error(errorData.error || 'Failed to open file');
+    }
+    return response.blob();
+  };
+
+  const handleViewAttachment = async (item: AttachmentItem) => {
+    if (item.file && item.url) {
+      if (isImageAttachment(item.type)) {
+        setViewPreview(item);
+        return;
+      }
+      if (isPdfAttachment(item.type, item.name)) {
+        window.open(item.url, '_blank', 'noopener,noreferrer');
+        return;
+      }
+      showError('This file type can’t be previewed in the browser. Use Download to save it.');
+      return;
+    }
+    try {
+      const blob = await fetchSubscriptionAttachmentBlob(item.id, true);
+      const type = blob.type || item.type || '';
+      if (!canPreviewAttachment(type, item.name)) {
+        showError('This file type can’t be previewed in the browser. Use Download to save it.');
+        return;
+      }
+      const url = window.URL.createObjectURL(blob);
+      if (isImageAttachment(type)) {
+        setViewPreview({ ...item, type, url, size: item.size || blob.size });
+        return;
+      }
+      if (isPdfAttachment(type, item.name)) {
+        window.open(url, '_blank', 'noopener,noreferrer');
+      }
+    } catch (error) {
+      showError(error instanceof Error ? error.message : 'Failed to open file');
+    }
+  };
+
+  const handleDownloadAttachment = async (item: AttachmentItem): Promise<boolean> => {
+    if (item.file) return false;
+    try {
+      const blob = await fetchSubscriptionAttachmentBlob(item.id);
+      const url = window.URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = url;
+      link.download = item.name || 'attachment';
+      document.body.appendChild(link);
+      link.click();
+      window.URL.revokeObjectURL(url);
+      document.body.removeChild(link);
+      return true;
+    } catch (error) {
+      showError(error instanceof Error ? error.message : 'Failed to download file');
+      return false;
+    }
+  };
+
+  const addSavedSubscriptionFiles = async (subscriptionId: string, files: File[]) => {
+    setAttachmentBusy(true);
+    try {
+      for (const file of files) {
+        await uploadSubscriptionFile(file, subscriptionId);
+      }
+      await reloadSubscriptions();
+    } catch (error) {
+      showError(error instanceof Error ? error.message : 'Failed to add file');
+    } finally {
+      setAttachmentBusy(false);
+    }
+  };
+
+  const removeSavedSubscriptionFile = async (attachmentId: string) => {
+    if (!toolId) return;
+    setAttachmentBusy(true);
+    try {
+      const response = await fetch(`${API_BASE}/attachments`, {
+        method: 'DELETE',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ toolId, attachmentId }),
+      });
+      const data = await response.json().catch(() => ({}));
+      if (!response.ok) throw new Error(data.error || 'Failed to remove file');
+      await reloadSubscriptions();
+    } catch (error) {
+      showError(error instanceof Error ? error.message : 'Failed to remove file');
+    } finally {
+      setAttachmentBusy(false);
+    }
+  };
+
   // Load subscriptions from API
   useEffect(() => {
     const loadSubscriptions = async () => {
@@ -143,28 +383,7 @@ export function SubscriptionTrackerTool({ toolId }: SubscriptionTrackerToolProps
       
       setIsLoading(true);
       try {
-        const response = await fetch(`/api/tools/subscription-tracker?toolId=${toolId}`);
-        if (response.ok) {
-          const data = await response.json();
-          // Transform database format to component format
-          const transformedSubscriptions: Subscription[] = (data.subscriptions || []).map((sub: any) => ({
-            id: sub.id,
-            name: sub.name,
-            category: sub.category,
-            frequency: sub.frequency,
-            amount: parseFloat(sub.amount),
-            dayOfMonth: sub.day_of_month,
-            billedDate: sub.billed_date,
-            renewalDate: sub.renewal_date,
-            notes: sub.notes || '',
-            isActive: sub.is_active !== false,
-            dateAdded: sub.date_added,
-            dateInactivated: sub.date_inactivated
-          }));
-          setSubscriptions(transformedSubscriptions);
-        } else {
-          console.error('Failed to load subscriptions');
-        }
+        await reloadSubscriptions();
       } catch (error) {
         console.error('Error loading subscriptions:', error);
       } finally {
@@ -307,50 +526,40 @@ export function SubscriptionTrackerTool({ toolId }: SubscriptionTrackerToolProps
         },
         body: JSON.stringify({
           toolId,
-          subscriptionData
+          subscriptionData,
+          addToDashboard: newSubscription.addToDashboard === true && canPinFrequency(newSubscription.frequency),
         }),
       });
 
+      const data = await response.json().catch(() => ({}));
       if (response.ok) {
-        // Reload subscriptions from API
-        const loadResponse = await fetch(`/api/tools/subscription-tracker?toolId=${toolId}`);
-        if (loadResponse.ok) {
-          const data = await loadResponse.json();
-          const transformedSubscriptions: Subscription[] = (data.subscriptions || []).map((sub: any) => ({
-            id: sub.id,
-            name: sub.name,
-            category: sub.category,
-            frequency: sub.frequency,
-            amount: parseFloat(sub.amount),
-            dayOfMonth: sub.day_of_month,
-            billedDate: sub.billed_date,
-            renewalDate: sub.renewal_date,
-            notes: sub.notes || '',
-            isActive: sub.is_active !== false,
-            dateAdded: sub.date_added,
-            dateInactivated: sub.date_inactivated
-          }));
-          setSubscriptions(transformedSubscriptions);
+        const createdId = data.subscriptionId as string | undefined;
+        if (createdId && pendingAttachments.length > 0) {
+          try {
+            for (const queued of pendingAttachments) {
+              if (!queued.file) continue;
+              await uploadSubscriptionFile(queued.file, createdId);
+            }
+          } catch (uploadError) {
+            clearPendingAttachments();
+            await reloadSubscriptions();
+            setNewSubscription(emptySubscriptionForm());
+            setShowCustomCategory(false);
+            setIsAdding(false);
+            showError(uploadError instanceof Error ? uploadError.message : 'Subscription saved, but a file failed to upload.');
+            return;
+          }
         }
+        clearPendingAttachments();
+        await reloadSubscriptions();
         
         // Reset form
-        setNewSubscription({
-          name: '',
-          category: '',
-          customCategory: '',
-          frequency: 'monthly',
-          amount: '',
-          dayOfMonth: '',
-          billedDate: '',
-          renewalDate: '',
-          notes: ''
-        });
+        setNewSubscription(emptySubscriptionForm());
         setShowCustomCategory(false);
         setIsAdding(false);
       } else {
-        const errorData = await response.json();
-        console.error('Failed to add subscription:', errorData.error);
-        showError('Failed to add subscription: ' + (errorData.error || 'Unknown error'));
+        console.error('Failed to add subscription:', data.error);
+        showError('Failed to add subscription: ' + (data.error || 'Unknown error'));
       }
     } catch (error) {
       console.error('Error adding subscription:', error);
@@ -379,24 +588,15 @@ export function SubscriptionTrackerTool({ toolId }: SubscriptionTrackerToolProps
       dayOfMonth: subscription.dayOfMonth?.toString() || '',
       billedDate: subscription.billedDate || '',
       renewalDate: subscription.renewalDate || '',
-      notes: subscription.notes
+      notes: subscription.notes,
+      addToDashboard: subscription.addToDashboard === true && canPinFrequency(subscription.frequency),
     });
     setShowCustomCategoryEdit(false);
   };
 
   const cancelEditing = () => {
     setEditingId(null);
-    setEditingSubscription({
-      name: '',
-      category: '',
-      customCategory: '',
-      frequency: 'monthly',
-      amount: '',
-      dayOfMonth: '',
-      billedDate: '',
-      renewalDate: '',
-      notes: ''
-    });
+    setEditingSubscription(emptySubscriptionForm());
     setShowCustomCategoryEdit(false);
   };
 
@@ -451,31 +651,13 @@ export function SubscriptionTrackerTool({ toolId }: SubscriptionTrackerToolProps
         body: JSON.stringify({
           subscriptionId: editingId,
           toolId,
-          subscriptionData
+          subscriptionData,
+          addToDashboard: editingSubscription.addToDashboard === true && canPinFrequency(editingSubscription.frequency),
         }),
       });
 
       if (response.ok) {
-        // Reload subscriptions from API
-        const loadResponse = await fetch(`/api/tools/subscription-tracker?toolId=${toolId}`);
-        if (loadResponse.ok) {
-          const data = await loadResponse.json();
-          const transformedSubscriptions: Subscription[] = (data.subscriptions || []).map((sub: any) => ({
-            id: sub.id,
-            name: sub.name,
-            category: sub.category,
-            frequency: sub.frequency,
-            amount: parseFloat(sub.amount),
-            dayOfMonth: sub.day_of_month,
-            billedDate: sub.billed_date,
-            renewalDate: sub.renewal_date,
-            notes: sub.notes || '',
-            isActive: sub.is_active !== false,
-            dateAdded: sub.date_added,
-            dateInactivated: sub.date_inactivated
-          }));
-          setSubscriptions(transformedSubscriptions);
-        }
+        await reloadSubscriptions();
         cancelEditing();
       } else {
         const errorData = await response.json();
@@ -530,26 +712,7 @@ export function SubscriptionTrackerTool({ toolId }: SubscriptionTrackerToolProps
       });
 
       if (response.ok) {
-        // Reload subscriptions from API
-        const loadResponse = await fetch(`/api/tools/subscription-tracker?toolId=${toolId}`);
-        if (loadResponse.ok) {
-          const data = await loadResponse.json();
-          const transformedSubscriptions: Subscription[] = (data.subscriptions || []).map((sub: any) => ({
-            id: sub.id,
-            name: sub.name,
-            category: sub.category,
-            frequency: sub.frequency,
-            amount: parseFloat(sub.amount),
-            dayOfMonth: sub.day_of_month,
-            billedDate: sub.billed_date,
-            renewalDate: sub.renewal_date,
-            notes: sub.notes || '',
-            isActive: sub.is_active !== false,
-            dateAdded: sub.date_added,
-            dateInactivated: sub.date_inactivated
-          }));
-          setSubscriptions(transformedSubscriptions);
-        }
+        await reloadSubscriptions();
       } else {
         const errorData = await response.json();
         console.error('Failed to inactivate subscription:', errorData.error);
@@ -603,26 +766,7 @@ export function SubscriptionTrackerTool({ toolId }: SubscriptionTrackerToolProps
       });
 
       if (response.ok) {
-        // Reload subscriptions from API
-        const loadResponse = await fetch(`/api/tools/subscription-tracker?toolId=${toolId}`);
-        if (loadResponse.ok) {
-          const data = await loadResponse.json();
-          const transformedSubscriptions: Subscription[] = (data.subscriptions || []).map((sub: any) => ({
-            id: sub.id,
-            name: sub.name,
-            category: sub.category,
-            frequency: sub.frequency,
-            amount: parseFloat(sub.amount),
-            dayOfMonth: sub.day_of_month,
-            billedDate: sub.billed_date,
-            renewalDate: sub.renewal_date,
-            notes: sub.notes || '',
-            isActive: sub.is_active !== false,
-            dateAdded: sub.date_added,
-            dateInactivated: sub.date_inactivated
-          }));
-          setSubscriptions(transformedSubscriptions);
-        }
+        await reloadSubscriptions();
       } else {
         const errorData = await response.json();
         console.error('Failed to reactivate subscription:', errorData.error);
@@ -655,26 +799,8 @@ export function SubscriptionTrackerTool({ toolId }: SubscriptionTrackerToolProps
       });
 
       if (response.ok) {
-        // Reload subscriptions from API
-        const loadResponse = await fetch(`/api/tools/subscription-tracker?toolId=${toolId}`);
-        if (loadResponse.ok) {
-          const data = await loadResponse.json();
-          const transformedSubscriptions: Subscription[] = (data.subscriptions || []).map((sub: any) => ({
-            id: sub.id,
-            name: sub.name,
-            category: sub.category,
-            frequency: sub.frequency,
-            amount: parseFloat(sub.amount),
-            dayOfMonth: sub.day_of_month,
-            billedDate: sub.billed_date,
-            renewalDate: sub.renewal_date,
-            notes: sub.notes || '',
-            isActive: sub.is_active !== false,
-            dateAdded: sub.date_added,
-            dateInactivated: sub.date_inactivated
-          }));
-          setSubscriptions(transformedSubscriptions);
-        }
+        await reloadSubscriptions();
+        if (attachmentModal === deleteConfirmId) closeAttachmentModal();
         setDeleteConfirmId(null);
         setDeleteConfirmText('');
       } else {
@@ -911,6 +1037,21 @@ export function SubscriptionTrackerTool({ toolId }: SubscriptionTrackerToolProps
       return a.name.localeCompare(b.name);
     });
   const inactiveSubscriptions = subscriptions.filter(sub => !sub.isActive).sort((a, b) => a.name.localeCompare(b.name));
+  const savedAttachmentSubscription =
+    attachmentModal && attachmentModal !== 'add'
+      ? subscriptions.find((sub) => sub.id === attachmentModal) || null
+      : null;
+  const modalFiles: AttachmentItem[] =
+    attachmentModal === 'add'
+      ? pendingAttachments
+      : savedAttachmentSubscription
+        ? (savedAttachmentSubscription.attachments || []).map((item) => ({
+            id: item.id,
+            name: item.name,
+            size: item.size,
+            type: item.type,
+          }))
+        : [];
 
   return (
     <div className="space-y-6">
@@ -959,7 +1100,13 @@ export function SubscriptionTrackerTool({ toolId }: SubscriptionTrackerToolProps
             </div>
           ) : (
             <div className={cardClass}>
-              <h3 className={isLight ? 'text-lg font-semibold text-slate-900 mb-4' : 'text-lg font-semibold text-slate-50 mb-4'}>Add New Subscription</h3>
+              <div className="flex items-center justify-between gap-3 mb-4">
+                <h3 className={isLight ? 'text-lg font-semibold text-slate-900' : 'text-lg font-semibold text-slate-50'}>Add New Subscription</h3>
+                <AttachmentButton
+                  count={pendingAttachments.length}
+                  onClick={() => setAttachmentModal('add')}
+                />
+              </div>
               <div className="space-y-4">
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                   <div>
@@ -1039,7 +1186,8 @@ export function SubscriptionTrackerTool({ toolId }: SubscriptionTrackerToolProps
                             frequency: newFrequency,
                             dayOfMonth: '',
                             billedDate: newSubscription.billedDate || '',
-                            renewalDate: newSubscription.renewalDate || ''
+                            renewalDate: newSubscription.renewalDate || '',
+                            addToDashboard: newSubscription.addToDashboard,
                           });
                         } else {
                           setNewSubscription({ 
@@ -1047,7 +1195,8 @@ export function SubscriptionTrackerTool({ toolId }: SubscriptionTrackerToolProps
                             frequency: newFrequency,
                             dayOfMonth: newSubscription.dayOfMonth || '',
                             billedDate: '',
-                            renewalDate: ''
+                            renewalDate: '',
+                            addToDashboard: newFrequency === 'quarterly' ? false : newSubscription.addToDashboard,
                           });
                         }
                       }}
@@ -1130,6 +1279,12 @@ export function SubscriptionTrackerTool({ toolId }: SubscriptionTrackerToolProps
                     className={textareaClass}
                   />
                 </div>
+                <DashboardCalendarSwitch
+                  isOn={newSubscription.addToDashboard}
+                  disabled={!canPinFrequency(newSubscription.frequency)}
+                  isLight={isLight}
+                  onToggle={() => setNewSubscription((prev) => ({ ...prev, addToDashboard: !prev.addToDashboard }))}
+                />
                 <div className="flex gap-2">
                   <button
                     onClick={addSubscription}
@@ -1147,18 +1302,9 @@ export function SubscriptionTrackerTool({ toolId }: SubscriptionTrackerToolProps
                   <button
                     onClick={() => {
                       setIsAdding(false);
-                      setNewSubscription({
-                        name: '',
-                        category: '',
-                        customCategory: '',
-                        frequency: 'monthly',
-                        amount: '',
-                        dayOfMonth: '',
-                        billedDate: '',
-                        renewalDate: '',
-                        notes: ''
-                      });
+                      setNewSubscription(emptySubscriptionForm());
                       setShowCustomCategory(false);
+                      clearPendingAttachments();
                     }}
                     className={secondaryButtonClass}
                   >
@@ -1231,6 +1377,15 @@ export function SubscriptionTrackerTool({ toolId }: SubscriptionTrackerToolProps
                   <div key={subscription.id} className={nestedCardClass}>
                     {editingId === subscription.id ? (
                       <div className="space-y-4">
+                        <div className="flex items-center justify-between gap-3">
+                          <h4 className={isLight ? 'text-md font-semibold text-slate-900' : 'text-md font-semibold text-slate-50'}>
+                            Edit Subscription
+                          </h4>
+                          <AttachmentButton
+                            count={subscription.attachments?.length || 0}
+                            onClick={() => setAttachmentModal(subscription.id)}
+                          />
+                        </div>
                         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                           <div>
                             <label className="block text-sm font-medium text-slate-300 mb-2">
@@ -1308,7 +1463,8 @@ export function SubscriptionTrackerTool({ toolId }: SubscriptionTrackerToolProps
                                     frequency: newFrequency,
                                     dayOfMonth: '',
                                     billedDate: editingSubscription.billedDate || '',
-                                    renewalDate: editingSubscription.renewalDate || ''
+                                    renewalDate: editingSubscription.renewalDate || '',
+                                    addToDashboard: editingSubscription.addToDashboard,
                                   });
                                 } else {
                                   setEditingSubscription({ 
@@ -1316,7 +1472,8 @@ export function SubscriptionTrackerTool({ toolId }: SubscriptionTrackerToolProps
                                     frequency: newFrequency,
                                     dayOfMonth: editingSubscription.dayOfMonth || '',
                                     billedDate: '',
-                                    renewalDate: ''
+                                    renewalDate: '',
+                                    addToDashboard: newFrequency === 'quarterly' ? false : editingSubscription.addToDashboard,
                                   });
                                 }
                               }}
@@ -1396,6 +1553,12 @@ export function SubscriptionTrackerTool({ toolId }: SubscriptionTrackerToolProps
                             className="w-full px-3 py-2 rounded-lg border border-slate-700 bg-slate-900/70 text-slate-100 placeholder-slate-500 focus:border-emerald-500/50 focus:outline-none focus:ring-1 focus:ring-emerald-500/50 resize-none"
                           />
                         </div>
+                        <DashboardCalendarSwitch
+                          isOn={editingSubscription.addToDashboard}
+                          disabled={!canPinFrequency(editingSubscription.frequency)}
+                          isLight={isLight}
+                          onToggle={() => setEditingSubscription((prev) => ({ ...prev, addToDashboard: !prev.addToDashboard }))}
+                        />
                         <div className="flex gap-2">
                           <button
                             onClick={saveEdit}
@@ -1426,6 +1589,7 @@ export function SubscriptionTrackerTool({ toolId }: SubscriptionTrackerToolProps
                             <span className={isLight ? 'px-2 py-1 rounded text-xs font-medium border border-emerald-300 bg-emerald-50 text-emerald-800' : 'px-2 py-1 rounded text-xs font-medium bg-emerald-500/20 text-emerald-300'}>
                               {subscription.category}
                             </span>
+                            {subscription.addToDashboard && <OnCalendarChip isLight={isLight} />}
                           </div>
                           <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-sm">
                             <div>
@@ -1476,6 +1640,10 @@ export function SubscriptionTrackerTool({ toolId }: SubscriptionTrackerToolProps
                           )}
                         </div>
                         <div className="flex shrink-0 items-center gap-1.5 ml-4">
+                          <AttachmentButton
+                            count={subscription.attachments?.length || 0}
+                            onClick={() => setAttachmentModal(subscription.id)}
+                          />
                           <button
                             type="button"
                             onClick={() => startEditing(subscription)}
@@ -1536,6 +1704,7 @@ export function SubscriptionTrackerTool({ toolId }: SubscriptionTrackerToolProps
                             <span className={isLight ? 'px-2 py-1 rounded text-xs font-medium border border-slate-300 bg-slate-100 text-slate-700' : 'px-2 py-1 rounded text-xs font-medium bg-slate-600/50 text-slate-400'}>
                               {subscription.category}
                             </span>
+                            {subscription.addToDashboard && <OnCalendarChip isLight={isLight} />}
                           </div>
                           <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-sm">
                             <div>
@@ -1561,6 +1730,10 @@ export function SubscriptionTrackerTool({ toolId }: SubscriptionTrackerToolProps
                           )}
                         </div>
                         <div className="flex shrink-0 items-center gap-1.5 ml-4">
+                          <AttachmentButton
+                            count={subscription.attachments?.length || 0}
+                            onClick={() => setAttachmentModal(subscription.id)}
+                          />
                           <button
                             type="button"
                             onClick={() => reactivateSubscription(subscription.id)}
@@ -1716,6 +1889,43 @@ export function SubscriptionTrackerTool({ toolId }: SubscriptionTrackerToolProps
           </div>
         </div>
       )}
+
+      <AttachmentModal
+        open={attachmentModal !== null}
+        onClose={closeAttachmentModal}
+        previewItem={viewPreview}
+        title={
+          attachmentModal === 'add'
+            ? newSubscription.name.trim() || 'New subscription'
+            : savedAttachmentSubscription?.name || 'Subscription'
+        }
+        files={modalFiles}
+        busy={attachmentBusy}
+        readOnly={Boolean(savedAttachmentSubscription && !savedAttachmentSubscription.isActive)}
+        onAdd={(incoming) => {
+          if (attachmentModal === 'add') {
+            setPendingAttachments((prev) => [...prev, ...incoming.map(createPendingAttachment)]);
+            return;
+          }
+          if (attachmentModal) {
+            void addSavedSubscriptionFiles(attachmentModal, incoming);
+          }
+        }}
+        onRemove={(id) => {
+          if (attachmentModal === 'add') {
+            setPendingAttachments((prev) => {
+              const next = prev.filter((item) => item.id !== id);
+              const removed = prev.find((item) => item.id === id);
+              if (removed?.url) URL.revokeObjectURL(removed.url);
+              return next;
+            });
+            return;
+          }
+          void removeSavedSubscriptionFile(id);
+        }}
+        onView={handleViewAttachment}
+        onDownload={attachmentModal === 'add' ? undefined : handleDownloadAttachment}
+      />
     </div>
   );
 }

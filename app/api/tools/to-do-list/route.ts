@@ -2,6 +2,63 @@ import { NextRequest, NextResponse } from 'next/server';
 import { getSession } from '@/lib/session';
 import { supabaseServer } from '@/lib/supabaseServer';
 import { deleteCategoryTaskStorageFiles, deleteTaskStorageFiles, isMissingRelationError } from '@/lib/todo-storage';
+import { CALENDAR_SOURCE_TODO_TASK } from '@/lib/calendarPins';
+import {
+  deleteCalendarPinsForSources,
+  getPinnedSourceIds,
+  syncCalendarPin,
+} from '@/lib/calendarPinsServer';
+
+async function attachDashboardFlags<T extends { id: string }>(
+  tasks: T[],
+  userId: string,
+  toolId?: string
+): Promise<(T & { addToDashboard: boolean })[]> {
+  const { ids } = await getPinnedSourceIds({
+    userId,
+    sourceType: CALENDAR_SOURCE_TODO_TASK,
+    sourceIds: tasks.map((task) => task.id),
+    toolId,
+  });
+  return tasks.map((task) => ({ ...task, addToDashboard: ids.has(task.id) }));
+}
+
+async function applyTodoPin({
+  userId,
+  toolId,
+  taskId,
+  pinned,
+  dueDate,
+}: {
+  userId: string;
+  toolId: string;
+  taskId: string;
+  pinned: boolean;
+  dueDate?: string | null;
+}): Promise<{ error: string | null; pinned: boolean }> {
+  const wantsPin = pinned && Boolean(dueDate);
+  const pinResult = await syncCalendarPin({
+    userId,
+    toolId,
+    sourceType: CALENDAR_SOURCE_TODO_TASK,
+    sourceId: taskId,
+    pinned: wantsPin,
+  });
+  return { error: pinResult.error, pinned: wantsPin };
+}
+
+async function deletePinsForCategory(userId: string, categoryId: string) {
+  const { data } = await supabaseServer
+    .from('tools_tdl_tasks')
+    .select('id')
+    .eq('category_id', categoryId)
+    .eq('user_id', userId);
+  await deleteCalendarPinsForSources({
+    userId,
+    sourceType: CALENDAR_SOURCE_TODO_TASK,
+    sourceIds: (data || []).map((row) => row.id),
+  });
+}
 
 async function attachmentsByTaskIds(taskIds: string[], userId: string) {
   const map: Record<string, Array<{ id: string; name: string; size: number; type: string }>> = {};
@@ -154,16 +211,20 @@ export async function GET(request: NextRequest) {
       const attachmentMap = await attachmentsByTaskIds((tasks || []).map((t) => t.id), user.id);
 
       return NextResponse.json({
-        tasks: (tasks || []).map((t) => ({
-          id: t.id,
-          categoryId: t.category_id,
-          taskName: t.task_name,
-          dueDate: t.due_date || '',
-          priority: t.priority || 'Medium',
-          notes: t.notes || '',
-          status: t.status || 'Not Started',
-          attachments: attachmentMap[t.id] || [],
-        })),
+        tasks: await attachDashboardFlags(
+          (tasks || []).map((t) => ({
+            id: t.id,
+            categoryId: t.category_id,
+            taskName: t.task_name,
+            dueDate: t.due_date || '',
+            priority: t.priority || 'Medium',
+            notes: t.notes || '',
+            status: t.status || 'Not Started',
+            attachments: attachmentMap[t.id] || [],
+          })),
+          user.id,
+          toolId
+        ),
       });
     }
 
@@ -264,6 +325,7 @@ export async function POST(request: NextRequest) {
         if (!categoryId) {
           return NextResponse.json({ error: 'Category ID is required' }, { status: 400 });
         }
+        await deletePinsForCategory(user.id, categoryId);
         await deleteCategoryTaskStorageFiles(categoryId, user.id);
         const { error } = await supabaseServer
           .from('tools_tdl_categories')
@@ -281,13 +343,14 @@ export async function POST(request: NextRequest) {
 
     if (resource === 'task') {
       if (action === 'create') {
-        const { categoryId, task_name, due_date, priority, notes, status } = body as {
+        const { categoryId, task_name, due_date, priority, notes, status, addToDashboard } = body as {
           categoryId: string;
           task_name: string;
           due_date?: string;
           priority?: string;
           notes?: string;
           status?: string;
+          addToDashboard?: boolean;
         };
         if (!categoryId || !task_name?.trim()) {
           return NextResponse.json({ error: 'Category and task name are required' }, { status: 400 });
@@ -310,6 +373,19 @@ export async function POST(request: NextRequest) {
           console.error('Error creating task:', error);
           return NextResponse.json({ error: error.message }, { status: 500 });
         }
+        const pinResult = await applyTodoPin({
+          userId: user.id,
+          toolId,
+          taskId: data.id,
+          pinned: addToDashboard === true,
+          dueDate: data.due_date || due_date || null,
+        });
+        if (pinResult.error) {
+          return NextResponse.json(
+            { error: 'Task saved, but failed to add it to the dashboard calendar' },
+            { status: 500 }
+          );
+        }
         return NextResponse.json({
           task: {
             id: data.id,
@@ -319,20 +395,23 @@ export async function POST(request: NextRequest) {
             priority: data.priority || 'Medium',
             notes: data.notes || '',
             status: data.status || 'Not Started',
+            addToDashboard: pinResult.pinned,
             attachments: [],
           },
         });
       }
 
       if (action === 'update') {
-        const { taskId, task_name, due_date, priority, notes, status } = body as {
+        const { taskId, task_name, due_date, priority, notes, status, addToDashboard } = body as {
           taskId: string;
           task_name?: string;
           due_date?: string;
           priority?: string;
           notes?: string;
           status?: string;
+          addToDashboard?: boolean;
         };
+        const hasPinFlag = typeof addToDashboard === 'boolean';
         if (!taskId) {
           return NextResponse.json({ error: 'Task ID is required' }, { status: 400 });
         }
@@ -356,17 +435,37 @@ export async function POST(request: NextRequest) {
           console.error('Error updating task:', error);
           return NextResponse.json({ error: error.message }, { status: 500 });
         }
-        return NextResponse.json({
-          task: {
-            id: data.id,
-            categoryId: data.category_id,
-            taskName: data.task_name,
-            dueDate: data.due_date || '',
-            priority: data.priority || 'Medium',
-            notes: data.notes || '',
-            status: data.status || 'Not Started',
-          },
-        });
+        if (hasPinFlag) {
+          const pinResult = await applyTodoPin({
+            userId: user.id,
+            toolId,
+            taskId: data.id,
+            pinned: addToDashboard === true,
+            dueDate: data.due_date || null,
+          });
+          if (pinResult.error) {
+            return NextResponse.json(
+              { error: 'Task saved, but failed to update the dashboard calendar' },
+              { status: 500 }
+            );
+          }
+        }
+        const [taskWithFlag] = await attachDashboardFlags(
+          [
+            {
+              id: data.id,
+              categoryId: data.category_id,
+              taskName: data.task_name,
+              dueDate: data.due_date || '',
+              priority: data.priority || 'Medium',
+              notes: data.notes || '',
+              status: data.status || 'Not Started',
+            },
+          ],
+          user.id,
+          toolId
+        );
+        return NextResponse.json({ task: taskWithFlag });
       }
 
       if (action === 'delete') {
@@ -374,6 +473,11 @@ export async function POST(request: NextRequest) {
         if (!taskId) {
           return NextResponse.json({ error: 'Task ID is required' }, { status: 400 });
         }
+        await deleteCalendarPinsForSources({
+          userId: user.id,
+          sourceType: CALENDAR_SOURCE_TODO_TASK,
+          sourceIds: [taskId],
+        });
         await deleteTaskStorageFiles(taskId, user.id);
         const { error } = await supabaseServer
           .from('tools_tdl_tasks')

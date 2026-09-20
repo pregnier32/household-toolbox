@@ -1,6 +1,67 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getSession } from '@/lib/session';
 import { supabaseServer } from '@/lib/supabaseServer';
+import {
+  attachmentsBySubscriptionIds,
+  deleteSubscriptionStorageFiles,
+} from '@/lib/subscription-tracker-storage';
+import { CALENDAR_SOURCE_SUBSCRIPTION } from '@/lib/calendarPins';
+import {
+  deleteCalendarPinsForSources,
+  getPinnedSourceIds,
+  syncCalendarPin,
+} from '@/lib/calendarPinsServer';
+
+function canPinSubscription(frequency: string, billedDate?: string | null, dayOfMonth?: number | null): boolean {
+  if (frequency === 'monthly') return Boolean(dayOfMonth);
+  if (frequency === 'annual') return Boolean(billedDate);
+  return false;
+}
+
+async function attachDashboardFlags<T extends { id: string }>(
+  subscriptions: T[],
+  userId: string,
+  toolId?: string
+): Promise<(T & { addToDashboard: boolean })[]> {
+  const { ids } = await getPinnedSourceIds({
+    userId,
+    sourceType: CALENDAR_SOURCE_SUBSCRIPTION,
+    sourceIds: subscriptions.map((subscription) => subscription.id),
+    toolId,
+  });
+  return subscriptions.map((subscription) => ({
+    ...subscription,
+    addToDashboard: ids.has(subscription.id),
+  }));
+}
+
+async function applySubscriptionPin({
+  userId,
+  toolId,
+  subscriptionId,
+  pinned,
+  frequency,
+  billedDate,
+  dayOfMonth,
+}: {
+  userId: string;
+  toolId: string;
+  subscriptionId: string;
+  pinned: boolean;
+  frequency: string;
+  billedDate?: string | null;
+  dayOfMonth?: number | null;
+}): Promise<{ error: string | null; pinned: boolean }> {
+  const wantsPin = pinned && canPinSubscription(frequency, billedDate, dayOfMonth);
+  const pinResult = await syncCalendarPin({
+    userId,
+    toolId,
+    sourceType: CALENDAR_SOURCE_SUBSCRIPTION,
+    sourceId: subscriptionId,
+    pinned: wantsPin,
+  });
+  return { error: pinResult.error, pinned: wantsPin };
+}
 
 // GET - Fetch all subscriptions for the current user
 export async function GET(request: NextRequest) {
@@ -34,7 +95,13 @@ export async function GET(request: NextRequest) {
         return NextResponse.json({ error: 'Subscription not found' }, { status: 404 });
       }
 
-      return NextResponse.json({ subscription });
+      const attachmentsBySubscription = await attachmentsBySubscriptionIds([subscription.id], user.id);
+      const [withFlag] = await attachDashboardFlags(
+        [{ ...subscription, attachments: attachmentsBySubscription[subscription.id] || [] }],
+        user.id,
+        toolId
+      );
+      return NextResponse.json({ subscription: withFlag });
     }
 
     // Fetch all subscriptions for the user
@@ -50,7 +117,22 @@ export async function GET(request: NextRequest) {
       return NextResponse.json({ error: 'Failed to fetch subscriptions' }, { status: 500 });
     }
 
-    return NextResponse.json({ subscriptions: subscriptions || [] });
+    const rows = subscriptions || [];
+    const attachmentsBySubscription = await attachmentsBySubscriptionIds(
+      rows.map((row) => row.id),
+      user.id
+    );
+
+    return NextResponse.json({
+      subscriptions: await attachDashboardFlags(
+        rows.map((row) => ({
+          ...row,
+          attachments: attachmentsBySubscription[row.id] || [],
+        })),
+        user.id,
+        toolId
+      ),
+    });
   } catch (error) {
     console.error('Error in subscription tracker GET:', error);
     return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
@@ -67,7 +149,8 @@ export async function POST(request: NextRequest) {
 
   try {
     const body = await request.json();
-    const { subscriptionId, toolId, subscriptionData } = body;
+    const { subscriptionId, toolId, subscriptionData, addToDashboard } = body;
+    const hasPinFlag = typeof addToDashboard === 'boolean';
 
     if (!toolId) {
       return NextResponse.json({ error: 'Tool ID is required' }, { status: 400 });
@@ -115,6 +198,24 @@ export async function POST(request: NextRequest) {
         return NextResponse.json({ error: 'Failed to update subscription' }, { status: 500 });
       }
 
+      if (hasPinFlag) {
+        const pinResult = await applySubscriptionPin({
+          userId: user.id,
+          toolId,
+          subscriptionId,
+          pinned: addToDashboard === true,
+          frequency: subscriptionData.frequency,
+          billedDate: subscriptionData.frequency === 'annual' ? subscriptionData.billed_date : null,
+          dayOfMonth: subscriptionData.frequency === 'annual' ? null : subscriptionData.day_of_month,
+        });
+        if (pinResult.error) {
+          return NextResponse.json(
+            { error: 'Subscription saved, but failed to update the dashboard calendar' },
+            { status: 500 }
+          );
+        }
+      }
+
       return NextResponse.json({ success: true, subscriptionId });
     }
 
@@ -142,6 +243,24 @@ export async function POST(request: NextRequest) {
     if (createError) {
       console.error('Error creating subscription:', createError);
       return NextResponse.json({ error: 'Failed to create subscription' }, { status: 500 });
+    }
+
+    if (hasPinFlag || addToDashboard === true) {
+      const pinResult = await applySubscriptionPin({
+        userId: user.id,
+        toolId,
+        subscriptionId: newSubscription.id,
+        pinned: addToDashboard === true,
+        frequency: subscriptionData.frequency,
+        billedDate: subscriptionData.frequency === 'annual' ? subscriptionData.billed_date : null,
+        dayOfMonth: subscriptionData.frequency === 'annual' ? null : subscriptionData.day_of_month,
+      });
+      if (pinResult.error) {
+        return NextResponse.json(
+          { error: 'Subscription saved, but failed to add it to the dashboard calendar' },
+          { status: 500 }
+        );
+      }
     }
 
     return NextResponse.json({ success: true, subscriptionId: newSubscription.id });
@@ -177,6 +296,13 @@ export async function DELETE(request: NextRequest) {
     if (fetchError || !subscription) {
       return NextResponse.json({ error: 'Subscription not found' }, { status: 404 });
     }
+
+    await deleteCalendarPinsForSources({
+      userId: user.id,
+      sourceType: CALENDAR_SOURCE_SUBSCRIPTION,
+      sourceIds: [subscriptionId],
+    });
+    await deleteSubscriptionStorageFiles(subscriptionId, user.id);
 
     const { error: deleteError } = await supabaseServer
       .from('tools_st_subscriptions')

@@ -1,64 +1,61 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getSession } from '@/lib/session';
 import { supabaseServer } from '@/lib/supabaseServer';
-import { assertCanStoreBytes, refreshUserStorageUsage } from '@/lib/user-storage';
+import {
+  attachmentsByAppointmentIds,
+  attachmentsByDocumentIds,
+  attachmentsByPetIds,
+  attachmentsByVaccinationIds,
+  attachmentsByVeterinaryIds,
+  deleteAllPetStorageFiles,
+  deleteAppointmentFileRows,
+  deleteDocumentFileRows,
+  deleteVaccinationFileRows,
+  deleteVeterinaryFileRows,
+} from '@/lib/pet-care-storage';
+import { CALENDAR_SOURCE_PET_APPOINTMENT } from '@/lib/calendarPins';
+import {
+  deleteCalendarPinsForSources,
+  getPinnedSourceIds,
+  syncCalendarPin,
+} from '@/lib/calendarPinsServer';
 
-// Constants
-const MAX_FILE_SIZE = 10 * 1024 * 1024; // 10MB in bytes
+const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
-// Helper function to upload file to Supabase Storage
-async function uploadFile(
-  file: File,
-  userId: string,
-  bucketName: string,
-  folder: string
-): Promise<{ url: string; fileName: string; fileSize: number; fileType: string } | null> {
-  try {
-    if (file.size > MAX_FILE_SIZE) {
-      throw new Error(`File size cannot exceed ${MAX_FILE_SIZE / 1024 / 1024}MB`);
+function isUuid(value: unknown): value is string {
+  return typeof value === 'string' && UUID_RE.test(value);
+}
+
+async function upsertPetChildren(
+  table: string,
+  petId: string,
+  rows: Array<{ id?: unknown; payload: Record<string, unknown> }>,
+  onDeleteIds?: (ids: string[]) => Promise<void>
+) {
+  const { data: existing, error: existingError } = await supabaseServer.from(table).select('id').eq('pet_id', petId);
+  if (existingError) throw existingError;
+  const existingIds = new Set((existing || []).map((row) => row.id as string));
+  const keepIds = new Set<string>();
+
+  for (const row of rows) {
+    const id = isUuid(row.id) ? row.id : null;
+    if (id && existingIds.has(id)) {
+      const { error } = await supabaseServer.from(table).update(row.payload).eq('id', id).eq('pet_id', petId);
+      if (error) throw error;
+      keepIds.add(id);
+    } else {
+      const insertRow = id ? { id, pet_id: petId, ...row.payload } : { pet_id: petId, ...row.payload };
+      const { data, error } = await supabaseServer.from(table).insert(insertRow).select('id').single();
+      if (error || !data) throw error || new Error(`Failed to insert ${table} row`);
+      keepIds.add(data.id);
     }
+  }
 
-    await assertCanStoreBytes(userId, file.size);
-
-    const sanitizedFileName = file.name.replace(/[^a-zA-Z0-9.-]/g, '_');
-    const storageFileName = `${folder}/${userId}/${Date.now()}-${sanitizedFileName}`;
-    
-    const arrayBuffer = await file.arrayBuffer();
-    const buffer = Buffer.from(arrayBuffer);
-    
-    const { data: uploadData, error: uploadError } = await supabaseServer
-      .storage
-      .from(bucketName)
-      .upload(storageFileName, buffer, {
-        contentType: file.type,
-        upsert: false
-      });
-    
-    if (uploadError) {
-      console.error('Error uploading file:', uploadError);
-      // Check if bucket doesn't exist
-      if (uploadError.message?.includes('Bucket not found') || uploadError.message?.includes('does not exist')) {
-        throw new Error(`Storage bucket '${bucketName}' does not exist. Please create it in Supabase Storage.`);
-      }
-      throw new Error(`Failed to upload file: ${uploadError.message}`);
-    }
-    
-    const { data: urlData } = supabaseServer
-      .storage
-      .from(bucketName)
-      .getPublicUrl(storageFileName);
-    
-    await refreshUserStorageUsage(userId);
-
-    return {
-      url: urlData.publicUrl,
-      fileName: file.name,
-      fileSize: file.size,
-      fileType: file.type
-    };
-  } catch (error: any) {
-    console.error('Error in uploadFile:', error);
-    throw error; // Re-throw to be caught by the caller
+  const stale = [...existingIds].filter((id) => !keepIds.has(id));
+  if (stale.length > 0) {
+    if (onDeleteIds) await onDeleteIds(stale);
+    const { error } = await supabaseServer.from(table).delete().eq('pet_id', petId).in('id', stale);
+    if (error) throw error;
   }
 }
 
@@ -127,15 +124,34 @@ export async function GET(request: NextRequest) {
       const documents = documentsResult.data || [];
       const notes = notesResult.data || [];
 
+      const [petFiles, documentFiles, veterinaryFiles, vaccinationFiles, appointmentFiles, pinned] = await Promise.all([
+        attachmentsByPetIds([petId], user.id),
+        attachmentsByDocumentIds(documents.map((row) => row.id), user.id),
+        attachmentsByVeterinaryIds(vetRecords.map((row) => row.id), user.id),
+        attachmentsByVaccinationIds(vaccinations.map((row) => row.id), user.id),
+        attachmentsByAppointmentIds(appointments.map((row) => row.id), user.id),
+        getPinnedSourceIds({
+          userId: user.id,
+          sourceType: CALENDAR_SOURCE_PET_APPOINTMENT,
+          sourceIds: appointments.map((row) => row.id),
+          toolId,
+        }),
+      ]);
+
       return NextResponse.json({
         pet: {
           ...pet,
+          attachments: petFiles[petId] || [],
           foods: foods,
-          veterinaryRecords: vetRecords,
+          veterinaryRecords: vetRecords.map((row) => ({ ...row, attachments: veterinaryFiles[row.id] || [] })),
           carePlanItems: careItems,
-          vaccinations: vaccinations,
-          appointments: appointments,
-          documents: documents,
+          vaccinations: vaccinations.map((row) => ({ ...row, attachments: vaccinationFiles[row.id] || [] })),
+          appointments: appointments.map((row) => ({
+            ...row,
+            attachments: appointmentFiles[row.id] || [],
+            addToDashboard: pinned.ids.has(row.id),
+          })),
+          documents: documents.map((row) => ({ ...row, attachments: documentFiles[row.id] || [] })),
           notes: notes
         }
       });
@@ -167,7 +183,11 @@ export async function GET(request: NextRequest) {
       }, { status: 500 });
     }
 
-    return NextResponse.json({ pets: pets || [] });
+    const list = pets || [];
+    const petFiles = await attachmentsByPetIds(list.map((row) => row.id), user.id);
+    return NextResponse.json({
+      pets: list.map((row) => ({ ...row, attachments: petFiles[row.id] || [] })),
+    });
   } catch (error) {
     console.error('Error in pet care schedule API:', error);
     return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
@@ -293,11 +313,12 @@ export async function POST(request: NextRequest) {
     }
 
     if (veterinaryRecords && Array.isArray(veterinaryRecords)) {
-      await supabaseServer.from('tools_pcs_veterinary_records').delete().eq('pet_id', finalPetId);
-      if (veterinaryRecords.length > 0) {
-        await supabaseServer.from('tools_pcs_veterinary_records').insert(
-          veterinaryRecords.map((v: any) => ({
-            pet_id: finalPetId,
+      await upsertPetChildren(
+        'tools_pcs_veterinary_records',
+        finalPetId,
+        veterinaryRecords.map((v: any) => ({
+          id: v.id,
+          payload: {
             veterinarian_name: v.veterinarianName || null,
             clinic_name: v.clinicName || null,
             phone: v.phone || null,
@@ -306,9 +327,10 @@ export async function POST(request: NextRequest) {
             status: v.status || 'Active',
             date_added: v.dateAdded || new Date().toISOString().split('T')[0],
             notes: v.notes || null,
-          }))
-        );
-      }
+          },
+        })),
+        (ids) => deleteVeterinaryFileRows(ids, user.id)
+      );
     }
 
     if (carePlanItems && Array.isArray(carePlanItems)) {
@@ -379,66 +401,86 @@ export async function POST(request: NextRequest) {
     }
 
     if (vaccinations && Array.isArray(vaccinations)) {
-      await supabaseServer.from('tools_pcs_vaccinations').delete().eq('pet_id', finalPetId);
-      if (vaccinations.length > 0) {
-        await supabaseServer.from('tools_pcs_vaccinations').insert(
-          vaccinations.map((v: any) => ({
-            pet_id: finalPetId,
+      await upsertPetChildren(
+        'tools_pcs_vaccinations',
+        finalPetId,
+        vaccinations.map((v: any) => ({
+          id: v.id,
+          payload: {
             name: v.name,
             date: v.date,
             veterinarian: v.veterinarian || null,
             notes: v.notes || null,
-          }))
-        );
-      }
+          },
+        })),
+        (ids) => deleteVaccinationFileRows(ids, user.id)
+      );
     }
 
     if (appointments && Array.isArray(appointments)) {
-      await supabaseServer.from('tools_pcs_appointments').delete().eq('pet_id', finalPetId);
-      if (appointments.length > 0) {
-        const appointmentData = appointments.map((a: any) => {
+      await upsertPetChildren(
+        'tools_pcs_appointments',
+        finalPetId,
+        appointments.map((a: any) => {
           const appointmentDate = new Date(a.date);
           const today = new Date();
           today.setHours(0, 0, 0, 0);
           appointmentDate.setHours(0, 0, 0, 0);
-          const isUpcoming = a.isUpcoming !== undefined ? a.isUpcoming : (appointmentDate >= today);
-
+          const isUpcoming = a.isUpcoming !== undefined ? a.isUpcoming : appointmentDate >= today;
           return {
-            pet_id: finalPetId,
-            date: a.date,
-            time: a.time || null,
-            type: a.type,
-            veterinarian: a.veterinarian || null,
-            notes: a.notes || null,
-            is_upcoming: isUpcoming,
+            id: a.id,
+            payload: {
+              date: a.date,
+              time: a.time || null,
+              type: a.type,
+              veterinarian: a.veterinarian || null,
+              notes: a.notes || null,
+              is_upcoming: isUpcoming,
+            },
           };
+        }),
+        async (ids) => {
+          await deleteCalendarPinsForSources({
+            userId: user.id,
+            sourceType: CALENDAR_SOURCE_PET_APPOINTMENT,
+            sourceIds: ids,
+          });
+          await deleteAppointmentFileRows(ids, user.id);
+        }
+      );
+
+      for (const appointment of appointments) {
+        if (typeof appointment?.addToDashboard !== 'boolean' || !isUuid(appointment.id)) continue;
+        const pinResult = await syncCalendarPin({
+          userId: user.id,
+          toolId,
+          sourceType: CALENDAR_SOURCE_PET_APPOINTMENT,
+          sourceId: appointment.id,
+          pinned: appointment.addToDashboard,
         });
-
-        const insertedAppointments = await supabaseServer.from('tools_pcs_appointments').insert(appointmentData).select();
-
-        if (insertedAppointments.error) {
-          console.error('Error inserting appointments:', insertedAppointments.error);
+        if (pinResult.error) {
+          return NextResponse.json(
+            { error: 'Appointment saved, but failed to update the dashboard calendar' },
+            { status: 500 }
+          );
         }
       }
     }
 
     if (documents && Array.isArray(documents)) {
-      await supabaseServer.from('tools_pcs_documents').delete().eq('pet_id', finalPetId);
-      if (documents.length > 0) {
-        // Upload files and prepare document data
-        const documentsToInsert = documents.map((d: any) => ({
-              pet_id: finalPetId,
-              name: d.name,
-              date: d.date,
-              description: d.description || null,
-              file_url: d.file_url || null,
-              file_name: d.file_name || null,
-              file_size: d.file_size ?? null,
-              file_type: d.file_type || null,
-            }));
-
-        await supabaseServer.from('tools_pcs_documents').insert(documentsToInsert);
-      }
+      await upsertPetChildren(
+        'tools_pcs_documents',
+        finalPetId,
+        documents.map((d: any) => ({
+          id: d.id,
+          payload: {
+            name: d.name,
+            date: d.date,
+            description: d.description || null,
+          },
+        })),
+        (ids) => deleteDocumentFileRows(ids, user.id)
+      );
     }
 
     if (notes && Array.isArray(notes)) {
@@ -473,7 +515,6 @@ export async function DELETE(request: NextRequest) {
   try {
     const { searchParams } = new URL(request.url);
     const petId = searchParams.get('petId');
-    const toolId = searchParams.get('toolId');
 
     if (!petId) {
       return NextResponse.json({ error: 'Pet ID is required' }, { status: 400 });
@@ -481,7 +522,7 @@ export async function DELETE(request: NextRequest) {
 
     const { data: pet, error: petError } = await supabaseServer
       .from('tools_pcs_pets')
-      .select('id, tool_id')
+      .select('id')
       .eq('id', petId)
       .eq('user_id', user.id)
       .single();
@@ -490,25 +531,18 @@ export async function DELETE(request: NextRequest) {
       return NextResponse.json({ error: 'Pet not found' }, { status: 404 });
     }
 
-    const finalToolId = toolId || pet.tool_id;
-
-    const { data: petDocs } = await supabaseServer
-      .from('tools_pcs_documents')
-      .select('file_url')
+    const { data: petAppointments } = await supabaseServer
+      .from('tools_pcs_appointments')
+      .select('id')
       .eq('pet_id', petId);
-    const storagePaths = (petDocs || [])
-      .map((row: { file_url: string | null }) => {
-        if (!row.file_url) return null;
-        const marker = 'pet-care-schedule/';
-        const markerIndex = row.file_url.indexOf(marker);
-        if (markerIndex === -1) return null;
-        return row.file_url.slice(markerIndex + marker.length);
-      })
-      .filter((path: string | null): path is string => Boolean(path));
-    if (storagePaths.length > 0) {
-      await supabaseServer.storage.from('pet-care-schedule').remove(storagePaths);
-      await refreshUserStorageUsage(user.id);
-    }
+
+    await deleteCalendarPinsForSources({
+      userId: user.id,
+      sourceType: CALENDAR_SOURCE_PET_APPOINTMENT,
+      sourceIds: (petAppointments || []).map((row) => row.id),
+    });
+
+    await deleteAllPetStorageFiles(petId, user.id);
 
     const childTables = [
       'tools_pcs_food_entries',

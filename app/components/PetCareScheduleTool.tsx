@@ -2,6 +2,32 @@
 
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { useTheme } from './AppThemeProvider';
+import { useAppNotice } from './AppNotice';
+import { AttachmentButton } from './AttachmentButton';
+import { AttachmentModal } from './AttachmentModal';
+import {
+  canPreviewAttachment,
+  createPendingAttachment,
+  isImageAttachment,
+  isPdfAttachment,
+  type AttachmentItem,
+} from '@/lib/attachments';
+
+const API_BASE = '/api/tools/pet-care-schedule';
+
+type AttachmentTarget =
+  | { kind: 'pet'; id: 'add' | string }
+  | { kind: 'document'; id: 'add' | string }
+  | { kind: 'veterinary'; id: 'add' | string }
+  | { kind: 'vaccination'; id: 'add' | string }
+  | { kind: 'appointment'; id: 'add' | string };
+
+type StoredAttachment = {
+  id: string;
+  name: string;
+  size: number;
+  type: string;
+};
 
 type PetType = {
   id: string;
@@ -36,6 +62,7 @@ type Vaccination = {
   date: string;
   veterinarian: string;
   notes: string;
+  attachments?: StoredAttachment[];
 };
 
 type Appointment = {
@@ -46,18 +73,59 @@ type Appointment = {
   veterinarian: string;
   notes: string;
   isUpcoming: boolean;
+  attachments?: StoredAttachment[];
+  addToDashboard?: boolean;
 };
+
+type AppointmentForm = {
+  date: string;
+  time: string;
+  type: string;
+  veterinarian: string;
+  notes: string;
+  addToDashboard: boolean;
+};
+
+const emptyAppointmentForm = (): AppointmentForm => ({
+  date: '',
+  time: '',
+  type: '',
+  veterinarian: '',
+  notes: '',
+  addToDashboard: false,
+});
+
+function mapAppointment(row: {
+  id: string;
+  date: string;
+  time?: string | null;
+  type: string;
+  veterinarian?: string | null;
+  notes?: string | null;
+  isUpcoming?: boolean;
+  is_upcoming?: boolean;
+  attachments?: StoredAttachment[];
+  addToDashboard?: boolean;
+}): Appointment {
+  return {
+    id: row.id,
+    date: row.date,
+    time: row.time || '',
+    type: row.type,
+    veterinarian: row.veterinarian || '',
+    notes: row.notes || '',
+    isUpcoming: row.isUpcoming ?? row.is_upcoming ?? false,
+    attachments: row.attachments || [],
+    addToDashboard: row.addToDashboard === true,
+  };
+}
 
 type Document = {
   id: string;
   name: string;
   date: string;
   description: string;
-  file: File | null;
-  file_url?: string | null;
-  file_name?: string | null;
-  file_size?: number | null;
-  file_type?: string | null;
+  attachments?: StoredAttachment[];
 };
 
 type Note = {
@@ -77,6 +145,7 @@ type VeterinaryRecord = {
   status: 'Active' | 'History';
   dateAdded: string;
   notes: string;
+  attachments?: StoredAttachment[];
 };
 
 const COMMON_PET_TYPES = [
@@ -128,12 +197,62 @@ function localToday(): string {
   return `${year}-${month}-${day}`;
 }
 
+function DashboardCalendarSwitch({
+  isOn,
+  onToggle,
+  isLight,
+}: {
+  isOn: boolean;
+  onToggle: () => void;
+  isLight: boolean;
+}) {
+  return (
+    <label className="flex items-center gap-2 cursor-pointer" title="Add to dashboard calendar">
+      <span className={`text-xs whitespace-nowrap ${isLight ? 'text-slate-600' : 'text-slate-400'}`}>
+        Add to dashboard calendar
+      </span>
+      <button
+        type="button"
+        role="switch"
+        aria-checked={isOn}
+        aria-label="Add to dashboard calendar"
+        title="Add to dashboard calendar"
+        onClick={onToggle}
+        className={`relative inline-flex h-6 w-11 flex-shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors focus:outline-none focus:ring-2 focus:ring-emerald-500/50 focus:ring-offset-2 ${
+          isLight ? 'focus:ring-offset-white' : 'focus:ring-offset-slate-900'
+        } ${isOn ? 'bg-emerald-500' : isLight ? 'bg-slate-300' : 'bg-slate-700'}`}
+      >
+        <span
+          className={`pointer-events-none inline-block h-5 w-5 transform rounded-full bg-white shadow ring-0 transition ${
+            isOn ? 'translate-x-5' : 'translate-x-1'
+          }`}
+        />
+      </button>
+    </label>
+  );
+}
+
+function OnCalendarChip({ isLight }: { isLight: boolean }) {
+  return (
+    <span
+      className={
+        isLight
+          ? 'inline-flex items-center rounded-full bg-emerald-100 px-2 py-0.5 text-xs font-medium text-emerald-800'
+          : 'inline-flex items-center rounded-full bg-emerald-500/20 px-2 py-0.5 text-xs font-medium text-emerald-300'
+      }
+    >
+      On calendar
+    </span>
+  );
+}
+
 type Pet = {
   id: string;
   name: string;
   pet_type: string | null;
   custom_pet_type: string | null;
   card_color: string | null;
+  attachments?: StoredAttachment[];
 };
 
 type PetCareScheduleToolProps = {
@@ -142,6 +261,7 @@ type PetCareScheduleToolProps = {
 
 export function PetCareScheduleTool({ toolId }: PetCareScheduleToolProps) {
   const { resolvedTheme } = useTheme();
+  const { showError } = useAppNotice();
   const isLight = resolvedTheme === 'light';
   const titleClass = isLight ? 'text-2xl font-semibold text-slate-900 mb-2' : 'text-2xl font-semibold text-slate-50 mb-2';
   const descClass = isLight ? 'text-slate-600 text-sm' : 'text-slate-400 text-sm';
@@ -219,6 +339,14 @@ export function PetCareScheduleTool({ toolId }: PetCareScheduleToolProps) {
   const isSavingRef = useRef(false);
   const [saveMessage, setSaveMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
   const [lastSavedData, setLastSavedData] = useState<string>('');
+  const [pendingPetAttachments, setPendingPetAttachments] = useState<AttachmentItem[]>([]);
+  const [pendingDocumentAttachments, setPendingDocumentAttachments] = useState<AttachmentItem[]>([]);
+  const [pendingVeterinaryAttachments, setPendingVeterinaryAttachments] = useState<AttachmentItem[]>([]);
+  const [pendingVaccinationAttachments, setPendingVaccinationAttachments] = useState<AttachmentItem[]>([]);
+  const [pendingAppointmentAttachments, setPendingAppointmentAttachments] = useState<AttachmentItem[]>([]);
+  const [attachmentModal, setAttachmentModal] = useState<AttachmentTarget | null>(null);
+  const [attachmentBusy, setAttachmentBusy] = useState(false);
+  const [viewPreview, setViewPreview] = useState<AttachmentItem | null>(null);
   
   const [petName, setPetName] = useState('');
   const [petType, setPetType] = useState<PetType | null>(null);
@@ -275,15 +403,15 @@ export function PetCareScheduleTool({ toolId }: PetCareScheduleToolProps) {
   
   // Appointments
   const [appointments, setAppointments] = useState<Appointment[]>([]);
-  const [newAppointment, setNewAppointment] = useState({ date: '', time: '', type: '', veterinarian: '', notes: '' });
+  const [newAppointment, setNewAppointment] = useState<AppointmentForm>(emptyAppointmentForm);
   const [editingAppointmentId, setEditingAppointmentId] = useState<string | null>(null);
-  const [editingAppointment, setEditingAppointment] = useState({ date: '', time: '', type: '', veterinarian: '', notes: '' });
+  const [editingAppointment, setEditingAppointment] = useState<AppointmentForm>(emptyAppointmentForm);
   
   // Documents
   const [documents, setDocuments] = useState<Document[]>([]);
-  const [newDocument, setNewDocument] = useState({ name: '', date: '', description: '', file: null as File | null });
+  const [newDocument, setNewDocument] = useState({ name: '', date: '', description: '' });
   const [editingDocumentId, setEditingDocumentId] = useState<string | null>(null);
-  const [editingDocument, setEditingDocument] = useState({ name: '', date: '', description: '', file: null as File | null });
+  const [editingDocument, setEditingDocument] = useState({ name: '', date: '', description: '' });
   
   // Notes
   const [notes, setNotes] = useState<Note[]>([]);
@@ -368,10 +496,7 @@ export function PetCareScheduleTool({ toolId }: PetCareScheduleToolProps) {
           name: d.name.trim(),
           date: d.date,
           description: (d.description || '').trim(),
-          file_url: d.file_url || null,
-          file_name: d.file_name || (d.file ? d.file.name : null),
-          file_size: d.file_size || (d.file ? d.file.size : null),
-          file_type: d.file_type || (d.file ? d.file.type : null),
+          attachments: (d.attachments || []).map((item) => item.id),
         };
         return doc;
       }).sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime()),
@@ -463,6 +588,7 @@ export function PetCareScheduleTool({ toolId }: PetCareScheduleToolProps) {
           status: v.status,
           dateAdded: v.date_added,
           notes: v.notes || '',
+          attachments: v.attachments || [],
         })));
         
         setCarePlanItems((pet.carePlanItems || []).map((c: any) => {
@@ -486,28 +612,17 @@ export function PetCareScheduleTool({ toolId }: PetCareScheduleToolProps) {
           date: v.date,
           veterinarian: v.veterinarian || '',
           notes: v.notes || '',
+          attachments: v.attachments || [],
         })));
         
-        setAppointments((pet.appointments || []).map((a: any) => ({
-          id: a.id,
-          date: a.date,
-          time: a.time || '',
-          type: a.type,
-          veterinarian: a.veterinarian || '',
-          notes: a.notes || '',
-          isUpcoming: a.is_upcoming,
-        })));
+        setAppointments((pet.appointments || []).map((a: any) => mapAppointment(a)));
         
         setDocuments((pet.documents || []).map((d: any) => ({
           id: d.id,
           name: d.name,
           date: d.date,
           description: d.description || '',
-          file: null, // Files would need separate handling
-          file_url: d.file_url || null,
-          file_name: d.file_name || null,
-          file_size: d.file_size || null,
-          file_type: d.file_type || null,
+          attachments: d.attachments || [],
         })));
         
         setNotes((pet.notes || []).map((n: any) => ({
@@ -598,6 +713,7 @@ export function PetCareScheduleTool({ toolId }: PetCareScheduleToolProps) {
             notes: f.notes || '',
           })),
           veterinaryRecords: vetRecordsToUse.map(v => ({
+            id: v.id,
             veterinarianName: v.veterinarianName,
             clinicName: v.clinicName,
             phone: v.phone,
@@ -621,31 +737,28 @@ export function PetCareScheduleTool({ toolId }: PetCareScheduleToolProps) {
             };
           }),
           vaccinations: vaccinationsToUse.map(v => ({
+            id: v.id,
             name: v.name,
             date: v.date,
             veterinarian: v.veterinarian,
             notes: v.notes || '',
           })),
-          appointments: appointments.map(a => ({
+          appointments: appointmentsToUse.map(a => ({
+            id: a.id,
             date: a.date,
             time: a.time,
             type: a.type,
             veterinarian: a.veterinarian,
             notes: a.notes || '',
             isUpcoming: a.isUpcoming,
+            addToDashboard: a.addToDashboard === true,
           })),
-          documents: documents.map(d => {
-            const doc: any = {
-              name: d.name,
-              date: d.date,
-              description: d.description,
-              file_url: d.file_url || null,
-              file_name: d.file_name || (d.file ? d.file.name : null),
-              file_size: d.file_size || (d.file ? d.file.size : null),
-              file_type: d.file_type || (d.file ? d.file.type : null),
-            };
-            return doc;
-          }),
+          documents: documentsToUse.map(d => ({
+            id: d.id,
+            name: d.name,
+            date: d.date,
+            description: d.description,
+          })),
           notes: notesToUse.map(n => ({
             content: n.content,
             date: n.date,
@@ -670,6 +783,7 @@ export function PetCareScheduleTool({ toolId }: PetCareScheduleToolProps) {
       
       // Reload pets to get updated data (this will also update the snapshot after load)
       await loadPets();
+      if (selectedPetId) await loadPetData(selectedPetId);
       
       // After reload, update snapshot again to ensure it matches loaded data
       setTimeout(() => {
@@ -683,6 +797,161 @@ export function PetCareScheduleTool({ toolId }: PetCareScheduleToolProps) {
       isSavingRef.current = false;
       setIsSaving(false);
     }
+  };
+
+  const revokePending = (items: AttachmentItem[]) => {
+    items.forEach((item) => {
+      if (item.url) URL.revokeObjectURL(item.url);
+    });
+  };
+
+  const closeAttachmentModal = () => {
+    setAttachmentModal(null);
+    setViewPreview(null);
+  };
+
+  const ownerFieldForKind = (kind: AttachmentTarget['kind']) => {
+    if (kind === 'pet') return 'petId';
+    if (kind === 'document') return 'documentId';
+    if (kind === 'veterinary') return 'veterinaryId';
+    if (kind === 'vaccination') return 'vaccinationId';
+    return 'appointmentId';
+  };
+
+  const uploadOwnerFile = async (kind: AttachmentTarget['kind'], ownerId: string, file: File) => {
+    if (!toolId) throw new Error('Tool ID is required');
+    const formData = new FormData();
+    formData.append('toolId', toolId);
+    formData.append(ownerFieldForKind(kind), ownerId);
+    formData.append('file', file);
+    const response = await fetch(`${API_BASE}/attachments`, { method: 'POST', body: formData });
+    const data = await response.json().catch(() => ({}));
+    if (!response.ok) throw new Error(data.error || 'Failed to add file');
+  };
+
+  const persistPendingFiles = async (kind: AttachmentTarget['kind'], ownerId: string, items: AttachmentItem[]) => {
+    const files = items.map((item) => item.file).filter((file): file is File => Boolean(file));
+    for (const file of files) {
+      await uploadOwnerFile(kind, ownerId, file);
+    }
+    revokePending(items);
+  };
+
+  const fetchAttachmentBlob = async (attachmentId: string, inline = false) => {
+    const query = inline ? '?inline=1' : '';
+    const response = await fetch(`${API_BASE}/attachments/${attachmentId}${query}`);
+    if (!response.ok) {
+      const errorData = await response.json().catch(() => ({ error: 'Failed to open file' }));
+      throw new Error(errorData.error || 'Failed to open file');
+    }
+    return response.blob();
+  };
+
+  const handleViewAttachment = async (item: AttachmentItem) => {
+    if (item.file && item.url) {
+      if (isImageAttachment(item.type)) {
+        setViewPreview(item);
+        return;
+      }
+      if (isPdfAttachment(item.type, item.name)) {
+        window.open(item.url, '_blank', 'noopener,noreferrer');
+        return;
+      }
+      showError('This file type can’t be previewed in the browser. Use Download to save it.');
+      return;
+    }
+    try {
+      const blob = await fetchAttachmentBlob(item.id, true);
+      const type = blob.type || item.type || '';
+      if (!canPreviewAttachment(type, item.name)) {
+        showError('This file type can’t be previewed in the browser. Use Download to save it.');
+        return;
+      }
+      const url = window.URL.createObjectURL(blob);
+      if (isImageAttachment(type)) {
+        setViewPreview({ ...item, type, url, size: item.size || blob.size });
+        return;
+      }
+      if (isPdfAttachment(type, item.name)) {
+        window.open(url, '_blank', 'noopener,noreferrer');
+      }
+    } catch (error) {
+      showError(error instanceof Error ? error.message : 'Failed to open file');
+    }
+  };
+
+  const handleDownloadAttachment = async (item: AttachmentItem): Promise<boolean> => {
+    if (item.file) return false;
+    try {
+      const blob = await fetchAttachmentBlob(item.id);
+      const url = window.URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = url;
+      link.download = item.name || 'attachment';
+      document.body.appendChild(link);
+      link.click();
+      window.URL.revokeObjectURL(url);
+      document.body.removeChild(link);
+      return true;
+    } catch (error) {
+      showError(error instanceof Error ? error.message : 'Failed to download file');
+      return false;
+    }
+  };
+
+  const addSavedFiles = async (kind: AttachmentTarget['kind'], ownerId: string, files: File[]) => {
+    setAttachmentBusy(true);
+    try {
+      for (const file of files) {
+        await uploadOwnerFile(kind, ownerId, file);
+      }
+      if (kind === 'pet') {
+        await loadPets();
+        if (selectedPetId === ownerId) await loadPetData(ownerId);
+      } else if (selectedPetId) {
+        await loadPetData(selectedPetId);
+      }
+    } catch (error) {
+      showError(error instanceof Error ? error.message : 'Failed to add file');
+    } finally {
+      setAttachmentBusy(false);
+    }
+  };
+
+  const removeSavedFile = async (attachmentId: string) => {
+    if (!toolId) return;
+    setAttachmentBusy(true);
+    try {
+      const response = await fetch(`${API_BASE}/attachments`, {
+        method: 'DELETE',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ toolId, attachmentId }),
+      });
+      const data = await response.json().catch(() => ({}));
+      if (!response.ok) throw new Error(data.error || 'Failed to remove file');
+      await loadPets();
+      if (selectedPetId) await loadPetData(selectedPetId);
+    } catch (error) {
+      showError(error instanceof Error ? error.message : 'Failed to remove file');
+    } finally {
+      setAttachmentBusy(false);
+    }
+  };
+
+  const pendingForKind = (kind: AttachmentTarget['kind']) => {
+    if (kind === 'pet') return pendingPetAttachments;
+    if (kind === 'document') return pendingDocumentAttachments;
+    if (kind === 'veterinary') return pendingVeterinaryAttachments;
+    if (kind === 'vaccination') return pendingVaccinationAttachments;
+    return pendingAppointmentAttachments;
+  };
+
+  const setPendingForKind = (kind: AttachmentTarget['kind'], items: AttachmentItem[]) => {
+    if (kind === 'pet') setPendingPetAttachments(items);
+    else if (kind === 'document') setPendingDocumentAttachments(items);
+    else if (kind === 'veterinary') setPendingVeterinaryAttachments(items);
+    else if (kind === 'vaccination') setPendingVaccinationAttachments(items);
+    else setPendingAppointmentAttachments(items);
   };
 
   // Pet management functions
@@ -724,6 +993,10 @@ export function PetCareScheduleTool({ toolId }: PetCareScheduleToolProps) {
       // Reload pets and select the new one
       await loadPets();
       if (data.petId) {
+        if (pendingPetAttachments.length > 0) {
+          await persistPendingFiles('pet', data.petId, pendingPetAttachments);
+          setPendingPetAttachments([]);
+        }
         setSelectedPetId(data.petId);
         await loadPetData(data.petId);
       }
@@ -817,6 +1090,7 @@ export function PetCareScheduleTool({ toolId }: PetCareScheduleToolProps) {
             notes: f.notes || '',
           })),
           veterinaryRecords: (currentPet.veterinaryRecords || []).map((v: any) => ({
+            id: v.id,
             veterinarianName: v.veterinarian_name || '',
             clinicName: v.clinic_name || '',
             phone: v.phone || '',
@@ -835,27 +1109,18 @@ export function PetCareScheduleTool({ toolId }: PetCareScheduleToolProps) {
             notes: c.notes || '',
           })),
           vaccinations: (currentPet.vaccinations || []).map((v: any) => ({
+            id: v.id,
             name: v.name,
             date: v.date,
             veterinarian: v.veterinarian || '',
             notes: v.notes || '',
           })),
-          appointments: (currentPet.appointments || []).map((a: any) => ({
-            date: a.date,
-            time: a.time || '',
-            type: a.type,
-            veterinarian: a.veterinarian || '',
-            notes: a.notes || '',
-            isUpcoming: a.is_upcoming,
-          })),
+          appointments: (currentPet.appointments || []).map((a: any) => mapAppointment(a)),
           documents: (currentPet.documents || []).map((d: any) => ({
+            id: d.id,
             name: d.name,
             date: d.date,
             description: d.description || '',
-            file_url: d.file_url || null,
-            file_name: d.file_name || null,
-            file_size: d.file_size || null,
-            file_type: d.file_type || null,
           })),
           notes: (currentPet.notes || []).map((n: any) => ({
             content: n.content,
@@ -941,6 +1206,7 @@ export function PetCareScheduleTool({ toolId }: PetCareScheduleToolProps) {
             notes: f.notes || '',
           })),
           veterinaryRecords: (currentPet.veterinaryRecords || []).map((v: any) => ({
+            id: v.id,
             veterinarianName: v.veterinarian_name || '',
             clinicName: v.clinic_name || '',
             phone: v.phone || '',
@@ -959,27 +1225,18 @@ export function PetCareScheduleTool({ toolId }: PetCareScheduleToolProps) {
             notes: c.notes || '',
           })),
           vaccinations: (currentPet.vaccinations || []).map((v: any) => ({
+            id: v.id,
             name: v.name,
             date: v.date,
             veterinarian: v.veterinarian || '',
             notes: v.notes || '',
           })),
-          appointments: (currentPet.appointments || []).map((a: any) => ({
-            date: a.date,
-            time: a.time || '',
-            type: a.type,
-            veterinarian: a.veterinarian || '',
-            notes: a.notes || '',
-            isUpcoming: a.is_upcoming,
-          })),
+          appointments: (currentPet.appointments || []).map((a: any) => mapAppointment(a)),
           documents: (currentPet.documents || []).map((d: any) => ({
+            id: d.id,
             name: d.name,
             date: d.date,
             description: d.description || '',
-            file_url: d.file_url || null,
-            file_name: d.file_name || null,
-            file_size: d.file_size || null,
-            file_type: d.file_type || null,
           })),
           notes: (currentPet.notes || []).map((n: any) => ({
             content: n.content,
@@ -1270,14 +1527,25 @@ export function PetCareScheduleTool({ toolId }: PetCareScheduleToolProps) {
   const addVaccination = async () => {
     if (newVaccination.name.trim() && newVaccination.date) {
       const vaccination: Vaccination = {
-        id: Date.now().toString(),
-        ...newVaccination
+        id: crypto.randomUUID(),
+        ...newVaccination,
+        attachments: [],
       };
-      setVaccinations(prev => [...prev, vaccination]);
+      const next = [...vaccinations, vaccination];
+      const queued = pendingVaccinationAttachments;
+      setVaccinations(next);
       setNewVaccination({ name: '', date: '', veterinarian: '', notes: '' });
       setAddingSection(null);
-      // Save to database immediately
-      setTimeout(() => savePetData(), 100);
+      setPendingVaccinationAttachments([]);
+      await savePetData(undefined, undefined, undefined, next);
+      if (queued.length > 0) {
+        try {
+          await persistPendingFiles('vaccination', vaccination.id, queued);
+          if (selectedPetId) await loadPetData(selectedPetId);
+        } catch (error) {
+          showError(error instanceof Error ? error.message : 'Failed to add file');
+        }
+      }
     }
   };
 
@@ -1329,15 +1597,31 @@ export function PetCareScheduleTool({ toolId }: PetCareScheduleToolProps) {
     const todayKey = localToday();
     if (newAppointment.date && newAppointment.type.trim()) {
       const appointment: Appointment = {
-        id: Date.now().toString(),
-        ...newAppointment,
+        id: crypto.randomUUID(),
+        date: newAppointment.date,
+        time: newAppointment.time,
+        type: newAppointment.type,
+        veterinarian: newAppointment.veterinarian,
+        notes: newAppointment.notes,
         isUpcoming: newAppointment.date >= todayKey,
+        attachments: [],
+        addToDashboard: newAppointment.addToDashboard,
       };
-      setAppointments(prev => [...prev, appointment]);
-      setNewAppointment({ date: '', time: '', type: '', veterinarian: '', notes: '' });
+      const next = [...appointments, appointment];
+      const queued = pendingAppointmentAttachments;
+      setAppointments(next);
+      setNewAppointment(emptyAppointmentForm());
       setAddingSection(null);
-      // Save to database immediately
-      setTimeout(() => savePetData(), 100);
+      setPendingAppointmentAttachments([]);
+      await savePetData(undefined, undefined, undefined, undefined, next);
+      if (queued.length > 0) {
+        try {
+          await persistPendingFiles('appointment', appointment.id, queued);
+          if (selectedPetId) await loadPetData(selectedPetId);
+        } catch (error) {
+          showError(error instanceof Error ? error.message : 'Failed to add file');
+        }
+      }
     }
   };
 
@@ -1349,12 +1633,13 @@ export function PetCareScheduleTool({ toolId }: PetCareScheduleToolProps) {
       type: appointment.type,
       veterinarian: appointment.veterinarian || '',
       notes: appointment.notes || '',
+      addToDashboard: appointment.addToDashboard === true,
     });
   };
 
   const cancelEditingAppointment = () => {
     setEditingAppointmentId(null);
-    setEditingAppointment({ date: '', time: '', type: '', veterinarian: '', notes: '' });
+    setEditingAppointment(emptyAppointmentForm());
   };
 
   const saveAppointmentEdit = async () => {
@@ -1370,28 +1655,38 @@ export function PetCareScheduleTool({ toolId }: PetCareScheduleToolProps) {
             veterinarian: editingAppointment.veterinarian || '',
             notes: editingAppointment.notes || '',
             isUpcoming: editingAppointment.date >= todayKey,
+            addToDashboard: editingAppointment.addToDashboard,
           }
         : appointment
     );
 
     setAppointments(updatedAppointments);
     setEditingAppointmentId(null);
-    setEditingAppointment({ date: '', time: '', type: '', veterinarian: '', notes: '' });
+    setEditingAppointment(emptyAppointmentForm());
 
     setTimeout(() => {
       savePetData(undefined, undefined, undefined, undefined, updatedAppointments);
     }, 100);
   };
 
+  const deleteAppointment = (appointmentId: string) => {
+    const next = appointments.filter((appointment) => appointment.id !== appointmentId);
+    setAppointments(next);
+    savePetData(undefined, undefined, undefined, undefined, next);
+  };
+
   const addVeterinaryRecord = async () => {
     if (newVetRecord.veterinarianName.trim() || newVetRecord.clinicName.trim()) {
       const record: VeterinaryRecord = {
-        id: Date.now().toString(),
+        id: crypto.randomUUID(),
         ...newVetRecord,
         dateAdded: localToday(),
-        notes: newVetRecord.notes || ''
+        notes: newVetRecord.notes || '',
+        attachments: [],
       };
-      setVeterinaryRecords(prev => [...prev, record]);
+      const next = [...veterinaryRecords, record];
+      const queued = pendingVeterinaryAttachments;
+      setVeterinaryRecords(next);
       setNewVetRecord({
         veterinarianName: '',
         clinicName: '',
@@ -1402,8 +1697,16 @@ export function PetCareScheduleTool({ toolId }: PetCareScheduleToolProps) {
         notes: ''
       });
       setAddingSection(null);
-      // Save to database immediately
-      setTimeout(() => savePetData(), 100);
+      setPendingVeterinaryAttachments([]);
+      await savePetData(undefined, undefined, next);
+      if (queued.length > 0) {
+        try {
+          await persistPendingFiles('veterinary', record.id, queued);
+          if (selectedPetId) await loadPetData(selectedPetId);
+        } catch (error) {
+          showError(error instanceof Error ? error.message : 'Failed to add file');
+        }
+      }
     }
   };
 
@@ -1484,14 +1787,25 @@ export function PetCareScheduleTool({ toolId }: PetCareScheduleToolProps) {
   const addDocument = async () => {
     if (newDocument.name.trim() && newDocument.date) {
       const document: Document = {
-        id: Date.now().toString(),
-        ...newDocument
+        id: crypto.randomUUID(),
+        ...newDocument,
+        attachments: [],
       };
-      setDocuments(prev => [...prev, document]);
-      setNewDocument({ name: '', date: '', description: '', file: null });
+      const next = [...documents, document];
+      const queued = pendingDocumentAttachments;
+      setDocuments(next);
+      setNewDocument({ name: '', date: '', description: '' });
       setAddingSection(null);
-      // Save to database immediately
-      setTimeout(() => savePetData(), 100);
+      setPendingDocumentAttachments([]);
+      await savePetData(undefined, undefined, undefined, undefined, undefined, next);
+      if (queued.length > 0) {
+        try {
+          await persistPendingFiles('document', document.id, queued);
+          if (selectedPetId) await loadPetData(selectedPetId);
+        } catch (error) {
+          showError(error instanceof Error ? error.message : 'Failed to add file');
+        }
+      }
     }
   };
 
@@ -1501,13 +1815,12 @@ export function PetCareScheduleTool({ toolId }: PetCareScheduleToolProps) {
       name: document.name,
       date: document.date,
       description: document.description || '',
-      file: null // File editing is not allowed
     });
   };
 
   const cancelEditingDocument = () => {
     setEditingDocumentId(null);
-    setEditingDocument({ name: '', date: '', description: '', file: null });
+    setEditingDocument({ name: '', date: '', description: '' });
   };
 
   const saveDocumentEdit = async () => {
@@ -1532,30 +1845,13 @@ export function PetCareScheduleTool({ toolId }: PetCareScheduleToolProps) {
     setDocuments(updatedDocuments);
     
     setEditingDocumentId(null);
-    setEditingDocument({ name: '', date: '', description: '', file: null });
+    setEditingDocument({ name: '', date: '', description: '' });
     
     // Save to database immediately using the updated items
     setTimeout(() => {
       console.log(`Saving with updated documents`);
       savePetData(undefined, undefined, undefined, undefined, undefined, updatedDocuments);
     }, 100);
-  };
-
-  const handleDocumentClick = (doc: Document) => {
-    if (doc.file_url) {
-      // Open the file URL in a new tab
-      window.open(doc.file_url, '_blank');
-    } else if (doc.file) {
-      // Create a blob URL for the file and download it
-      const url = URL.createObjectURL(doc.file);
-      const a = document.createElement('a');
-      a.href = url;
-      a.download = doc.file_name || doc.file.name || 'document';
-      document.body.appendChild(a);
-      a.click();
-      document.body.removeChild(a);
-      URL.revokeObjectURL(url);
-    }
   };
 
   const addNote = async () => {
@@ -1877,8 +2173,8 @@ export function PetCareScheduleTool({ toolId }: PetCareScheduleToolProps) {
         if (doc.description) {
           addText(`Description: ${doc.description}`, 9, false, 10);
         }
-        if (doc.file_name) {
-          addText(`File: ${doc.file_name}`, 9, false, 10);
+        if ((doc.attachments || []).length > 0) {
+          addText(`Files: ${(doc.attachments || []).length}`, 9, false, 10);
         }
         yPos += 3;
       });
@@ -1946,6 +2242,48 @@ export function PetCareScheduleTool({ toolId }: PetCareScheduleToolProps) {
   };
 
   const selectedPet = pets.find(p => p.id === selectedPetId);
+  const selectedPetAttachments = selectedPetId
+    ? (pets.find((pet) => pet.id === selectedPetId)?.attachments || [])
+    : [];
+  const savedModalRecord =
+    attachmentModal && attachmentModal.id !== 'add'
+      ? attachmentModal.kind === 'pet'
+        ? { name: pets.find((pet) => pet.id === attachmentModal.id)?.name || 'Pet', attachments: pets.find((pet) => pet.id === attachmentModal.id)?.attachments || selectedPetAttachments }
+        : attachmentModal.kind === 'document'
+          ? documents.find((item) => item.id === attachmentModal.id)
+          : attachmentModal.kind === 'veterinary'
+            ? veterinaryRecords.find((item) => item.id === attachmentModal.id)
+            : attachmentModal.kind === 'vaccination'
+              ? vaccinations.find((item) => item.id === attachmentModal.id)
+              : appointments.find((item) => item.id === attachmentModal.id)
+      : null;
+  const modalFiles: AttachmentItem[] =
+    attachmentModal?.id === 'add'
+      ? pendingForKind(attachmentModal.kind)
+      : ((savedModalRecord && 'attachments' in savedModalRecord ? savedModalRecord.attachments : []) || []).map((item) => ({
+          id: item.id,
+          name: item.name,
+          size: item.size,
+          type: item.type,
+        }));
+  const modalTitle =
+    attachmentModal?.id === 'add'
+      ? attachmentModal.kind === 'pet'
+        ? newPetName.trim() || 'New pet'
+        : attachmentModal.kind === 'document'
+          ? newDocument.name.trim() || 'New document'
+          : attachmentModal.kind === 'veterinary'
+            ? newVetRecord.clinicName.trim() || newVetRecord.veterinarianName.trim() || 'New veterinary contact'
+            : attachmentModal.kind === 'vaccination'
+              ? newVaccination.name.trim() || 'New vaccination'
+              : newAppointment.type.trim() || 'New appointment'
+      : savedModalRecord && 'name' in savedModalRecord
+        ? savedModalRecord.name || 'Attachments'
+        : savedModalRecord && 'veterinarianName' in savedModalRecord
+          ? savedModalRecord.veterinarianName || savedModalRecord.clinicName || 'Veterinary contact'
+          : savedModalRecord && 'type' in savedModalRecord
+            ? savedModalRecord.type || 'Appointment'
+            : 'Attachments';
   const documentNeedle = documentSearch.trim().toLowerCase();
   const filteredDocuments = documents.filter((doc) =>
     documentNeedle === '' || doc.name.toLowerCase().includes(documentNeedle)
@@ -2013,6 +2351,10 @@ export function PetCareScheduleTool({ toolId }: PetCareScheduleToolProps) {
                     />
                   </div>
                   <div className="flex items-center gap-2">
+                    <AttachmentButton
+                      count={(pets.find((item) => item.id === pet.id)?.attachments || []).length}
+                      onClick={() => setAttachmentModal({ kind: 'pet', id: pet.id })}
+                    />
                     <button
                       onClick={savePetEdit}
                       disabled={isSaving || !editingPetName.trim()}
@@ -2095,6 +2437,12 @@ export function PetCareScheduleTool({ toolId }: PetCareScheduleToolProps) {
                       {pet.custom_pet_type || pet.pet_type || '—'}
                     </div>
                   </button>
+                  <div className="absolute top-1 left-1" onClick={(e) => e.stopPropagation()}>
+                    <AttachmentButton
+                      count={(pet.attachments || []).length}
+                      onClick={() => setAttachmentModal({ kind: 'pet', id: pet.id })}
+                    />
+                  </div>
                   {/* Ellipsis Menu Button */}
                   <button
                     onClick={(e) => {
@@ -2183,6 +2531,10 @@ export function PetCareScheduleTool({ toolId }: PetCareScheduleToolProps) {
                 autoFocus
               />
             </div>
+            <AttachmentButton
+              count={pendingPetAttachments.length}
+              onClick={() => setAttachmentModal({ kind: 'pet', id: 'add' })}
+            />
             <button
               onClick={createNewPet}
               disabled={!newPetName.trim()}
@@ -2194,6 +2546,9 @@ export function PetCareScheduleTool({ toolId }: PetCareScheduleToolProps) {
               onClick={() => {
                 setIsCreatingNewPet(false);
                 setNewPetName('');
+                revokePending(pendingPetAttachments);
+                setPendingPetAttachments([]);
+                if (attachmentModal?.kind === 'pet' && attachmentModal.id === 'add') closeAttachmentModal();
               }}
               className={secondaryButtonClass}
             >
@@ -2370,11 +2725,19 @@ export function PetCareScheduleTool({ toolId }: PetCareScheduleToolProps) {
           <div className={cardClass}>
             <div className="flex items-center justify-between mb-4">
               <h3 className={isLight ? 'text-lg font-semibold text-slate-900' : 'text-lg font-semibold text-slate-50'}>Basic Information</h3>
-              {selectedPet && (
-                <span className="text-sm text-slate-400">
-                  Editing: <span className="text-emerald-400 font-medium">{selectedPet.name}</span>
-                </span>
-              )}
+              <div className="flex items-center gap-3">
+                {selectedPet && (
+                  <span className="text-sm text-slate-400">
+                    Editing: <span className="text-emerald-400 font-medium">{selectedPet.name}</span>
+                  </span>
+                )}
+                {selectedPetId && (
+                  <AttachmentButton
+                    count={selectedPetAttachments.length}
+                    onClick={() => setAttachmentModal({ kind: 'pet', id: selectedPetId })}
+                  />
+                )}
+              </div>
             </div>
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <div>
@@ -2778,7 +3141,13 @@ export function PetCareScheduleTool({ toolId }: PetCareScheduleToolProps) {
             </div>
           ) : (
           <div className={cardClass}>
-            <h3 className={sectionTitleClass}>Add Veterinary Contact</h3>
+            <div className="flex items-start justify-between gap-4">
+              <h3 className={sectionTitleClass}>Add Veterinary Contact</h3>
+              <AttachmentButton
+                count={pendingVeterinaryAttachments.length}
+                onClick={() => setAttachmentModal({ kind: 'veterinary', id: 'add' })}
+              />
+            </div>
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <div>
                 <label className={labelClass}>Veterinarian Name</label>
@@ -3015,6 +3384,10 @@ export function PetCareScheduleTool({ toolId }: PetCareScheduleToolProps) {
                             <p className="text-xs text-slate-500 mt-2">Added: {formatLocalDate(record.dateAdded)}</p>
                           </div>
                           <div className="flex gap-1.5 ml-4">
+                            <AttachmentButton
+                              count={(record.attachments || []).length}
+                              onClick={() => setAttachmentModal({ kind: 'veterinary', id: record.id })}
+                            />
                             <button
                               onClick={() => startEditingVetRecord(record)}
                               className={rowIconEmeraldClass}
@@ -3182,6 +3555,10 @@ export function PetCareScheduleTool({ toolId }: PetCareScheduleToolProps) {
                             <p className="text-xs text-slate-500 mt-2">Added: {formatLocalDate(record.dateAdded)}</p>
                           </div>
                           <div className="flex gap-1.5 ml-4">
+                            <AttachmentButton
+                              count={(record.attachments || []).length}
+                              onClick={() => setAttachmentModal({ kind: 'veterinary', id: record.id })}
+                            />
                             <button
                               onClick={() => startEditingVetRecord(record)}
                               className={rowIconEmeraldClass}
@@ -3565,7 +3942,13 @@ export function PetCareScheduleTool({ toolId }: PetCareScheduleToolProps) {
             </div>
           ) : (
           <div className={cardClass}>
-            <h3 className={sectionTitleClass}>Add Vaccination</h3>
+            <div className="flex items-start justify-between gap-4">
+              <h3 className={sectionTitleClass}>Add Vaccination</h3>
+              <AttachmentButton
+                count={pendingVaccinationAttachments.length}
+                onClick={() => setAttachmentModal({ kind: 'vaccination', id: 'add' })}
+              />
+            </div>
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <div>
                 <label className="block text-sm font-medium text-slate-300 mb-2">Vaccination Name</label>
@@ -3708,6 +4091,10 @@ export function PetCareScheduleTool({ toolId }: PetCareScheduleToolProps) {
                             )}
                           </div>
                           <div className="flex gap-1.5 ml-4">
+                            <AttachmentButton
+                              count={(vaccination.attachments || []).length}
+                              onClick={() => setAttachmentModal({ kind: 'vaccination', id: vaccination.id })}
+                            />
                             <button
                               onClick={() => startEditingVaccination(vaccination)}
                               className={rowIconEmeraldClass}
@@ -3762,7 +4149,13 @@ export function PetCareScheduleTool({ toolId }: PetCareScheduleToolProps) {
             </div>
           ) : (
           <div className={cardClass}>
-            <h3 className={sectionTitleClass}>Add Appointment</h3>
+            <div className="flex items-start justify-between gap-4">
+              <h3 className={sectionTitleClass}>Add Appointment</h3>
+              <AttachmentButton
+                count={pendingAppointmentAttachments.length}
+                onClick={() => setAttachmentModal({ kind: 'appointment', id: 'add' })}
+              />
+            </div>
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <div>
                 <label className="block text-sm font-medium text-slate-300 mb-2">Date</label>
@@ -3812,6 +4205,15 @@ export function PetCareScheduleTool({ toolId }: PetCareScheduleToolProps) {
                   className="w-full px-3 py-2 rounded-lg border border-slate-700 bg-slate-900/70 text-slate-100 placeholder-slate-500 focus:border-emerald-500/50 focus:outline-none focus:ring-1 focus:ring-emerald-500/50"
                 />
               </div>
+              <div className="md:col-span-2">
+                <DashboardCalendarSwitch
+                  isOn={newAppointment.addToDashboard}
+                  isLight={isLight}
+                  onToggle={() =>
+                    setNewAppointment({ ...newAppointment, addToDashboard: !newAppointment.addToDashboard })
+                  }
+                />
+              </div>
             </div>
             <div className="flex gap-2 mt-4">
               <button
@@ -3824,7 +4226,7 @@ export function PetCareScheduleTool({ toolId }: PetCareScheduleToolProps) {
                 type="button"
                 onClick={() => {
                   setAddingSection(null);
-                  setNewAppointment({ date: '', time: '', type: '', veterinarian: '', notes: '' });
+                  setNewAppointment(emptyAppointmentForm());
                 }}
                 className={secondaryButtonClass}
               >
@@ -3899,6 +4301,18 @@ export function PetCareScheduleTool({ toolId }: PetCareScheduleToolProps) {
                                 className={`${inputClass} resize-none`}
                               />
                             </div>
+                            <div className="md:col-span-2">
+                              <DashboardCalendarSwitch
+                                isOn={editingAppointment.addToDashboard}
+                                isLight={isLight}
+                                onToggle={() =>
+                                  setEditingAppointment({
+                                    ...editingAppointment,
+                                    addToDashboard: !editingAppointment.addToDashboard,
+                                  })
+                                }
+                              />
+                            </div>
                           </div>
                           <div className="flex gap-2">
                             <button
@@ -3919,7 +4333,10 @@ export function PetCareScheduleTool({ toolId }: PetCareScheduleToolProps) {
                       ) : (
                         <div className="flex items-start justify-between">
                           <div className="flex-1">
-                            <h4 className="text-slate-100 font-medium">{appointment.type}</h4>
+                            <div className="flex flex-wrap items-center gap-2">
+                              <h4 className="text-slate-100 font-medium">{appointment.type}</h4>
+                              {appointment.addToDashboard && <OnCalendarChip isLight={isLight} />}
+                            </div>
                             <p className="text-sm text-slate-400">
                               {formatLocalDate(appointment.date)} {appointment.time && `at ${appointment.time}`}
                             </p>
@@ -3931,6 +4348,10 @@ export function PetCareScheduleTool({ toolId }: PetCareScheduleToolProps) {
                             )}
                           </div>
                           <div className="flex gap-1.5 ml-4">
+                            <AttachmentButton
+                              count={(appointment.attachments || []).length}
+                              onClick={() => setAttachmentModal({ kind: 'appointment', id: appointment.id })}
+                            />
                             <button
                               onClick={() => startEditingAppointment(appointment)}
                               className={rowIconEmeraldClass}
@@ -3940,7 +4361,7 @@ export function PetCareScheduleTool({ toolId }: PetCareScheduleToolProps) {
                               <svg className="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" /></svg>
                             </button>
                             <button
-                              onClick={() => requestDeleteEntry('upcoming appointment', () => deleteItem(appointments, setAppointments, appointment.id))}
+                              onClick={() => requestDeleteEntry('upcoming appointment', () => deleteAppointment(appointment.id))}
                               className={rowIconDangerClass}
                               title="Delete appointment"
                               aria-label="Delete appointment"
@@ -4010,6 +4431,18 @@ export function PetCareScheduleTool({ toolId }: PetCareScheduleToolProps) {
                                 className={`${inputClass} resize-none`}
                               />
                             </div>
+                            <div className="md:col-span-2">
+                              <DashboardCalendarSwitch
+                                isOn={editingAppointment.addToDashboard}
+                                isLight={isLight}
+                                onToggle={() =>
+                                  setEditingAppointment({
+                                    ...editingAppointment,
+                                    addToDashboard: !editingAppointment.addToDashboard,
+                                  })
+                                }
+                              />
+                            </div>
                           </div>
                           <div className="flex gap-2">
                             <button
@@ -4030,7 +4463,10 @@ export function PetCareScheduleTool({ toolId }: PetCareScheduleToolProps) {
                       ) : (
                         <div className="flex items-start justify-between">
                           <div className="flex-1">
-                            <h4 className="text-slate-100 font-medium">{appointment.type}</h4>
+                            <div className="flex flex-wrap items-center gap-2">
+                              <h4 className="text-slate-100 font-medium">{appointment.type}</h4>
+                              {appointment.addToDashboard && <OnCalendarChip isLight={isLight} />}
+                            </div>
                             <p className="text-sm text-slate-400">
                               {formatLocalDate(appointment.date)} {appointment.time && `at ${appointment.time}`}
                             </p>
@@ -4042,6 +4478,10 @@ export function PetCareScheduleTool({ toolId }: PetCareScheduleToolProps) {
                             )}
                           </div>
                           <div className="flex gap-1.5 ml-4">
+                            <AttachmentButton
+                              count={(appointment.attachments || []).length}
+                              onClick={() => setAttachmentModal({ kind: 'appointment', id: appointment.id })}
+                            />
                             <button
                               onClick={() => startEditingAppointment(appointment)}
                               className={rowIconEmeraldClass}
@@ -4051,7 +4491,7 @@ export function PetCareScheduleTool({ toolId }: PetCareScheduleToolProps) {
                               <svg className="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" /></svg>
                             </button>
                             <button
-                              onClick={() => requestDeleteEntry('appointment history record', () => deleteItem(appointments, setAppointments, appointment.id))}
+                              onClick={() => requestDeleteEntry('appointment history record', () => deleteAppointment(appointment.id))}
                               className={rowIconDangerClass}
                               title="Delete appointment"
                               aria-label="Delete appointment"
@@ -4083,7 +4523,13 @@ export function PetCareScheduleTool({ toolId }: PetCareScheduleToolProps) {
             </div>
           ) : (
           <div className={cardClass}>
-            <h3 className={sectionTitleClass}>Upload Document</h3>
+            <div className="flex items-start justify-between gap-4">
+              <h3 className={sectionTitleClass}>Add Document</h3>
+              <AttachmentButton
+                count={pendingDocumentAttachments.length}
+                onClick={() => setAttachmentModal({ kind: 'document', id: 'add' })}
+              />
+            </div>
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <div>
                 <label className="block text-xs font-medium text-slate-300 mb-1.5">Document Name</label>
@@ -4114,29 +4560,6 @@ export function PetCareScheduleTool({ toolId }: PetCareScheduleToolProps) {
                   className="w-full rounded-lg border border-slate-700 bg-slate-900/70 px-3 py-2 text-sm text-slate-100 placeholder-slate-500 focus:border-emerald-500/50 focus:outline-none focus:ring-1 focus:ring-emerald-500/50 resize-none"
                 />
               </div>
-              <div className="md:col-span-2">
-                <label className="block text-xs font-medium text-slate-300 mb-1.5">File</label>
-                <div className="relative">
-                  <input
-                    type="file"
-                    id="new-document-file-input"
-                    onChange={(e) => setNewDocument({ ...newDocument, file: e.target.files?.[0] || null })}
-                    className="absolute inset-0 w-full h-full opacity-0 cursor-pointer"
-                    accept="image/*,.pdf"
-                  />
-                  <label
-                    htmlFor="new-document-file-input"
-                    className="flex items-center gap-2 w-full rounded-lg border border-slate-700 bg-slate-900/70 px-3 py-2 text-sm text-slate-100 hover:bg-slate-800 transition-colors cursor-pointer"
-                  >
-                    <svg className="w-5 h-5 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
-                    </svg>
-                    <span className="text-slate-300">
-                      {newDocument.file ? newDocument.file.name : 'Select file'}
-                    </span>
-                  </label>
-                </div>
-              </div>
             </div>
             <div className="flex gap-2 mt-4">
               <button
@@ -4149,7 +4572,9 @@ export function PetCareScheduleTool({ toolId }: PetCareScheduleToolProps) {
                 type="button"
                 onClick={() => {
                   setAddingSection(null);
-                  setNewDocument({ name: '', date: '', description: '', file: null });
+                  setNewDocument({ name: '', date: '', description: '' });
+                  revokePending(pendingDocumentAttachments);
+                  setPendingDocumentAttachments([]);
                 }}
                 className={secondaryButtonClass}
               >
@@ -4211,7 +4636,11 @@ export function PetCareScheduleTool({ toolId }: PetCareScheduleToolProps) {
                               />
                             </div>
                           </div>
-                          <div className="flex gap-2">
+                          <div className="flex gap-2 items-center">
+                            <AttachmentButton
+                              count={(document.attachments || []).length}
+                              onClick={() => setAttachmentModal({ kind: 'document', id: document.id })}
+                            />
                             <button
                               onClick={saveDocumentEdit}
                               disabled={!editingDocument.name.trim() || !editingDocument.date || isSaving}
@@ -4235,28 +4664,12 @@ export function PetCareScheduleTool({ toolId }: PetCareScheduleToolProps) {
                             {document.description && (
                               <p className="text-sm text-slate-400 mt-1">Description: {document.description}</p>
                             )}
-                            {(document.file || document.file_name) && (
-                              <p className="text-sm text-emerald-400 mt-1 flex items-center gap-2">
-                                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
-                                </svg>
-                                File: {document.file_name || (document.file ? document.file.name : 'No file')}
-                              </p>
-                            )}
                           </div>
                           <div className="flex gap-1.5 ml-4">
-                            {(document.file_url || document.file) && (
-                              <button
-                                onClick={() => handleDocumentClick(document)}
-                                className={rowIconSecondaryClass}
-                                title="Download file"
-                                aria-label="Download file"
-                              >
-                                <svg className="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
-                                </svg>
-                              </button>
-                            )}
+                            <AttachmentButton
+                              count={(document.attachments || []).length}
+                              onClick={() => setAttachmentModal({ kind: 'document', id: document.id })}
+                            />
                             <button
                               onClick={() => startEditingDocument(document)}
                               className={rowIconEmeraldClass}
@@ -4544,6 +4957,40 @@ export function PetCareScheduleTool({ toolId }: PetCareScheduleToolProps) {
       )}
         </>
       )}
+
+      <AttachmentModal
+        open={attachmentModal !== null}
+        onClose={closeAttachmentModal}
+        previewItem={viewPreview}
+        title={modalTitle}
+        files={modalFiles}
+        busy={attachmentBusy}
+        onAdd={(incoming) => {
+          if (!attachmentModal) return;
+          if (attachmentModal.id === 'add') {
+            setPendingForKind(attachmentModal.kind, [
+              ...pendingForKind(attachmentModal.kind),
+              ...incoming.map(createPendingAttachment),
+            ]);
+            return;
+          }
+          void addSavedFiles(attachmentModal.kind, attachmentModal.id, incoming);
+        }}
+        onRemove={(id) => {
+          if (!attachmentModal) return;
+          if (attachmentModal.id === 'add') {
+            const prev = pendingForKind(attachmentModal.kind);
+            const next = prev.filter((item) => item.id !== id);
+            const removed = prev.find((item) => item.id === id);
+            if (removed?.url) URL.revokeObjectURL(removed.url);
+            setPendingForKind(attachmentModal.kind, next);
+            return;
+          }
+          void removeSavedFile(id);
+        }}
+        onView={handleViewAttachment}
+        onDownload={attachmentModal?.id === 'add' ? undefined : handleDownloadAttachment}
+      />
     </div>
   );
 }

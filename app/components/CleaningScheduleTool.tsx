@@ -15,7 +15,6 @@ import {
 import {
   addDays,
   addMonthsSetDay,
-  advanceFrom,
   asDateOnly,
   CleaningCategory,
   CleaningCompletion,
@@ -24,6 +23,7 @@ import {
   CleaningScheduleData,
   CleaningScheduledTask,
   compareIso,
+  expandOccurrences,
   FrequencyKind,
   parseLocalDate,
   toIso,
@@ -152,20 +152,6 @@ function startOfMonth(iso: string): string {
 function endOfMonth(iso: string): string {
   const date = parseLocalDate(iso);
   return toIso(new Date(date.getFullYear(), date.getMonth() + 1, 0));
-}
-
-function expandOccurrences(nextDueDate: string, frequency: CleaningFrequency, windowStart: string, windowEnd: string): string[] {
-  const dates: string[] = [];
-  let cursor = nextDueDate;
-  let guard = 0;
-  while (compareIso(cursor, windowEnd) <= 0 && guard < 200) {
-    if (compareIso(cursor, windowStart) >= 0) dates.push(cursor);
-    const next = advanceFrom(cursor, frequency);
-    if (compareIso(next, cursor) <= 0) break;
-    cursor = next;
-    guard += 1;
-  }
-  return dates;
 }
 
 function occurrenceStatus(date: string, today: string): OccurrenceStatus {
@@ -355,6 +341,55 @@ function ReminderDaysFields({
 function reminderSummary(days: number | null | undefined): string {
   if (days == null) return 'Off';
   return `${days} day${days === 1 ? '' : 's'} before due`;
+}
+
+function DashboardCalendarSwitch({
+  isOn,
+  onToggle,
+  isLight,
+}: {
+  isOn: boolean;
+  onToggle: () => void;
+  isLight: boolean;
+}) {
+  return (
+    <label className="flex items-center gap-2 cursor-pointer" title="Add to dashboard calendar">
+      <span className={`text-xs whitespace-nowrap ${isLight ? 'text-slate-600' : 'text-slate-400'}`}>
+        Add to dashboard calendar
+      </span>
+      <button
+        type="button"
+        role="switch"
+        aria-checked={isOn}
+        aria-label="Add to dashboard calendar"
+        title="Add to dashboard calendar"
+        onClick={onToggle}
+        className={`relative inline-flex h-6 w-11 flex-shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors focus:outline-none focus:ring-2 focus:ring-emerald-500/50 focus:ring-offset-2 ${
+          isLight ? 'focus:ring-offset-white' : 'focus:ring-offset-slate-900'
+        } ${isOn ? 'bg-emerald-500' : isLight ? 'bg-slate-300' : 'bg-slate-700'}`}
+      >
+        <span
+          className={`pointer-events-none inline-block h-5 w-5 transform rounded-full bg-white shadow ring-0 transition ${
+            isOn ? 'translate-x-5' : 'translate-x-1'
+          }`}
+        />
+      </button>
+    </label>
+  );
+}
+
+function OnCalendarChip({ isLight }: { isLight: boolean }) {
+  return (
+    <span
+      className={
+        isLight
+          ? 'inline-flex items-center rounded-full bg-emerald-100 px-2 py-0.5 text-xs font-medium text-emerald-800'
+          : 'inline-flex items-center rounded-full bg-emerald-500/20 px-2 py-0.5 text-xs font-medium text-emerald-300'
+      }
+    >
+      On calendar
+    </span>
+  );
 }
 
 function datesForRange(range: RangeId, nextDueDate: string, frequency: CleaningFrequency, today: string): string[] {
@@ -680,6 +715,7 @@ export function CleaningScheduleTool({ toolId }: CleaningScheduleToolProps) {
   const [activateForm, setActivateForm] = useState<FrequencyForm>(() => emptyFrequencyForm(todayIso()));
   const [activateNextDue, setActivateNextDue] = useState(todayIso);
   const [activateReminderDays, setActivateReminderDays] = useState<number | null>(null);
+  const [activateAddToDashboard, setActivateAddToDashboard] = useState(false);
   const [selectedDefaultIds, setSelectedDefaultIds] = useState<string[]>([]);
 
   const [detailTaskId, setDetailTaskId] = useState<string | null>(null);
@@ -687,6 +723,7 @@ export function CleaningScheduleTool({ toolId }: CleaningScheduleToolProps) {
   const [detailForm, setDetailForm] = useState<FrequencyForm>(() => emptyFrequencyForm(todayIso()));
   const [detailNextDue, setDetailNextDue] = useState(todayIso);
   const [detailReminderDays, setDetailReminderDays] = useState<number | null>(null);
+  const [detailAddToDashboard, setDetailAddToDashboard] = useState(false);
   const [detailItemForm, setDetailItemForm] = useState<ItemForm>(emptyItemForm);
 
   const [completeOccurrence, setCompleteOccurrence] = useState<{ taskId: string; scheduledDate: string } | null>(null);
@@ -716,6 +753,7 @@ export function CleaningScheduleTool({ toolId }: CleaningScheduleToolProps) {
       (data.tasks ?? []).map((task) => ({
         ...task,
         nextDueDate: asDateOnly(task.nextDueDate) || task.nextDueDate,
+        addToDashboard: !!task.addToDashboard,
       }))
     );
     setCompletions((data.completions ?? []).map((row) => ({ ...row, attachments: row.attachments ?? [] })));
@@ -1027,6 +1065,7 @@ export function CleaningScheduleTool({ toolId }: CleaningScheduleToolProps) {
     setActivateForm(existing ? frequencyToForm(existing.frequency, today) : emptyFrequencyForm(today));
     setActivateNextDue(existing?.nextDueDate || today);
     setActivateReminderDays(existing?.reminderDays ?? null);
+    setActivateAddToDashboard(existing?.addToDashboard === true);
   };
 
   const openBulkActivate = (itemIds: string[]) => {
@@ -1039,6 +1078,7 @@ export function CleaningScheduleTool({ toolId }: CleaningScheduleToolProps) {
     setActivateForm(emptyFrequencyForm(today));
     setActivateNextDue(today);
     setActivateReminderDays(null);
+    setActivateAddToDashboard(false);
   };
 
   const saveActivation = async () => {
@@ -1054,6 +1094,7 @@ export function CleaningScheduleTool({ toolId }: CleaningScheduleToolProps) {
           frequency,
           nextDueDate: activateNextDue,
           reminderDays: activateReminderDays,
+          addToDashboard: activateAddToDashboard,
         });
       }
       const count = activateItemIds.length;
@@ -1079,6 +1120,7 @@ export function CleaningScheduleTool({ toolId }: CleaningScheduleToolProps) {
     setDetailForm(frequencyToForm(task.frequency, today));
     setDetailNextDue(task.nextDueDate);
     setDetailReminderDays(task.reminderDays);
+    setDetailAddToDashboard(task.addToDashboard);
     setDetailItemForm({
       name: item.name,
       categoryId: item.categoryId,
@@ -1112,6 +1154,7 @@ export function CleaningScheduleTool({ toolId }: CleaningScheduleToolProps) {
         frequency: formToFrequency(detailForm),
         nextDueDate: detailNextDue,
         reminderDays: detailReminderDays,
+        addToDashboard: detailAddToDashboard,
       });
       setDetailEditing(false);
       showBanner('success', 'Schedule updated.');
@@ -1636,6 +1679,7 @@ export function CleaningScheduleTool({ toolId }: CleaningScheduleToolProps) {
             <h4 className={headingSmClass}>{row.name}</h4>
             <span className={chipNeutralClass}>{row.categoryName}</span>
             <span className={statusBadgeClass(row.status)}>{row.status}</span>
+            {scheduledTasks.find((task) => task.id === row.taskId)?.addToDashboard && <OnCalendarChip isLight={isLight} />}
           </div>
           <p className={subTextClass}>
             {formatDateForDisplay(row.date)} · {row.frequencyLabel}
@@ -1852,6 +1896,7 @@ export function CleaningScheduleTool({ toolId }: CleaningScheduleToolProps) {
                         <h4 className={headingSmClass}>{item.name}</h4>
                         {item.isDefault && <span className={defaultBadgeClass}>Default</span>}
                         {schedule && <span className={chipNeutralClass}>Next {formatDateForDisplay(schedule.nextDueDate)}</span>}
+                        {schedule?.addToDashboard && <OnCalendarChip isLight={isLight} />}
                       </div>
                       {item.description && <p className={subTextClass}>{item.description}</p>}
                       {item.notes && <p className={`${subTextClass} italic mt-1`}>{item.notes}</p>}
@@ -2011,7 +2056,12 @@ export function CleaningScheduleTool({ toolId }: CleaningScheduleToolProps) {
                     <div key={group.taskId}>
                       <div className="flex items-start justify-between gap-3 mb-2">
                         <div className="min-w-0">
-                          <h4 className={headingSmClass}>{group.name}</h4>
+                          <div className="flex flex-wrap items-center gap-2">
+                            <h4 className={headingSmClass}>{group.name}</h4>
+                            {scheduledTasks.find((task) => task.id === group.taskId)?.addToDashboard && (
+                              <OnCalendarChip isLight={isLight} />
+                            )}
+                          </div>
                           <p className={subTextClass}>
                             {group.categoryName} · {group.frequencyLabel} · {group.rows.length}{' '}
                             {group.rows.length === 1 ? 'occurrence' : 'occurrences'}
@@ -2108,6 +2158,7 @@ export function CleaningScheduleTool({ toolId }: CleaningScheduleToolProps) {
                             <div className="flex flex-wrap items-center gap-2 mb-1">
                               <h4 className={headingSmClass}>{item.name}</h4>
                               <span className={chipNeutralClass}>{categoryName(item.categoryId)}</span>
+                              {task.addToDashboard && <OnCalendarChip isLight={isLight} />}
                             </div>
                             <p className={subTextClass}>
                               {frequencyLabel(task.frequency)}
@@ -2514,6 +2565,11 @@ export function CleaningScheduleTool({ toolId }: CleaningScheduleToolProps) {
                 inputClass={inputClass}
                 hintClass={mutedTextClass}
               />
+              <DashboardCalendarSwitch
+                isOn={activateAddToDashboard}
+                isLight={isLight}
+                onToggle={() => setActivateAddToDashboard((prev) => !prev)}
+              />
               <div className="flex gap-3 pt-2">
                 <button
                   type="button"
@@ -2639,6 +2695,11 @@ export function CleaningScheduleTool({ toolId }: CleaningScheduleToolProps) {
                   inputClass={inputClass}
                   hintClass={mutedTextClass}
                 />
+                <DashboardCalendarSwitch
+                  isOn={detailAddToDashboard}
+                  isLight={isLight}
+                  onToggle={() => setDetailAddToDashboard((prev) => !prev)}
+                />
                 <div className="flex gap-3">
                   <button
                     type="button"
@@ -2671,6 +2732,10 @@ export function CleaningScheduleTool({ toolId }: CleaningScheduleToolProps) {
                   <div>
                     <p className={compactLabelClass}>Reminder</p>
                     <p className={bodyTextClass}>{reminderSummary(detailTask.reminderDays)}</p>
+                  </div>
+                  <div>
+                    <p className={compactLabelClass}>Dashboard calendar</p>
+                    <p className={bodyTextClass}>{detailTask.addToDashboard ? 'On calendar' : 'Off'}</p>
                   </div>
                   <div>
                     <p className={compactLabelClass}>Last completed</p>

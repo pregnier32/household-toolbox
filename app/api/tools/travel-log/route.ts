@@ -6,6 +6,63 @@ import {
   deleteTripStorageFiles,
   type TravelLogAttachment,
 } from '@/lib/travel-log-storage';
+import {
+  CALENDAR_PIN_KIND_END,
+  CALENDAR_PIN_KIND_START,
+  CALENDAR_SOURCE_TRAVEL_TRIP,
+} from '@/lib/calendarPins';
+import {
+  deleteCalendarPinsForSources,
+  getPinnedSourceIds,
+  syncCalendarPin,
+} from '@/lib/calendarPinsServer';
+
+async function attachDashboardFlags<T extends { id: string }>(
+  trips: T[],
+  userId: string,
+  toolId?: string
+): Promise<(T & { addToDashboard: boolean })[]> {
+  const { ids } = await getPinnedSourceIds({
+    userId,
+    sourceType: CALENDAR_SOURCE_TRAVEL_TRIP,
+    sourceIds: trips.map((trip) => trip.id),
+    toolId,
+  });
+  return trips.map((trip) => ({ ...trip, addToDashboard: ids.has(trip.id) }));
+}
+
+async function applyTripPins({
+  userId,
+  toolId,
+  tripId,
+  pinned,
+}: {
+  userId: string;
+  toolId: string;
+  tripId: string;
+  pinned: boolean;
+}): Promise<{ error: string | null; pinned: boolean }> {
+  const startResult = await syncCalendarPin({
+    userId,
+    toolId,
+    sourceType: CALENDAR_SOURCE_TRAVEL_TRIP,
+    sourceId: tripId,
+    pinKind: CALENDAR_PIN_KIND_START,
+    pinned,
+  });
+  if (startResult.error) {
+    return { error: startResult.error, pinned };
+  }
+  const endResult = await syncCalendarPin({
+    userId,
+    toolId,
+    sourceType: CALENDAR_SOURCE_TRAVEL_TRIP,
+    sourceId: tripId,
+    pinKind: CALENDAR_PIN_KIND_END,
+    pinned,
+  });
+  return { error: endResult.error, pinned };
+}
 
 type DbTrip = {
   id: string;
@@ -93,6 +150,7 @@ type TripInput = {
   wouldReturn?: string;
   wouldRecommend?: string;
   includeInTravelCounts?: string;
+  addToDashboard?: boolean;
 };
 
 function parseCurrencyToNumber(value: string | undefined): number | null {
@@ -328,8 +386,12 @@ export async function GET(request: NextRequest) {
     }
 
     const attachmentMap = await attachmentsByTripIds(tripIds, user.id);
-    const mappedTrips = (trips ?? []).map((trip) =>
-      mapTripToUi(trip as DbTrip, lodging, journalNotes, attachmentMap[trip.id] || [])
+    const mappedTrips = await attachDashboardFlags(
+      (trips ?? []).map((trip) =>
+        mapTripToUi(trip as DbTrip, lodging, journalNotes, attachmentMap[trip.id] || [])
+      ),
+      user.id,
+      toolId
     );
 
     return NextResponse.json({ trips: mappedTrips });
@@ -364,6 +426,11 @@ export async function POST(request: NextRequest) {
         return NextResponse.json({ error: 'Trip ID is required' }, { status: 400 });
       }
 
+      await deleteCalendarPinsForSources({
+        userId: user.id,
+        sourceType: CALENDAR_SOURCE_TRAVEL_TRIP,
+        sourceIds: [tripId],
+      });
       await deleteTripStorageFiles(tripId, user.id);
 
       const { error } = await supabaseServer
@@ -421,14 +488,30 @@ export async function POST(request: NextRequest) {
         .select('*')
         .eq('trip_id', created.id);
 
+      const pinResult = await applyTripPins({
+        userId: user.id,
+        toolId,
+        tripId: created.id,
+        pinned: trip.addToDashboard === true,
+      });
+      if (pinResult.error) {
+        return NextResponse.json(
+          { error: 'Trip saved, but failed to add it to the dashboard calendar' },
+          { status: 500 }
+        );
+      }
+
       return NextResponse.json({
         success: true,
-        trip: mapTripToUi(
-          created as DbTrip,
-          (lodgingRows ?? []) as DbLodging[],
-          (journalRows ?? []) as DbJournalNote[],
-          []
-        ),
+        trip: {
+          ...mapTripToUi(
+            created as DbTrip,
+            (lodgingRows ?? []) as DbLodging[],
+            (journalRows ?? []) as DbJournalNote[],
+            []
+          ),
+          addToDashboard: pinResult.pinned,
+        },
       });
     }
 
@@ -470,15 +553,31 @@ export async function POST(request: NextRequest) {
         .select('*')
         .eq('trip_id', tripId);
 
+      const pinResult = await applyTripPins({
+        userId: user.id,
+        toolId,
+        tripId,
+        pinned: trip.addToDashboard === true,
+      });
+      if (pinResult.error) {
+        return NextResponse.json(
+          { error: 'Trip saved, but failed to update the dashboard calendar' },
+          { status: 500 }
+        );
+      }
+
       const updateAttachments = await attachmentsByTripIds([tripId], user.id);
       return NextResponse.json({
         success: true,
-        trip: mapTripToUi(
-          updated as DbTrip,
-          (lodgingRows ?? []) as DbLodging[],
-          (journalRows ?? []) as DbJournalNote[],
-          updateAttachments[tripId] || []
-        ),
+        trip: {
+          ...mapTripToUi(
+            updated as DbTrip,
+            (lodgingRows ?? []) as DbLodging[],
+            (journalRows ?? []) as DbJournalNote[],
+            updateAttachments[tripId] || []
+          ),
+          addToDashboard: pinResult.pinned,
+        },
       });
     }
 

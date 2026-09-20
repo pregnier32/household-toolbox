@@ -7,6 +7,64 @@ import {
   deleteRecordStorageFiles,
   type RepairHistoryAttachment,
 } from '@/lib/repair-history-storage';
+import { CALENDAR_PIN_KIND_WARRANTY, CALENDAR_SOURCE_REPAIR_WARRANTY } from '@/lib/calendarPins';
+import {
+  deleteCalendarPinsForSources,
+  getPinnedSourceIds,
+  syncCalendarPin,
+} from '@/lib/calendarPinsServer';
+
+async function attachDashboardFlags<T extends { id: string }>(
+  records: T[],
+  userId: string,
+  toolId?: string
+): Promise<(T & { addToDashboard: boolean })[]> {
+  const { ids } = await getPinnedSourceIds({
+    userId,
+    sourceType: CALENDAR_SOURCE_REPAIR_WARRANTY,
+    sourceIds: records.map((record) => record.id),
+    toolId,
+  });
+  return records.map((record) => ({ ...record, addToDashboard: ids.has(record.id) }));
+}
+
+async function deletePinsForHeader(userId: string, headerId: string) {
+  const { data } = await supabaseServer
+    .from('tools_rh_records')
+    .select('id')
+    .eq('header_id', headerId)
+    .eq('user_id', userId);
+  await deleteCalendarPinsForSources({
+    userId,
+    sourceType: CALENDAR_SOURCE_REPAIR_WARRANTY,
+    sourceIds: (data || []).map((row) => row.id),
+  });
+}
+
+async function applyWarrantyPin({
+  userId,
+  toolId,
+  recordId,
+  pinned,
+  warrantyEndDate,
+}: {
+  userId: string;
+  toolId: string;
+  recordId: string;
+  pinned: boolean;
+  warrantyEndDate?: string | null;
+}): Promise<{ error: string | null; pinned: boolean }> {
+  const wantsPin = pinned && Boolean(warrantyEndDate);
+  const pinResult = await syncCalendarPin({
+    userId,
+    toolId,
+    sourceType: CALENDAR_SOURCE_REPAIR_WARRANTY,
+    sourceId: recordId,
+    pinKind: CALENDAR_PIN_KIND_WARRANTY,
+    pinned: wantsPin,
+  });
+  return { error: pinResult.error, pinned: wantsPin };
+}
 
 function toStockHeaderName(name: string): string | null {
   if (name === 'Auto2') return null;
@@ -272,7 +330,11 @@ export async function GET(request: NextRequest) {
           return NextResponse.json({ error: 'Failed to fetch record' }, { status: 500 });
         }
 
-        const [recordWithAttachments] = await withRecordAttachments([record], user.id);
+        const [recordWithAttachments] = await attachDashboardFlags(
+          await withRecordAttachments([record], user.id),
+          user.id,
+          toolId || undefined
+        );
 
         if (resource === 'records') {
           return NextResponse.json({ record: recordWithAttachments });
@@ -299,7 +361,11 @@ export async function GET(request: NextRequest) {
         }
 
         if (records && Array.isArray(records)) {
-          const recordsWithAttachments = await withRecordAttachments(records, user.id);
+          const recordsWithAttachments = await attachDashboardFlags(
+            await withRecordAttachments(records, user.id),
+            user.id,
+            toolId || undefined
+          );
 
           if (resource === 'records') {
             return NextResponse.json({ records: recordsWithAttachments });
@@ -387,7 +453,11 @@ export async function GET(request: NextRequest) {
 
     return NextResponse.json({
       headers: headers || [],
-      records: await withRecordAttachments(records || [], user.id),
+      records: await attachDashboardFlags(
+        await withRecordAttachments(records || [], user.id),
+        user.id,
+        toolId || undefined
+      ),
       items: items || []
     });
   } catch (error: any) {
@@ -425,6 +495,7 @@ export async function POST(request: NextRequest) {
       const categoryType = formData.get('categoryType') as 'Home' | 'Auto';
 
       if (action === 'delete' && headerId) {
+        await deletePinsForHeader(user.id, headerId);
         await deleteHeaderRecordStorageFiles(headerId, user.id);
         const { error } = await supabaseServer
           .from('tools_rh_headers')
@@ -517,6 +588,9 @@ export async function POST(request: NextRequest) {
       const cost = formData.get('cost') as string;
       const serviceProvider = formData.get('serviceProvider') as string;
       const warrantyEndDate = formData.get('warrantyEndDate') as string;
+      const addToDashboardRaw = formData.get('addToDashboard');
+      const hasPinFlag = addToDashboardRaw !== null;
+      const addToDashboard = addToDashboardRaw === 'true';
       const submittedToInsurance = formData.get('submittedToInsurance') === 'true';
       const insuranceCarrier = formData.get('insuranceCarrier') as string;
       const claimNumber = formData.get('claimNumber') as string;
@@ -528,6 +602,11 @@ export async function POST(request: NextRequest) {
       const notes = formData.get('notes') as string;
 
       if (action === 'delete' && recordId) {
+        await deleteCalendarPinsForSources({
+          userId: user.id,
+          sourceType: CALENDAR_SOURCE_REPAIR_WARRANTY,
+          sourceIds: [recordId],
+        });
         await deleteRecordStorageFiles(recordId, user.id);
 
         const { error } = await supabaseServer
@@ -596,6 +675,27 @@ export async function POST(request: NextRequest) {
         }
 
         finalRecordId = data.id;
+      }
+
+      if (finalRecordId && (action === 'create' || (action === 'update' && hasPinFlag))) {
+        const pinResult = await applyWarrantyPin({
+          userId: user.id,
+          toolId,
+          recordId: finalRecordId,
+          pinned: addToDashboard === true,
+          warrantyEndDate: warrantyEndDate || null,
+        });
+        if (pinResult.error) {
+          return NextResponse.json(
+            {
+              error:
+                action === 'create'
+                  ? 'Repair saved, but failed to add the warranty to the dashboard calendar'
+                  : 'Repair saved, but failed to update the dashboard calendar',
+            },
+            { status: 500 }
+          );
+        }
       }
 
       return NextResponse.json({ success: true, recordId: finalRecordId });
@@ -700,6 +800,7 @@ export async function DELETE(request: NextRequest) {
     }
 
     if (resource === 'header') {
+      await deletePinsForHeader(user.id, id);
       await deleteHeaderRecordStorageFiles(id, user.id);
       const { error } = await supabaseServer
         .from('tools_rh_headers')
@@ -717,6 +818,11 @@ export async function DELETE(request: NextRequest) {
     }
 
     if (resource === 'record') {
+      await deleteCalendarPinsForSources({
+        userId: user.id,
+        sourceType: CALENDAR_SOURCE_REPAIR_WARRANTY,
+        sourceIds: [id],
+      });
       await deleteRecordStorageFiles(id, user.id);
 
       const { error } = await supabaseServer

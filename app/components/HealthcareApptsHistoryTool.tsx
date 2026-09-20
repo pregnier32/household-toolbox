@@ -40,6 +40,7 @@ type AppointmentRecord = {
   insurancePaid: string;
   currentAmountDue: string;
   documents: AppointmentDocument[];
+  addToDashboard: boolean;
 };
 
 type HealthcareApptsHistoryToolProps = {
@@ -81,6 +82,7 @@ function mapApiRecordToRecord(r: {
   total_billed: string | null;
   insurance_paid: string | null;
   current_amount_due: string | null;
+  addToDashboard?: boolean;
   documents?: { id: string; name: string; size?: number; type?: string; file_size?: number | null }[];
 }): AppointmentRecord {
   return {
@@ -96,6 +98,7 @@ function mapApiRecordToRecord(r: {
     totalBilled: r.total_billed ?? '',
     insurancePaid: r.insurance_paid ?? '',
     currentAmountDue: r.current_amount_due ?? '',
+    addToDashboard: r.addToDashboard === true,
     documents: (r.documents || []).map((d) => ({
       id: d.id,
       name: d.name,
@@ -210,7 +213,57 @@ const defaultRecord = (headerId: string): Omit<AppointmentRecord, 'id'> => ({
   insurancePaid: '',
   currentAmountDue: '',
   documents: [],
+  addToDashboard: false,
 });
+
+function DashboardCalendarSwitch({
+  isOn,
+  onToggle,
+  isLight,
+}: {
+  isOn: boolean;
+  onToggle: () => void;
+  isLight: boolean;
+}) {
+  return (
+    <label className="flex items-center gap-2 cursor-pointer" title="Add to dashboard calendar">
+      <span className={`text-xs whitespace-nowrap ${isLight ? 'text-slate-600' : 'text-slate-400'}`}>
+        Add to dashboard calendar
+      </span>
+      <button
+        type="button"
+        role="switch"
+        aria-checked={isOn}
+        aria-label="Add to dashboard calendar"
+        title="Add to dashboard calendar"
+        onClick={onToggle}
+        className={`relative inline-flex h-6 w-11 flex-shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors focus:outline-none focus:ring-2 focus:ring-emerald-500/50 focus:ring-offset-2 ${
+          isLight ? 'focus:ring-offset-white' : 'focus:ring-offset-slate-900'
+        } ${isOn ? 'bg-emerald-500' : isLight ? 'bg-slate-300' : 'bg-slate-700'}`}
+      >
+        <span
+          className={`pointer-events-none inline-block h-5 w-5 transform rounded-full bg-white shadow ring-0 transition ${
+            isOn ? 'translate-x-5' : 'translate-x-1'
+          }`}
+        />
+      </button>
+    </label>
+  );
+}
+
+function OnCalendarChip({ isLight }: { isLight: boolean }) {
+  return (
+    <span
+      className={
+        isLight
+          ? 'inline-flex items-center rounded-full bg-emerald-100 px-2 py-0.5 text-xs font-medium text-emerald-800'
+          : 'inline-flex items-center rounded-full bg-emerald-500/20 px-2 py-0.5 text-xs font-medium text-emerald-300'
+      }
+    >
+      On calendar
+    </span>
+  );
+}
 
 export function HealthcareApptsHistoryTool({ toolId }: HealthcareApptsHistoryToolProps) {
   const { resolvedTheme } = useTheme();
@@ -752,6 +805,7 @@ export function HealthcareApptsHistoryTool({ toolId }: HealthcareApptsHistoryToo
       formData.append('totalBilled', newRecord.totalBilled);
       formData.append('insurancePaid', newRecord.insurancePaid);
       formData.append('currentAmountDue', newRecord.currentAmountDue);
+      formData.append('addToDashboard', String(newRecord.addToDashboard === true));
       const response = await fetch(API_BASE, { method: 'POST', body: formData });
       if (!response.ok) {
         const err = await response.json().catch(() => ({}));
@@ -825,6 +879,7 @@ export function HealthcareApptsHistoryTool({ toolId }: HealthcareApptsHistoryToo
       formData.append('totalBilled', editingRecord.totalBilled);
       formData.append('insurancePaid', editingRecord.insurancePaid);
       formData.append('currentAmountDue', editingRecord.currentAmountDue);
+      formData.append('addToDashboard', String(editingRecord.addToDashboard === true));
       const response = await fetch(API_BASE, { method: 'POST', body: formData });
       if (!response.ok) {
         const err = await response.json().catch(() => ({}));
@@ -1625,6 +1680,11 @@ export function HealthcareApptsHistoryTool({ toolId }: HealthcareApptsHistoryToo
                       </div>
                     </div>
                   </div>
+                  <DashboardCalendarSwitch
+                    isOn={newRecord.addToDashboard}
+                    isLight={isLight}
+                    onToggle={() => setNewRecord({ ...newRecord, addToDashboard: !newRecord.addToDashboard })}
+                  />
                   <div className="flex gap-3 justify-end">
                     <button
                       onClick={cancelAddingRecord}
@@ -1781,6 +1841,11 @@ export function HealthcareApptsHistoryTool({ toolId }: HealthcareApptsHistoryToo
                       />
                     </div>
                   </div>
+                  <DashboardCalendarSwitch
+                    isOn={editingRecord.addToDashboard}
+                    isLight={isLight}
+                    onToggle={() => setEditingRecord({ ...editingRecord, addToDashboard: !editingRecord.addToDashboard })}
+                  />
                   <div className="flex gap-3 justify-end flex-wrap">
                     <button
                       type="button"
@@ -1839,6 +1904,7 @@ export function HealthcareApptsHistoryTool({ toolId }: HealthcareApptsHistoryToo
                               >
                                 {record.isUpcoming ? 'Upcoming' : 'History'}
                               </span>
+                              {record.addToDashboard && <OnCalendarChip isLight={isLight} />}
                             </div>
                             {record.reasonForVisit && (
                               <p className="text-sm text-slate-300 mt-1">{record.reasonForVisit}</p>

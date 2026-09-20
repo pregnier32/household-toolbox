@@ -15,6 +15,12 @@ import {
   parseReminderDays,
   todayIso,
 } from '@/lib/cleaning-schedule';
+import { CALENDAR_SOURCE_CLEANING_TASK } from '@/lib/calendarPins';
+import {
+  deleteCalendarPinsForSources,
+  getPinnedSourceIds,
+  syncCalendarPin,
+} from '@/lib/calendarPinsServer';
 import {
   attachmentsByCompletionIds,
   attachmentsByItemIds,
@@ -86,7 +92,8 @@ function mapData(
   tasks: DbTask[],
   completions: DbCompletion[],
   itemAttachments: Record<string, CleaningAttachment[]> = {},
-  completionAttachments: Record<string, CleaningAttachment[]> = {}
+  completionAttachments: Record<string, CleaningAttachment[]> = {},
+  pinnedTaskIds: Set<string> = new Set()
 ): CleaningScheduleData {
   return {
     categories: categories.map((row) => ({
@@ -116,6 +123,7 @@ function mapData(
       isActive: row.is_active !== false,
       dateAdded: asDateOnly(row.date_added) || todayIso(),
       dateInactivated: row.date_inactivated ? asDateOnly(row.date_inactivated) : undefined,
+      addToDashboard: pinnedTaskIds.has(row.id),
     })),
     completions: completions.map((row) => ({
       id: row.id,
@@ -247,19 +255,27 @@ async function fetchAllData(userId: string, toolId: string): Promise<CleaningSch
   if (completionsRes.error) throw new Error(asErrorMessage(completionsRes.error, 'Failed to fetch completions'));
 
   const items = (itemsRes.data ?? []) as DbItem[];
+  const tasks = (tasksRes.data ?? []) as DbTask[];
   const completions = (completionsRes.data ?? []) as DbCompletion[];
-  const [itemAttachments, completionAttachments] = await Promise.all([
+  const [itemAttachments, completionAttachments, pinned] = await Promise.all([
     attachmentsByItemIds(items.map((row) => row.id), userId),
     attachmentsByCompletionIds(completions.map((row) => row.id), userId),
+    getPinnedSourceIds({
+      userId,
+      sourceType: CALENDAR_SOURCE_CLEANING_TASK,
+      sourceIds: tasks.map((row) => row.id),
+      toolId,
+    }),
   ]);
 
   return mapData(
     (categoriesRes.data ?? []) as DbCategory[],
     items,
-    (tasksRes.data ?? []) as DbTask[],
+    tasks,
     completions,
     itemAttachments,
-    completionAttachments
+    completionAttachments,
+    pinned.ids
   );
 }
 
@@ -373,6 +389,7 @@ export async function POST(request: NextRequest) {
       completeBasis,
       reminderDays,
       completedDate: completedDateRaw,
+      addToDashboard,
     } = body as {
       toolId?: string;
       action?: string;
@@ -389,6 +406,7 @@ export async function POST(request: NextRequest) {
       completeBasis?: 'today' | 'scheduled';
       reminderDays?: number | null;
       completedDate?: string;
+      addToDashboard?: boolean;
     };
 
     if (!toolId) {
@@ -723,6 +741,22 @@ export async function POST(request: NextRequest) {
           console.error('Error updating task:', taskError);
           return NextResponse.json({ error: 'Failed to update schedule' }, { status: 500 });
         }
+
+        if (typeof addToDashboard === 'boolean' && taskId) {
+          const pinResult = await syncCalendarPin({
+            userId: user.id,
+            toolId,
+            sourceType: CALENDAR_SOURCE_CLEANING_TASK,
+            sourceId: taskId,
+            pinned: addToDashboard,
+          });
+          if (pinResult.error) {
+            return NextResponse.json(
+              { error: 'Schedule saved, but failed to update the dashboard calendar' },
+              { status: 500 }
+            );
+          }
+        }
       }
 
       return NextResponse.json({ success: true, ...(await fetchAllData(user.id, toolId)) });
@@ -783,6 +817,19 @@ export async function POST(request: NextRequest) {
         return NextResponse.json({ error: 'Default items cannot be deleted' }, { status: 400 });
       }
 
+      const { data: itemTasks } = await supabaseServer
+        .from('tools_cs_tasks')
+        .select('id')
+        .eq('item_id', itemId)
+        .eq('user_id', user.id)
+        .eq('tool_id', toolId);
+
+      await deleteCalendarPinsForSources({
+        userId: user.id,
+        sourceType: CALENDAR_SOURCE_CLEANING_TASK,
+        sourceIds: (itemTasks || []).map((row) => row.id),
+      });
+
       await deleteItemStorageFiles(itemId, user.id);
 
       const { error } = await supabaseServer
@@ -841,13 +888,29 @@ export async function POST(request: NextRequest) {
         .eq('tool_id', toolId)
         .maybeSingle();
 
-      const { error } = existing
-        ? await supabaseServer.from('tools_cs_tasks').update(payload).eq('id', existing.id)
-        : await supabaseServer.from('tools_cs_tasks').insert(payload);
+      const { data: saved, error } = existing
+        ? await supabaseServer.from('tools_cs_tasks').update(payload).eq('id', existing.id).select('id').single()
+        : await supabaseServer.from('tools_cs_tasks').insert(payload).select('id').single();
 
-      if (error) {
+      if (error || !saved) {
         console.error('Error activating task:', error);
         return NextResponse.json({ error: 'Failed to activate task' }, { status: 500 });
+      }
+
+      if (typeof addToDashboard === 'boolean') {
+        const pinResult = await syncCalendarPin({
+          userId: user.id,
+          toolId,
+          sourceType: CALENDAR_SOURCE_CLEANING_TASK,
+          sourceId: saved.id,
+          pinned: addToDashboard,
+        });
+        if (pinResult.error) {
+          return NextResponse.json(
+            { error: 'Task saved, but failed to update the dashboard calendar' },
+            { status: 500 }
+          );
+        }
       }
 
       return NextResponse.json({ success: true, ...(await fetchAllData(user.id, toolId)) });
@@ -924,6 +987,12 @@ export async function POST(request: NextRequest) {
       if (item?.is_default) {
         return NextResponse.json({ error: 'Default scheduled tasks cannot be permanently deleted' }, { status: 400 });
       }
+
+      await deleteCalendarPinsForSources({
+        userId: user.id,
+        sourceType: CALENDAR_SOURCE_CLEANING_TASK,
+        sourceIds: [taskId],
+      });
 
       await deleteTaskCompletionStorageFiles(taskId, user.id);
 

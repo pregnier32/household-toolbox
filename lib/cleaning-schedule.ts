@@ -55,6 +55,7 @@ export type CleaningScheduledTask = {
   isActive: boolean;
   dateAdded: string;
   dateInactivated?: string;
+  addToDashboard: boolean;
 };
 
 export type CleaningCompletion = {
@@ -142,6 +143,25 @@ export function addMonthsSetDay(iso: string, months: number, dayOfMonth?: number
 
 export function compareIso(a: string, b: string): number {
   return a.localeCompare(b);
+}
+
+export function expandOccurrences(
+  nextDueDate: string,
+  frequency: CleaningFrequency,
+  windowStart: string,
+  windowEnd: string
+): string[] {
+  const dates: string[] = [];
+  let cursor = nextDueDate;
+  let guard = 0;
+  while (compareIso(cursor, windowEnd) <= 0 && guard < 400) {
+    if (compareIso(cursor, windowStart) >= 0) dates.push(cursor);
+    const next = advanceFrom(cursor, frequency);
+    if (compareIso(next, cursor) <= 0) break;
+    cursor = next;
+    guard += 1;
+  }
+  return dates;
 }
 
 function firstSaturdayOfMonth(year: number, month: number): string {

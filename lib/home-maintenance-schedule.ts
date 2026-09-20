@@ -33,6 +33,13 @@ export type HmsCategory = {
   isDefault: boolean;
 };
 
+export type HmsAttachment = {
+  id: string;
+  name: string;
+  size: number;
+  type: string;
+};
+
 export type HmsLibraryItem = {
   id: string;
   name: string;
@@ -42,6 +49,7 @@ export type HmsLibraryItem = {
   defaultLocation: string;
   isDefault: boolean;
   isHidden: boolean;
+  attachments: HmsAttachment[];
 };
 
 export type HmsServiceProvider = {
@@ -65,6 +73,7 @@ export type HmsScheduledTask = {
   isActive: boolean;
   dateAdded: string;
   dateInactivated?: string;
+  addToDashboard?: boolean;
 };
 
 export type HmsCompletion = {
@@ -75,6 +84,7 @@ export type HmsCompletion = {
   notes: string;
   cost: number | null;
   lateness: 'Early' | 'On time' | 'Late';
+  attachments: HmsAttachment[];
 };
 
 export type HmsScheduleData = {
@@ -226,6 +236,25 @@ export function nextSpecificMonthsAfter(
     if (compareIso(candidate, iso) > 0) return candidate;
   }
   return clampMonthDay(startYear + years, selected[0], day);
+}
+
+export function expandOccurrences(
+  nextDueDate: string,
+  frequency: HmsFrequency,
+  windowStart: string,
+  windowEnd: string
+): string[] {
+  const dates: string[] = [];
+  let cursor = nextDueDate;
+  let guard = 0;
+  while (compareIso(cursor, windowEnd) <= 0 && guard < 400) {
+    if (compareIso(cursor, windowStart) >= 0) dates.push(cursor);
+    const next = advanceFrom(cursor, frequency);
+    if (compareIso(next, cursor) <= 0) break;
+    cursor = next;
+    guard += 1;
+  }
+  return dates;
 }
 
 export function advanceFrom(basisIso: string, frequency: HmsFrequency): string {
@@ -543,6 +572,7 @@ export function createSeedData(): Pick<HmsScheduleData, 'categories' | 'items'> 
     defaultLocation: '',
     isDefault: true,
     isHidden: false,
+    attachments: [],
   }));
   return { categories, items };
 }

@@ -345,6 +345,13 @@ export const DOCUMENT_TYPES = [
   'Other',
 ] as const;
 
+export type EolAttachment = {
+  id: string;
+  name: string;
+  size: number;
+  type: string;
+};
+
 export type EolDocumentNote = {
   id: string;
   name: string;
@@ -358,6 +365,7 @@ export type EolDocumentNote = {
   lastUpdated: string;
   expirationDate: string;
   specialInstructions: string;
+  attachments: EolAttachment[];
 };
 
 export const POLICY_TYPES = [
@@ -396,6 +404,7 @@ export type EolInsurancePolicy = {
   claimContact: string;
   documentLocation: string;
   instructions: string;
+  attachments: EolAttachment[];
 };
 
 export const BANK_ACCOUNT_TYPES = ['Checking', 'Savings', 'Money market', 'CD', 'Other'] as const;
@@ -721,6 +730,7 @@ export type EolPersonalItem = {
   reason: string;
   photoReference: string;
   specialInstructions: string;
+  attachments: EolAttachment[];
 };
 
 export type EolMyWishes = EolMyWishesQuestions & {
@@ -753,6 +763,7 @@ export type EolLetter = {
   status: 'Draft' | 'Complete';
   visibility: 'Visible' | 'Private';
   lastUpdated: string;
+  attachments: EolAttachment[];
 };
 
 export type EolCustomField = {
@@ -773,6 +784,7 @@ export type EolCustomRecord = {
   instructions: string;
   customNotes: string;
   customFields: EolCustomField[];
+  attachments: EolAttachment[];
 };
 
 export type EolCustomSection = {
@@ -1070,6 +1082,7 @@ export function emptyDocumentNote(): EolDocumentNote {
     lastUpdated: '',
     expirationDate: '',
     specialInstructions: '',
+    attachments: [],
   };
 }
 
@@ -1094,6 +1107,7 @@ export function emptyInsurancePolicy(): EolInsurancePolicy {
     claimContact: '',
     documentLocation: '',
     instructions: '',
+    attachments: [],
   };
 }
 
@@ -1357,6 +1371,7 @@ export function emptyPersonalItem(): EolPersonalItem {
     reason: '',
     photoReference: '',
     specialInstructions: '',
+    attachments: [],
   };
 }
 
@@ -1379,6 +1394,7 @@ export function emptyLetter(): EolLetter {
     status: 'Draft',
     visibility: 'Visible',
     lastUpdated: nowIso(),
+    attachments: [],
   };
 }
 
@@ -1399,6 +1415,7 @@ export function emptyCustomRecord(): EolCustomRecord {
     instructions: '',
     customNotes: '',
     customFields: [],
+    attachments: [],
   };
 }
 
@@ -2041,7 +2058,11 @@ const BUILT_IN_DUPLICATE_TEMPLATE: Partial<Record<EolBuiltInSectionId, EolCustom
 };
 
 function reIdList<T extends { id: string }>(list: T[], prefix: string): T[] {
-  return list.map((item) => ({ ...item, id: createEolId(prefix) }));
+  return list.map((item) => {
+    const next = { ...item, id: createEolId(prefix) } as T & { attachments?: EolAttachment[] };
+    if ('attachments' in next) next.attachments = [];
+    return next;
+  });
 }
 
 export function cloneCustomSection(section: EolCustomSection): EolCustomSection {

@@ -31,6 +31,7 @@ type HistoryRecord = {
   cost: string;
   serviceProvider: string;
   warrantyEndDate: string;
+  addToDashboard: boolean;
   submittedToInsurance: boolean;
   insuranceCarrier: string;
   claimNumber: string;
@@ -74,6 +75,7 @@ function mapApiRecord(r: any): HistoryRecord {
     cost: r.cost || '',
     serviceProvider: r.service_provider || '',
     warrantyEndDate: r.warranty_end_date || '',
+    addToDashboard: r.addToDashboard === true,
     submittedToInsurance: r.submitted_to_insurance || false,
     insuranceCarrier: r.insurance_carrier || '',
     claimNumber: r.claim_number || '',
@@ -103,6 +105,7 @@ function emptyRepairForm(): RepairFormState {
     cost: '',
     serviceProvider: '',
     warrantyEndDate: '',
+    addToDashboard: false,
     submittedToInsurance: false,
     insuranceCarrier: '',
     claimNumber: '',
@@ -113,6 +116,66 @@ function emptyRepairForm(): RepairFormState {
     manualLink: '',
     notes: '',
   };
+}
+
+function DashboardCalendarSwitch({
+  isOn,
+  onToggle,
+  isLight,
+  disabled = false,
+}: {
+  isOn: boolean;
+  onToggle: () => void;
+  isLight: boolean;
+  disabled?: boolean;
+}) {
+  return (
+    <label
+      className={`flex items-center gap-2 ${disabled ? 'cursor-not-allowed' : 'cursor-pointer'}`}
+      title={disabled ? 'Set a warranty end date to add this record to the dashboard calendar' : 'Add to dashboard calendar'}
+    >
+      <span className={`text-xs whitespace-nowrap ${isLight ? 'text-slate-600' : 'text-slate-400'}`}>
+        Add to dashboard calendar
+      </span>
+      <button
+        type="button"
+        role="switch"
+        aria-checked={isOn}
+        aria-disabled={disabled}
+        aria-label="Add to dashboard calendar"
+        title={disabled ? 'Set a warranty end date to add this record to the dashboard calendar' : 'Add to dashboard calendar'}
+        disabled={disabled}
+        onClick={() => {
+          if (!disabled) onToggle();
+        }}
+        className={`relative inline-flex h-6 w-11 flex-shrink-0 rounded-full border-2 border-transparent transition-colors focus:outline-none focus:ring-2 focus:ring-emerald-500/50 focus:ring-offset-2 ${
+          disabled ? 'cursor-not-allowed opacity-50' : 'cursor-pointer'
+        } ${isLight ? 'focus:ring-offset-white' : 'focus:ring-offset-slate-900'} ${
+          isOn ? 'bg-emerald-500' : isLight ? 'bg-slate-300' : 'bg-slate-700'
+        }`}
+      >
+        <span
+          className={`pointer-events-none inline-block h-5 w-5 transform rounded-full bg-white shadow ring-0 transition ${
+            isOn ? 'translate-x-5' : 'translate-x-1'
+          }`}
+        />
+      </button>
+    </label>
+  );
+}
+
+function OnCalendarChip({ isLight }: { isLight: boolean }) {
+  return (
+    <span
+      className={
+        isLight
+          ? 'inline-flex items-center rounded-full bg-emerald-100 px-2 py-0.5 text-xs font-medium text-emerald-800'
+          : 'inline-flex items-center rounded-full bg-emerald-500/20 px-2 py-0.5 text-xs font-medium text-emerald-300'
+      }
+    >
+      On calendar
+    </span>
+  );
 }
 
 function recordMatchesSearch(record: HistoryRecord, query: string): boolean {
@@ -975,6 +1038,7 @@ export function RepairHistoryTool({ toolId }: RepairHistoryToolProps) {
       formData.append('cost', newRecord.cost || '');
       formData.append('serviceProvider', newRecord.serviceProvider || '');
       formData.append('warrantyEndDate', newRecord.warrantyEndDate || '');
+      formData.append('addToDashboard', newRecord.addToDashboard === true && Boolean(newRecord.warrantyEndDate) ? 'true' : 'false');
       formData.append('submittedToInsurance', newRecord.submittedToInsurance ? 'true' : 'false');
       formData.append('insuranceCarrier', newRecord.insuranceCarrier || '');
       formData.append('claimNumber', newRecord.claimNumber || '');
@@ -1078,6 +1142,7 @@ export function RepairHistoryTool({ toolId }: RepairHistoryToolProps) {
       formData.append('cost', editingRecord.cost || '');
       formData.append('serviceProvider', editingRecord.serviceProvider || '');
       formData.append('warrantyEndDate', editingRecord.warrantyEndDate || '');
+      formData.append('addToDashboard', editingRecord.addToDashboard === true && Boolean(editingRecord.warrantyEndDate) ? 'true' : 'false');
       formData.append('submittedToInsurance', editingRecord.submittedToInsurance ? 'true' : 'false');
       formData.append('insuranceCarrier', editingRecord.insuranceCarrier || '');
       formData.append('claimNumber', editingRecord.claimNumber || '');
@@ -2051,10 +2116,17 @@ export function RepairHistoryTool({ toolId }: RepairHistoryToolProps) {
                         onChange={(e) => setNewRecord({
                           ...newRecord,
                           warrantyEndDate: e.target.value,
+                          addToDashboard: e.target.value ? newRecord.addToDashboard : false,
                         })}
                         className="w-full rounded-lg border border-slate-700 bg-slate-900/70 px-3 py-2 text-sm text-slate-100 focus:border-emerald-500/50 focus:outline-none focus:ring-1 focus:ring-emerald-500/50"
                       />
                     </div>
+                    <DashboardCalendarSwitch
+                      isOn={newRecord.addToDashboard}
+                      disabled={!newRecord.warrantyEndDate}
+                      isLight={isLight}
+                      onToggle={() => setNewRecord((prev) => ({ ...prev, addToDashboard: !prev.addToDashboard }))}
+                    />
                     {selectedHeader?.categoryType === 'Home' && (
                       <div>
                         <label className="block text-xs font-medium text-slate-300 mb-1.5">
@@ -2323,10 +2395,20 @@ export function RepairHistoryTool({ toolId }: RepairHistoryToolProps) {
                                 onChange={(e) => setEditingRecord({
                                   ...editingRecord,
                                   warrantyEndDate: e.target.value,
+                                  addToDashboard: e.target.value ? editingRecord.addToDashboard : false,
                                 })}
                                 className="w-full rounded-lg border border-slate-700 bg-slate-900/70 px-3 py-2 text-sm text-slate-100 focus:border-emerald-500/50 focus:outline-none focus:ring-1 focus:ring-emerald-500/50"
                               />
                             </div>
+                            <DashboardCalendarSwitch
+                              isOn={editingRecord.addToDashboard}
+                              disabled={!editingRecord.warrantyEndDate}
+                              isLight={isLight}
+                              onToggle={() => setEditingRecord({
+                                ...editingRecord,
+                                addToDashboard: !editingRecord.addToDashboard,
+                              })}
+                            />
                             <div>
                               <label className="block text-xs font-medium text-slate-300 mb-1.5">
                                 Online User Manual
@@ -2382,6 +2464,7 @@ export function RepairHistoryTool({ toolId }: RepairHistoryToolProps) {
                                 }`}>
                                   {record.type === 'repair' ? 'Repair' : 'Replace'}
                                 </span>
+                                {record.addToDashboard && <OnCalendarChip isLight={isLight} />}
                               </div>
                               {isCrossHeaderSearch && (
                                 <p className="text-sm text-slate-400 mb-1">
