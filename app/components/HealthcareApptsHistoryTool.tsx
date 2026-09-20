@@ -5,6 +5,7 @@ import { useTheme } from './AppThemeProvider';
 import { useAppNotice } from './AppNotice';
 import { AttachmentButton } from './AttachmentButton';
 import { AttachmentModal } from './AttachmentModal';
+import { ExportPdfIconButton } from './ExportPdfIconButton';
 import {
   canPreviewAttachment,
   createPendingAttachment,
@@ -135,6 +136,18 @@ function formatDateDisplay(dateStr: string): string {
   const [y, m, d] = dateStr.split('-');
   if (!y || !m || !d) return dateStr;
   return `${m}/${d}/${y}`;
+}
+
+function formatReportDate(date: Date): string {
+  return date.toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' });
+}
+
+function compareUpcomingForExport(a: AppointmentRecord, b: AppointmentRecord): number {
+  return (a.appointmentDate || '').localeCompare(b.appointmentDate || '');
+}
+
+function compareHistoryForExport(a: AppointmentRecord, b: AppointmentRecord): number {
+  return (b.appointmentDate || '').localeCompare(a.appointmentDate || '');
 }
 
 function parseCurrency(value: string): number {
@@ -292,13 +305,6 @@ export function HealthcareApptsHistoryTool({ toolId }: HealthcareApptsHistoryToo
   const secondaryButtonClass = isLight
     ? 'px-4 py-2 rounded-lg border-2 border-slate-400 bg-slate-100 text-slate-800 hover:bg-slate-200 transition-colors disabled:opacity-50'
     : 'px-4 py-2 rounded-lg border border-slate-700 bg-slate-800 text-slate-200 hover:bg-slate-700 transition-colors disabled:opacity-50';
-  const tabStripBorderClass = isLight ? 'border-slate-200' : 'border-slate-800';
-  const tabActiveClass = isLight
-    ? 'border-b-2 border-emerald-600 text-emerald-900 font-semibold'
-    : 'border-b-2 border-emerald-500 text-emerald-300';
-  const tabInactiveClass = isLight
-    ? 'text-slate-600 hover:text-slate-900 border-b-2 border-transparent'
-    : 'text-slate-400 hover:text-slate-300 border-b-2 border-transparent';
   const popupMenuClass = isLight
     ? 'absolute top-10 right-0 z-50 mt-1 rounded-lg border border-slate-200 bg-white shadow-lg ring-1 ring-slate-900/5 min-w-[160px] py-1'
     : 'absolute top-10 right-0 z-50 bg-slate-800 border border-slate-700 rounded-lg shadow-lg min-w-[160px] py-1';
@@ -364,8 +370,8 @@ export function HealthcareApptsHistoryTool({ toolId }: HealthcareApptsHistoryToo
   const [searchQuery, setSearchQuery] = useState('');
   const [filterType, setFilterType] = useState<'all' | 'upcoming' | 'history'>('all');
 
-  const [activeTab, setActiveTab] = useState<'history' | 'report'>('history');
   const [showExportPopup, setShowExportPopup] = useState(false);
+  const [exportAllMembers, setExportAllMembers] = useState(true);
   const [exportIncludeUpcoming, setExportIncludeUpcoming] = useState(true);
   const [exportHistoryScope, setExportHistoryScope] = useState<string>('all');
   const [isExportingPdf, setIsExportingPdf] = useState(false);
@@ -785,6 +791,15 @@ export function HealthcareApptsHistoryTool({ toolId }: HealthcareApptsHistoryToo
     return () => window.removeEventListener('keydown', onKeyDown);
   }, [isAddingRecord, recordTypeStep]);
 
+  useEffect(() => {
+    if (!showExportPopup) return undefined;
+    const onKey = (event: KeyboardEvent) => {
+      if (event.key === 'Escape' && !isExportingPdf) setShowExportPopup(false);
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [showExportPopup, isExportingPdf]);
+
   const addRecord = async () => {
     if (!selectedHeaderId || !toolId) return;
     setIsSaving(true);
@@ -982,134 +997,250 @@ export function HealthcareApptsHistoryTool({ toolId }: HealthcareApptsHistoryToo
     }
   };
 
-  const exportHealthcareReportToPdf = async () => {
-    if (typeof window === 'undefined' || !selectedHeader) return;
+  const exportToPDF = async () => {
+    if (isExportingPdf) return;
+    if (exportHistoryScope !== 'all' && !exportHistoryScope) {
+      showError('Select a history year, or choose All years.');
+      return;
+    }
     setIsExportingPdf(true);
+
     try {
-      const filtered: AppointmentRecord[] = recordsForHeader.filter((r) => {
-        const includeByType = exportIncludeUpcoming ? true : !r.isUpcoming;
-        const includeByYear =
-          exportHistoryScope === 'all' || !r.appointmentDate
-            ? true
-            : r.appointmentDate.startsWith(exportHistoryScope);
-        return includeByType && includeByYear;
+      const currentMemberId = selectedHeaderId;
+      const useAllMembers = exportAllMembers || !currentMemberId;
+      const membersToExport = useAllMembers
+        ? headers
+        : headers.filter((header) => header.id === currentMemberId);
+      const selectedMemberName = headers.find((header) => header.id === currentMemberId)?.name;
+      const memberIds = new Set(headers.map((header) => header.id));
+
+      const matchesExport = (record: AppointmentRecord) => {
+        if (!useAllMembers && record.headerId !== currentMemberId) return false;
+        if (record.isUpcoming) return exportIncludeUpcoming;
+        if (exportHistoryScope === 'all' || !record.appointmentDate) return true;
+        return record.appointmentDate.startsWith(exportHistoryScope);
+      };
+
+      const recordsByMember = membersToExport.map((header) => {
+        const memberRecords = records.filter((record) => record.headerId === header.id && matchesExport(record));
+        return {
+          header,
+          upcoming: memberRecords.filter((record) => record.isUpcoming).sort(compareUpcomingForExport),
+          history: memberRecords.filter((record) => !record.isUpcoming).sort(compareHistoryForExport),
+        };
       });
-      const visitCount = filtered.length;
-      const totalBilledSum = filtered.reduce((sum, r) => sum + parseCurrency(r.totalBilled), 0);
-      const insurancePaidSum = filtered.reduce((sum, r) => sum + parseCurrency(r.insurancePaid), 0);
+
+      if (useAllMembers) {
+        const unassigned = records.filter((record) => !memberIds.has(record.headerId) && matchesExport(record));
+        if (unassigned.length > 0) {
+          recordsByMember.push({
+            header: { id: 'unassigned', name: 'Unassigned', card_color: '#64748b' },
+            upcoming: unassigned.filter((record) => record.isUpcoming).sort(compareUpcomingForExport),
+            history: unassigned.filter((record) => !record.isUpcoming).sort(compareHistoryForExport),
+          });
+        }
+      }
+
+      const groupsWithVisits = recordsByMember.filter(
+        (group) => group.upcoming.length > 0 || group.history.length > 0
+      );
+      const exportedRecords = groupsWithVisits.flatMap((group) => [...group.upcoming, ...group.history]);
+
+      const visitCount = exportedRecords.length;
+      const totalBilledSum = exportedRecords.reduce((sum, record) => sum + parseCurrency(record.totalBilled), 0);
+      const insurancePaidSum = exportedRecords.reduce((sum, record) => sum + parseCurrency(record.insurancePaid), 0);
       const patientResponsibilitySum = Math.max(0, totalBilledSum - insurancePaidSum);
-      const currentAmountDueSum = filtered.reduce((sum, r) => sum + parseCurrency(r.currentAmountDue), 0);
+      const currentAmountDueSum = exportedRecords.reduce(
+        (sum, record) => sum + parseCurrency(record.currentAmountDue),
+        0
+      );
 
-      let jsPDF: any;
-      if ((window as any).jspdf?.jsPDF) {
-        jsPDF = (window as any).jspdf.jsPDF;
-      } else {
-        await new Promise<void>((resolve, reject) => {
-          const script = document.createElement('script');
-          script.src = 'https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js';
-          script.onload = () => {
-            jsPDF = (window as any).jspdf.jsPDF;
-            resolve();
-          };
-          script.onerror = reject;
-          document.head.appendChild(script);
-        });
-      }
+      const { jsPDF } = await import('jspdf');
+      const pdf = new jsPDF({
+        orientation: 'portrait',
+        unit: 'mm',
+        format: 'a4',
+      });
 
-      const pdf = new jsPDF({ orientation: 'portrait', unit: 'mm', format: 'a4' });
-      const pageW = pdf.internal.pageSize.getWidth();
-      const margin = 18;
-      const contentW = pageW - margin * 2;
-      let y = 20;
+      const pageWidth = pdf.internal.pageSize.getWidth();
+      const pageHeight = pdf.internal.pageSize.getHeight();
+      const margin = 15;
+      const contentWidth = pageWidth - margin * 2;
+      let yPos = margin;
 
-      pdf.setFontSize(18);
-      pdf.setFont('helvetica', 'bold');
-      pdf.text('Healthcare Report', margin, y);
-      y += 8;
-      pdf.setFontSize(11);
-      pdf.setFont('helvetica', 'normal');
-      pdf.text(`${selectedHeader.name}  •  Generated ${new Date().toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' })}`, margin, y);
-      y += 14;
+      const colors = {
+        background: [255, 255, 255] as const,
+        text: [15, 23, 42] as const,
+        title: [15, 23, 42] as const,
+        header: [241, 245, 249] as const,
+        muted: [71, 85, 105] as const,
+      };
 
-      pdf.setFontSize(12);
-      pdf.setFont('helvetica', 'bold');
-      pdf.text('Financial summary', margin, y);
-      y += 8;
-      pdf.setFont('helvetica', 'normal');
-      pdf.setFontSize(10);
-      const kpiLabels = ['Number of visits', 'Total Billed', 'Insurance Paid', 'Patient Responsibility', 'Current Amount Due'];
-      const kpiValues = [
-        String(visitCount),
-        formatCurrencyDisplay(String(totalBilledSum)),
-        formatCurrencyDisplay(String(insurancePaidSum)),
-        formatCurrencyDisplay(String(patientResponsibilitySum)),
-        formatCurrencyDisplay(String(currentAmountDueSum)),
-      ];
-      const colW = contentW / 5;
-      for (let i = 0; i < 5; i++) {
-        pdf.setFont('helvetica', 'bold');
-        pdf.text(kpiLabels[i], margin + i * colW, y);
-        pdf.setFont('helvetica', 'normal');
-        pdf.text(kpiValues[i], margin + i * colW, y + 6);
-      }
-      y += 20;
+      const fillPage = () => {
+        pdf.setFillColor(colors.background[0], colors.background[1], colors.background[2]);
+        pdf.rect(0, 0, pageWidth, pageHeight, 'F');
+      };
 
-      pdf.setFont('helvetica', 'bold');
-      pdf.setFontSize(12);
-      pdf.text('Appointments', margin, y);
-      y += 10;
-
-      const lineHeight = 6;
-      const maxY = pdf.internal.pageSize.getHeight() - 25;
-
-      for (const r of filtered) {
-        if (y > maxY) {
+      const checkNewPage = (requiredHeight: number) => {
+        if (yPos + requiredHeight > pageHeight - margin) {
           pdf.addPage();
-          y = 20;
+          fillPage();
+          yPos = margin;
+          return true;
         }
+        return false;
+      };
+
+      const addSectionHeader = (title: string) => {
+        checkNewPage(15);
+        pdf.setFillColor(colors.header[0], colors.header[1], colors.header[2]);
+        pdf.rect(margin, yPos, contentWidth, 10, 'F');
+        pdf.setFontSize(13);
         pdf.setFont('helvetica', 'bold');
-        pdf.setFontSize(10);
-        pdf.text(`${formatDateDisplay(r.appointmentDate)}  ${r.isUpcoming ? '(Upcoming)' : '(History)'}`, margin, y);
-        y += lineHeight;
-        pdf.setFont('helvetica', 'normal');
-        const textOpt = { maxWidth: contentW };
-        if (r.careFacility) {
-          const lines = pdf.splitTextToSize(`Facility: ${r.careFacility}`, contentW);
-          lines.forEach((line: string) => {
-            pdf.text(line, margin, y);
-            y += lineHeight;
-          });
+        pdf.setTextColor(colors.title[0], colors.title[1], colors.title[2]);
+        pdf.text(title, margin + 5, yPos + 7);
+        yPos += 15;
+      };
+
+      const addText = (text: string, fontSize = 10, isBold = false, indent = 0, muted = false) => {
+        pdf.setFontSize(fontSize);
+        pdf.setFont('helvetica', isBold ? 'bold' : 'normal');
+        const color = muted ? colors.muted : colors.text;
+        pdf.setTextColor(color[0], color[1], color[2]);
+        const maxWidth = contentWidth - indent - 5;
+        const lines = pdf.splitTextToSize(text, maxWidth) as string[];
+        const lineHeight = fontSize * 0.42;
+        checkNewPage(lines.length * lineHeight + 2);
+        lines.forEach((line) => {
+          pdf.text(line, margin + indent, yPos);
+          yPos += lineHeight;
+        });
+        yPos += 2;
+      };
+
+      const writeVisit = (record: AppointmentRecord) => {
+        checkNewPage(28);
+        const kind = record.isUpcoming ? 'Upcoming' : 'History';
+        addText(`${formatDateDisplay(record.appointmentDate) || 'No date'}  ·  ${kind}`, 11, true, 5);
+        if (record.careFacility.trim()) {
+          addText(`Facility: ${record.careFacility.trim()}`, 9, false, 8);
         }
-        if (r.providerInfo) {
-          const lines = pdf.splitTextToSize(`Provider: ${r.providerInfo}`, contentW);
-          lines.forEach((line: string) => {
-            pdf.text(line, margin, y);
-            y += lineHeight;
-          });
+        if (record.providerInfo.trim()) {
+          addText(`Provider: ${record.providerInfo.trim()}`, 9, false, 8);
         }
-        if (r.reasonForVisit) {
-          const lines = pdf.splitTextToSize(`Reason: ${r.reasonForVisit}`, contentW);
-          lines.forEach((line: string) => {
-            pdf.text(line, margin, y);
-            y += lineHeight;
-          });
+        if (record.reasonForVisit.trim()) {
+          addText(`Reason: ${record.reasonForVisit.trim()}`, 9, false, 8);
         }
-        if (r.totalBilled || r.insurancePaid || r.currentAmountDue) {
-          pdf.text(
-            `Billed: ${formatCurrencyDisplay(r.totalBilled) || '—'}  |  Insurance: ${formatCurrencyDisplay(r.insurancePaid) || '—'}  |  Due: ${formatCurrencyDisplay(r.currentAmountDue) || '—'}`,
-            margin,
-            y
+        if (record.preVisitNotes.trim()) {
+          addText(`Pre-visit notes: ${record.preVisitNotes.trim()}`, 9, false, 8);
+        }
+        if (record.postVisitNotes.trim()) {
+          addText(`Post-visit notes: ${record.postVisitNotes.trim()}`, 9, false, 8);
+        }
+        if (record.totalBilled || record.insurancePaid || record.currentAmountDue) {
+          addText(
+            `Billed: ${formatCurrencyDisplay(record.totalBilled) || '—'}  ·  Insurance: ${formatCurrencyDisplay(record.insurancePaid) || '—'}  ·  Due: ${formatCurrencyDisplay(record.currentAmountDue) || '—'}`,
+            9,
+            false,
+            8
           );
-          y += lineHeight;
+          if (record.totalBilled || record.insurancePaid) {
+            addText(
+              `Patient responsibility: ${getPatientResponsibilityDisplay(record.totalBilled, record.insurancePaid) || '—'}`,
+              9,
+              false,
+              8
+            );
+          }
         }
-        y += 4;
+        yPos += 3;
+      };
+
+      fillPage();
+
+      pdf.setFontSize(20);
+      pdf.setFont('helvetica', 'bold');
+      pdf.setTextColor(colors.title[0], colors.title[1], colors.title[2]);
+      const title = 'Healthcare Appointments Report';
+      pdf.text(title, (pageWidth - pdf.getTextWidth(title)) / 2, yPos);
+      yPos += 10;
+
+      pdf.setFontSize(10);
+      pdf.setFont('helvetica', 'normal');
+      pdf.setTextColor(colors.muted[0], colors.muted[1], colors.muted[2]);
+      pdf.text(`Generated on: ${formatReportDate(new Date())}`, margin, yPos);
+      yPos += 6;
+
+      const memberLabel = useAllMembers ? 'All members' : selectedMemberName || 'Selected member';
+      const upcomingLabel = exportIncludeUpcoming ? 'Upcoming and history' : 'History only';
+      const yearLabel = exportHistoryScope === 'all' ? 'All years' : exportHistoryScope;
+      pdf.text(`${upcomingLabel}  ·  ${yearLabel}  ·  ${memberLabel}`, margin, yPos);
+      yPos += 10;
+
+      addSectionHeader('Summary');
+      addText(`Visits: ${visitCount}`, 11, true, 5);
+      addText(`Total billed: ${formatCurrencyDisplay(String(totalBilledSum)) || '$0.00'}`, 10, false, 5);
+      addText(`Insurance paid: ${formatCurrencyDisplay(String(insurancePaidSum)) || '$0.00'}`, 10, false, 5);
+      addText(
+        `Patient responsibility: ${formatCurrencyDisplay(String(patientResponsibilitySum)) || '$0.00'}`,
+        10,
+        false,
+        5
+      );
+      addText(`Current amount due: ${formatCurrencyDisplay(String(currentAmountDueSum)) || '$0.00'}`, 10, false, 5);
+      addText(`Members: ${groupsWithVisits.length}`, 10, false, 5);
+      yPos += 4;
+
+      if (groupsWithVisits.length === 0) {
+        addText('No appointments match the selected options.', 10, false, 5, true);
       }
 
-      pdf.save(`Healthcare_Report_${selectedHeader.name.replace(/\s+/g, '_')}_${new Date().toISOString().slice(0, 10)}.pdf`);
+      groupsWithVisits.forEach(({ header, upcoming, history }) => {
+        addSectionHeader(header.name);
+
+        if (exportIncludeUpcoming) {
+          if (upcoming.length > 0) {
+            upcoming.forEach(writeVisit);
+          } else if (history.length === 0) {
+            addText('No upcoming appointments.', 9, false, 8, true);
+          }
+        }
+
+        if (history.length > 0) {
+          if (exportIncludeUpcoming && upcoming.length > 0) {
+            yPos += 2;
+          }
+          addText('History', 11, true, 5);
+          yPos += 1;
+          history.forEach(writeVisit);
+        } else if (!exportIncludeUpcoming) {
+          addText('No history appointments.', 9, false, 8, true);
+        }
+
+        yPos += 3;
+      });
+
+      const attachmentRefs = exportedRecords.flatMap((record) => {
+        const memberName =
+          headers.find((header) => header.id === record.headerId)?.name || 'Unassigned';
+        const dateLabel = formatDateDisplay(record.appointmentDate) || 'No date';
+        return (record.documents || [])
+          .map((file) => file.name?.trim())
+          .filter((name): name is string => Boolean(name))
+          .map((fileName) => `${memberName} — ${dateLabel} — ${fileName}`);
+      });
+
+      if (attachmentRefs.length > 0) {
+        addSectionHeader('Attachments');
+        addText('File names only. Files themselves are not included in this report.', 8, false, 5, true);
+        attachmentRefs.forEach((line) => addText(line, 9, false, 8));
+      }
+
+      pdf.save(`Healthcare_Appts_Report_${new Date().toISOString().split('T')[0]}.pdf`);
       setShowExportPopup(false);
-    } catch (e) {
-      console.error('PDF export failed:', e);
-      setSaveMessage({ type: 'error', text: 'Failed to generate PDF. Try again.' });
+    } catch (error) {
+      console.error('Error exporting healthcare appointments PDF:', error);
+      showError(error instanceof Error ? error.message : 'Failed to generate PDF');
     } finally {
       setIsExportingPdf(false);
     }
@@ -1133,11 +1264,17 @@ export function HealthcareApptsHistoryTool({ toolId }: HealthcareApptsHistoryToo
 
   return (
     <div className="space-y-6">
-      <div>
-        <h2 className={titleClass}>Healthcare Appts &amp; History</h2>
-        <p className={descClass}>
-          Track upcoming appointments and healthcare history for each family member.
-        </p>
+      <div className="flex items-start justify-between gap-3">
+        <div>
+          <h2 className={titleClass}>Healthcare Appts &amp; History</h2>
+          <p className={descClass}>
+            Track upcoming appointments and healthcare history for each family member.
+          </p>
+        </div>
+        <ExportPdfIconButton
+          title="Export healthcare appointments to PDF"
+          onClick={() => setShowExportPopup(true)}
+        />
       </div>
 
       {saveMessage && (
@@ -1424,28 +1561,11 @@ export function HealthcareApptsHistoryTool({ toolId }: HealthcareApptsHistoryToo
 
       {selectedHeaderId && selectedHeader && (
         <>
-          <div className={`border-b ${tabStripBorderClass}`}>
-            <div className="flex gap-2 overflow-x-auto">
-              <div className={`px-4 py-2 text-[18px] font-medium whitespace-nowrap border-b-2 border-transparent ${isLight ? 'text-slate-800' : 'text-slate-200'}`}>
-                {selectedHeader.name}:
-              </div>
-              {[
-                { id: 'history', label: 'Appointments' },
-                { id: 'report', label: 'Report' },
-              ].map((tab) => (
-                <button
-                  key={tab.id}
-                  onClick={() => setActiveTab(tab.id as 'history' | 'report')}
-                  className={`px-4 py-2 text-sm font-medium transition-colors whitespace-nowrap ${activeTab === tab.id ? tabActiveClass : tabInactiveClass}`}
-                >
-                  {tab.label}
-                </button>
-              ))}
-            </div>
-          </div>
+          <h3 className={isLight ? 'text-lg font-semibold text-slate-900' : 'text-lg font-semibold text-slate-50'}>
+            {selectedHeader.name}
+          </h3>
 
-          {activeTab === 'history' && (
-            <div className="space-y-6">
+          <div className="space-y-6">
               {!isAddingRecord && (
                 <div className="flex justify-start">
                   <button
@@ -1960,36 +2080,23 @@ export function HealthcareApptsHistoryTool({ toolId }: HealthcareApptsHistoryToo
                   )}
                 </div>
               )}
-            </div>
-          )}
+          </div>
 
-          {activeTab === 'report' && (
-            <div className="space-y-6">
-              <div className={cardPad6Class}>
-                <h3 className="text-lg font-semibold text-slate-50 mb-4">Export Healthcare Report</h3>
-                <p className="text-slate-300 mb-4">
-                  Generate a report of all appointment history records for {selectedHeader.name}. The report will include appointments, provider and facility details, and financial summary.
-                </p>
-                <button
-                  onClick={() => setShowExportPopup(true)}
-                  className={primaryButtonClass}
-                >
-                  Generate PDF Report
-                </button>
-              </div>
-            </div>
-          )}
+        </>
+      )}
 
-          {/* Export popup */}
-          {showExportPopup && selectedHeader && (
+      {showExportPopup && (
             <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
-              <div className={modalCardClass}>
+              <div className={modalCardClass} role="dialog" aria-modal="true" aria-labelledby="hcah-export-title">
                 <div className="flex items-center justify-between mb-4">
-                  <h3 className={isLight ? 'text-lg font-semibold text-slate-900' : 'text-lg font-semibold text-slate-50'}>Export Options</h3>
+                  <h3 id="hcah-export-title" className={isLight ? 'text-lg font-semibold text-slate-900' : 'text-lg font-semibold text-slate-50'}>
+                    Export Options
+                  </h3>
                   <button
-                    onClick={() => setShowExportPopup(false)}
+                    type="button"
+                    onClick={() => !isExportingPdf && setShowExportPopup(false)}
                     disabled={isExportingPdf}
-                    className={isLight ? 'rounded-lg p-1 text-slate-600 hover:bg-slate-100 hover:text-slate-900 transition-colors disabled:opacity-50' : 'rounded-lg p-1 text-slate-400 hover:bg-slate-800 hover:text-slate-200 transition-colors disabled:opacity-50'}
+                    className={isLight ? 'text-slate-600 hover:text-slate-900 transition-colors disabled:opacity-50' : 'text-slate-400 hover:text-slate-200 transition-colors disabled:opacity-50'}
                     aria-label="Close"
                     title="Close"
                   >
@@ -1998,97 +2105,163 @@ export function HealthcareApptsHistoryTool({ toolId }: HealthcareApptsHistoryToo
                     </svg>
                   </button>
                 </div>
-                <div className="space-y-5">
-                  <div>
-                    <label className="block text-sm font-medium text-slate-300 mb-2">Include upcoming appointments?</label>
-                    <div className="flex gap-4">
-                      <label className="flex items-center gap-2 cursor-pointer">
-                        <input
-                          type="radio"
-                          name="exportIncludeUpcoming"
-                          checked={exportIncludeUpcoming}
-                          onChange={() => setExportIncludeUpcoming(true)}
-                          className="w-4 h-4 text-emerald-500 focus:ring-emerald-500 focus:ring-offset-slate-800"
-                        />
-                        <span className="text-slate-200">Yes</span>
-                      </label>
-                      <label className="flex items-center gap-2 cursor-pointer">
-                        <input
-                          type="radio"
-                          name="exportIncludeUpcoming"
-                          checked={!exportIncludeUpcoming}
-                          onChange={() => setExportIncludeUpcoming(false)}
-                          className="w-4 h-4 text-emerald-500 focus:ring-emerald-500 focus:ring-offset-slate-800"
-                        />
-                        <span className="text-slate-200">No (history only)</span>
-                      </label>
-                    </div>
-                  </div>
-                  <div>
-                    <label className="block text-sm font-medium text-slate-300 mb-2">History scope</label>
-                    <div className="flex gap-4 flex-wrap items-center">
-                      <label className="flex items-center gap-2 cursor-pointer">
-                        <input
-                          type="radio"
-                          name="exportHistoryScope"
-                          checked={exportHistoryScope === 'all'}
-                          onChange={() => setExportHistoryScope('all')}
-                          className="w-4 h-4 text-emerald-500 focus:ring-emerald-500 focus:ring-offset-slate-800"
-                        />
-                        <span className="text-slate-200">All history</span>
-                      </label>
-                      <label className="flex items-center gap-2 cursor-pointer">
-                        <input
-                          type="radio"
-                          name="exportHistoryScope"
-                          checked={exportHistoryScope !== 'all'}
-                          onChange={() => {
-                            const years = Array.from(
-                              new Set(
-                                recordsForHeader
-                                  .filter((r) => !r.isUpcoming)
-                                  .map((r) => r.appointmentDate?.slice(0, 4))
-                                  .filter(Boolean)
+                <div className="space-y-4">
+                  <p className={descClass}>
+                    Attachment files are listed by name at the end.
+                  </p>
+
+                  <fieldset className="space-y-2" disabled={isExportingPdf}>
+                    <legend className={`${labelClass} mb-0`}>Family members</legend>
+                    <label className={`flex items-start gap-3 ${isLight ? 'text-slate-700' : 'text-slate-300'} cursor-pointer`}>
+                      <input
+                        type="radio"
+                        name="hcahExportMembers"
+                        checked={exportAllMembers || !selectedHeaderId}
+                        onChange={() => setExportAllMembers(true)}
+                        className={isLight
+                          ? 'mt-0.5 h-4 w-4 border-slate-400 text-emerald-600 focus:ring-emerald-500'
+                          : 'mt-0.5 h-4 w-4 border-slate-600 bg-slate-700 text-emerald-500 focus:ring-emerald-500'}
+                      />
+                      <span>All members</span>
+                    </label>
+                    <label
+                      className={`flex items-start gap-3 ${
+                        selectedHeaderId
+                          ? `${isLight ? 'text-slate-700' : 'text-slate-300'} cursor-pointer`
+                          : isLight
+                            ? 'text-slate-400 cursor-not-allowed'
+                            : 'text-slate-500 cursor-not-allowed'
+                      }`}
+                    >
+                      <input
+                        type="radio"
+                        name="hcahExportMembers"
+                        checked={!exportAllMembers && Boolean(selectedHeaderId)}
+                        onChange={() => setExportAllMembers(false)}
+                        disabled={!selectedHeaderId}
+                        className={isLight
+                          ? 'mt-0.5 h-4 w-4 border-slate-400 text-emerald-600 focus:ring-emerald-500'
+                          : 'mt-0.5 h-4 w-4 border-slate-600 bg-slate-700 text-emerald-500 focus:ring-emerald-500'}
+                      />
+                      <span>
+                        Current member only
+                        {selectedHeader ? ` (${selectedHeader.name})` : ''}
+                      </span>
+                    </label>
+                  </fieldset>
+
+                  <fieldset className="space-y-2" disabled={isExportingPdf}>
+                    <legend className={`${labelClass} mb-0`}>Include upcoming appointments?</legend>
+                    <label className={`flex items-start gap-3 ${isLight ? 'text-slate-700' : 'text-slate-300'} cursor-pointer`}>
+                      <input
+                        type="radio"
+                        name="hcahExportUpcoming"
+                        checked={exportIncludeUpcoming}
+                        onChange={() => setExportIncludeUpcoming(true)}
+                        className={isLight
+                          ? 'mt-0.5 h-4 w-4 border-slate-400 text-emerald-600 focus:ring-emerald-500'
+                          : 'mt-0.5 h-4 w-4 border-slate-600 bg-slate-700 text-emerald-500 focus:ring-emerald-500'}
+                      />
+                      <span>Yes</span>
+                    </label>
+                    <label className={`flex items-start gap-3 ${isLight ? 'text-slate-700' : 'text-slate-300'} cursor-pointer`}>
+                      <input
+                        type="radio"
+                        name="hcahExportUpcoming"
+                        checked={!exportIncludeUpcoming}
+                        onChange={() => setExportIncludeUpcoming(false)}
+                        className={isLight
+                          ? 'mt-0.5 h-4 w-4 border-slate-400 text-emerald-600 focus:ring-emerald-500'
+                          : 'mt-0.5 h-4 w-4 border-slate-600 bg-slate-700 text-emerald-500 focus:ring-emerald-500'}
+                      />
+                      <span>No (history only)</span>
+                    </label>
+                  </fieldset>
+
+                  <fieldset className="space-y-2" disabled={isExportingPdf}>
+                    <legend className={`${labelClass} mb-0`}>History</legend>
+                    <label className={`flex items-start gap-3 ${isLight ? 'text-slate-700' : 'text-slate-300'} cursor-pointer`}>
+                      <input
+                        type="radio"
+                        name="hcahExportYear"
+                        checked={exportHistoryScope === 'all'}
+                        onChange={() => setExportHistoryScope('all')}
+                        className={isLight
+                          ? 'mt-0.5 h-4 w-4 border-slate-400 text-emerald-600 focus:ring-emerald-500'
+                          : 'mt-0.5 h-4 w-4 border-slate-600 bg-slate-700 text-emerald-500 focus:ring-emerald-500'}
+                      />
+                      <span>All years</span>
+                    </label>
+                    <label className={`flex items-start gap-3 ${isLight ? 'text-slate-700' : 'text-slate-300'} cursor-pointer`}>
+                      <input
+                        type="radio"
+                        name="hcahExportYear"
+                        checked={exportHistoryScope !== 'all'}
+                        onChange={() => {
+                          const scoped = exportAllMembers || !selectedHeaderId
+                            ? records
+                            : records.filter((record) => record.headerId === selectedHeaderId);
+                          const years = Array.from(
+                            new Set(
+                              scoped
+                                .filter((record) => !record.isUpcoming)
+                                .map((record) => record.appointmentDate?.slice(0, 4))
+                                .filter((year): year is string => Boolean(year))
+                            )
+                          ).sort((a, b) => b.localeCompare(a));
+                          setExportHistoryScope(years[0] ?? new Date().getFullYear().toString());
+                        }}
+                        className={isLight
+                          ? 'mt-0.5 h-4 w-4 border-slate-400 text-emerald-600 focus:ring-emerald-500'
+                          : 'mt-0.5 h-4 w-4 border-slate-600 bg-slate-700 text-emerald-500 focus:ring-emerald-500'}
+                      />
+                      <span>One year</span>
+                    </label>
+                    {exportHistoryScope !== 'all' && (
+                      <div className="ml-7">
+                        <label className={labelClassSm} htmlFor="hcah-export-year">
+                          Year
+                        </label>
+                        <select
+                          id="hcah-export-year"
+                          value={exportHistoryScope}
+                          onChange={(e) => setExportHistoryScope(e.target.value || 'all')}
+                          className={inputClass}
+                        >
+                          <option value="">Select a year</option>
+                          {Array.from(
+                            new Set(
+                              (exportAllMembers || !selectedHeaderId
+                                ? records
+                                : records.filter((record) => record.headerId === selectedHeaderId)
                               )
-                            ).sort((a, b) => (b ?? '').localeCompare(a ?? ''));
-                            setExportHistoryScope(years[0] ?? new Date().getFullYear().toString());
-                          }}
-                          className="w-4 h-4 text-emerald-500 focus:ring-emerald-500 focus:ring-offset-slate-800"
-                        />
-                        <span className="text-slate-200">Select year:</span>
-                      </label>
-                      <select
-                        value={exportHistoryScope === 'all' ? '' : exportHistoryScope}
-                        onChange={(e) => setExportHistoryScope(e.target.value || 'all')}
-                        className="rounded-lg border border-slate-600 bg-slate-900 px-3 py-1.5 text-sm text-slate-100 focus:border-emerald-500/50 focus:outline-none"
-                      >
-                        <option value="">--</option>
-                        {Array.from(
-                          new Set(
-                            recordsForHeader
-                              .filter((r) => !r.isUpcoming)
-                              .map((r) => r.appointmentDate?.slice(0, 4))
-                              .filter(Boolean)
+                                .filter((record) => !record.isUpcoming)
+                                .map((record) => record.appointmentDate?.slice(0, 4))
+                                .filter((year): year is string => Boolean(year))
+                            )
                           )
-                        )
-                          .sort((a, b) => (b ?? '').localeCompare(a ?? ''))
-                          .map((year) => (
-                            <option key={year} value={year}>
-                              {year}
-                            </option>
-                          ))}
-                      </select>
-                    </div>
-                  </div>
+                            .sort((a, b) => b.localeCompare(a))
+                            .map((year) => (
+                              <option key={year} value={year}>
+                                {year}
+                              </option>
+                            ))}
+                        </select>
+                      </div>
+                    )}
+                  </fieldset>
+
                   <div className="flex gap-3 pt-2">
                     <button
-                      onClick={() => exportHealthcareReportToPdf()}
-                      disabled={isExportingPdf}
+                      type="button"
+                      onClick={exportToPDF}
+                      disabled={isExportingPdf || (exportHistoryScope !== 'all' && !exportHistoryScope)}
                       className={`flex-1 ${primaryButtonClass}`}
                     >
                       {isExportingPdf ? 'Generating…' : 'Export to PDF'}
                     </button>
                     <button
+                      type="button"
                       onClick={() => setShowExportPopup(false)}
                       disabled={isExportingPdf}
                       className={secondaryButtonClass}
@@ -2099,8 +2272,6 @@ export function HealthcareApptsHistoryTool({ toolId }: HealthcareApptsHistoryToo
                 </div>
               </div>
             </div>
-          )}
-        </>
       )}
 
       {/* Delete record confirmation */}

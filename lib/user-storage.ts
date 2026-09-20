@@ -263,3 +263,121 @@ export async function assertCanStoreBytes(userId: string, incomingBytes: number)
 export async function refreshUserStorageUsage(userId: string): Promise<StorageQuota> {
   return recountUserStorage(userId);
 }
+
+export type SiteStorageStats = {
+  documentCount: number;
+  usedBytes: number;
+  usedLabel: string;
+};
+
+const ATTACHMENT_COUNT_TABLES = [
+  'tools_ab_address_attachments',
+  'tools_ce_event_attachments',
+  'tools_cs_completion_attachments',
+  'tools_cs_item_attachments',
+  'tools_ebp_event_attachments',
+  'tools_ebp_expense_attachments',
+  'tools_eolp_document_attachments',
+  'tools_eolp_insurance_attachments',
+  'tools_eolp_letter_attachments',
+  'tools_eolp_other_record_attachments',
+  'tools_eolp_personal_item_attachments',
+  'tools_gt_goal_attachments',
+  'tools_gt_update_attachments',
+  'tools_hcah_documents',
+  'tools_hms_completion_attachments',
+  'tools_hms_item_attachments',
+  'tools_hsa_expense_receipts',
+  'tools_id_documents',
+  'tools_mp_meal_attachments',
+  'tools_note_attachments',
+  'tools_pcs_appointment_attachments',
+  'tools_pcs_document_attachments',
+  'tools_pcs_documents',
+  'tools_pcs_pet_attachments',
+  'tools_pcs_vaccination_attachments',
+  'tools_pcs_veterinary_attachments',
+  'tools_rh_record_attachments',
+  'tools_rh_repair_pictures',
+  'tools_sl_list_attachments',
+  'tools_st_subscription_attachments',
+  'tools_tdl_attachments',
+  'tools_tl_trip_attachments',
+] as const;
+
+async function countAttachmentRows(): Promise<number> {
+  const counts = await Promise.all(
+    ATTACHMENT_COUNT_TABLES.map(async (table) => {
+      const { count, error } = await supabaseServer
+        .from(table)
+        .select('*', { count: 'exact', head: true });
+      if (error) {
+        console.error(`Failed to count ${table}:`, error);
+        return 0;
+      }
+      return count || 0;
+    })
+  );
+
+  const extraFileColumns = await Promise.all([
+    supabaseServer
+      .from('tools_rh_records')
+      .select('*', { count: 'exact', head: true })
+      .not('receipt_file_url', 'is', null),
+    supabaseServer
+      .from('tools_rh_records')
+      .select('*', { count: 'exact', head: true })
+      .not('warranty_file_url', 'is', null),
+  ]);
+
+  const extraCount = extraFileColumns.reduce((sum, result) => {
+    if (result.error) {
+      console.error('Failed to count extra file columns:', result.error);
+      return sum;
+    }
+    return sum + (result.count || 0);
+  }, 0);
+
+  return counts.reduce((sum, value) => sum + value, 0) + extraCount;
+}
+
+async function sumCachedUserStorageBytes(): Promise<number> {
+  const { data, error } = await supabaseServer
+    .from('users')
+    .select('storage_used_bytes');
+
+  if (error) {
+    console.error('Failed to sum cached storage usage:', error);
+    return 0;
+  }
+
+  return (data || []).reduce((sum, row) => sum + Math.max(0, row.storage_used_bytes ?? 0), 0);
+}
+
+export async function getSiteStorageStats(): Promise<SiteStorageStats> {
+  const { data, error } = await supabaseServer.rpc('get_site_storage_stats');
+  if (!error) {
+    const row = Array.isArray(data) ? data[0] : data;
+    if (row) {
+      const usedBytes = Math.max(0, Number(row.used_bytes) || 0);
+      return {
+        documentCount: Math.max(0, Number(row.document_count) || 0),
+        usedBytes,
+        usedLabel: formatStorageBytes(usedBytes),
+      };
+    }
+  } else {
+    console.error('Site storage stats RPC failed; using cached fallback:', error);
+  }
+
+  const [documentCount, usedBytes] = await Promise.all([
+    countAttachmentRows(),
+    sumCachedUserStorageBytes(),
+  ]);
+
+  return {
+    documentCount,
+    usedBytes,
+    usedLabel: formatStorageBytes(usedBytes),
+  };
+}

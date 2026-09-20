@@ -1,0 +1,18 @@
+---
+description: PDF export popup copy — do not mention light mode
+alwaysApply: true
+---
+
+# PDF export popups
+
+When adding or changing a PDF export options popup, do **not** tell the user that the report is generated in light mode.
+
+Never include copy such as:
+
+- "The report is always generated in light mode."
+- "The report is always light mode."
+- "Always generated in light mode"
+
+The PDF itself must still be light mode (white page, dark text). Just do not say that on the popup.
+
+Other helper text is fine (for example, that attachment filenames appear at the end).

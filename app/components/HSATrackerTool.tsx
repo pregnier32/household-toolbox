@@ -5,6 +5,7 @@ import { useTheme } from './AppThemeProvider';
 import { useAppNotice } from './AppNotice';
 import { AttachmentButton } from './AttachmentButton';
 import { AttachmentModal } from './AttachmentModal';
+import { ExportPdfIconButton } from './ExportPdfIconButton';
 import {
   canPreviewAttachment,
   createPendingAttachment,
@@ -35,6 +36,10 @@ function formatMoney(n: number): string {
   });
 }
 
+function formatReportDate(date: Date): string {
+  return date.toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' });
+}
+
 function ReceiptNeededWarning({ isLight }: { isLight: boolean }) {
   return (
     <div
@@ -62,6 +67,23 @@ function ReceiptNeededWarning({ isLight }: { isLight: boolean }) {
 
 type DepositSource = 'Payroll' | 'Employer' | 'Personal' | 'Other';
 type RecurrenceFrequency = 'weekly' | 'biweekly' | 'monthly' | 'quarterly' | 'yearly';
+
+function recurrenceFrequencyLabel(frequency: RecurrenceFrequency | null): string {
+  switch (frequency) {
+    case 'weekly':
+      return 'Weekly';
+    case 'biweekly':
+      return 'Biweekly';
+    case 'monthly':
+      return 'Monthly';
+    case 'quarterly':
+      return 'Quarterly';
+    case 'yearly':
+      return 'Yearly';
+    default:
+      return '';
+  }
+}
 
 export type DepositRecord = {
   id: string;
@@ -104,7 +126,7 @@ type HsaAccount = {
   expenses: ExpenseRecord[];
 };
 
-type MainTab = 'summary' | 'deposits' | 'expenses' | 'reports';
+type MainTab = 'summary' | 'deposits' | 'expenses';
 
 function balanceBeforeYear(deposits: DepositRecord[], expenses: ExpenseRecord[], year: number): number {
   const boundary = `${year}-01-01`;
@@ -557,6 +579,9 @@ export function HSATrackerTool({ toolId }: HSATrackerToolProps) {
   const [expenseDeleteConfirmText, setExpenseDeleteConfirmText] = useState('');
 
   const [reportYear, setReportYear] = useState(currentYear);
+  const [exportAllAccounts, setExportAllAccounts] = useState(false);
+  const [exportAccountId, setExportAccountId] = useState('');
+  const [isExportingPdf, setIsExportingPdf] = useState(false);
   const [showReportModal, setShowReportModal] = useState(false);
   const [csvExportMessage, setCsvExportMessage] = useState<string | null>(null);
   const expenseDeleteConfirmed = expenseDeleteConfirmText.trim().toLowerCase() === 'delete';
@@ -1118,132 +1143,265 @@ export function HSATrackerTool({ toolId }: HSATrackerToolProps) {
     setExpenseDeleteConfirmText('');
   };
 
-  const generateReportPdf = useCallback(async () => {
-    if (!selectedAccount) return;
-    const year = reportYear;
-    const { deposits, expenses, name: accountName } = selectedAccount;
-
-    let jsPDF: new (options?: { orientation?: string; unit?: string; format?: string }) => Record<string, unknown>;
-    if ((window as unknown as { jspdf?: { jsPDF: typeof jsPDF } }).jspdf?.jsPDF) {
-      jsPDF = (window as unknown as { jspdf: { jsPDF: typeof jsPDF } }).jspdf.jsPDF;
-    } else {
-      await new Promise<void>((resolve, reject) => {
-        const script = document.createElement('script');
-        script.src = 'https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js';
-        script.onload = () => resolve();
-        script.onerror = () => reject(new Error('Failed to load jsPDF'));
-        document.head.appendChild(script);
-      });
-      jsPDF = (window as unknown as { jspdf: { jsPDF: typeof jsPDF } }).jspdf.jsPDF;
+  const exportToPDF = async () => {
+    if (isExportingPdf) return;
+    const chosenAccount = accounts.find((account) => account.id === exportAccountId) ?? null;
+    if (!exportAllAccounts && !chosenAccount) {
+      showError('Select an HSA account, or choose All accounts.');
+      return;
+    }
+    const useAllAccounts = exportAllAccounts;
+    const accountsToExport = useAllAccounts
+      ? accounts
+      : chosenAccount
+        ? [chosenAccount]
+        : [];
+    if (accountsToExport.length === 0) {
+      showError('Select an HSA account, or choose All accounts.');
+      return;
+    }
+    if (!reportYear) {
+      showError('Select a calendar year.');
+      return;
     }
 
-    const pdf = new jsPDF({ orientation: 'portrait', unit: 'mm', format: 'a4' }) as unknown as {
-      internal: { pageSize: { getWidth: () => number; getHeight: () => number } };
-      addPage: () => void;
-      setFontSize: (n: number) => void;
-      setFont: (family: string, style: string) => void;
-      setTextColor: (...args: number[]) => void;
-      text: (text: string | string[], x: number, y: number, options?: { align?: string }) => void;
-      splitTextToSize: (text: string, maxWidth: number) => string[];
-      line: (x1: number, y1: number, x2: number, y2: number) => void;
-      setDrawColor: (...args: number[]) => void;
-      save: (name: string) => void;
-    };
-    const pageWidth = pdf.internal.pageSize.getWidth();
-    const pageHeight = pdf.internal.pageSize.getHeight();
-    const margin = 15;
-    let y = margin;
+    setIsExportingPdf(true);
 
-    const checkPage = (need: number) => {
-      if (y + need > pageHeight - margin) {
-        pdf.addPage();
-        y = margin;
-      }
-    };
+    try {
+      const year = reportYear;
+      const inYear = (iso: string) => iso.startsWith(String(year));
+      const accountLabel = useAllAccounts ? 'All accounts' : chosenAccount?.name || 'Selected account';
 
-    const starting = balanceBeforeYear(deposits, expenses, year);
+      const accountBlocks = accountsToExport.map((account) => {
+        const yearDeposits = [...account.deposits]
+          .filter((deposit) => inYear(deposit.date))
+          .sort((a, b) => a.date.localeCompare(b.date) || a.name.localeCompare(b.name));
+        const yearExpenses = [...account.expenses]
+          .filter((expense) => inYear(expense.date))
+          .sort((a, b) => a.date.localeCompare(b.date) || a.name.localeCompare(b.name));
+        const starting = balanceBeforeYear(account.deposits, account.expenses, year);
+        const ending = balanceThroughDate(account.deposits, account.expenses, `${year}-12-31`);
+        const depositsYtd = yearDeposits.reduce((sum, deposit) => sum + deposit.amount, 0);
+        const expensesYtd = yearExpenses.reduce((sum, expense) => sum + expense.amount, 0);
+        const reimbursablePending = yearExpenses
+          .filter((expense) => expense.paymentMethod === 'Out of Pocket' && expense.reimbursedYet === 'No')
+          .reduce((sum, expense) => sum + expense.amount, 0);
+        const contributionLimit = getLimitForYear(account.contributionLimits, year);
+        type LedgerLine =
+          | { kind: 'deposit'; date: string; deposit: DepositRecord }
+          | { kind: 'expense'; date: string; expense: ExpenseRecord };
+        const lines: LedgerLine[] = [
+          ...yearDeposits.map((deposit) => ({ kind: 'deposit' as const, date: deposit.date, deposit })),
+          ...yearExpenses.map((expense) => ({ kind: 'expense' as const, date: expense.date, expense })),
+        ].sort((a, b) =>
+          a.date.localeCompare(b.date)
+          || a.kind.localeCompare(b.kind)
+          || (a.kind === 'deposit' ? a.deposit.name : a.expense.name)
+            .localeCompare(b.kind === 'deposit' ? b.deposit.name : b.expense.name)
+        );
+        return {
+          account,
+          yearDeposits,
+          yearExpenses,
+          starting,
+          ending,
+          depositsYtd,
+          expensesYtd,
+          reimbursablePending,
+          contributionLimit,
+          lines,
+        };
+      });
 
-    type Line = { date: string; label: string; amount: number; kind: 'deposit' | 'expense' };
-    const inYear = (iso: string) => iso.startsWith(String(year));
-    const lines: Line[] = [
-      ...deposits
-        .filter((d) => inYear(d.date))
-        .map((d) => ({
-          date: d.date,
-          label: `Deposit — ${d.name}`,
-          amount: d.amount,
-          kind: 'deposit' as const,
-        })),
-      ...expenses
-        .filter((e) => inYear(e.date))
-        .map((e) => ({
-          date: e.date,
-          label: `Expense — ${e.name}`,
-          amount: -e.amount,
-          kind: 'expense' as const,
-        })),
-    ].sort((a, b) => a.date.localeCompare(b.date));
+      const { jsPDF } = await import('jspdf');
+      const pdf = new jsPDF({
+        orientation: 'portrait',
+        unit: 'mm',
+        format: 'a4',
+      });
 
-    pdf.setFontSize(18);
-    pdf.setFont('helvetica', 'bold');
-    pdf.text(`HSA Tracker — ${accountName}`, margin, y);
-    y += 8;
-    pdf.setFontSize(11);
-    pdf.setFont('helvetica', 'normal');
-    pdf.text(`Calendar year ${year}`, margin, y);
-    y += 6;
-    pdf.text(
-      `Generated ${new Date().toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' })}`,
-      margin,
-      y
-    );
-    y += 10;
+      const pageWidth = pdf.internal.pageSize.getWidth();
+      const pageHeight = pdf.internal.pageSize.getHeight();
+      const margin = 15;
+      const contentWidth = pageWidth - margin * 2;
+      let yPos = margin;
 
-    pdf.setFont('helvetica', 'bold');
-    pdf.text('Starting balance (January 1)', margin, y);
-    pdf.setFont('helvetica', 'normal');
-    pdf.text(formatMoney(starting), pageWidth - margin, y, { align: 'right' });
-    y += 8;
+      const colors = {
+        background: [255, 255, 255] as const,
+        text: [15, 23, 42] as const,
+        title: [15, 23, 42] as const,
+        header: [241, 245, 249] as const,
+        muted: [71, 85, 105] as const,
+      };
 
-    let running = starting;
-    pdf.setFontSize(9);
-    const descMax = pageWidth - margin * 2 - 52;
-    for (const row of lines) {
-      running += row.amount;
-      checkPage(14);
+      const fillPage = () => {
+        pdf.setFillColor(colors.background[0], colors.background[1], colors.background[2]);
+        pdf.rect(0, 0, pageWidth, pageHeight, 'F');
+      };
+
+      const checkNewPage = (requiredHeight: number) => {
+        if (yPos + requiredHeight > pageHeight - margin) {
+          pdf.addPage();
+          fillPage();
+          yPos = margin;
+          return true;
+        }
+        return false;
+      };
+
+      const addSectionHeader = (title: string) => {
+        checkNewPage(15);
+        pdf.setFillColor(colors.header[0], colors.header[1], colors.header[2]);
+        pdf.rect(margin, yPos, contentWidth, 10, 'F');
+        pdf.setFontSize(13);
+        pdf.setFont('helvetica', 'bold');
+        pdf.setTextColor(colors.title[0], colors.title[1], colors.title[2]);
+        pdf.text(title, margin + 5, yPos + 7);
+        yPos += 15;
+      };
+
+      const addText = (text: string, fontSize = 10, isBold = false, indent = 0, muted = false) => {
+        pdf.setFontSize(fontSize);
+        pdf.setFont('helvetica', isBold ? 'bold' : 'normal');
+        const color = muted ? colors.muted : colors.text;
+        pdf.setTextColor(color[0], color[1], color[2]);
+        const maxWidth = contentWidth - indent - 5;
+        const wrapped = pdf.splitTextToSize(text, maxWidth) as string[];
+        const lineHeight = fontSize * 0.42;
+        checkNewPage(wrapped.length * lineHeight + 2);
+        wrapped.forEach((line) => {
+          pdf.text(line, margin + indent, yPos);
+          yPos += lineHeight;
+        });
+        yPos += 2;
+      };
+
+      fillPage();
+
+      pdf.setFontSize(20);
       pdf.setFont('helvetica', 'bold');
-      pdf.text(formatDateForDisplay(row.date), margin, y);
+      pdf.setTextColor(colors.title[0], colors.title[1], colors.title[2]);
+      const title = 'HSA Tracker Report';
+      pdf.text(title, (pageWidth - pdf.getTextWidth(title)) / 2, yPos);
+      yPos += 10;
+
+      pdf.setFontSize(10);
       pdf.setFont('helvetica', 'normal');
-      const wrapped = pdf.splitTextToSize(row.label, descMax);
-      const rowHeight = Math.max(5, wrapped.length * 4.5);
-      checkPage(rowHeight + 2);
-      wrapped.forEach((line: string, i: number) => {
-        pdf.text(line, margin + 24, y + i * 4.5);
+      pdf.setTextColor(colors.muted[0], colors.muted[1], colors.muted[2]);
+      pdf.text(`Generated on: ${formatReportDate(new Date())}`, margin, yPos);
+      yPos += 6;
+      pdf.text(`Calendar year ${year}  ·  ${accountLabel}`, margin, yPos);
+      yPos += 10;
+
+      accountBlocks.forEach((block) => {
+        addSectionHeader(block.account.name);
+        addText('Summary', 11, true, 5);
+        addText(`Starting balance (January 1): ${formatMoney(block.starting)}`, 10, false, 5);
+        addText(`Deposits: ${formatMoney(block.depositsYtd)} (${block.yearDeposits.length})`, 10, false, 5);
+        addText(`Expenses: ${formatMoney(block.expensesYtd)} (${block.yearExpenses.length})`, 10, false, 5);
+        addText(`Ending balance (December 31): ${formatMoney(block.ending)}`, 10, false, 5);
+        addText(`Reimbursable pending: ${formatMoney(block.reimbursablePending)}`, 10, false, 5);
+        if (block.contributionLimit != null) {
+          addText(`Contribution limit: ${formatMoney(block.contributionLimit)}`, 10, false, 5);
+          addText(
+            `Remaining toward limit: ${formatMoney(block.contributionLimit - block.depositsYtd)}`,
+            10,
+            false,
+            5
+          );
+        }
+        yPos += 2;
+
+        addText('Activity', 11, true, 5);
+        if (block.lines.length === 0) {
+          addText('No deposits or expenses for this year.', 10, false, 8, true);
+        } else {
+          let running = block.starting;
+          block.lines.forEach((line) => {
+            checkNewPage(28);
+            if (line.kind === 'deposit') {
+              const deposit = line.deposit;
+              running += deposit.amount;
+              addText(
+                `${formatDateForDisplay(deposit.date)}  ·  Deposit — ${deposit.name}`,
+                11,
+                true,
+                5
+              );
+              addText(`Amount: +${formatMoney(deposit.amount)}`, 9, false, 8);
+              addText(`Source: ${deposit.source}`, 9, false, 8);
+              addText(`Tax year: ${deposit.taxYear}`, 9, false, 8);
+              if (deposit.note.trim()) {
+                addText(`Note: ${deposit.note.trim()}`, 9, false, 8);
+              }
+              if (deposit.isRepeatable) {
+                const frequency = recurrenceFrequencyLabel(deposit.recurrenceFrequency);
+                addText(frequency ? `Recurring · ${frequency}` : 'Recurring', 9, false, 8);
+              }
+              addText(`Running balance: ${formatMoney(running)}`, 9, false, 8);
+            } else {
+              const expense = line.expense;
+              running -= expense.amount;
+              addText(
+                `${formatDateForDisplay(expense.date)}  ·  Expense — ${expense.name}`,
+                11,
+                true,
+                5
+              );
+              addText(`Amount: ${formatMoney(-expense.amount)}`, 9, false, 8);
+              addText(`Category: ${expense.category}`, 9, false, 8);
+              if (expense.providerOrStore.trim()) {
+                addText(`Provider: ${expense.providerOrStore.trim()}`, 9, false, 8);
+              }
+              addText(`Payment method: ${expense.paymentMethod}`, 9, false, 8);
+              addText(
+                expense.reimbursementDate
+                  ? `Reimbursed: ${expense.reimbursedYet} (${formatDateForDisplay(expense.reimbursementDate)})`
+                  : `Reimbursed: ${expense.reimbursedYet}`,
+                9,
+                false,
+                8
+              );
+              if (expense.notes.trim()) {
+                addText(`Notes: ${expense.notes.trim()}`, 9, false, 8);
+              }
+              addText(`Running balance: ${formatMoney(running)}`, 9, false, 8);
+            }
+            yPos += 3;
+          });
+        }
+        yPos += 3;
       });
-      const changeStr =
-        row.amount >= 0 ? `+${formatMoney(Math.abs(row.amount))}` : formatMoney(row.amount);
-      pdf.text(changeStr, pageWidth - margin - 30, y, { align: 'right' });
-      pdf.text(formatMoney(running), pageWidth - margin, y, { align: 'right' });
-      y += rowHeight + 2;
+
+      const attachmentRefs = accountBlocks.flatMap((block) =>
+        block.yearExpenses.flatMap((expense) =>
+          (expense.attachments || [])
+            .map((file) => file.name?.trim())
+            .filter((name): name is string => Boolean(name))
+            .map((fileName) =>
+              `${block.account.name} — ${expense.name} — ${formatDateForDisplay(expense.date)} — ${fileName}`
+            )
+        )
+      );
+
+      if (attachmentRefs.length > 0) {
+        addSectionHeader('Attachments');
+        addText('File names only. Files themselves are not included in this report.', 8, false, 5, true);
+        attachmentRefs.forEach((line) => addText(line, 9, false, 8));
+      }
+
+      pdf.save(`HSA_Tracker_Report_${new Date().toISOString().split('T')[0]}.pdf`);
+      setShowReportModal(false);
+    } catch (error) {
+      console.error('Error exporting HSA tracker PDF:', error);
+      showError(error instanceof Error ? error.message : 'Failed to generate PDF');
+    } finally {
+      setIsExportingPdf(false);
     }
+  };
 
-    checkPage(12);
-    pdf.setDrawColor(180);
-    pdf.line(margin, y, pageWidth - margin, y);
-    y += 6;
-    pdf.setFont('helvetica', 'bold');
-    pdf.text('Ending balance (December 31)', margin, y);
-    const ending = balanceThroughDate(deposits, expenses, `${year}-12-31`);
-    pdf.setFont('helvetica', 'normal');
-    pdf.text(formatMoney(ending), pageWidth - margin, y, { align: 'right' });
-
-    pdf.save(`HSA_Report_${accountName.replace(/\s+/g, '_')}_${year}.pdf`);
-    setShowReportModal(false);
-  }, [reportYear, selectedAccount]);
-
-  const exportReportCsv = () => {
+  const exportReportCsv = (year = summaryYear) => {
     if (!selectedAccount) return;
-    const year = reportYear;
     const { deposits, expenses, name: accountName } = selectedAccount;
     const inYear = (iso: string) => iso.startsWith(String(year));
     const yearDeposits = deposits.filter((d) => inYear(d.date));
@@ -1306,7 +1464,7 @@ export function HSATrackerTool({ toolId }: HSATrackerToolProps) {
     const onKeyDown = (e: KeyboardEvent) => {
       if (e.key === 'Escape') {
         setMenuOpenAccountId(null);
-        setShowReportModal(false);
+        if (showReportModal && !isExportingPdf) setShowReportModal(false);
         setDeleteConfirmAccountId(null);
         setDeleteDepositId(null);
         setDeleteExpenseId(null);
@@ -1315,7 +1473,7 @@ export function HSATrackerTool({ toolId }: HSATrackerToolProps) {
     };
     window.addEventListener('keydown', onKeyDown);
     return () => window.removeEventListener('keydown', onKeyDown);
-  }, []);
+  }, [showReportModal, isExportingPdf]);
 
   const sortedDeposits = selectedAccount
     ? [...selectedAccount.deposits].sort((a, b) => b.date.localeCompare(a.date))
@@ -1350,12 +1508,23 @@ export function HSATrackerTool({ toolId }: HSATrackerToolProps) {
         />
       )}
 
-      <div>
-        <h2 className={titleClass}>HSA Tracker</h2>
-        <p className={descClass}>
-          Track HSA deposits and expenses across accounts. Your data is saved to your account when you use this tool
-          from the dashboard.
-        </p>
+      <div className="flex items-start justify-between gap-3">
+        <div>
+          <h2 className={titleClass}>HSA Tracker</h2>
+          <p className={descClass}>
+            Track HSA deposits and expenses across accounts. Your data is saved to your account when you use this tool
+            from the dashboard.
+          </p>
+        </div>
+        <ExportPdfIconButton
+          title="Export HSA tracker to PDF"
+          onClick={() => {
+            const fallbackId = selectedAccount?.id || accounts[0]?.id || '';
+            if (fallbackId && !exportAccountId) setExportAccountId(fallbackId);
+            if (!fallbackId) setExportAllAccounts(true);
+            setShowReportModal(true);
+          }}
+        />
       </div>
 
       {/* Account selector (Goals-style) */}
@@ -1560,7 +1729,6 @@ export function HSATrackerTool({ toolId }: HSATrackerToolProps) {
                   { id: 'summary', label: 'Summary' },
                   { id: 'deposits', label: 'Deposits' },
                   { id: 'expenses', label: 'Expenses' },
-                  { id: 'reports', label: 'Reports' },
                 ] as const
               ).map((tab) => (
                 <button
@@ -1590,7 +1758,10 @@ export function HSATrackerTool({ toolId }: HSATrackerToolProps) {
                   <select
                     id="hsa-summary-year"
                     value={summaryYear}
-                    onChange={(e) => setSummaryYear(Number(e.target.value))}
+                    onChange={(e) => {
+                      setSummaryYear(Number(e.target.value));
+                      setCsvExportMessage(null);
+                    }}
                     className={
                       isLight
                         ? 'shrink-0 rounded-lg border border-slate-300 bg-white px-3 py-1.5 text-sm text-slate-900 focus:border-emerald-500/50 focus:outline-none focus:ring-1 focus:ring-emerald-500/50'
@@ -1606,7 +1777,15 @@ export function HSATrackerTool({ toolId }: HSATrackerToolProps) {
                   <span className={`${mutedSmallClass} min-w-0 whitespace-nowrap`}>
                     KPI amounts use calendar year {summaryYear}. Balance is as of 12/31/{summaryYear}.
                   </span>
+                  <button type="button" onClick={() => exportReportCsv(summaryYear)} className={`${secondaryButtonClass} shrink-0`}>
+                    Export CSV
+                  </button>
                 </div>
+                {csvExportMessage ? (
+                  <p className={`mt-3 ${isLight ? 'text-sm text-slate-800' : 'text-sm text-slate-200'}`} role="status">
+                    {csvExportMessage}
+                  </p>
+                ) : null}
               </div>
 
               <div className={cardClass} aria-label="Rollover balances">
@@ -2214,26 +2393,97 @@ export function HSATrackerTool({ toolId }: HSATrackerToolProps) {
             </div>
           )}
 
-          {mainTab === 'reports' && (
-            <div className="space-y-6">
-              <div className={cardClass}>
-                <h3 className={`text-lg font-semibold ${isLight ? 'text-slate-900' : 'text-slate-50'} mb-2`}>
-                  Export HSA Tracker report
-                </h3>
-                <p className={`${mutedSmallClass} mb-4 max-w-prose`}>
-                  Export CSV downloads deposits and expenses for the selected year. Generate PDF Report is unchanged.
-                </p>
-                <label className={labelClassSm} htmlFor="hsa-report-year">
-                  Year
+        </>
+      )}
+
+      {showReportModal && (
+        <div className={modalBackdropClass}>
+          <div className={modalCardConfirmClass} role="dialog" aria-modal="true" aria-labelledby="hsa-export-title">
+            <div className="flex items-center justify-between mb-4">
+              <h3 id="hsa-export-title" className={modalTitleClass}>
+                Export Options
+              </h3>
+              <button
+                type="button"
+                onClick={() => !isExportingPdf && setShowReportModal(false)}
+                disabled={isExportingPdf}
+                className={isLight ? 'text-slate-600 hover:text-slate-900 transition-colors disabled:opacity-50' : 'text-slate-400 hover:text-slate-200 transition-colors disabled:opacity-50'}
+                aria-label="Close"
+                title="Close"
+              >
+                <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                </svg>
+              </button>
+            </div>
+            <div className="space-y-4">
+              <p className={descClass}>
+                Attachment files are listed by name at the end.
+              </p>
+
+              <fieldset className="space-y-2" disabled={isExportingPdf}>
+                <legend className={`${labelClass} mb-0`}>Accounts</legend>
+                <label className={`flex items-start gap-3 ${isLight ? 'text-slate-700' : 'text-slate-300'} cursor-pointer`}>
+                  <input
+                    type="radio"
+                    name="hsaExportAccounts"
+                    checked={exportAllAccounts}
+                    onChange={() => setExportAllAccounts(true)}
+                    className={isLight
+                      ? 'mt-0.5 h-4 w-4 border-slate-400 text-emerald-600 focus:ring-emerald-500'
+                      : 'mt-0.5 h-4 w-4 border-slate-600 bg-slate-700 text-emerald-500 focus:ring-emerald-500'}
+                  />
+                  <span>All accounts</span>
+                </label>
+                <label className={`flex items-start gap-3 ${isLight ? 'text-slate-700' : 'text-slate-300'} cursor-pointer`}>
+                  <input
+                    type="radio"
+                    name="hsaExportAccounts"
+                    checked={!exportAllAccounts}
+                    onChange={() => {
+                      setExportAllAccounts(false);
+                      if (!exportAccountId) {
+                        setExportAccountId(selectedAccount?.id || accounts[0]?.id || '');
+                      }
+                    }}
+                    className={isLight
+                      ? 'mt-0.5 h-4 w-4 border-slate-400 text-emerald-600 focus:ring-emerald-500'
+                      : 'mt-0.5 h-4 w-4 border-slate-600 bg-slate-700 text-emerald-500 focus:ring-emerald-500'}
+                  />
+                  <span>One account</span>
+                </label>
+                {!exportAllAccounts && (
+                  <div className="ml-7">
+                    <label className={labelClassSm} htmlFor="hsa-export-account">
+                      Account
+                    </label>
+                    <select
+                      id="hsa-export-account"
+                      value={exportAccountId}
+                      onChange={(e) => setExportAccountId(e.target.value)}
+                      className={inputClassPad}
+                    >
+                      <option value="">Select an account</option>
+                      {accounts.map((account) => (
+                        <option key={account.id} value={account.id}>
+                          {account.name}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                )}
+              </fieldset>
+
+              <div>
+                <label className={labelClassSm} htmlFor="hsa-export-year">
+                  Calendar year
                 </label>
                 <select
-                  id="hsa-report-year"
+                  id="hsa-export-year"
                   value={reportYear}
-                  onChange={(e) => {
-                    setReportYear(Number(e.target.value));
-                    setCsvExportMessage(null);
-                  }}
-                  className={`${inputClassPad} mb-4 max-w-xs`}
+                  onChange={(e) => setReportYear(Number(e.target.value))}
+                  disabled={isExportingPdf}
+                  className={inputClassPad}
                 >
                   {availableYears.map((y) => (
                     <option key={y} value={y}>
@@ -2241,52 +2491,26 @@ export function HSATrackerTool({ toolId }: HSATrackerToolProps) {
                     </option>
                   ))}
                 </select>
-                <div className="flex flex-wrap items-center gap-2" role="group" aria-label="Reports export">
-                  <button type="button" onClick={exportReportCsv} className={primaryButtonClass}>
-                    Export CSV
-                  </button>
-                  <button type="button" onClick={() => setShowReportModal(true)} className={primaryButtonClass}>
-                    Generate PDF Report
-                  </button>
-                </div>
-                {csvExportMessage ? (
-                  <p
-                    className={`mt-3 ${isLight ? 'text-sm text-slate-800' : 'text-sm text-slate-200'}`}
-                    role="status"
-                  >
-                    {csvExportMessage}
-                  </p>
-                ) : null}
               </div>
-            </div>
-          )}
-        </>
-      )}
 
-      {showReportModal && selectedAccount && (
-        <div className={modalBackdropClass}>
-          <div className={modalCardConfirmClass}>
-            <h3 className={modalTitleClass}>Report options</h3>
-            <p className={`${mutedSmallClass} mt-2 mb-4`}>Choose the calendar year to include in the PDF.</p>
-            <label className={labelClassSm}>Year</label>
-            <select
-              value={reportYear}
-              onChange={(e) => setReportYear(Number(e.target.value))}
-              className={`${inputClassPad} mb-6`}
-            >
-              {availableYears.map((y) => (
-                <option key={y} value={y}>
-                  {y}
-                </option>
-              ))}
-            </select>
-            <div className="flex gap-2">
-              <button type="button" onClick={() => void generateReportPdf()} className={`${primaryButtonClass} flex-1`}>
-                Export to PDF
-              </button>
-              <button type="button" onClick={() => setShowReportModal(false)} className={secondaryButtonClass}>
-                Cancel
-              </button>
+              <div className="flex gap-3 pt-2">
+                <button
+                  type="button"
+                  onClick={() => void exportToPDF()}
+                  disabled={isExportingPdf || accounts.length === 0 || (!exportAllAccounts && !exportAccountId)}
+                  className={`flex-1 ${primaryButtonClass}`}
+                >
+                  {isExportingPdf ? 'Generating…' : 'Export to PDF'}
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setShowReportModal(false)}
+                  disabled={isExportingPdf}
+                  className={secondaryButtonClass}
+                >
+                  Cancel
+                </button>
+              </div>
             </div>
           </div>
         </div>

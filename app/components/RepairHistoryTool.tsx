@@ -5,6 +5,7 @@ import { useTheme } from './AppThemeProvider';
 import { useAppNotice } from './AppNotice';
 import { AttachmentButton } from './AttachmentButton';
 import { AttachmentModal } from './AttachmentModal';
+import { ExportPdfIconButton } from './ExportPdfIconButton';
 import {
   canPreviewAttachment,
   createPendingAttachment,
@@ -508,7 +509,7 @@ export function RepairHistoryTool({ toolId }: RepairHistoryToolProps) {
   const [highlightRecordId, setHighlightRecordId] = useState<string | null>(null);
   
   // Active tab
-  const [activeTab, setActiveTab] = useState<'history' | 'items' | 'export'>('history');
+  const [activeTab, setActiveTab] = useState<'history' | 'items'>('history');
   
   // Items management
   const [items, setItems] = useState<Item[]>([]);
@@ -1442,18 +1443,24 @@ export function RepairHistoryTool({ toolId }: RepairHistoryToolProps) {
   return (
     <div className="space-y-6">
       {/* Header */}
-      <div className="flex items-center justify-between">
+      <div className="flex items-start justify-between gap-3">
         <div>
           <h2 className={titleClass}>Repair History</h2>
           <p className={descClass}>
             Track repairs and replacements for your home and vehicles
           </p>
         </div>
-        {isLoading && (
-          <div className={loadingClass}>
-            Loading...
-          </div>
-        )}
+        <div className="flex items-center gap-3 shrink-0">
+          {isLoading && (
+            <div className={loadingClass}>
+              Loading...
+            </div>
+          )}
+          <ExportPdfIconButton
+            title="Export repair history to PDF"
+            onClick={() => setShowExportPopup(true)}
+          />
+        </div>
       </div>
 
       {/* Save Message */}
@@ -1792,11 +1799,10 @@ export function RepairHistoryTool({ toolId }: RepairHistoryToolProps) {
               {[
                 { id: 'history', label: 'Repairs' },
                 { id: 'items', label: 'Items' },
-                { id: 'export', label: 'Export' }
               ].map((tab) => (
                 <button
                   key={tab.id}
-                  onClick={() => setActiveTab(tab.id as 'history' | 'items' | 'export')}
+                  onClick={() => setActiveTab(tab.id as 'history' | 'items')}
                   className={`px-4 py-2 text-sm font-medium transition-colors whitespace-nowrap ${
                     activeTab === tab.id ? tabActiveClass : tabInactiveClass
                   }`}
@@ -2774,23 +2780,6 @@ export function RepairHistoryTool({ toolId }: RepairHistoryToolProps) {
             </div>
           )}
 
-          {/* Export Tab */}
-          {activeTab === 'export' && (
-            <div className="space-y-6">
-              <div className={cardClass}>
-                <h3 className={`${sectionTitleClass} mb-4`}>Export Repair History Report</h3>
-                <p className={isLight ? 'text-slate-700 mb-4' : 'text-slate-300 mb-4'}>
-                  Generate a comprehensive PDF report of all your repair history records. The report will include all repair and replacement details, summary statistics, and category breakdown.
-                </p>
-                <button
-                  onClick={() => setShowExportPopup(true)}
-                  className={primaryButtonClass}
-                >
-                  Generate PDF Report
-                </button>
-              </div>
-            </div>
-          )}
         </>
       )}
 

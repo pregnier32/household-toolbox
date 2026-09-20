@@ -5,6 +5,7 @@ import { useTheme } from './AppThemeProvider';
 import { useAppNotice } from './AppNotice';
 import { AttachmentButton } from './AttachmentButton';
 import { AttachmentModal } from './AttachmentModal';
+import { ExportPdfIconButton } from './ExportPdfIconButton';
 import {
   canPreviewAttachment,
   createPendingAttachment,
@@ -143,6 +144,24 @@ function formatAddressLine(record: AddressRecord): string {
   return parts.join(' · ') || 'No address on file';
 }
 
+function formatAddressee(record: AddressRecord): string {
+  return [record.firstName, record.lastName].filter(Boolean).join(' ').trim();
+}
+
+function formatMailingBlock(record: AddressRecord): string[] {
+  const lines: string[] = [];
+  if (record.streetAddress.trim()) lines.push(record.streetAddress.trim());
+  const cityState = [record.city.trim(), record.state.trim()].filter(Boolean).join(', ');
+  const cityLine = [cityState, record.zip.trim()].filter(Boolean).join(' ').trim();
+  if (cityLine) lines.push(cityLine);
+  if (record.country.trim()) lines.push(record.country.trim());
+  return lines;
+}
+
+function formatReportDate(date: Date): string {
+  return date.toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' });
+}
+
 type AddressBookToolProps = {
   toolId?: string;
 };
@@ -238,6 +257,11 @@ export function AddressBookTool({ toolId }: AddressBookToolProps) {
   const [deleteTagConfirmId, setDeleteTagConfirmId] = useState<string | null>(null);
   const [deleteTagConfirmText, setDeleteTagConfirmText] = useState('');
   const [viewAddressModal, setViewAddressModal] = useState<AddressRecord | null>(null);
+  const [showExportPopup, setShowExportPopup] = useState(false);
+  const [includeHistory, setIncludeHistory] = useState(false);
+  const [exportAllTags, setExportAllTags] = useState(true);
+  const [exportTagIds, setExportTagIds] = useState<string[]>([]);
+  const [isExportingPdf, setIsExportingPdf] = useState(false);
   const [pendingAttachments, setPendingAttachments] = useState<AttachmentItem[]>([]);
   const [attachmentModal, setAttachmentModal] = useState<null | 'add' | string>(null);
   const [attachmentBusy, setAttachmentBusy] = useState(false);
@@ -864,10 +888,11 @@ export function AddressBookTool({ toolId }: AddressBookToolProps) {
         setDeleteTagConfirmText('');
       }
       if (viewAddressModal) setViewAddressModal(null);
+      if (showExportPopup && !isExportingPdf) setShowExportPopup(false);
     };
     window.addEventListener('keydown', onKeyDown);
     return () => window.removeEventListener('keydown', onKeyDown);
-  }, [deleteConfirmId, deleteTagConfirmId, viewAddressModal, attachmentModal]);
+  }, [deleteConfirmId, deleteTagConfirmId, viewAddressModal, attachmentModal, showExportPopup, isExportingPdf]);
 
   const renderAddressFields = (
     form: AddressFormState,
@@ -1191,14 +1216,232 @@ export function AddressBookTool({ toolId }: AddressBookToolProps) {
           }))
         : [];
 
+  const toggleExportTag = (tagId: string) => {
+    setExportAllTags(false);
+    setExportTagIds((prev) =>
+      prev.includes(tagId) ? prev.filter((id) => id !== tagId) : [...prev, tagId]
+    );
+  };
+
+  const exportToPDF = async () => {
+    if (isExportingPdf) return;
+    if (!exportAllTags && exportTagIds.length === 0) {
+      showError('Select at least one tag, or choose All tags.');
+      return;
+    }
+
+    setIsExportingPdf(true);
+
+    try {
+      const matchesExportTags = (record: AddressRecord) =>
+        exportAllTags || exportTagIds.some((tagId) => record.tags.includes(tagId));
+
+      const sortByName = (a: AddressRecord, b: AddressRecord) => {
+        const byLabel = a.mailingName.localeCompare(b.mailingName);
+        if (byLabel !== 0) return byLabel;
+        return formatAddressee(a).localeCompare(formatAddressee(b));
+      };
+
+      const scoped = addresses.filter(matchesExportTags);
+      const activeRecords = scoped.filter((record) => record.isActive).sort(sortByName);
+      const inactiveRecords = scoped.filter((record) => !record.isActive).sort(sortByName);
+      const exportedRecords = includeHistory ? [...activeRecords, ...inactiveRecords] : activeRecords;
+
+      const usedTagNames = Array.from(
+        new Set(
+          exportedRecords.flatMap((record) =>
+            record.tags.map((tagId) => getTagName(tagId)).filter((name) => name && name !== 'Unknown')
+          )
+        )
+      ).sort((a, b) => a.localeCompare(b));
+
+      const selectedTagNames = exportTagIds
+        .map((tagId) => getTagName(tagId))
+        .filter((name) => name && name !== 'Unknown');
+
+      const { jsPDF } = await import('jspdf');
+      const pdf = new jsPDF({
+        orientation: 'portrait',
+        unit: 'mm',
+        format: 'a4',
+      });
+
+      const pageWidth = pdf.internal.pageSize.getWidth();
+      const pageHeight = pdf.internal.pageSize.getHeight();
+      const margin = 15;
+      const contentWidth = pageWidth - margin * 2;
+      let yPos = margin;
+
+      const colors = {
+        background: [255, 255, 255] as const,
+        text: [15, 23, 42] as const,
+        title: [15, 23, 42] as const,
+        header: [241, 245, 249] as const,
+        muted: [71, 85, 105] as const,
+      };
+
+      const fillPage = () => {
+        pdf.setFillColor(colors.background[0], colors.background[1], colors.background[2]);
+        pdf.rect(0, 0, pageWidth, pageHeight, 'F');
+      };
+
+      const checkNewPage = (requiredHeight: number) => {
+        if (yPos + requiredHeight > pageHeight - margin) {
+          pdf.addPage();
+          fillPage();
+          yPos = margin;
+          return true;
+        }
+        return false;
+      };
+
+      const addSectionHeader = (title: string) => {
+        checkNewPage(15);
+        pdf.setFillColor(colors.header[0], colors.header[1], colors.header[2]);
+        pdf.rect(margin, yPos, contentWidth, 10, 'F');
+        pdf.setFontSize(13);
+        pdf.setFont('helvetica', 'bold');
+        pdf.setTextColor(colors.title[0], colors.title[1], colors.title[2]);
+        pdf.text(title, margin + 5, yPos + 7);
+        yPos += 15;
+      };
+
+      const addText = (text: string, fontSize = 10, isBold = false, indent = 0, muted = false) => {
+        pdf.setFontSize(fontSize);
+        pdf.setFont('helvetica', isBold ? 'bold' : 'normal');
+        const color = muted ? colors.muted : colors.text;
+        pdf.setTextColor(color[0], color[1], color[2]);
+
+        const maxWidth = contentWidth - indent - 5;
+        const lines = pdf.splitTextToSize(text, maxWidth) as string[];
+        const lineHeight = fontSize * 0.42;
+
+        checkNewPage(lines.length * lineHeight + 2);
+
+        lines.forEach((line) => {
+          pdf.text(line, margin + indent, yPos);
+          yPos += lineHeight;
+        });
+        yPos += 2;
+      };
+
+      const writeAddress = (record: AddressRecord) => {
+        checkNewPage(28);
+        addText(record.mailingName.trim() || formatAddressee(record) || 'Untitled address', 11, true, 8);
+        const addressee = formatAddressee(record);
+        if (addressee && addressee !== record.mailingName.trim()) {
+          addText(addressee, 10, false, 8);
+        }
+        const block = formatMailingBlock(record);
+        if (block.length > 0) {
+          block.forEach((line) => addText(line, 9, false, 8));
+        }
+        if (record.email.trim()) {
+          addText(`Email: ${record.email.trim()}`, 9, false, 8);
+        }
+        if (record.phone.trim()) {
+          addText(`Phone: ${record.phone.trim()}`, 9, false, 8);
+        }
+        const tagNames = record.tags
+          .map((tagId) => getTagName(tagId))
+          .filter((name) => name && name !== 'Unknown');
+        if (tagNames.length > 0) {
+          addText(`Tags: ${tagNames.join(', ')}`, 9, false, 8);
+        }
+        if (!record.isActive && record.dateInactivated) {
+          addText(`Date inactivated: ${formatDisplayDate(record.dateInactivated)}`, 9, false, 8);
+        }
+        yPos += 3;
+      };
+
+      fillPage();
+
+      pdf.setFontSize(20);
+      pdf.setFont('helvetica', 'bold');
+      pdf.setTextColor(colors.title[0], colors.title[1], colors.title[2]);
+      const title = 'Address Book Report';
+      pdf.text(title, (pageWidth - pdf.getTextWidth(title)) / 2, yPos);
+      yPos += 10;
+
+      pdf.setFontSize(10);
+      pdf.setFont('helvetica', 'normal');
+      pdf.setTextColor(colors.muted[0], colors.muted[1], colors.muted[2]);
+      pdf.text(`Generated on: ${formatReportDate(new Date())}`, margin, yPos);
+      yPos += 6;
+
+      const historyLabel = includeHistory ? 'Active and inactive addresses' : 'Active addresses only';
+      const tagScopeLabel = exportAllTags
+        ? 'All tags'
+        : selectedTagNames.length > 0
+          ? selectedTagNames.join(', ')
+          : 'Selected tags';
+      pdf.text(`${historyLabel}  ·  ${tagScopeLabel}`, margin, yPos);
+      yPos += 10;
+
+      addSectionHeader('Summary');
+      addText(`Total addresses: ${exportedRecords.length}`, 11, true, 5);
+      addText(`Active addresses: ${activeRecords.length}`, 10, false, 5);
+      if (includeHistory) {
+        addText(`Inactive addresses: ${inactiveRecords.length}`, 10, false, 5);
+      }
+      addText(`Tags used: ${usedTagNames.length}`, 10, false, 5);
+      yPos += 4;
+
+      if (exportedRecords.length === 0) {
+        addText('No addresses match the selected options.', 10, false, 5, true);
+      } else {
+        addSectionHeader('Addresses');
+        if (activeRecords.length > 0) {
+          activeRecords.forEach(writeAddress);
+        } else {
+          addText('No active addresses.', 9, false, 8, true);
+        }
+
+        if (includeHistory && inactiveRecords.length > 0) {
+          yPos += 2;
+          addText('Inactive', 11, true, 5);
+          yPos += 1;
+          inactiveRecords.forEach(writeAddress);
+        }
+      }
+
+      const attachmentRefs = exportedRecords.flatMap((record) =>
+        (record.attachments || [])
+          .map((file) => file.name?.trim())
+          .filter((name): name is string => Boolean(name))
+          .map((fileName) => `${record.mailingName.trim() || formatAddressee(record) || 'Address'} — ${fileName}`)
+      );
+
+      if (attachmentRefs.length > 0) {
+        addSectionHeader('Attachments');
+        addText('File names only. Files themselves are not included in this report.', 8, false, 5, true);
+        attachmentRefs.forEach((line) => addText(line, 9, false, 8));
+      }
+
+      pdf.save(`Address_Book_Report_${new Date().toISOString().split('T')[0]}.pdf`);
+      setShowExportPopup(false);
+    } catch (error) {
+      console.error('Error exporting address book PDF:', error);
+      showError(error instanceof Error ? error.message : 'Failed to generate PDF');
+    } finally {
+      setIsExportingPdf(false);
+    }
+  };
+
   return (
     <div className="space-y-6">
-      <div className="flex items-center justify-between">
+      <div className="flex items-start justify-between gap-3">
         <div>
           <h2 className={titleClass}>Address Book</h2>
           <p className={descClass}>Store, tag, and manage mailing addresses for your household.</p>
         </div>
-        {isLoading && <div className={loadingClass}>Loading...</div>}
+        <div className="flex items-center gap-3 shrink-0">
+          {isLoading && <div className={loadingClass}>Loading...</div>}
+          <ExportPdfIconButton
+            title="Export address book to PDF"
+            onClick={() => setShowExportPopup(true)}
+          />
+        </div>
       </div>
 
       <div className={tabStripClass}>
@@ -1757,6 +2000,123 @@ export function AddressBookTool({ toolId }: AddressBookToolProps) {
               <button type="button" onClick={() => setViewAddressModal(null)} className={secondaryButtonClass}>
                 Close
               </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {showExportPopup && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
+          <div className={modalCardClass} role="dialog" aria-modal="true" aria-labelledby="address-book-export-title">
+            <div className="flex items-center justify-between mb-4">
+              <h3 id="address-book-export-title" className={sectionTitleClass}>
+                Export Options
+              </h3>
+              <button
+                type="button"
+                onClick={() => !isExportingPdf && setShowExportPopup(false)}
+                disabled={isExportingPdf}
+                className={isLight ? 'text-slate-600 hover:text-slate-900 transition-colors disabled:opacity-50' : 'text-slate-400 hover:text-slate-200 transition-colors disabled:opacity-50'}
+                title="Close"
+                aria-label="Close"
+              >
+                <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                </svg>
+              </button>
+            </div>
+
+            <div className="space-y-4">
+              <p className={`${descClass}`}>
+                Attachment files are listed by name at the end. Search text is not applied.
+              </p>
+
+              <div className="flex items-start gap-3">
+                <input
+                  type="checkbox"
+                  id="includeHistoryExport"
+                  checked={includeHistory}
+                  onChange={(e) => setIncludeHistory(e.target.checked)}
+                  disabled={isExportingPdf}
+                  className={isLight
+                    ? 'mt-0.5 h-4 w-4 rounded border-slate-400 text-emerald-600 focus:ring-emerald-500'
+                    : 'mt-0.5 h-4 w-4 rounded border-slate-600 bg-slate-700 text-emerald-500 focus:ring-emerald-500'}
+                />
+                <label htmlFor="includeHistoryExport" className={`${isLight ? 'text-slate-700' : 'text-slate-300'} cursor-pointer`}>
+                  Include inactive addresses
+                </label>
+              </div>
+
+              <fieldset className="space-y-2" disabled={isExportingPdf}>
+                <legend className={`${labelClass} mb-0`}>Tags</legend>
+                <label className={`flex items-start gap-3 ${isLight ? 'text-slate-700' : 'text-slate-300'} cursor-pointer`}>
+                  <input
+                    type="radio"
+                    name="addressBookExportTags"
+                    checked={exportAllTags}
+                    onChange={() => {
+                      setExportAllTags(true);
+                      setExportTagIds([]);
+                    }}
+                    className={isLight
+                      ? 'mt-0.5 h-4 w-4 border-slate-400 text-emerald-600 focus:ring-emerald-500'
+                      : 'mt-0.5 h-4 w-4 border-slate-600 bg-slate-700 text-emerald-500 focus:ring-emerald-500'}
+                  />
+                  <span>All tags</span>
+                </label>
+                <label className={`flex items-start gap-3 ${isLight ? 'text-slate-700' : 'text-slate-300'} cursor-pointer`}>
+                  <input
+                    type="radio"
+                    name="addressBookExportTags"
+                    checked={!exportAllTags}
+                    onChange={() => setExportAllTags(false)}
+                    className={isLight
+                      ? 'mt-0.5 h-4 w-4 border-slate-400 text-emerald-600 focus:ring-emerald-500'
+                      : 'mt-0.5 h-4 w-4 border-slate-600 bg-slate-700 text-emerald-500 focus:ring-emerald-500'}
+                  />
+                  <span>Selected tags only</span>
+                </label>
+                {!exportAllTags && (
+                  <div className={`ml-7 max-h-40 overflow-y-auto space-y-2 pr-1 ${activeTags.length === 0 ? descClass : ''}`}>
+                    {activeTags.length === 0 ? (
+                      <p>No active tags to select.</p>
+                    ) : (
+                      activeTags.map((tag) => (
+                        <label key={tag.id} className={`flex items-start gap-3 ${isLight ? 'text-slate-700' : 'text-slate-300'} cursor-pointer`}>
+                          <input
+                            type="checkbox"
+                            checked={exportTagIds.includes(tag.id)}
+                            onChange={() => toggleExportTag(tag.id)}
+                            className={isLight
+                              ? 'mt-0.5 h-4 w-4 rounded border-slate-400 text-emerald-600 focus:ring-emerald-500'
+                              : 'mt-0.5 h-4 w-4 rounded border-slate-600 bg-slate-700 text-emerald-500 focus:ring-emerald-500'}
+                          />
+                          <span>{tag.name}</span>
+                        </label>
+                      ))
+                    )}
+                  </div>
+                )}
+              </fieldset>
+
+              <div className="flex gap-3 pt-2">
+                <button
+                  type="button"
+                  onClick={exportToPDF}
+                  disabled={isExportingPdf || (!exportAllTags && exportTagIds.length === 0)}
+                  className={`flex-1 ${primaryButtonClass}`}
+                >
+                  {isExportingPdf ? 'Generating…' : 'Export to PDF'}
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setShowExportPopup(false)}
+                  disabled={isExportingPdf}
+                  className={secondaryButtonClass}
+                >
+                  Cancel
+                </button>
+              </div>
             </div>
           </div>
         </div>

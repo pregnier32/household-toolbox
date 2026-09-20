@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, PieChart, Pie, Cell, Legend } from 'recharts';
+import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts';
 
 export function AdminOverviewPanel() {
   const [activeUserCount, setActiveUserCount] = useState<number | null>(null);
@@ -9,10 +9,12 @@ export function AdminOverviewPanel() {
   const [activeTrialToolsCount, setActiveTrialToolsCount] = useState<number | null>(null);
   const [avgToolsPerAdmin, setAvgToolsPerAdmin] = useState<number | null>(null);
   const [usersByMonth, setUsersByMonth] = useState<{ month: string; count: number }[]>([]);
-  const [toolsByName, setToolsByName] = useState<{ name: string; value: number }[]>([]);
+  const [toolsByName, setToolsByName] = useState<{ id?: string; name: string; value: number }[]>([]);
   const [monthlyRevenue, setMonthlyRevenue] = useState<number | null>(null);
   const [lifetimeRevenue, setLifetimeRevenue] = useState<number | null>(null);
   const [revenueByDay, setRevenueByDay] = useState<{ date: string; revenue: number }[]>([]);
+  const [documentCount, setDocumentCount] = useState<number | null>(null);
+  const [storageUsedLabel, setStorageUsedLabel] = useState<string | null>(null);
   const [isLoadingStats, setIsLoadingStats] = useState(false);
 
   useEffect(() => {
@@ -29,6 +31,8 @@ export function AdminOverviewPanel() {
         if (data.monthlyRevenue !== undefined) setMonthlyRevenue(data.monthlyRevenue);
         if (data.lifetimeRevenue !== undefined) setLifetimeRevenue(data.lifetimeRevenue);
         if (data.revenueByDay) setRevenueByDay(data.revenueByDay);
+        if (data.documentCount !== undefined) setDocumentCount(data.documentCount);
+        if (data.storageUsedLabel !== undefined) setStorageUsedLabel(data.storageUsedLabel);
         setIsLoadingStats(false);
       })
       .catch((error) => {
@@ -40,7 +44,7 @@ export function AdminOverviewPanel() {
   return (
     <div>
       <h1 className="mb-4 text-2xl font-semibold text-slate-50">System Stats</h1>
-      <div className="grid gap-4 md:grid-cols-2">
+      <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
         <div className="rounded-2xl border border-slate-800 bg-slate-900/70 p-6">
           <p className="mb-2 text-2xl">👥</p>
           <h3 className="mb-2 text-sm font-semibold text-slate-100">Active Users</h3>
@@ -61,6 +65,48 @@ export function AdminOverviewPanel() {
             </>
           )}
         </div>
+        <div className="rounded-2xl border border-slate-800 bg-slate-900/70 p-6">
+          <p className="mb-2 text-2xl">🔧</p>
+          <h3 className="mb-2 text-sm font-semibold text-slate-100">Active Tools</h3>
+          {isLoadingStats ? (
+            <p className="text-xs text-slate-400">Loading...</p>
+          ) : (
+            <>
+              <p className="mb-1 text-3xl font-semibold text-emerald-400">
+                {activeTrialToolsCount !== null ? activeTrialToolsCount : '—'}
+              </p>
+              <p className="mb-4 text-xs text-slate-400">Tools with active status</p>
+              <div className="border-t border-slate-800 pt-3">
+                <p className="mb-1 text-2xl font-semibold text-emerald-400">
+                  {avgToolsPerAdmin !== null ? avgToolsPerAdmin.toFixed(2) : '—'}
+                </p>
+                <p className="text-xs text-slate-400">Average Tools per admin user</p>
+              </div>
+            </>
+          )}
+        </div>
+        <div className="rounded-2xl border border-slate-800 bg-slate-900/70 p-6">
+          <p className="mb-2 text-2xl">📄</p>
+          <h3 className="mb-2 text-sm font-semibold text-slate-100">Documents</h3>
+          {isLoadingStats ? (
+            <p className="text-xs text-slate-400">Loading...</p>
+          ) : (
+            <>
+              <p className="mb-1 text-3xl font-semibold text-emerald-400">
+                {documentCount !== null ? documentCount.toLocaleString('en-US') : '—'}
+              </p>
+              <p className="mb-4 text-xs text-slate-400">Files stored in Supabase</p>
+              <div className="border-t border-slate-800 pt-3">
+                <p className="mb-1 text-2xl font-semibold text-emerald-400">
+                  {storageUsedLabel ?? '—'}
+                </p>
+                <p className="text-xs text-slate-400">Total memory usage</p>
+              </div>
+            </>
+          )}
+        </div>
+      </div>
+      <div className="mt-4 grid gap-4 md:grid-cols-2">
         <div className="rounded-2xl border border-slate-800 bg-slate-900/70 p-6">
           <h3 className="mb-2 text-sm font-semibold text-slate-100">Users Created by Month</h3>
           {isLoadingStats ? (
@@ -89,72 +135,29 @@ export function AdminOverviewPanel() {
             <p className="text-xs text-slate-400">No data available</p>
           )}
         </div>
-      </div>
-      <div className="mt-4 grid gap-4 md:grid-cols-2">
-        <div className="rounded-2xl border border-slate-800 bg-slate-900/70 p-6">
-          <p className="mb-2 text-2xl">🔧</p>
-          <h3 className="mb-2 text-sm font-semibold text-slate-100">Active Tools</h3>
-          {isLoadingStats ? (
-            <p className="text-xs text-slate-400">Loading...</p>
-          ) : (
-            <>
-              <p className="mb-1 text-3xl font-semibold text-emerald-400">
-                {activeTrialToolsCount !== null ? activeTrialToolsCount : '—'}
-              </p>
-              <p className="mb-4 text-xs text-slate-400">Tools with active status</p>
-              <div className="border-t border-slate-800 pt-3">
-                <p className="mb-1 text-2xl font-semibold text-emerald-400">
-                  {avgToolsPerAdmin !== null ? avgToolsPerAdmin.toFixed(2) : '—'}
-                </p>
-                <p className="text-xs text-slate-400">Average Tools per admin user</p>
-              </div>
-            </>
-          )}
-        </div>
         <div className="rounded-2xl border border-slate-800 bg-slate-900/70 p-6">
           <h3 className="mb-2 text-sm font-semibold text-slate-100">Tools by Name</h3>
           {isLoadingStats ? (
             <p className="text-xs text-slate-400">Loading...</p>
           ) : toolsByName.length > 0 ? (
-            <div className="mt-4">
-              <ResponsiveContainer width="100%" height={250}>
-                <PieChart>
-                  <Pie
-                    data={toolsByName}
-                    cx="50%"
-                    cy="50%"
-                    labelLine={false}
-                    label={({ name, percent }) => `${name}: ${((percent || 0) * 100).toFixed(0)}%`}
-                    outerRadius={80}
-                    fill="#8884d8"
-                    dataKey="value"
+            <div className="mt-3 max-h-72 overflow-y-auto pr-5">
+              <div className="mb-1 flex items-center gap-4 text-xs uppercase tracking-wide text-slate-500">
+                <span className="w-12 shrink-0 text-right">Active</span>
+                <span>Tool</span>
+              </div>
+              <ul className="divide-y divide-slate-800">
+                {toolsByName.map((tool, index) => (
+                  <li
+                    key={tool.id || `${tool.name}-${index}`}
+                    className="flex items-center gap-4 py-2"
                   >
-                    {toolsByName.map((entry, index) => {
-                      const colors = [
-                        '#10b981',
-                        '#3b82f6',
-                        '#8b5cf6',
-                        '#f59e0b',
-                        '#ef4444',
-                        '#06b6d4',
-                        '#ec4899',
-                        '#84cc16',
-                      ];
-                      return <Cell key={`cell-${index}`} fill={colors[index % colors.length]} />;
-                    })}
-                  </Pie>
-                  <Tooltip
-                    contentStyle={{
-                      backgroundColor: '#1e293b',
-                      border: '1px solid #334155',
-                      borderRadius: '8px',
-                      color: '#e2e8f0',
-                    }}
-                    formatter={(value: number) => [value, 'Count']}
-                  />
-                  <Legend wrapperStyle={{ color: '#94a3b8', fontSize: '12px' }} formatter={(value) => value} />
-                </PieChart>
-              </ResponsiveContainer>
+                    <span className="w-12 shrink-0 text-right tabular-nums text-sm font-semibold text-slate-100">
+                      {tool.value}
+                    </span>
+                    <span className="text-sm text-slate-200">{tool.name}</span>
+                  </li>
+                ))}
+              </ul>
             </div>
           ) : (
             <p className="text-xs text-slate-400">No data available</p>

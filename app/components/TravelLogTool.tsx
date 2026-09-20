@@ -5,6 +5,7 @@ import { useTheme } from './AppThemeProvider';
 import { useAppNotice } from './AppNotice';
 import { AttachmentButton } from './AttachmentButton';
 import { AttachmentModal } from './AttachmentModal';
+import { ExportPdfIconButton } from './ExportPdfIconButton';
 import {
   canPreviewAttachment,
   createPendingAttachment,
@@ -1140,11 +1141,6 @@ export function TravelLogTool({ toolId }: TravelLogToolProps) {
   const secondaryButtonSmClass = isLight
     ? 'px-3 py-1.5 rounded-lg border-2 border-slate-400 bg-slate-100 text-slate-800 text-sm hover:bg-slate-200'
     : 'px-3 py-1.5 rounded-lg border border-slate-600 bg-slate-700 text-slate-200 text-sm hover:bg-slate-600';
-  const tabStripClass = isLight ? 'border-b border-slate-200' : 'border-b border-slate-800';
-  const tabActiveClass = isLight
-    ? 'border-b-2 border-emerald-600 text-emerald-900 font-semibold'
-    : 'border-b-2 border-emerald-500 text-emerald-300';
-  const tabInactiveClass = isLight ? 'text-slate-600 hover:text-slate-900' : 'text-slate-400 hover:text-slate-300';
   const rowIconEmeraldClass = isLight
     ? 'inline-flex items-center justify-center rounded-lg border-2 border-emerald-700 bg-white p-2 text-emerald-700 transition-colors hover:bg-emerald-50 hover:text-emerald-900 focus:outline-none focus:ring-2 focus:ring-emerald-500/50 focus:ring-offset-2 focus:ring-offset-white'
     : 'inline-flex items-center justify-center rounded-lg border-2 border-emerald-500/50 bg-slate-800/50 p-2 text-emerald-300 transition-colors hover:border-emerald-400 hover:bg-emerald-500/20 focus:outline-none focus:ring-2 focus:ring-emerald-500/50 focus:ring-offset-2 focus:ring-offset-slate-900';
@@ -1173,7 +1169,6 @@ export function TravelLogTool({ toolId }: TravelLogToolProps) {
 
   const [trips, setTrips] = useState<TripRecord[]>([]);
   const [isLoading, setIsLoading] = useState(false);
-  const [activeTab, setActiveTab] = useState<'trips' | 'export'>('trips');
   const [searchQuery, setSearchQuery] = useState('');
   const [isAdding, setIsAdding] = useState(false);
   const [newTrip, setNewTrip] = useState<TripFormState>(emptyTripForm());
@@ -2143,36 +2138,21 @@ export function TravelLogTool({ toolId }: TravelLogToolProps) {
 
   return (
     <div className="space-y-6">
-      <div>
-        <h2 className={titleClass}>Travel Log</h2>
-        <p className={descClass}>
-          Record trips and vacations — destinations, lodging, journal notes, and memories to look back on.
-        </p>
-        {isLoading && <div className={loadingClass}>Loading...</div>}
-      </div>
-
-      <div className={tabStripClass}>
-        <div className="flex gap-2">
-          {[
-            { id: 'trips' as const, label: 'Trips' },
-            { id: 'export' as const, label: 'Export' },
-          ].map((tab) => (
-            <button
-              key={tab.id}
-              type="button"
-              onClick={() => setActiveTab(tab.id)}
-              className={`px-4 py-2 text-sm font-medium transition-colors ${
-                activeTab === tab.id ? tabActiveClass : tabInactiveClass
-              }`}
-            >
-              {tab.label}
-            </button>
-          ))}
+      <div className="flex items-start justify-between gap-3">
+        <div>
+          <h2 className={titleClass}>Travel Log</h2>
+          <p className={descClass}>
+            Record trips and vacations — destinations, lodging, journal notes, and memories to look back on.
+          </p>
+          {isLoading && <div className={loadingClass}>Loading...</div>}
         </div>
+        <ExportPdfIconButton
+          title="Export travel log to PDF"
+          onClick={() => setShowExportPopup(true)}
+        />
       </div>
 
-      {activeTab === 'trips' && (
-        <div className="space-y-6">
+      <div className="space-y-6">
           {!isAdding && !editingId && (
             <div className={cardClass}>
               <label className={labelClass}>Search trips</label>
@@ -2230,23 +2210,7 @@ export function TravelLogTool({ toolId }: TravelLogToolProps) {
               <p className={`${descClass} text-center py-8`}>No trips yet. Add one to get started!</p>
             )}
           </div>
-        </div>
-      )}
-
-      {activeTab === 'export' && (
-        <div className="space-y-6">
-          <div className={cardClass}>
-            <h3 className={`${sectionTitleClass} mb-4`}>Export Travel Log Report</h3>
-            <p className={`${descClass} mb-4`}>
-              Generate a comprehensive PDF report of all your trips. The report will include trip details,
-              lodging, journal notes, memories, and budget summaries.
-            </p>
-            <button type="button" onClick={() => setShowExportPopup(true)} className={primaryButtonClass}>
-              Generate PDF Report
-            </button>
-          </div>
-        </div>
-      )}
+      </div>
 
       {showExportPopup && (
         <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">

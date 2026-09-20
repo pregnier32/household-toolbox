@@ -5,6 +5,7 @@ import { useTheme } from './AppThemeProvider';
 import { useAppNotice } from './AppNotice';
 import { AttachmentButton } from './AttachmentButton';
 import { AttachmentModal } from './AttachmentModal';
+import { ExportPdfIconButton } from './ExportPdfIconButton';
 import {
   canPreviewAttachment,
   createPendingAttachment,
@@ -203,9 +204,6 @@ export function SubscriptionTrackerTool({ toolId }: SubscriptionTrackerToolProps
   const secondaryButtonClass = isLight
     ? 'px-4 py-2 rounded-lg border-2 border-slate-400 bg-slate-100 text-slate-800 hover:bg-slate-200 transition-colors'
     : 'px-4 py-2 rounded-lg border border-slate-700 bg-slate-800 text-slate-200 hover:bg-slate-700 transition-colors';
-  const tabStripClass = isLight ? 'border-b border-slate-200' : 'border-b border-slate-800';
-  const tabActiveClass = isLight ? 'border-b-2 border-emerald-600 text-emerald-900' : 'border-b-2 border-emerald-500 text-emerald-300';
-  const tabInactiveClass = isLight ? 'text-slate-600 hover:text-slate-900' : 'text-slate-400 hover:text-slate-300';
   const rowIconEmeraldClass = isLight
     ? 'inline-flex items-center justify-center rounded-lg border-2 border-emerald-700 bg-white p-2 text-emerald-700 transition-colors hover:bg-emerald-50 hover:text-emerald-900'
     : 'inline-flex items-center justify-center rounded-lg border-2 border-emerald-500/50 bg-slate-800/50 p-2 text-emerald-300 transition-colors hover:border-emerald-400 hover:bg-emerald-500/20';
@@ -216,7 +214,6 @@ export function SubscriptionTrackerTool({ toolId }: SubscriptionTrackerToolProps
     ? 'inline-flex items-center justify-center rounded-lg border-2 border-red-300 bg-white p-2 text-red-700 transition-colors hover:bg-red-50 hover:border-red-400'
     : 'inline-flex items-center justify-center rounded-lg border-2 border-red-500/50 bg-slate-800/50 p-2 text-red-400 transition-colors hover:border-red-400 hover:bg-red-500/20';
   const [subscriptions, setSubscriptions] = useState<Subscription[]>([]);
-  const [activeTab, setActiveTab] = useState<'subscriptions' | 'export'>('subscriptions');
   const [isLoading, setIsLoading] = useState(false);
   const [showExportPopup, setShowExportPopup] = useState(false);
   const [includeHistory, setIncludeHistory] = useState(false);
@@ -1056,38 +1053,20 @@ export function SubscriptionTrackerTool({ toolId }: SubscriptionTrackerToolProps
   return (
     <div className="space-y-6">
       {/* Header */}
-      <div className="flex items-center justify-between">
+      <div className="flex items-start justify-between gap-3">
         <div>
           <h2 className={titleClass}>Subscription Tracker</h2>
           <p className={descClass}>
             Track and manage all your subscriptions in one place
           </p>
         </div>
+        <ExportPdfIconButton
+          title="Export subscriptions to PDF"
+          onClick={() => setShowExportPopup(true)}
+        />
       </div>
 
-      {/* Tabs */}
-      <div className={tabStripClass}>
-        <div className="flex gap-2">
-          {[
-            { id: 'subscriptions', label: 'Subscriptions' },
-            { id: 'export', label: 'Export' }
-          ].map((tab) => (
-            <button
-              key={tab.id}
-              onClick={() => setActiveTab(tab.id as 'subscriptions' | 'export')}
-              className={`px-4 py-2 text-sm font-medium transition-colors ${
-                activeTab === tab.id ? tabActiveClass : tabInactiveClass
-              }`}
-            >
-              {tab.label}
-            </button>
-          ))}
-        </div>
-      </div>
-
-      {/* Subscriptions Tab */}
-      {activeTab === 'subscriptions' && (
-        <div className="space-y-6">
+      <div className="space-y-6">
           {/* Add New Subscription Form */}
           {!isAdding ? (
             <div className="flex justify-start">
@@ -1766,26 +1745,7 @@ export function SubscriptionTrackerTool({ toolId }: SubscriptionTrackerToolProps
               )
             )}
           </div>
-        </div>
-      )}
-
-      {/* Export Tab */}
-      {activeTab === 'export' && (
-        <div className="space-y-6">
-          <div className={cardClass}>
-            <h3 className={isLight ? 'text-lg font-semibold text-slate-900 mb-4' : 'text-lg font-semibold text-slate-50 mb-4'}>Export Subscription Report</h3>
-            <p className={isLight ? 'text-slate-700 mb-4' : 'text-slate-300 mb-4'}>
-              Generate a comprehensive PDF report of all your subscriptions. The report will include all subscription details, summary statistics, and category breakdown.
-            </p>
-            <button
-              onClick={() => setShowExportPopup(true)}
-              className={primaryButtonClass}
-            >
-              Generate PDF Report
-            </button>
-          </div>
-        </div>
-      )}
+      </div>
 
       {/* Export Popup */}
       {showExportPopup && (

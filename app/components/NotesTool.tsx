@@ -5,6 +5,7 @@ import { useTheme } from './AppThemeProvider';
 import { useAppNotice } from './AppNotice';
 import { AttachmentButton } from './AttachmentButton';
 import { AttachmentModal } from './AttachmentModal';
+import { ExportPdfIconButton } from './ExportPdfIconButton';
 import {
   canPreviewAttachment,
   createPendingAttachment,
@@ -1514,18 +1515,21 @@ export function NotesTool({ toolId }: NotesToolProps) {
   return (
     <div className="space-y-6">
       {/* Header */}
-      <div className="flex items-center justify-between">
+      <div className="flex items-start justify-between gap-3">
         <div>
           <h2 className={titleClass}>Notes</h2>
           <p className={descClass}>
             Create, tag, and manage your notes
           </p>
         </div>
-        {isLoading && (
-          <div className={loadingClass}>
-            Loading...
-          </div>
-        )}
+        <div className="flex items-center gap-3 shrink-0">
+          {isLoading && (
+            <div className={loadingClass}>
+              Loading...
+            </div>
+          )}
+          <ExportPdfIconButton />
+        </div>
       </div>
 
       {/* Tabs */}

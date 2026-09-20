@@ -8257,6 +8257,13 @@ export type Database = {
         Args: { p_table: string }
         Returns: undefined
       }
+      get_site_storage_stats: {
+        Args: Record<PropertyKey, never>
+        Returns: {
+          document_count: number
+          used_bytes: number
+        }[]
+      }
       get_user_storage_usage: {
         Args: { p_user_id: string }
         Returns: {

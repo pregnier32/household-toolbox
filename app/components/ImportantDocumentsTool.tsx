@@ -5,6 +5,7 @@ import { useTheme } from './AppThemeProvider';
 import { useAppNotice } from './AppNotice';
 import { AttachmentButton } from './AttachmentButton';
 import { AttachmentModal } from './AttachmentModal';
+import { ExportPdfIconButton } from './ExportPdfIconButton';
 import { canPreviewAttachment, formatAttachmentBytes, isImageAttachment, isPdfAttachment, type AttachmentItem } from '@/lib/attachments';
 
 type DocumentTag = {
@@ -1552,18 +1553,21 @@ export function ImportantDocumentsTool({ toolId }: ImportantDocumentsToolProps) 
   return (
     <div className="space-y-6">
       {/* Header */}
-      <div className="flex items-center justify-between">
+      <div className="flex items-start justify-between gap-3">
         <div>
           <h2 className={titleClass}>Important Documents</h2>
           <p className={descClass}>
             Upload, tag, and manage your important documents
           </p>
         </div>
-        {isLoading && (
-          <div className={loadingClass}>
-            Loading...
-          </div>
-        )}
+        <div className="flex items-center gap-3 shrink-0">
+          {isLoading && (
+            <div className={loadingClass}>
+              Loading...
+            </div>
+          )}
+          <ExportPdfIconButton />
+        </div>
       </div>
 
       {/* Tabs */}

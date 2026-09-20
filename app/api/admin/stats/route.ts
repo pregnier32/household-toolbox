@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import { getSession } from '@/lib/session';
 import { supabaseServer } from '@/lib/supabaseServer';
+import { getSiteStorageStats } from '@/lib/user-storage';
 
 export async function GET() {
   // Check if user is authenticated and is a superadmin
@@ -64,8 +65,6 @@ export async function GET() {
       ? (activeTrialToolsCount || 0) / adminUserCount 
       : 0;
 
-    // Get active tools grouped by tool name
-    // First, get all users_tools with their tool_ids
     const { data: usersToolsData, error: usersToolsError } = await supabaseServer
       .from('users_tools')
       .select('tool_id')
@@ -76,49 +75,32 @@ export async function GET() {
       return NextResponse.json({ error: 'Failed to fetch stats' }, { status: 500 });
     }
 
-    // Get unique tool IDs
-    const toolIds = usersToolsData 
-      ? [...new Set(usersToolsData.map(ut => ut.tool_id).filter(Boolean))]
-      : [];
+    const { data: allTools, error: allToolsError } = await supabaseServer
+      .from('tools')
+      .select('id, name, status')
+      .neq('status', 'coming_soon');
 
-    // Fetch tool names for these tool IDs
-    let toolNameMap = new Map<string, string>();
-    if (toolIds.length > 0) {
-      const { data: toolsData, error: toolsError } = await supabaseServer
-        .from('tools')
-        .select('id, name')
-        .in('id', toolIds);
-
-      if (toolsError) {
-        console.error('Error fetching tools:', toolsError);
-        return NextResponse.json({ error: 'Failed to fetch stats' }, { status: 500 });
-      }
-
-      // Create a map of tool_id to tool_name
-      if (toolsData) {
-        toolsData.forEach((tool) => {
-          toolNameMap.set(tool.id, tool.name);
-        });
-      }
+    if (allToolsError) {
+      console.error('Error fetching tools:', allToolsError);
+      return NextResponse.json({ error: 'Failed to fetch stats' }, { status: 500 });
     }
 
-    // Group by tool name and count
     const toolCounts = new Map<string, number>();
-    if (usersToolsData) {
-      usersToolsData.forEach((item) => {
-        const toolName = item.tool_id 
-          ? (toolNameMap.get(item.tool_id) || 'Unknown')
-          : 'Unknown';
-        const currentCount = toolCounts.get(toolName) || 0;
-        toolCounts.set(toolName, currentCount + 1);
-      });
-    }
+    (usersToolsData || []).forEach((item) => {
+      if (!item.tool_id) return;
+      toolCounts.set(item.tool_id, (toolCounts.get(item.tool_id) || 0) + 1);
+    });
 
-    // Convert to array format for the pie chart
-    const toolsByName = Array.from(toolCounts.entries()).map(([name, count]) => ({
-      name,
-      value: count
-    }));
+    const toolsByName = (allTools || [])
+      .map((tool) => ({
+        id: tool.id,
+        name: tool.name,
+        value: toolCounts.get(tool.id) || 0,
+      }))
+      .sort((a, b) => {
+        if (b.value !== a.value) return b.value - a.value;
+        return a.name.localeCompare(b.name, undefined, { sensitivity: 'base' });
+      });
 
     // Get users created in the last 12 months, grouped by month
     const twelveMonthsAgo = new Date();
@@ -172,6 +154,7 @@ export async function GET() {
     const monthlyRevenue = 0;
     const lifetimeRevenue = 0;
     const revenueByDay: { date: string; revenue: number }[] = [];
+    const storageStats = await getSiteStorageStats();
 
     return NextResponse.json({ 
       activeUserCount: count || 0,
@@ -182,7 +165,10 @@ export async function GET() {
       toolsByName: toolsByName,
       monthlyRevenue: Math.round(monthlyRevenue * 100) / 100, // Round to 2 decimal places
       lifetimeRevenue: Math.round(lifetimeRevenue * 100) / 100, // Round to 2 decimal places
-      revenueByDay: revenueByDay
+      revenueByDay: revenueByDay,
+      documentCount: storageStats.documentCount,
+      storageUsedBytes: storageStats.usedBytes,
+      storageUsedLabel: storageStats.usedLabel,
     });
   } catch (error) {
     console.error('Error in stats API:', error);

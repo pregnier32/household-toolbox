@@ -5,6 +5,7 @@ import { useTheme } from './AppThemeProvider';
 import { useAppNotice } from './AppNotice';
 import { AttachmentButton } from './AttachmentButton';
 import { AttachmentModal } from './AttachmentModal';
+import { ExportPdfIconButton } from './ExportPdfIconButton';
 import {
   canPreviewAttachment,
   createPendingAttachment,
@@ -828,11 +829,14 @@ export function ToDoListTool({ toolId }: ToDoListToolProps) {
 
   return (
     <div className="space-y-6">
-      <div>
-        <h1 className={titleClass}>To Do List</h1>
-        <p className={descClass}>
-          Manage tasks by category. Add and edit categories, then add tasks with due date, priority, and status.
-        </p>
+      <div className="flex items-start justify-between gap-3">
+        <div>
+          <h1 className={titleClass}>To Do List</h1>
+          <p className={descClass}>
+            Manage tasks by category. Add and edit categories, then add tasks with due date, priority, and status.
+          </p>
+        </div>
+        <ExportPdfIconButton />
       </div>
 
       {saveMessage && (

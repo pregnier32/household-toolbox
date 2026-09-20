@@ -11,6 +11,7 @@ import { useTheme } from './AppThemeProvider';
 import { useAppNotice } from './AppNotice';
 import { AttachmentButton } from './AttachmentButton';
 import { AttachmentModal } from './AttachmentModal';
+import { ExportPdfIconButton } from './ExportPdfIconButton';
 import {
   canPreviewAttachment,
   createPendingAttachment,
@@ -132,7 +133,7 @@ async function eolPlannerRequest<T>(input: RequestInfo | URL, init?: RequestInit
   return payload;
 }
 
-type TabId = EolBuiltInSectionId | 'export' | `custom:${string}`;
+type TabId = EolBuiltInSectionId | `custom:${string}`;
 
 type DeleteTarget =
   | { kind: 'plan'; id: string; label: string }
@@ -994,7 +995,6 @@ export function EndOfLifePlannerTool({ toolId }: EndOfLifePlannerToolProps) {
   const [saveStatus, setSaveStatus] = useState<'idle' | 'saving' | 'saved' | 'error'>('idle');
   const [formError, setFormError] = useState('');
   const [showArchived, setShowArchived] = useState(false);
-  const [planSearchQuery, setPlanSearchQuery] = useState('');
   const [isCreatingPlan, setIsCreatingPlan] = useState(false);
   const [newPlanName, setNewPlanName] = useState('');
   const [newPersonName, setNewPersonName] = useState('');
@@ -1174,17 +1174,10 @@ export function EndOfLifePlannerTool({ toolId }: EndOfLifePlannerToolProps) {
     return () => window.removeEventListener('keydown', onKey);
   }, [attachmentModal, archiveConfirmPlanId, deleteTarget, showExportPopup, renamingSectionId, menuOpenPlanId, menuOpenTabId, menuOpenSubsectionId]);
 
-  const visiblePlans = useMemo(() => {
-    const query = planSearchQuery.trim().toLowerCase();
-    return plans.filter((plan) => {
-      if (!showArchived && plan.status !== 'Active') return false;
-      if (!query) return true;
-      return (
-        plan.name.toLowerCase().includes(query) ||
-        plan.personFullName.toLowerCase().includes(query)
-      );
-    });
-  }, [plans, showArchived, planSearchQuery]);
+  const visiblePlans = useMemo(
+    () => plans.filter((plan) => showArchived || plan.status === 'Active'),
+    [plans, showArchived]
+  );
 
   const selectedPlan = plans.find((plan) => plan.id === selectedPlanId) || null;
   const overall = selectedPlan ? overallPlanPercent(selectedPlan) : 0;
@@ -1192,7 +1185,7 @@ export function EndOfLifePlannerTool({ toolId }: EndOfLifePlannerToolProps) {
   useEffect(() => {
     if (!selectedPlan) return;
     const key = activeTab.startsWith('custom:') ? activeTab.slice(7) : activeTab;
-    const shouldLeave = activeTab === 'export' || selectedPlan.data.inactiveSectionIds.includes(key);
+    const shouldLeave = selectedPlan.data.inactiveSectionIds.includes(key);
     if (!shouldLeave) return;
     const hidden = new Set(selectedPlan.data.inactiveSectionIds);
     const removed = new Set(selectedPlan.data.removedSectionIds);
@@ -1922,7 +1915,6 @@ export function EndOfLifePlannerTool({ toolId }: EndOfLifePlannerToolProps) {
       setActiveTab(`custom:${copy.id}`);
       return;
     }
-    if (tab.id === 'export') return;
     const copy = duplicateBuiltInSection(selectedPlan.data, tab.id as EolBuiltInSectionId, tab.label);
     patchData((data) => ({
       ...data,
@@ -3302,9 +3294,15 @@ export function EndOfLifePlannerTool({ toolId }: EndOfLifePlannerToolProps) {
 
   return (
     <div className="space-y-6">
-      <div>
-        <h2 className={titleClass}>{EOL_TOOL_TITLE}</h2>
-        <p className={descClass}>{EOL_TOOL_DESCRIPTION}</p>
+      <div className="flex items-start justify-between gap-3">
+        <div>
+          <h2 className={titleClass}>{EOL_TOOL_TITLE}</h2>
+          <p className={descClass}>{EOL_TOOL_DESCRIPTION}</p>
+        </div>
+        <ExportPdfIconButton
+          title="Export end of life planner to PDF"
+          onClick={() => setShowExportPopup(true)}
+        />
       </div>
 
       {saveStatus === 'saving' ? <div className={successBannerClass}>Saving…</div> : null}
@@ -3340,23 +3338,7 @@ export function EndOfLifePlannerTool({ toolId }: EndOfLifePlannerToolProps) {
         </div>
         {!isCreatingPlan ? (
           <>
-            <div className="mb-3 max-w-md">
-              <label htmlFor="eol-plan-search" className={labelClass}>
-                Search plans
-              </label>
-              <input
-                id="eol-plan-search"
-                type="text"
-                value={planSearchQuery}
-                onChange={(event) => setPlanSearchQuery(event.target.value)}
-                placeholder="Search by plan name or person…"
-                className={inputClass}
-              />
-            </div>
             <div className="flex items-center gap-3 flex-wrap">
-              {plans.filter((plan) => showArchived || plan.status === 'Active').length > 0 && visiblePlans.length === 0 ? (
-                <p className={mutedTextClass}>No matching plans.</p>
-              ) : null}
               {visiblePlans.map((plan) =>
                 editingPlanId === plan.id ? (
                   <div
@@ -3604,32 +3586,6 @@ export function EndOfLifePlannerTool({ toolId }: EndOfLifePlannerToolProps) {
       {selectedPlan ? (
         <>
           <div className={`${tabStripClass} relative z-50`}>
-            <div className="mb-2">
-              <p className={`text-base font-semibold ${bodyTextClass}`}>{selectedPlan.name}</p>
-              <p className={`text-xs ${mutedTextClass}`}>
-                Created {formatDateDisplay(selectedPlan.dateCreated.split('T')[0])} · Last updated{' '}
-                {formatDateTimeDisplay(selectedPlan.lastUpdated)}
-              </p>
-              {(selectedPlan.historyEvents || []).length > 0 ? (
-                <ul className={`mt-2 space-y-0.5 text-xs ${mutedTextClass}`}>
-                  <li className={isLight ? 'font-semibold text-slate-700' : 'font-semibold text-slate-300'}>
-                    Recent activity
-                  </li>
-                  {[...selectedPlan.historyEvents].reverse().slice(0, 8).map((event) => (
-                    <li key={event.id}>
-                      {event.kind === 'restore'
-                        ? 'Restored'
-                        : event.kind === 'archive'
-                          ? 'Archived'
-                          : event.kind === 'created'
-                            ? 'Created'
-                            : 'Edited'}
-                      : {event.summary} · {formatDateTimeDisplay(event.at)}
-                    </li>
-                  ))}
-                </ul>
-              ) : null}
-            </div>
             <div className="flex flex-wrap gap-2">
               {tabs.map((tab) => {
                 const sectionKey = tab.custom && tab.id.startsWith('custom:') ? tab.id.slice(7) : String(tab.id);
@@ -4908,20 +4864,6 @@ export function EndOfLifePlannerTool({ toolId }: EndOfLifePlannerToolProps) {
           ) : null}
 
           {customSection ? renderCustomSection(customSection) : null}
-
-          {activeTab === 'export' ? (
-            <div className="space-y-6">
-              <div className={cardClass}>
-                <h3 className={sectionTitleClass}>Export End of Life Planner Report</h3>
-                <p className={`${isLight ? 'text-slate-700' : 'text-slate-300'} mb-4`}>
-                  Generate a PDF of the selected plan, including all sections, notes, and a completion summary. PDF generation will be added in a later update.
-                </p>
-                <button type="button" onClick={() => setShowExportPopup(true)} className={primaryButtonClass}>
-                  Generate PDF Report
-                </button>
-              </div>
-            </div>
-          ) : null}
         </>
       ) : null}
 

@@ -6,6 +6,7 @@ import { useTheme } from './AppThemeProvider';
 import { useAppNotice } from './AppNotice';
 import { AttachmentButton } from './AttachmentButton';
 import { AttachmentModal } from './AttachmentModal';
+import { ExportPdfIconButton } from './ExportPdfIconButton';
 import {
   canPreviewAttachment,
   createPendingAttachment,
@@ -1539,11 +1540,14 @@ export function MealPlannerTool({ toolId }: MealPlannerToolProps) {
       })()}
 
       <div className="space-y-6">
-      <div>
-        <h2 className={titleClass}>Meal Planner</h2>
-        <p className={descClass}>
-          Create a weekly meal plan, manage meals and ingredients, and generate a shopping list for the week.
-        </p>
+      <div className="flex items-start justify-between gap-3">
+        <div>
+          <h2 className={titleClass}>Meal Planner</h2>
+          <p className={descClass}>
+            Create a weekly meal plan, manage meals and ingredients, and generate a shopping list for the week.
+          </p>
+        </div>
+        <ExportPdfIconButton />
       </div>
       {isLoading && (
         <p className={mutedClass}>Loading your meal planner data…</p>

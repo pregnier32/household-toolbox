@@ -5,6 +5,7 @@ import { useTheme } from './AppThemeProvider';
 import { useAppNotice } from './AppNotice';
 import { AttachmentButton } from './AttachmentButton';
 import { AttachmentModal } from './AttachmentModal';
+import { ExportPdfIconButton } from './ExportPdfIconButton';
 import {
   canPreviewAttachment,
   createPendingAttachment,
@@ -816,11 +817,14 @@ export function ShoppingListTool({ toolId }: ShoppingListToolProps) {
 
   return (
     <div className="space-y-6">
-      <div>
-        <h2 className={titleClass}>Shopping List</h2>
-        <p className={descClass}>
-          Create shopping lists from your master list of items. Manage active lists and history.
-        </p>
+      <div className="flex items-start justify-between gap-3">
+        <div>
+          <h2 className={titleClass}>Shopping List</h2>
+          <p className={descClass}>
+            Create shopping lists from your master list of items. Manage active lists and history.
+          </p>
+        </div>
+        <ExportPdfIconButton />
       </div>
       {isLoading && (
         <p className={loadingClass}>Loading your lists and items…</p>

@@ -5,6 +5,7 @@ import { useTheme } from './AppThemeProvider';
 import { useAppNotice } from './AppNotice';
 import { AttachmentButton } from './AttachmentButton';
 import { AttachmentModal } from './AttachmentModal';
+import { ExportPdfIconButton } from './ExportPdfIconButton';
 import {
   canPreviewAttachment,
   createPendingAttachment,
@@ -99,6 +100,10 @@ function formatDisplayDate(isoDate: string): string {
   if (parts.length !== 3) return isoDate;
   const [year, month, day] = parts;
   return `${Number(month)}/${Number(day)}/${year}`;
+}
+
+function formatReportDate(date: Date): string {
+  return date.toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' });
 }
 
 function formatCurrency(amount: number): string {
@@ -598,12 +603,26 @@ export function EventBudgetPlannerTool({ toolId }: EventBudgetPlannerToolProps) 
   const [attachmentModal, setAttachmentModal] = useState<AttachmentTarget | null>(null);
   const [attachmentBusy, setAttachmentBusy] = useState(false);
   const [viewPreview, setViewPreview] = useState<AttachmentItem | null>(null);
+  const [showExportPopup, setShowExportPopup] = useState(false);
+  const [includeHistory, setIncludeHistory] = useState(false);
+  const [exportAllEvents, setExportAllEvents] = useState(true);
+  const [exportEventId, setExportEventId] = useState('');
+  const [isExportingPdf, setIsExportingPdf] = useState(false);
 
   const revokePending = (items: AttachmentItem[]) => {
     items.forEach((item) => {
       if (item.url) URL.revokeObjectURL(item.url);
     });
   };
+
+  useEffect(() => {
+    if (!showExportPopup) return undefined;
+    const onKey = (event: KeyboardEvent) => {
+      if (event.key === 'Escape' && !isExportingPdf) setShowExportPopup(false);
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [showExportPopup, isExportingPdf]);
 
   const closeAttachmentModal = () => {
     setAttachmentModal(null);
@@ -2135,13 +2154,306 @@ export function EventBudgetPlannerTool({ toolId }: EventBudgetPlannerToolProps) 
     </div>
   );
 
+  const exportEventChoices = [...events]
+    .filter((event) => event.isActive || includeHistory || event.id === exportEventId || event.id === editingEventId)
+    .sort((a, b) => a.date.localeCompare(b.date) || a.name.localeCompare(b.name));
+
+  const openExportPopup = () => {
+    if (editingEventId) {
+      setExportAllEvents(false);
+      setExportEventId(editingEventId);
+    }
+    setShowExportPopup(true);
+  };
+
+  const exportToPDF = async () => {
+    if (isExportingPdf) return;
+    if (!exportAllEvents && !exportEventId) {
+      showError('Select an event, or choose All events.');
+      return;
+    }
+
+    setIsExportingPdf(true);
+
+    try {
+      const scoped = (!exportAllEvents && exportEventId
+        ? events.filter((event) => event.id === exportEventId)
+        : events.filter((event) => event.isActive || includeHistory)
+      ).sort((a, b) => a.date.localeCompare(b.date) || a.name.localeCompare(b.name));
+
+      const activeScoped = scoped.filter((event) => event.isActive);
+      const inactiveScoped = scoped.filter((event) => !event.isActive);
+      const eventsToPrint = exportAllEvents && includeHistory ? [...activeScoped, ...inactiveScoped] : scoped;
+
+      const combined = eventsToPrint.reduce(
+        (acc, event) => {
+          const totals = getEventTotals(event);
+          acc.budgeted += totals.totalBudgeted;
+          acc.actual += totals.totalActual;
+          acc.remaining += totals.remaining;
+          if (totals.isOverBudget) acc.overBudget += 1;
+          return acc;
+        },
+        { budgeted: 0, actual: 0, remaining: 0, overBudget: 0 }
+      );
+
+      const { jsPDF } = await import('jspdf');
+      const pdf = new jsPDF({
+        orientation: 'portrait',
+        unit: 'mm',
+        format: 'a4',
+      });
+
+      const pageWidth = pdf.internal.pageSize.getWidth();
+      const pageHeight = pdf.internal.pageSize.getHeight();
+      const margin = 15;
+      const contentWidth = pageWidth - margin * 2;
+      let yPos = margin;
+
+      const colors = {
+        background: [255, 255, 255] as const,
+        text: [15, 23, 42] as const,
+        title: [15, 23, 42] as const,
+        header: [241, 245, 249] as const,
+        muted: [71, 85, 105] as const,
+        danger: [185, 28, 28] as const,
+      };
+
+      const fillPage = () => {
+        pdf.setFillColor(colors.background[0], colors.background[1], colors.background[2]);
+        pdf.rect(0, 0, pageWidth, pageHeight, 'F');
+      };
+
+      const checkNewPage = (requiredHeight: number) => {
+        if (yPos + requiredHeight > pageHeight - margin) {
+          pdf.addPage();
+          fillPage();
+          yPos = margin;
+          return true;
+        }
+        return false;
+      };
+
+      const addSectionHeader = (title: string) => {
+        checkNewPage(15);
+        pdf.setFillColor(colors.header[0], colors.header[1], colors.header[2]);
+        pdf.rect(margin, yPos, contentWidth, 10, 'F');
+        pdf.setFontSize(13);
+        pdf.setFont('helvetica', 'bold');
+        pdf.setTextColor(colors.title[0], colors.title[1], colors.title[2]);
+        pdf.text(title, margin + 5, yPos + 7);
+        yPos += 15;
+      };
+
+      const addText = (text: string, fontSize = 10, isBold = false, indent = 0, muted = false, danger = false) => {
+        pdf.setFontSize(fontSize);
+        pdf.setFont('helvetica', isBold ? 'bold' : 'normal');
+        const color = danger ? colors.danger : muted ? colors.muted : colors.text;
+        pdf.setTextColor(color[0], color[1], color[2]);
+        const maxWidth = contentWidth - indent - 5;
+        const lines = pdf.splitTextToSize(text, maxWidth) as string[];
+        const lineHeight = fontSize * 0.42;
+        checkNewPage(lines.length * lineHeight + 2);
+        lines.forEach((line) => {
+          pdf.text(line, margin + indent, yPos);
+          yPos += lineHeight;
+        });
+        yPos += 2;
+      };
+
+      const categoriesForEvent = (event: EventRecord) => {
+        const budgetIds = new Set(event.categoryBudgets.map((cb) => cb.categoryId));
+        const budgeted = event.categoryBudgets.map((cb) => ({
+          categoryId: cb.categoryId,
+          budgetAmount: asMoney(cb.budgetAmount),
+          expenses: event.expenses.filter((expense) => expense.categoryId === cb.categoryId),
+        }));
+        const orphanIds = Array.from(
+          new Set(event.expenses.map((expense) => expense.categoryId).filter((id) => !budgetIds.has(id)))
+        );
+        const orphans = orphanIds.map((categoryId) => ({
+          categoryId,
+          budgetAmount: 0,
+          expenses: event.expenses.filter((expense) => expense.categoryId === categoryId),
+        }));
+        return [...budgeted, ...orphans].sort((a, b) =>
+          getCategoryName(a.categoryId).localeCompare(getCategoryName(b.categoryId))
+        );
+      };
+
+      const writeEvent = (event: EventRecord) => {
+        const totals = getEventTotals(event);
+        checkNewPage(28);
+        addText(event.name, 12, true, 5);
+        addText(`Date: ${formatDisplayDate(event.date)}`, 9, false, 8);
+        addText(`Type: ${getTypeName(event.typeId)}`, 9, false, 8);
+        addText(`Budgeted: ${formatCurrency(totals.totalBudgeted)}`, 9, false, 8);
+        addText(`Actual: ${formatCurrency(totals.totalActual)}`, 9, false, 8);
+        addText(
+          `Remaining: ${formatCurrency(totals.remaining)}`,
+          9,
+          totals.isOverBudget,
+          8,
+          false,
+          totals.isOverBudget
+        );
+        if (event.notes.trim()) {
+          addText(`Notes: ${event.notes.trim()}`, 9, false, 8);
+        }
+        if (!event.isActive && event.dateInactivated) {
+          addText(`Date inactivated: ${formatDisplayDate(event.dateInactivated)}`, 9, false, 8);
+        }
+
+        const groups = categoriesForEvent(event);
+        if (groups.length === 0) {
+          addText('No category budgets or expenses.', 9, false, 8, true);
+        }
+
+        groups.forEach((group) => {
+          const actual = group.expenses.reduce((sum, expense) => sum + asMoney(expense.amount), 0);
+          const remaining = (moneyCents(group.budgetAmount) - moneyCents(actual)) / 100;
+          addText(getCategoryName(group.categoryId), 10, true, 8);
+          addText(
+            `Budget ${formatCurrency(group.budgetAmount)}  ·  Actual ${formatCurrency(actual)}  ·  Remaining ${formatCurrency(remaining)}`,
+            8,
+            remaining < 0,
+            10,
+            false,
+            remaining < 0
+          );
+          const expenses = [...group.expenses].sort(
+            (a, b) => a.date.localeCompare(b.date) || asMoney(a.amount) - asMoney(b.amount)
+          );
+          if (expenses.length === 0) {
+            addText('No expenses.', 8, false, 10, true);
+          }
+          expenses.forEach((expense) => {
+            const splits = expenseVendorSplits(expense);
+            const vendorLabel =
+              splits.length > 1
+                ? splits
+                    .map((part) => `${getVendorName(part.vendorId)} ${formatCurrency(asMoney(part.amount))}`)
+                    .join(' · ')
+                : getVendorName(expense.vendorId || splits[0]?.vendorId);
+            addText(
+              `${formatDisplayDate(expense.date)}  ·  ${formatCurrency(asMoney(expense.amount))}  ·  ${vendorLabel}`,
+              8,
+              false,
+              10
+            );
+            if (expense.note.trim()) {
+              addText(expense.note.trim(), 8, false, 12, true);
+            }
+          });
+          yPos += 2;
+        });
+        yPos += 3;
+      };
+
+      fillPage();
+
+      pdf.setFontSize(20);
+      pdf.setFont('helvetica', 'bold');
+      pdf.setTextColor(colors.title[0], colors.title[1], colors.title[2]);
+      const title = 'Event Budget Planner Report';
+      pdf.text(title, (pageWidth - pdf.getTextWidth(title)) / 2, yPos);
+      yPos += 10;
+
+      pdf.setFontSize(10);
+      pdf.setFont('helvetica', 'normal');
+      pdf.setTextColor(colors.muted[0], colors.muted[1], colors.muted[2]);
+      pdf.text(`Generated on: ${formatReportDate(new Date())}`, margin, yPos);
+      yPos += 6;
+
+      const historyLabel = exportAllEvents
+        ? includeHistory
+          ? 'Active and inactive events'
+          : 'Active events only'
+        : eventsToPrint[0]?.isActive
+          ? 'Selected event'
+          : 'Selected inactive event';
+      const scopeLabel = exportAllEvents
+        ? 'All events'
+        : eventsToPrint[0]?.name || 'Selected event';
+      pdf.text(`${historyLabel}  ·  ${scopeLabel}`, margin, yPos);
+      yPos += 10;
+
+      addSectionHeader('Summary');
+      addText(`Events: ${eventsToPrint.length}`, 11, true, 5);
+      addText(`Total budgeted: ${formatCurrency(combined.budgeted)}`, 10, false, 5);
+      addText(`Total actual: ${formatCurrency(combined.actual)}`, 10, false, 5);
+      addText(
+        `Remaining: ${formatCurrency(combined.remaining)}`,
+        10,
+        combined.remaining < 0,
+        5,
+        false,
+        combined.remaining < 0
+      );
+      addText(`Over budget: ${combined.overBudget}`, 10, false, 5);
+      yPos += 4;
+
+      if (eventsToPrint.length === 0) {
+        addText('No events match the selected options.', 10, false, 5, true);
+      } else if (exportAllEvents && includeHistory && inactiveScoped.length > 0) {
+        addSectionHeader('Events');
+        if (activeScoped.length > 0) {
+          activeScoped.forEach(writeEvent);
+        } else {
+          addText('No active events.', 9, false, 8, true);
+        }
+        yPos += 2;
+        addText('Inactive', 11, true, 5);
+        yPos += 1;
+        inactiveScoped.forEach(writeEvent);
+      } else {
+        addSectionHeader(eventsToPrint.length === 1 ? 'Event' : 'Events');
+        eventsToPrint.forEach(writeEvent);
+      }
+
+      const attachmentRefs = eventsToPrint.flatMap((event) => {
+        const eventFiles = (event.attachments || [])
+          .map((file) => file.name?.trim())
+          .filter((name): name is string => Boolean(name))
+          .map((fileName) => `${event.name} — ${fileName}`);
+        const expenseFiles = (event.expenses || []).flatMap((expense) =>
+          (expense.attachments || [])
+            .map((file) => file.name?.trim())
+            .filter((name): name is string => Boolean(name))
+            .map((fileName) => `${event.name} — ${fileName}`)
+        );
+        return [...eventFiles, ...expenseFiles];
+      });
+
+      if (attachmentRefs.length > 0) {
+        addSectionHeader('Attachments');
+        addText('File names only. Files themselves are not included in this report.', 8, false, 5, true);
+        attachmentRefs.forEach((line) => addText(line, 9, false, 8));
+      }
+
+      pdf.save(`Event_Budget_Planner_Report_${new Date().toISOString().split('T')[0]}.pdf`);
+      setShowExportPopup(false);
+    } catch (error) {
+      console.error('Error exporting event budget planner PDF:', error);
+      showError(error instanceof Error ? error.message : 'Failed to generate PDF');
+    } finally {
+      setIsExportingPdf(false);
+    }
+  };
+
   return (
     <div className="space-y-6">
-      <div>
-        <h2 className={titleClass}>Event Budget Planner</h2>
-        <p className={descClass}>
-          Organize and manage the financial side of any event by tracking planned and actual expenses in one place.
-        </p>
+      <div className="flex items-start justify-between gap-3">
+        <div>
+          <h2 className={titleClass}>Event Budget Planner</h2>
+          <p className={descClass}>
+            Organize and manage the financial side of any event by tracking planned and actual expenses in one place.
+          </p>
+        </div>
+        <ExportPdfIconButton
+          title="Export event budget to PDF"
+          onClick={openExportPopup}
+        />
       </div>
 
       {isLoading && <div className={loadingClass}>Loading...</div>}
@@ -3027,6 +3339,126 @@ export function EventBudgetPlannerTool({ toolId }: EventBudgetPlannerToolProps) 
             setDeleteTypeConfirmText('');
           }
         )}
+
+      {showExportPopup && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
+          <div className={modalCardClass} role="dialog" aria-modal="true" aria-labelledby="ebp-export-title">
+            <div className="flex items-center justify-between mb-4">
+              <h3 id="ebp-export-title" className={sectionTitleClass}>
+                Export Options
+              </h3>
+              <button
+                type="button"
+                onClick={() => !isExportingPdf && setShowExportPopup(false)}
+                disabled={isExportingPdf}
+                className={isLight ? 'text-slate-600 hover:text-slate-900 transition-colors disabled:opacity-50' : 'text-slate-400 hover:text-slate-200 transition-colors disabled:opacity-50'}
+                title="Close"
+                aria-label="Close"
+              >
+                <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                </svg>
+              </button>
+            </div>
+
+            <div className="space-y-4">
+              <p className={descClass}>
+                Attachment files are listed by name at the end.
+              </p>
+
+              <fieldset className="space-y-2" disabled={isExportingPdf}>
+                <legend className={`${labelClass} mb-0`}>Events</legend>
+                <label className={`flex items-start gap-3 ${isLight ? 'text-slate-700' : 'text-slate-300'} cursor-pointer`}>
+                  <input
+                    type="radio"
+                    name="ebpExportScope"
+                    checked={exportAllEvents}
+                    onChange={() => setExportAllEvents(true)}
+                    className={isLight
+                      ? 'mt-0.5 h-4 w-4 border-slate-400 text-emerald-600 focus:ring-emerald-500'
+                      : 'mt-0.5 h-4 w-4 border-slate-600 bg-slate-700 text-emerald-500 focus:ring-emerald-500'}
+                  />
+                  <span>All events</span>
+                </label>
+                <label className={`flex items-start gap-3 ${isLight ? 'text-slate-700' : 'text-slate-300'} cursor-pointer`}>
+                  <input
+                    type="radio"
+                    name="ebpExportScope"
+                    checked={!exportAllEvents}
+                    onChange={() => {
+                      setExportAllEvents(false);
+                      if (!exportEventId) {
+                        setExportEventId(editingEventId || activeEvents[0]?.id || events[0]?.id || '');
+                      }
+                    }}
+                    className={isLight
+                      ? 'mt-0.5 h-4 w-4 border-slate-400 text-emerald-600 focus:ring-emerald-500'
+                      : 'mt-0.5 h-4 w-4 border-slate-600 bg-slate-700 text-emerald-500 focus:ring-emerald-500'}
+                  />
+                  <span>One event</span>
+                </label>
+                {!exportAllEvents && (
+                  <div className="ml-7">
+                    <label className={labelClass} htmlFor="ebp-export-event">
+                      Event
+                    </label>
+                    <select
+                      id="ebp-export-event"
+                      value={exportEventId}
+                      onChange={(e) => setExportEventId(e.target.value)}
+                      className={selectClass}
+                    >
+                      <option value="">Select an event</option>
+                      {exportEventChoices.map((event) => (
+                        <option key={event.id} value={event.id}>
+                          {event.isActive ? event.name : `${event.name} (inactive)`}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                )}
+              </fieldset>
+
+              {exportAllEvents && (
+                <div className="flex items-start gap-3">
+                  <input
+                    type="checkbox"
+                    id="includeHistoryExport"
+                    checked={includeHistory}
+                    onChange={(e) => setIncludeHistory(e.target.checked)}
+                    disabled={isExportingPdf}
+                    className={isLight
+                      ? 'mt-0.5 h-4 w-4 rounded border-slate-400 text-emerald-600 focus:ring-emerald-500'
+                      : 'mt-0.5 h-4 w-4 rounded border-slate-600 bg-slate-700 text-emerald-500 focus:ring-emerald-500'}
+                  />
+                  <label htmlFor="includeHistoryExport" className={`${isLight ? 'text-slate-700' : 'text-slate-300'} cursor-pointer`}>
+                    Include inactive events
+                  </label>
+                </div>
+              )}
+
+              <div className="flex gap-3 pt-2">
+                <button
+                  type="button"
+                  onClick={exportToPDF}
+                  disabled={isExportingPdf || (!exportAllEvents && !exportEventId)}
+                  className={`flex-1 ${primaryButtonClass}`}
+                >
+                  {isExportingPdf ? 'Generating…' : 'Export to PDF'}
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setShowExportPopup(false)}
+                  disabled={isExportingPdf}
+                  className={secondaryButtonClass}
+                >
+                  Cancel
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
 
       <AttachmentModal
         open={attachmentModal !== null}

@@ -5,6 +5,7 @@ import { useTheme } from './AppThemeProvider';
 import { useAppNotice } from './AppNotice';
 import { AttachmentButton } from './AttachmentButton';
 import { AttachmentModal } from './AttachmentModal';
+import { ExportPdfIconButton } from './ExportPdfIconButton';
 import {
   canPreviewAttachment,
   createPendingAttachment,
@@ -2291,13 +2292,17 @@ export function PetCareScheduleTool({ toolId }: PetCareScheduleToolProps) {
 
   return (
     <div className="space-y-6">
-      <div className="flex items-center justify-between">
+      <div className="flex items-start justify-between gap-3">
         <div>
           <h2 className={titleClass}>Pet Care Schedule</h2>
           <p className={descClass}>
             Manage all aspects of your pet's care, from basic information to veterinary records.
           </p>
         </div>
+        <ExportPdfIconButton
+          title="Export pet care to PDF"
+          onClick={() => setShowExportPopup(true)}
+        />
       </div>
 
       {/* Save Message */}
@@ -2704,7 +2709,6 @@ export function PetCareScheduleTool({ toolId }: PetCareScheduleToolProps) {
                 { id: 'appointments', label: 'Appointments' },
                 { id: 'documents', label: 'Documents' },
                 { id: 'notes', label: 'Notes' },
-                { id: 'export', label: 'Export' }
               ].map((tab) => (
                 <button
                   key={tab.id}
@@ -4886,24 +4890,6 @@ export function PetCareScheduleTool({ toolId }: PetCareScheduleToolProps) {
               </div>
             </div>
           )}
-        </div>
-      )}
-
-      {/* Export Section */}
-      {activeSection === 'export' && (
-        <div className="space-y-6">
-          <div className={cardClass}>
-            <h3 className={sectionTitleClass}>Export Pet Report</h3>
-            <p className="text-slate-300 mb-4">
-              Generate a comprehensive PDF report of all your pet's information. The report will include all sections: Pet Info, Food, Veterinary Contacts, Care Plan, Vaccinations, Appointments, Documents, and Notes.
-            </p>
-            <button
-              onClick={() => setShowExportPopup(true)}
-              className={isLight ? 'px-6 py-3 rounded-lg bg-emerald-600 text-white font-medium hover:bg-emerald-500 transition-colors' : 'px-6 py-3 rounded-lg bg-emerald-500 text-slate-950 font-medium hover:bg-emerald-400 transition-colors'}
-            >
-              Generate PDF Report
-            </button>
-          </div>
         </div>
       )}
 

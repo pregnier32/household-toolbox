@@ -16,13 +16,17 @@ const SRC_BLACK = '/images/logo/Logo_Side_Black.png';
 
 export function SideLogo({
   width = 200,
-  height = 40,
+  height,
   className = 'h-auto',
   priority,
   alt = 'Household Toolbox',
 }: SideLogoProps) {
   const { resolvedTheme } = useTheme();
-  const src = resolvedTheme === 'light' ? SRC_BLACK : SRC_WHITE;
+  const isLight = resolvedTheme === 'light';
+  const src = isLight ? SRC_BLACK : SRC_WHITE;
+  const intrinsicHeight = isLight ? 306 : 310;
+  const intrinsicWidth = isLight ? 699 : 688;
+  const renderedHeight = height ?? Math.round((width * intrinsicHeight) / intrinsicWidth);
 
   return (
     <Image
@@ -30,8 +34,10 @@ export function SideLogo({
       src={src}
       alt={alt}
       width={width}
-      height={height}
-      className={className}
+      height={renderedHeight}
+      className={`${className} bg-transparent`}
+      style={{ backgroundColor: 'transparent' }}
+      unoptimized
       priority={priority}
     />
   );

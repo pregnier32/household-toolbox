@@ -1,6 +1,7 @@
 'use client';
 
 import { useState } from 'react';
+import { ExportPdfIconButton } from './ExportPdfIconButton';
 
 type CalculationBox = {
   id: string;
@@ -164,6 +165,7 @@ export function PercentOfOrderTool() {
           >
             Add Box
           </button>
+          <ExportPdfIconButton />
         </div>
       </div>
 

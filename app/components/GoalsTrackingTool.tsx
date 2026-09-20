@@ -6,6 +6,7 @@ import { useTheme } from './AppThemeProvider';
 import { useAppNotice } from './AppNotice';
 import { AttachmentButton } from './AttachmentButton';
 import { AttachmentModal } from './AttachmentModal';
+import { ExportPdfIconButton } from './ExportPdfIconButton';
 import {
   canPreviewAttachment,
   createPendingAttachment,
@@ -100,6 +101,25 @@ function formatDateForDisplay(isoDate: string): string {
   if (!isoDate) return '';
   const [y, m, d] = isoDate.split('-');
   return `${Number(m)}/${Number(d)}/${y}`;
+}
+
+function formatReportDate(date: Date): string {
+  return date.toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' });
+}
+
+function compareGoalsForExport(a: Goal, b: Goal): number {
+  const aOpen = a.status !== 'Completed';
+  const bOpen = b.status !== 'Completed';
+  if (aOpen !== bOpen) return aOpen ? -1 : 1;
+  if (a.targetDate && b.targetDate) {
+    const byDate = a.targetDate.localeCompare(b.targetDate);
+    if (byDate !== 0) return byDate;
+  } else if (a.targetDate) {
+    return -1;
+  } else if (b.targetDate) {
+    return 1;
+  }
+  return a.title.localeCompare(b.title);
 }
 
 // --- Default categories (in-memory) ---
@@ -649,6 +669,10 @@ export function GoalsTrackingTool({ toolId }: GoalsTrackingToolProps) {
   const [pendingUpdateAttachments, setPendingUpdateAttachments] = useState<AttachmentItem[]>([]);
   const [attachmentBusy, setAttachmentBusy] = useState(false);
   const [viewPreview, setViewPreview] = useState<AttachmentItem | null>(null);
+  const [showExportPopup, setShowExportPopup] = useState(false);
+  const [includeCompleted, setIncludeCompleted] = useState(false);
+  const [exportAllCategories, setExportAllCategories] = useState(true);
+  const [isExportingPdf, setIsExportingPdf] = useState(false);
 
   const revokePending = (items: AttachmentItem[]) => {
     items.forEach((item) => {
@@ -1252,6 +1276,10 @@ export function GoalsTrackingTool({ toolId }: GoalsTrackingToolProps) {
     const onKeyDown = (e: KeyboardEvent) => {
       if (e.key === 'Escape') {
         if (attachmentModal) return;
+        if (showExportPopup) {
+          if (!isExportingPdf) setShowExportPopup(false);
+          return;
+        }
         setMenuOpenCategoryId(null);
         if (showAllUpdatesGoalId) setShowAllUpdatesGoalId(null);
         if (deleteConfirmCategoryId) {
@@ -1273,7 +1301,7 @@ export function GoalsTrackingTool({ toolId }: GoalsTrackingToolProps) {
     };
     window.addEventListener('keydown', onKeyDown);
     return () => window.removeEventListener('keydown', onKeyDown);
-  }, [attachmentModal, deleteConfirmCategoryId, deleteConfirmGoalId, showAllUpdatesGoalId, editingCategoryId, completePrompt]);
+  }, [attachmentModal, showExportPopup, isExportingPdf, deleteConfirmCategoryId, deleteConfirmGoalId, showAllUpdatesGoalId, editingCategoryId, completePrompt]);
 
   const savedGoalForAttachments =
     attachmentModal?.kind === 'goal' && attachmentModal.id !== 'add'
@@ -1318,6 +1346,257 @@ export function GoalsTrackingTool({ toolId }: GoalsTrackingToolProps) {
               }`
             : 'Attachments');
 
+  const exportToPDF = async () => {
+    if (isExportingPdf) return;
+    setIsExportingPdf(true);
+
+    try {
+      const currentCategoryId = resolvedCategoryId;
+      const useAllCategories = exportAllCategories || !currentCategoryId;
+      const categoriesToExport = useAllCategories
+        ? categories
+        : categories.filter((category) => category.id === currentCategoryId);
+      const selectedCategoryName = categories.find((category) => category.id === currentCategoryId)?.name;
+
+      const matchesExport = (goal: Goal) => {
+        if (!includeCompleted && goal.status === 'Completed') return false;
+        if (!useAllCategories && goal.categoryId !== currentCategoryId) return false;
+        return true;
+      };
+
+      const categoryIds = new Set(categories.map((category) => category.id));
+      const goalsByCategory = categoriesToExport.map((category) => ({
+        category,
+        goals: goals.filter((goal) => goal.categoryId === category.id && matchesExport(goal)).sort(compareGoalsForExport),
+      }));
+
+      if (useAllCategories) {
+        const uncategorized = goals
+          .filter((goal) => !categoryIds.has(goal.categoryId) && matchesExport(goal))
+          .sort(compareGoalsForExport);
+        if (uncategorized.length > 0) {
+          goalsByCategory.push({
+            category: { id: 'uncategorized', name: 'Uncategorized', card_color: '#64748b' },
+            goals: uncategorized,
+          });
+        }
+      }
+
+      const exportedGoals = goalsByCategory.flatMap((group) => group.goals);
+      const groupsWithGoals = goalsByCategory.filter((group) => group.goals.length > 0);
+      const statusCounts: Record<GoalStatus, number> = {
+        'Not Started': 0,
+        'In Progress': 0,
+        Delayed: 0,
+        Completed: 0,
+      };
+      exportedGoals.forEach((goal) => {
+        statusCounts[goal.status] += 1;
+      });
+
+      const { jsPDF } = await import('jspdf');
+      const pdf = new jsPDF({
+        orientation: 'portrait',
+        unit: 'mm',
+        format: 'a4',
+      });
+
+      const pageWidth = pdf.internal.pageSize.getWidth();
+      const pageHeight = pdf.internal.pageSize.getHeight();
+      const margin = 15;
+      const contentWidth = pageWidth - margin * 2;
+      let yPos = margin;
+
+      const colors = {
+        background: [255, 255, 255] as const,
+        text: [15, 23, 42] as const,
+        title: [15, 23, 42] as const,
+        header: [241, 245, 249] as const,
+        muted: [71, 85, 105] as const,
+      };
+
+      const fillPage = () => {
+        pdf.setFillColor(colors.background[0], colors.background[1], colors.background[2]);
+        pdf.rect(0, 0, pageWidth, pageHeight, 'F');
+      };
+
+      const checkNewPage = (requiredHeight: number) => {
+        if (yPos + requiredHeight > pageHeight - margin) {
+          pdf.addPage();
+          fillPage();
+          yPos = margin;
+          return true;
+        }
+        return false;
+      };
+
+      const addSectionHeader = (title: string) => {
+        checkNewPage(15);
+        pdf.setFillColor(colors.header[0], colors.header[1], colors.header[2]);
+        pdf.rect(margin, yPos, contentWidth, 10, 'F');
+        pdf.setFontSize(13);
+        pdf.setFont('helvetica', 'bold');
+        pdf.setTextColor(colors.title[0], colors.title[1], colors.title[2]);
+        pdf.text(title, margin + 5, yPos + 7);
+        yPos += 15;
+      };
+
+      const addText = (text: string, fontSize = 10, isBold = false, indent = 0, muted = false) => {
+        pdf.setFontSize(fontSize);
+        pdf.setFont('helvetica', isBold ? 'bold' : 'normal');
+        const color = muted ? colors.muted : colors.text;
+        pdf.setTextColor(color[0], color[1], color[2]);
+        const maxWidth = contentWidth - indent - 5;
+        const lines = pdf.splitTextToSize(text, maxWidth) as string[];
+        const lineHeight = fontSize * 0.42;
+        checkNewPage(lines.length * lineHeight + 2);
+        lines.forEach((line) => {
+          pdf.text(line, margin + indent, yPos);
+          yPos += lineHeight;
+        });
+        yPos += 2;
+      };
+
+      const writeGoal = (goal: Goal) => {
+        checkNewPage(28);
+        addText(goal.title, 12, true, 5);
+        addText(`Status: ${goal.status}`, 9, false, 8);
+        addText(`Priority: ${goal.priority}`, 9, false, 8);
+        addText(`Target date: ${goal.targetDate ? formatDateForDisplay(goal.targetDate) : '—'}`, 9, false, 8);
+        addText(`Percent complete: ${getGoalPercent(goal)}%`, 9, false, 8);
+        if (goal.description.trim()) {
+          addText(`Description: ${goal.description.trim()}`, 9, false, 8);
+        }
+        if (goal.lastUpdateDate) {
+          addText(`Last update: ${formatDateForDisplay(goal.lastUpdateDate)}`, 9, false, 8);
+        }
+
+        const phases = [...goal.phases].sort((a, b) => a.order - b.order);
+        if (phases.length > 0) {
+          addText('Phases', 10, true, 8);
+          phases.forEach((phase) => {
+            const phaseTasks = goal.tasks.filter((task) => task.phaseId === phase.id);
+            const done = phaseTasks.filter((task) => task.completed).length;
+            addText(
+              `${phase.name} (${done}/${phaseTasks.length} tasks · ${getPhasePercent(goal, phase.id)}%)`,
+              9,
+              true,
+              10
+            );
+            if (phaseTasks.length === 0) {
+              addText('No tasks.', 8, false, 12, true);
+            }
+            phaseTasks.forEach((task) => {
+              addText(`${task.completed ? '[x]' : '[ ]'} ${task.title}`, 8, false, 12);
+            });
+          });
+        }
+
+        const orphanTasks = goal.tasks.filter((task) => !goal.phases.some((phase) => phase.id === task.phaseId));
+        if (orphanTasks.length > 0) {
+          addText('Tasks', 10, true, 8);
+          orphanTasks.forEach((task) => {
+            addText(`${task.completed ? '[x]' : '[ ]'} ${task.title}`, 8, false, 12);
+          });
+        }
+
+        const notes = [...goal.updateNotes].sort((a, b) => b.noteDate.localeCompare(a.noteDate));
+        if (notes.length > 0) {
+          addText('Updates', 10, true, 8);
+          notes.forEach((note) => {
+            addText(`${formatDateForDisplay(note.noteDate)}: ${note.note}`, 8, false, 10);
+          });
+        }
+
+        yPos += 3;
+      };
+
+      fillPage();
+
+      pdf.setFontSize(20);
+      pdf.setFont('helvetica', 'bold');
+      pdf.setTextColor(colors.title[0], colors.title[1], colors.title[2]);
+      const title = 'Goals Tracking Report';
+      pdf.text(title, (pageWidth - pdf.getTextWidth(title)) / 2, yPos);
+      yPos += 10;
+
+      pdf.setFontSize(10);
+      pdf.setFont('helvetica', 'normal');
+      pdf.setTextColor(colors.muted[0], colors.muted[1], colors.muted[2]);
+      pdf.text(`Generated on: ${formatReportDate(new Date())}`, margin, yPos);
+      yPos += 6;
+
+      const scopeLabel = useAllCategories ? 'All categories' : selectedCategoryName || 'Selected category';
+      const completedLabel = includeCompleted ? 'Open and completed goals' : 'Open goals only';
+      pdf.text(`${completedLabel}  ·  ${scopeLabel}`, margin, yPos);
+      yPos += 10;
+
+      addSectionHeader('Summary');
+      addText(`Goals: ${exportedGoals.length}`, 11, true, 5);
+      addText(`Not Started: ${statusCounts['Not Started']}`, 10, false, 5);
+      addText(`In Progress: ${statusCounts['In Progress']}`, 10, false, 5);
+      addText(`Delayed: ${statusCounts.Delayed}`, 10, false, 5);
+      if (includeCompleted) {
+        addText(`Completed: ${statusCounts.Completed}`, 10, false, 5);
+      }
+      addText(`Categories: ${groupsWithGoals.length}`, 10, false, 5);
+      yPos += 4;
+
+      if (groupsWithGoals.length === 0) {
+        addText('No goals match the selected options.', 10, false, 5, true);
+      }
+
+      groupsWithGoals.forEach(({ category, goals: categoryGoals }) => {
+        addSectionHeader(category.name);
+        const openGoals = categoryGoals.filter((goal) => goal.status !== 'Completed');
+        const completedGoals = categoryGoals.filter((goal) => goal.status === 'Completed');
+
+        if (openGoals.length > 0) {
+          openGoals.forEach(writeGoal);
+        } else if (!includeCompleted || completedGoals.length === 0) {
+          addText('No open goals.', 9, false, 8, true);
+        }
+
+        if (includeCompleted && completedGoals.length > 0) {
+          yPos += 2;
+          addText('Completed', 11, true, 5);
+          yPos += 1;
+          completedGoals.forEach(writeGoal);
+        }
+
+        yPos += 3;
+      });
+
+      const attachmentRefs = exportedGoals.flatMap((goal) => {
+        const goalFiles = (goal.attachments || [])
+          .map((file) => file.name?.trim())
+          .filter((name): name is string => Boolean(name))
+          .map((fileName) => `${goal.title} — ${fileName}`);
+        const noteFiles = (goal.updateNotes || []).flatMap((note) =>
+          (note.attachments || [])
+            .map((file) => file.name?.trim())
+            .filter((name): name is string => Boolean(name))
+            .map((fileName) => `${goal.title} — ${fileName}`)
+        );
+        return [...goalFiles, ...noteFiles];
+      });
+
+      if (attachmentRefs.length > 0) {
+        addSectionHeader('Attachments');
+        addText('File names only. Files themselves are not included in this report.', 8, false, 5, true);
+        attachmentRefs.forEach((line) => addText(line, 9, false, 8));
+      }
+
+      pdf.save(`Goals_Tracking_Report_${new Date().toISOString().split('T')[0]}.pdf`);
+      setShowExportPopup(false);
+    } catch (error) {
+      console.error('Error exporting goals tracking PDF:', error);
+      showError(error instanceof Error ? error.message : 'Failed to generate PDF');
+    } finally {
+      setIsExportingPdf(false);
+    }
+  };
+
   return (
     <div className="space-y-6 relative">
       {toolId && isLoadingData && (
@@ -1331,11 +1610,17 @@ export function GoalsTrackingTool({ toolId }: GoalsTrackingToolProps) {
         </div>
       )}
       {/* Title and description */}
-      <div>
-        <h2 className={titleClass}>Goals Tracking</h2>
-        <p className={descClass}>
-          Create goals by category, track progress with phases and tasks, and get reminders when updates are due.
-        </p>
+      <div className="flex items-start justify-between gap-3">
+        <div>
+          <h2 className={titleClass}>Goals Tracking</h2>
+          <p className={descClass}>
+            Create goals by category, track progress with phases and tasks, and get reminders when updates are due.
+          </p>
+        </div>
+        <ExportPdfIconButton
+          title="Export goals to PDF"
+          onClick={() => setShowExportPopup(true)}
+        />
       </div>
 
       {/* Category selector */}
@@ -2506,6 +2791,120 @@ export function GoalsTrackingTool({ toolId }: GoalsTrackingToolProps) {
             </div>
           )}
         </>
+      )}
+
+      {showExportPopup && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
+          <div
+            className={
+              isLight
+                ? 'w-full max-w-md rounded-2xl border border-slate-200 bg-white p-6 shadow-2xl mx-4'
+                : 'w-full max-w-md rounded-2xl border border-slate-800 bg-slate-900 p-6 shadow-2xl mx-4'
+            }
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="gt-export-title"
+          >
+            <div className="flex items-center justify-between mb-4">
+              <h3 id="gt-export-title" className={isLight ? 'text-lg font-semibold text-slate-900' : 'text-lg font-semibold text-slate-50'}>
+                Export Options
+              </h3>
+              <button
+                type="button"
+                onClick={() => !isExportingPdf && setShowExportPopup(false)}
+                disabled={isExportingPdf}
+                className={isLight ? 'text-slate-600 hover:text-slate-900 transition-colors disabled:opacity-50' : 'text-slate-400 hover:text-slate-200 transition-colors disabled:opacity-50'}
+                title="Close"
+                aria-label="Close"
+              >
+                <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                </svg>
+              </button>
+            </div>
+
+            <div className="space-y-4">
+              <p className={`${descClass}`}>
+                Attachment files are listed by name at the end.
+              </p>
+
+              <fieldset className="space-y-2" disabled={isExportingPdf}>
+                <legend className={`${labelClass} mb-0`}>Categories</legend>
+                <label className={`flex items-start gap-3 ${bodyTextClass} cursor-pointer`}>
+                  <input
+                    type="radio"
+                    name="gtExportScope"
+                    checked={exportAllCategories || !resolvedCategoryId}
+                    onChange={() => setExportAllCategories(true)}
+                    className={isLight
+                      ? 'mt-0.5 h-4 w-4 border-slate-400 text-emerald-600 focus:ring-emerald-500'
+                      : 'mt-0.5 h-4 w-4 border-slate-600 bg-slate-700 text-emerald-500 focus:ring-emerald-500'}
+                  />
+                  <span>All categories</span>
+                </label>
+                <label
+                  className={`flex items-start gap-3 ${
+                    resolvedCategoryId
+                      ? `${bodyTextClass} cursor-pointer`
+                      : isLight
+                        ? 'text-slate-400 cursor-not-allowed'
+                        : 'text-slate-500 cursor-not-allowed'
+                  }`}
+                >
+                  <input
+                    type="radio"
+                    name="gtExportScope"
+                    checked={!exportAllCategories && Boolean(resolvedCategoryId)}
+                    onChange={() => setExportAllCategories(false)}
+                    disabled={!resolvedCategoryId}
+                    className={isLight
+                      ? 'mt-0.5 h-4 w-4 border-slate-400 text-emerald-600 focus:ring-emerald-500'
+                      : 'mt-0.5 h-4 w-4 border-slate-600 bg-slate-700 text-emerald-500 focus:ring-emerald-500'}
+                  />
+                  <span>
+                    Current category only
+                    {selectedCategory ? ` (${selectedCategory.name})` : ''}
+                  </span>
+                </label>
+              </fieldset>
+
+              <div className="flex items-start gap-3">
+                <input
+                  type="checkbox"
+                  id="includeCompletedExport"
+                  checked={includeCompleted}
+                  onChange={(e) => setIncludeCompleted(e.target.checked)}
+                  disabled={isExportingPdf}
+                  className={isLight
+                    ? 'mt-0.5 h-4 w-4 rounded border-slate-400 text-emerald-600 focus:ring-emerald-500'
+                    : 'mt-0.5 h-4 w-4 rounded border-slate-600 bg-slate-700 text-emerald-500 focus:ring-emerald-500'}
+                />
+                <label htmlFor="includeCompletedExport" className={`${bodyTextClass} cursor-pointer`}>
+                  Include completed goals
+                </label>
+              </div>
+
+              <div className="flex gap-3 pt-2">
+                <button
+                  type="button"
+                  onClick={exportToPDF}
+                  disabled={isExportingPdf}
+                  className={`flex-1 ${primaryButtonClass}`}
+                >
+                  {isExportingPdf ? 'Generating…' : 'Export to PDF'}
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setShowExportPopup(false)}
+                  disabled={isExportingPdf}
+                  className={secondaryButtonClass}
+                >
+                  Cancel
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
       )}
 
       <AttachmentModal

@@ -5,6 +5,7 @@ import { useTheme } from './AppThemeProvider';
 import { useAppNotice } from './AppNotice';
 import { AttachmentButton } from './AttachmentButton';
 import { AttachmentModal } from './AttachmentModal';
+import { ExportPdfIconButton } from './ExportPdfIconButton';
 import {
   canPreviewAttachment,
   createPendingAttachment,
@@ -51,7 +52,7 @@ type CleaningScheduleToolProps = {
   toolId?: string;
 };
 
-type TabId = 'schedule' | 'library' | 'categories' | 'export';
+type TabId = 'schedule' | 'library' | 'categories';
 type RangeId = 'overdue' | 'this_week' | 'this_month' | 'next_3_months' | 'all_active';
 type SortId = 'nextDue' | 'name' | 'category' | 'frequency';
 type LibraryFilter = 'all' | 'available' | 'scheduled' | 'hidden';
@@ -132,6 +133,10 @@ function formatDateForDisplay(isoDate: string): string {
   const [year, month, day] = isoDate.split('T')[0].split('-');
   if (!year || !month || !day) return isoDate;
   return `${Number(month)}/${Number(day)}/${year}`;
+}
+
+function formatReportDate(date: Date): string {
+  return date.toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' });
 }
 
 function startOfWeek(iso: string): string {
@@ -737,6 +742,10 @@ export function CleaningScheduleTool({ toolId }: CleaningScheduleToolProps) {
   const [deleteTarget, setDeleteTarget] = useState<DeleteTarget | null>(null);
   const [deleteConfirmText, setDeleteConfirmText] = useState('');
   const [showExportPopup, setShowExportPopup] = useState(false);
+  const [includeHistory, setIncludeHistory] = useState(false);
+  const [exportAllCategories, setExportAllCategories] = useState(true);
+  const [exportCategoryId, setExportCategoryId] = useState('');
+  const [isExportingPdf, setIsExportingPdf] = useState(false);
   const [banner, setBanner] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
 
   const today = todayIso();
@@ -854,11 +863,11 @@ export function CleaningScheduleTool({ toolId }: CleaningScheduleToolProps) {
         setDetailEditing(false);
         return;
       }
-      if (showExportPopup) setShowExportPopup(false);
+      if (showExportPopup && !isExportingPdf) setShowExportPopup(false);
     };
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
-  }, [deleteTarget, completeOccurrence, pendingCompletionAttachments, attachmentModal, activateItemIds, detailTaskId, showExportPopup]);
+  }, [deleteTarget, completeOccurrence, pendingCompletionAttachments, attachmentModal, activateItemIds, detailTaskId, showExportPopup, isExportingPdf]);
 
   const sortedCategories = useMemo(
     () => [...categories].sort((a, b) => a.name.localeCompare(b.name)),
@@ -1946,12 +1955,241 @@ export function CleaningScheduleTool({ toolId }: CleaningScheduleToolProps) {
     );
   };
 
+  const exportToPDF = async () => {
+    if (isExportingPdf) return;
+    if (!exportAllCategories && !exportCategoryId) {
+      showError('Select a category, or choose All categories.');
+      return;
+    }
+
+    setIsExportingPdf(true);
+
+    try {
+      const useAllCategories = exportAllCategories || !exportCategoryId;
+      const selectedCategory = categories.find((category) => category.id === exportCategoryId);
+      const selectedCategoryName = selectedCategory?.name;
+
+      const rows = scheduledTasks.flatMap((task) => {
+        const item = libraryItems.find((entry) => entry.id === task.libraryItemId);
+        if (!item) return [];
+        if (!includeHistory && !task.isActive) return [];
+        if (!useAllCategories && item.categoryId !== exportCategoryId) return [];
+        return [{
+          task,
+          item,
+          categoryId: item.categoryId,
+          categoryLabel: categoryName(item.categoryId),
+          status: occurrenceStatus(asDateOnly(task.nextDueDate) || task.nextDueDate, today),
+        }];
+      });
+
+      const sortRows = (a: (typeof rows)[number], b: (typeof rows)[number]) =>
+        compareIso(asDateOnly(a.task.nextDueDate) || a.task.nextDueDate, asDateOnly(b.task.nextDueDate) || b.task.nextDueDate)
+        || a.item.name.localeCompare(b.item.name);
+
+      const activeRows = rows.filter((row) => row.task.isActive).sort(sortRows);
+      const inactiveRows = rows.filter((row) => !row.task.isActive).sort(sortRows);
+      const exportedRows = includeHistory ? [...activeRows, ...inactiveRows] : activeRows;
+      const overdueCount = activeRows.filter((row) => row.status === 'Overdue').length;
+
+      const categoryIds = Array.from(new Set(exportedRows.map((row) => row.categoryId)));
+      const categoriesToPrint = (useAllCategories ? sortedCategories : sortedCategories.filter((category) => category.id === exportCategoryId))
+        .filter((category) => categoryIds.includes(category.id));
+      const uncategorizedRows = exportedRows.filter(
+        (row) => !categories.some((category) => category.id === row.categoryId)
+      );
+      const categoryGroups = [
+        ...categoriesToPrint.map((category) => ({
+          label: category.name,
+          active: activeRows.filter((row) => row.categoryId === category.id),
+          inactive: inactiveRows.filter((row) => row.categoryId === category.id),
+        })),
+        ...(uncategorizedRows.length > 0
+          ? [{
+              label: 'Uncategorized',
+              active: uncategorizedRows.filter((row) => row.task.isActive),
+              inactive: uncategorizedRows.filter((row) => !row.task.isActive),
+            }]
+          : []),
+      ].filter((group) => group.active.length > 0 || (includeHistory && group.inactive.length > 0));
+
+      const { jsPDF } = await import('jspdf');
+      const pdf = new jsPDF({
+        orientation: 'portrait',
+        unit: 'mm',
+        format: 'a4',
+      });
+
+      const pageWidth = pdf.internal.pageSize.getWidth();
+      const pageHeight = pdf.internal.pageSize.getHeight();
+      const margin = 15;
+      const contentWidth = pageWidth - margin * 2;
+      let yPos = margin;
+
+      const colors = {
+        background: [255, 255, 255] as const,
+        text: [15, 23, 42] as const,
+        title: [15, 23, 42] as const,
+        header: [241, 245, 249] as const,
+        muted: [71, 85, 105] as const,
+      };
+
+      const fillPage = () => {
+        pdf.setFillColor(colors.background[0], colors.background[1], colors.background[2]);
+        pdf.rect(0, 0, pageWidth, pageHeight, 'F');
+      };
+
+      const checkNewPage = (requiredHeight: number) => {
+        if (yPos + requiredHeight > pageHeight - margin) {
+          pdf.addPage();
+          fillPage();
+          yPos = margin;
+          return true;
+        }
+        return false;
+      };
+
+      const addSectionHeader = (title: string) => {
+        checkNewPage(15);
+        pdf.setFillColor(colors.header[0], colors.header[1], colors.header[2]);
+        pdf.rect(margin, yPos, contentWidth, 10, 'F');
+        pdf.setFontSize(13);
+        pdf.setFont('helvetica', 'bold');
+        pdf.setTextColor(colors.title[0], colors.title[1], colors.title[2]);
+        pdf.text(title, margin + 5, yPos + 7);
+        yPos += 15;
+      };
+
+      const addText = (text: string, fontSize = 10, isBold = false, indent = 0, muted = false) => {
+        pdf.setFontSize(fontSize);
+        pdf.setFont('helvetica', isBold ? 'bold' : 'normal');
+        const color = muted ? colors.muted : colors.text;
+        pdf.setTextColor(color[0], color[1], color[2]);
+        const maxWidth = contentWidth - indent - 5;
+        const lines = pdf.splitTextToSize(text, maxWidth) as string[];
+        const lineHeight = fontSize * 0.42;
+        checkNewPage(lines.length * lineHeight + 2);
+        lines.forEach((line) => {
+          pdf.text(line, margin + indent, yPos);
+          yPos += lineHeight;
+        });
+        yPos += 2;
+      };
+
+      const writeTask = (row: (typeof rows)[number]) => {
+        checkNewPage(24);
+        addText(row.item.name, 11, true, 8);
+        addText(`Frequency: ${frequencyLabel(row.task.frequency)}`, 9, false, 8);
+        addText(`Next due: ${formatDateForDisplay(row.task.nextDueDate)}`, 9, false, 8);
+        addText(`Status: ${row.status}`, 9, false, 8);
+        if (row.task.lastCompletedDate) {
+          addText(`Last completed: ${formatDateForDisplay(row.task.lastCompletedDate)}`, 9, false, 8);
+        }
+        if (row.item.description.trim()) {
+          addText(`Description: ${row.item.description.trim()}`, 9, false, 8);
+        }
+        if (row.item.notes.trim()) {
+          addText(`Notes: ${row.item.notes.trim()}`, 9, false, 8);
+        }
+        if (!row.task.isActive && row.task.dateInactivated) {
+          addText(`Date inactivated: ${formatDateForDisplay(row.task.dateInactivated)}`, 9, false, 8);
+        }
+        yPos += 3;
+      };
+
+      fillPage();
+
+      pdf.setFontSize(20);
+      pdf.setFont('helvetica', 'bold');
+      pdf.setTextColor(colors.title[0], colors.title[1], colors.title[2]);
+      const title = 'Cleaning Schedule Report';
+      pdf.text(title, (pageWidth - pdf.getTextWidth(title)) / 2, yPos);
+      yPos += 10;
+
+      pdf.setFontSize(10);
+      pdf.setFont('helvetica', 'normal');
+      pdf.setTextColor(colors.muted[0], colors.muted[1], colors.muted[2]);
+      pdf.text(`Generated on: ${formatReportDate(new Date())}`, margin, yPos);
+      yPos += 6;
+
+      const historyLabel = includeHistory ? 'Active and inactive tasks' : 'Active tasks only';
+      const scopeLabel = useAllCategories ? 'All categories' : selectedCategoryName || 'Selected category';
+      pdf.text(`${historyLabel}  ·  ${scopeLabel}`, margin, yPos);
+      yPos += 10;
+
+      addSectionHeader('Summary');
+      addText(`Total scheduled tasks: ${exportedRows.length}`, 11, true, 5);
+      addText(`Active tasks: ${activeRows.length}`, 10, false, 5);
+      if (includeHistory) {
+        addText(`Inactive tasks: ${inactiveRows.length}`, 10, false, 5);
+      }
+      addText(`Overdue: ${overdueCount}`, 10, false, 5);
+      addText(`Categories: ${categoryGroups.length}`, 10, false, 5);
+      if (categoryGroups.length > 0) {
+        yPos += 1;
+        addText('By category', 10, true, 5);
+        categoryGroups.forEach((group) => {
+          const count = includeHistory ? group.active.length + group.inactive.length : group.active.length;
+          addText(`${group.label}: ${count}`, 9, false, 8);
+        });
+      }
+      yPos += 4;
+
+      if (exportedRows.length === 0) {
+        addText('No scheduled tasks match the selected options.', 10, false, 5, true);
+      }
+
+      categoryGroups.forEach((group) => {
+        addSectionHeader(group.label);
+        if (group.active.length > 0) {
+          group.active.forEach(writeTask);
+        } else if (!includeHistory || group.inactive.length === 0) {
+          addText('No active tasks.', 9, false, 8, true);
+        }
+        if (includeHistory && group.inactive.length > 0) {
+          yPos += 2;
+          addText('Inactive', 11, true, 5);
+          yPos += 1;
+          group.inactive.forEach(writeTask);
+        }
+        yPos += 3;
+      });
+
+      const attachmentRefs = exportedRows.flatMap((row) =>
+        (row.item.attachments || [])
+          .map((file) => file.name?.trim())
+          .filter((name): name is string => Boolean(name))
+          .map((fileName) => `${row.item.name} — ${fileName}`)
+      );
+
+      if (attachmentRefs.length > 0) {
+        addSectionHeader('Attachments');
+        addText('File names only. Files themselves are not included in this report.', 8, false, 5, true);
+        attachmentRefs.forEach((line) => addText(line, 9, false, 8));
+      }
+
+      pdf.save(`Cleaning_Schedule_Report_${new Date().toISOString().split('T')[0]}.pdf`);
+      setShowExportPopup(false);
+    } catch (error) {
+      console.error('Error exporting cleaning schedule PDF:', error);
+      showError(error instanceof Error ? error.message : 'Failed to generate PDF');
+    } finally {
+      setIsExportingPdf(false);
+    }
+  };
+
   return (
     <div className="space-y-6">
-      <div>
-        <h2 className={titleClass}>Cleaning Schedule</h2>
-        <p className={descClass}>Activate household cleaning tasks, set a recurring schedule, and see what is due next.</p>
-        {isLoading && <p className={`${descClass} mt-2`}>Loading...</p>}
+      <div className="flex items-start justify-between gap-3">
+        <div>
+          <h2 className={titleClass}>Cleaning Schedule</h2>
+          <p className={descClass}>Activate household cleaning tasks, set a recurring schedule, and see what is due next.</p>
+          {isLoading && <p className={`${descClass} mt-2`}>Loading...</p>}
+        </div>
+        <ExportPdfIconButton
+          title="Export cleaning schedule to PDF"
+          onClick={() => setShowExportPopup(true)}
+        />
       </div>
 
       {banner && (
@@ -1966,7 +2204,6 @@ export function CleaningScheduleTool({ toolId }: CleaningScheduleToolProps) {
             { id: 'schedule', label: 'Schedule' },
             { id: 'library', label: 'Library' },
             { id: 'categories', label: 'Categories' },
-            { id: 'export', label: 'Export' },
           ].map((tab) => (
             <button
               key={tab.id}
@@ -2478,29 +2715,15 @@ export function CleaningScheduleTool({ toolId }: CleaningScheduleToolProps) {
         </div>
       )}
 
-      {activeTab === 'export' && (
-        <div className="space-y-6">
-          <div className={cardClass}>
-            <h3 className={`${sectionTitleClass} mb-4`}>Export Cleaning Schedule Report</h3>
-            <p className={`${descClass} mb-4`}>
-              Generate a comprehensive PDF report of all your cleaning tasks. The report will include scheduled items,
-              summary statistics, and category breakdown.
-            </p>
-            <button type="button" onClick={() => setShowExportPopup(true)} className={primaryButtonClass}>
-              Generate PDF Report
-            </button>
-          </div>
-        </div>
-      )}
-
       {showExportPopup && (
         <div className={overlayClass}>
-          <div className={modalCardClass}>
+          <div className={modalCardClass} role="dialog" aria-modal="true" aria-labelledby="cleaning-export-title">
             <div className="flex items-center justify-between mb-4">
-              <h3 className={sectionTitleClass}>Export Options</h3>
+              <h3 id="cleaning-export-title" className={sectionTitleClass}>Export Options</h3>
               <button
                 type="button"
-                onClick={() => setShowExportPopup(false)}
+                onClick={() => !isExportingPdf && setShowExportPopup(false)}
+                disabled={isExportingPdf}
                 aria-label="Close modal"
                 title="Close modal"
                 className={iconButtonClass}
@@ -2508,17 +2731,98 @@ export function CleaningScheduleTool({ toolId }: CleaningScheduleToolProps) {
                 <CloseIcon />
               </button>
             </div>
-            <div className="flex gap-3 pt-2">
-              <button
-                type="button"
-                onClick={() => setShowExportPopup(false)}
-                className={`flex-1 ${primaryButtonClass}`}
-              >
-                Export to PDF
-              </button>
-              <button type="button" onClick={() => setShowExportPopup(false)} className={secondaryButtonClass}>
-                Cancel
-              </button>
+            <div className="space-y-4">
+              <p className={descClass}>
+                Attachment files are listed by name at the end.
+              </p>
+
+              <div className="flex items-start gap-3">
+                <input
+                  type="checkbox"
+                  id="includeHistoryExport"
+                  checked={includeHistory}
+                  onChange={(e) => setIncludeHistory(e.target.checked)}
+                  disabled={isExportingPdf}
+                  className={isLight
+                    ? 'mt-0.5 h-4 w-4 rounded border-slate-400 text-emerald-600 focus:ring-emerald-500'
+                    : 'mt-0.5 h-4 w-4 rounded border-slate-600 bg-slate-700 text-emerald-500 focus:ring-emerald-500'}
+                />
+                <label htmlFor="includeHistoryExport" className={`${isLight ? 'text-slate-700' : 'text-slate-300'} cursor-pointer`}>
+                  Include inactive scheduled tasks
+                </label>
+              </div>
+
+              <fieldset className="space-y-2" disabled={isExportingPdf}>
+                <legend className={`${labelClass} mb-0`}>Categories</legend>
+                <label className={`flex items-start gap-3 ${isLight ? 'text-slate-700' : 'text-slate-300'} cursor-pointer`}>
+                  <input
+                    type="radio"
+                    name="cleaningExportScope"
+                    checked={exportAllCategories}
+                    onChange={() => setExportAllCategories(true)}
+                    className={isLight
+                      ? 'mt-0.5 h-4 w-4 border-slate-400 text-emerald-600 focus:ring-emerald-500'
+                      : 'mt-0.5 h-4 w-4 border-slate-600 bg-slate-700 text-emerald-500 focus:ring-emerald-500'}
+                  />
+                  <span>All categories</span>
+                </label>
+                <label className={`flex items-start gap-3 ${isLight ? 'text-slate-700' : 'text-slate-300'} cursor-pointer`}>
+                  <input
+                    type="radio"
+                    name="cleaningExportScope"
+                    checked={!exportAllCategories}
+                    onChange={() => {
+                      setExportAllCategories(false);
+                      if (!exportCategoryId && sortedCategories[0]) {
+                        setExportCategoryId(sortedCategories[0].id);
+                      }
+                    }}
+                    className={isLight
+                      ? 'mt-0.5 h-4 w-4 border-slate-400 text-emerald-600 focus:ring-emerald-500'
+                      : 'mt-0.5 h-4 w-4 border-slate-600 bg-slate-700 text-emerald-500 focus:ring-emerald-500'}
+                  />
+                  <span>One category</span>
+                </label>
+                {!exportAllCategories && (
+                  <div className="ml-7">
+                    <label className={compactLabelClass} htmlFor="cleaning-export-category">
+                      Category
+                    </label>
+                    <select
+                      id="cleaning-export-category"
+                      value={exportCategoryId}
+                      onChange={(e) => setExportCategoryId(e.target.value)}
+                      className={selectClass}
+                    >
+                      <option value="">Select a category</option>
+                      {sortedCategories.map((category) => (
+                        <option key={category.id} value={category.id}>
+                          {category.isActive === false ? `${category.name} (archived)` : category.name}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                )}
+              </fieldset>
+
+              <div className="flex gap-3 pt-2">
+                <button
+                  type="button"
+                  onClick={exportToPDF}
+                  disabled={isExportingPdf || (!exportAllCategories && !exportCategoryId)}
+                  className={`flex-1 ${primaryButtonClass}`}
+                >
+                  {isExportingPdf ? 'Generating…' : 'Export to PDF'}
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setShowExportPopup(false)}
+                  disabled={isExportingPdf}
+                  className={secondaryButtonClass}
+                >
+                  Cancel
+                </button>
+              </div>
             </div>
           </div>
         </div>

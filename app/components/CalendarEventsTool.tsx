@@ -5,6 +5,7 @@ import { useTheme } from './AppThemeProvider';
 import { useAppNotice } from './AppNotice';
 import { AttachmentButton } from './AttachmentButton';
 import { AttachmentModal } from './AttachmentModal';
+import { ExportPdfIconButton } from './ExportPdfIconButton';
 import {
   canPreviewAttachment,
   createPendingAttachment,
@@ -157,6 +158,20 @@ const DAYS_OF_WEEK = [
   { value: 5, label: 'Friday', short: 'Fri' },
   { value: 6, label: 'Saturday', short: 'Sat' }
 ];
+
+function formatEventTime(time: string): string {
+  const [hourPart, minutePart = '00'] = time.split(':');
+  const hour24 = Number(hourPart);
+  if (!Number.isFinite(hour24)) return time;
+  const minutes = minutePart.slice(0, 2).padStart(2, '0');
+  const period = hour24 >= 12 ? 'PM' : 'AM';
+  const hour12 = hour24 % 12 || 12;
+  return `${hour12}:${minutes} ${period}`;
+}
+
+function formatReportDate(date: Date): string {
+  return date.toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' });
+}
 
 type CommonHoliday = {
   name: string;
@@ -363,6 +378,8 @@ export function CalendarEventsTool({ toolId }: CalendarEventsToolProps) {
   // Export state
   const [showExportPopup, setShowExportPopup] = useState(false);
   const [includeHistory, setIncludeHistory] = useState(false);
+  const [exportAllCategories, setExportAllCategories] = useState(true);
+  const [isExportingPdf, setIsExportingPdf] = useState(false);
 
   const [pendingAttachments, setPendingAttachments] = useState<AttachmentItem[]>([]);
   const [attachmentModal, setAttachmentModal] = useState<null | 'add' | string>(null);
@@ -1045,188 +1062,213 @@ export function CalendarEventsTool({ toolId }: CalendarEventsToolProps) {
   };
 
   const exportToPDF = async () => {
-    // Group all events by category
-    const eventsByCategory = categories.map(category => {
-      const categoryEvents = calendarEvents.filter(e => e.categoryId === category.id);
-      const activeEvents = categoryEvents.filter(e => e.isActive);
-      const historyEvents = categoryEvents.filter(e => !e.isActive);
-      return {
-        category,
-        activeEvents,
-        historyEvents,
-        allEvents: includeHistory ? [...activeEvents, ...historyEvents] : activeEvents
-      };
-    });
+    if (isExportingPdf) return;
+    setIsExportingPdf(true);
 
-    // Load jsPDF from CDN
-    let jsPDF: any;
-    if ((window as any).jspdf?.jsPDF) {
-      jsPDF = (window as any).jspdf.jsPDF;
-    } else {
-      await new Promise<void>((resolve) => {
-        const script = document.createElement('script');
-        script.src = 'https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js';
-        script.onload = () => {
-          jsPDF = (window as any).jspdf.jsPDF;
-          resolve();
+    try {
+      const useAllCategories = exportAllCategories || !selectedCategoryId;
+      const categoriesToExport = useAllCategories
+        ? categories
+        : categories.filter((category) => category.id === selectedCategoryId);
+      const selectedCategoryName = categories.find((category) => category.id === selectedCategoryId)?.name;
+
+      const sortByDate = (a: CalendarEvent, b: CalendarEvent) =>
+        parseLocalDate(a.date).getTime() - parseLocalDate(b.date).getTime();
+
+      const eventsByCategory = categoriesToExport.map((category) => {
+        const categoryEvents = calendarEvents.filter((event) => event.categoryId === category.id);
+        return {
+          category,
+          activeEvents: categoryEvents.filter((event) => event.isActive).sort(sortByDate),
+          historyEvents: categoryEvents.filter((event) => !event.isActive).sort(sortByDate),
         };
-        document.head.appendChild(script);
       });
-    }
 
-    const pdf = new jsPDF({
-      orientation: 'portrait',
-      unit: 'mm',
-      format: 'a4'
-    });
+      const exportedEvents = eventsByCategory.flatMap(({ activeEvents, historyEvents }) =>
+        includeHistory ? [...activeEvents, ...historyEvents] : activeEvents
+      );
 
-    const pageWidth = pdf.internal.pageSize.getWidth();
-    const pageHeight = pdf.internal.pageSize.getHeight();
-    const margin = 15;
-    const contentWidth = pageWidth - (margin * 2);
-    let yPos = margin;
-
-    // Light mode colors
-    const colors = {
-      background: [255, 255, 255],
-      text: [0, 0, 0],
-      title: [0, 0, 0],
-      header: [240, 240, 240],
-      border: [200, 200, 200],
-      accent: [16, 185, 129] // emerald-500
-    };
-
-    // Helper function to add a new page if needed
-    const checkNewPage = (requiredHeight: number) => {
-      if (yPos + requiredHeight > pageHeight - margin) {
-        pdf.addPage();
-        yPos = margin;
-        return true;
-      }
-      return false;
-    };
-
-    // Helper function to add a section header
-    const addSectionHeader = (title: string) => {
-      checkNewPage(15);
-      pdf.setFillColor(...colors.header);
-      pdf.rect(margin, yPos, contentWidth, 10, 'F');
-      pdf.setFontSize(16);
-      pdf.setFont('helvetica', 'bold');
-      pdf.setTextColor(...colors.title);
-      pdf.text(title, margin + 5, yPos + 7);
-      yPos += 15;
-    };
-
-    // Helper function to add text with wrapping
-    const addText = (text: string, fontSize: number = 10, isBold: boolean = false, indent: number = 0) => {
-      pdf.setFontSize(fontSize);
-      pdf.setFont('helvetica', isBold ? 'bold' : 'normal');
-      pdf.setTextColor(...colors.text);
-      
-      const maxWidth = contentWidth - indent - 5;
-      const lines = pdf.splitTextToSize(text, maxWidth);
-      
-      checkNewPage(lines.length * (fontSize * 0.4) + 2);
-      
-      lines.forEach((line: string) => {
-        pdf.text(line, margin + indent, yPos);
-        yPos += fontSize * 0.4;
+      const { jsPDF } = await import('jspdf');
+      const pdf = new jsPDF({
+        orientation: 'portrait',
+        unit: 'mm',
+        format: 'a4',
       });
-      yPos += 2;
-    };
 
-    // Title
-    pdf.setFillColor(...colors.background);
-    pdf.rect(0, 0, pageWidth, pageHeight, 'F');
-    
-    pdf.setFontSize(20);
-    pdf.setFont('helvetica', 'bold');
-    pdf.setTextColor(...colors.title);
-    const title = 'Calendar Events - Complete Report';
-    const titleWidth = pdf.getTextWidth(title);
-    pdf.text(title, (pageWidth - titleWidth) / 2, yPos);
-    yPos += 15;
+      const pageWidth = pdf.internal.pageSize.getWidth();
+      const pageHeight = pdf.internal.pageSize.getHeight();
+      const margin = 15;
+      const contentWidth = pageWidth - margin * 2;
+      let yPos = margin;
 
-    pdf.setFontSize(10);
-    pdf.setFont('helvetica', 'normal');
-    pdf.setTextColor(...colors.text);
-    const dateStr = new Date().toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' });
-    pdf.text(`Generated on: ${dateStr}`, margin, yPos);
-    yPos += 10;
+      const colors = {
+        background: [255, 255, 255] as const,
+        text: [15, 23, 42] as const,
+        title: [15, 23, 42] as const,
+        header: [241, 245, 249] as const,
+        muted: [71, 85, 105] as const,
+      };
 
-    // Summary Section
-    const totalActiveEvents = eventsByCategory.reduce((sum, cat) => sum + cat.activeEvents.length, 0);
-    const totalHistoryEvents = eventsByCategory.reduce((sum, cat) => sum + cat.historyEvents.length, 0);
-    const totalEvents = includeHistory 
-      ? totalActiveEvents + totalHistoryEvents 
-      : totalActiveEvents;
+      const fillPage = () => {
+        pdf.setFillColor(colors.background[0], colors.background[1], colors.background[2]);
+        pdf.rect(0, 0, pageWidth, pageHeight, 'F');
+      };
 
-    addSectionHeader('Summary');
-    addText(`Total Events: ${totalEvents}`, 12, true, 5);
-    addText(`Active Events: ${totalActiveEvents}`, 10, false, 5);
-    if (includeHistory) {
-      addText(`Inactive Events: ${totalHistoryEvents}`, 10, false, 5);
-    }
-    addText(`Categories: ${categories.length}`, 10, false, 5);
-    yPos += 5;
+      const checkNewPage = (requiredHeight: number) => {
+        if (yPos + requiredHeight > pageHeight - margin) {
+          pdf.addPage();
+          fillPage();
+          yPos = margin;
+          return true;
+        }
+        return false;
+      };
 
-    // Events by Category
-    eventsByCategory.forEach(({ category, allEvents }) => {
-      if (allEvents.length === 0) return;
+      const addSectionHeader = (title: string) => {
+        checkNewPage(15);
+        pdf.setFillColor(colors.header[0], colors.header[1], colors.header[2]);
+        pdf.rect(margin, yPos, contentWidth, 10, 'F');
+        pdf.setFontSize(13);
+        pdf.setFont('helvetica', 'bold');
+        pdf.setTextColor(colors.title[0], colors.title[1], colors.title[2]);
+        pdf.text(title, margin + 5, yPos + 7);
+        yPos += 15;
+      };
 
-      addSectionHeader(category.name);
-      
-      // Sort events by date
-      const sortedEvents = [...allEvents].sort((a, b) => {
-        const dateA = parseLocalDate(a.date);
-        const dateB = parseLocalDate(b.date);
-        return dateA.getTime() - dateB.getTime();
-      });
-      
-      sortedEvents.forEach((event) => {
-        checkNewPage(25);
-        
-        addText(event.title, 11, true, 10);
-        addText(`Date: ${parseLocalDate(event.date).toLocaleDateString()}`, 9, false, 10);
-        addText(`Frequency: ${event.frequency}`, 9, false, 10);
-        
+      const addText = (text: string, fontSize = 10, isBold = false, indent = 0, muted = false) => {
+        pdf.setFontSize(fontSize);
+        pdf.setFont('helvetica', isBold ? 'bold' : 'normal');
+        const color = muted ? colors.muted : colors.text;
+        pdf.setTextColor(color[0], color[1], color[2]);
+
+        const maxWidth = contentWidth - indent - 5;
+        const lines = pdf.splitTextToSize(text, maxWidth) as string[];
+        const lineHeight = fontSize * 0.42;
+
+        checkNewPage(lines.length * lineHeight + 2);
+
+        lines.forEach((line) => {
+          pdf.text(line, margin + indent, yPos);
+          yPos += lineHeight;
+        });
+        yPos += 2;
+      };
+
+      const writeEvent = (event: CalendarEvent) => {
+        checkNewPage(22);
+        addText(event.title, 11, true, 8);
+        addText(`Date: ${formatReportDate(parseLocalDate(event.date))}`, 9, false, 8);
         if (event.time) {
-          addText(`Time: ${event.time}`, 9, false, 10);
+          addText(`Time: ${formatEventTime(event.time)}`, 9, false, 8);
         }
-        
-        if (event.endDate) {
-          addText(`End Date: ${parseLocalDate(event.endDate).toLocaleDateString()}`, 9, false, 10);
-        }
-        
+        addText(`Frequency: ${event.frequency}`, 9, false, 8);
         if (event.frequency === 'Weekly' && event.daysOfWeek && event.daysOfWeek.length > 0) {
-          const dayNames = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
-          const days = event.daysOfWeek.map(d => dayNames[d]).join(', ');
-          addText(`Days of Week: ${days}`, 9, false, 10);
+          const days = [...event.daysOfWeek]
+            .sort((a, b) => a - b)
+            .map((day) => DAYS_OF_WEEK.find((item) => item.value === day)?.label)
+            .filter(Boolean)
+            .join(', ');
+          addText(`Days of week: ${days}`, 9, false, 8);
         }
-        
         if (event.frequency === 'Monthly' && event.dayOfMonth) {
-          addText(`Day of Month: ${event.dayOfMonth}`, 9, false, 10);
+          addText(`Day of month: ${event.dayOfMonth}`, 9, false, 8);
         }
-        
+        if (event.endDate) {
+          addText(`End date: ${formatReportDate(parseLocalDate(event.endDate))}`, 9, false, 8);
+        }
         if (!event.isActive && event.dateInactivated) {
-          addText(`Date Inactivated: ${parseLocalDate(event.dateInactivated).toLocaleDateString()}`, 9, false, 10);
+          addText(`Date inactivated: ${formatReportDate(parseLocalDate(event.dateInactivated))}`, 9, false, 8);
         }
-        
         if (event.notes) {
-          addText(`Notes: ${event.notes}`, 9, false, 10);
+          addText(`Notes: ${event.notes}`, 9, false, 8);
         }
-        
+        yPos += 3;
+      };
+
+      fillPage();
+
+      pdf.setFontSize(20);
+      pdf.setFont('helvetica', 'bold');
+      pdf.setTextColor(colors.title[0], colors.title[1], colors.title[2]);
+      const title = 'Calendar Events Report';
+      pdf.text(title, (pageWidth - pdf.getTextWidth(title)) / 2, yPos);
+      yPos += 10;
+
+      pdf.setFontSize(10);
+      pdf.setFont('helvetica', 'normal');
+      pdf.setTextColor(colors.muted[0], colors.muted[1], colors.muted[2]);
+      pdf.text(`Generated on: ${formatReportDate(new Date())}`, margin, yPos);
+      yPos += 6;
+
+      const scopeLabel = useAllCategories
+        ? 'All categories'
+        : selectedCategoryName || 'Selected category';
+      const historyLabel = includeHistory ? 'Active and inactive events' : 'Active events only';
+      pdf.text(`${historyLabel}  ·  ${scopeLabel}`, margin, yPos);
+      yPos += 10;
+
+      const totalActiveEvents = eventsByCategory.reduce((sum, group) => sum + group.activeEvents.length, 0);
+      const totalHistoryEvents = eventsByCategory.reduce((sum, group) => sum + group.historyEvents.length, 0);
+      const totalEvents = includeHistory ? totalActiveEvents + totalHistoryEvents : totalActiveEvents;
+
+      addSectionHeader('Summary');
+      addText(`Total events: ${totalEvents}`, 11, true, 5);
+      addText(`Active events: ${totalActiveEvents}`, 10, false, 5);
+      if (includeHistory) {
+        addText(`Inactive events: ${totalHistoryEvents}`, 10, false, 5);
+      }
+      addText(`Categories: ${categoriesToExport.length}`, 10, false, 5);
+      yPos += 4;
+
+      const groupsWithEvents = eventsByCategory.filter(
+        (group) => group.activeEvents.length > 0 || (includeHistory && group.historyEvents.length > 0)
+      );
+
+      if (groupsWithEvents.length === 0) {
+        addText('No events match the selected options.', 10, false, 5, true);
+      }
+
+      groupsWithEvents.forEach(({ category, activeEvents: categoryActive, historyEvents: categoryHistory }) => {
+        addSectionHeader(category.name);
+
+        if (categoryActive.length > 0) {
+          categoryActive.forEach(writeEvent);
+        } else if (!includeHistory || categoryHistory.length === 0) {
+          addText('No active events.', 9, false, 8, true);
+        }
+
+        if (includeHistory && categoryHistory.length > 0) {
+          yPos += 2;
+          addText('Inactive', 11, true, 5);
+          yPos += 1;
+          categoryHistory.forEach(writeEvent);
+        }
+
         yPos += 3;
       });
-      
-      yPos += 5; // Extra space between categories
-    });
 
-    // Save PDF
-    const fileName = `Calendar_Events_Report_${new Date().toISOString().split('T')[0]}.pdf`;
-    pdf.save(fileName);
-    setShowExportPopup(false);
+      const attachmentRefs = exportedEvents.flatMap((event) =>
+        (event.attachments || [])
+          .map((file) => file.name?.trim())
+          .filter((name): name is string => Boolean(name))
+          .map((fileName) => `${event.title} — ${fileName}`)
+      );
+
+      if (attachmentRefs.length > 0) {
+        addSectionHeader('Attachments');
+        addText('File names only. Files themselves are not included in this report.', 8, false, 5, true);
+        attachmentRefs.forEach((line) => addText(line, 9, false, 8));
+      }
+
+      const fileName = `Calendar_Events_Report_${new Date().toISOString().split('T')[0]}.pdf`;
+      pdf.save(fileName);
+      setShowExportPopup(false);
+    } catch (error) {
+      console.error('Error exporting calendar events PDF:', error);
+      showError(error instanceof Error ? error.message : 'Failed to generate PDF');
+    } finally {
+      setIsExportingPdf(false);
+    }
   };
 
   const handleHolidaySelect = (holiday: CommonHoliday) => {
@@ -1454,20 +1496,10 @@ export function CalendarEventsTool({ toolId }: CalendarEventsToolProps) {
       <div className={cardClass}>
         <div className="flex items-center justify-between mb-4">
           <h2 className={titleClass}>Calendar Events</h2>
-          <button
+          <ExportPdfIconButton
+            title="Export calendar events to PDF"
             onClick={() => setShowExportPopup(true)}
-            className={
-              isLight
-                ? 'p-2 rounded-lg text-emerald-700 transition-colors hover:bg-emerald-100 hover:text-emerald-900'
-                : 'p-2 rounded-lg text-emerald-400 transition-colors hover:bg-emerald-500/10 hover:text-emerald-300'
-            }
-            title="Export all calendar events to PDF"
-            aria-label="Export all calendar events to PDF"
-          >
-            <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
-            </svg>
-          </button>
+          />
         </div>
         {!isCreatingNewCategory ? (
           <div className="flex items-end gap-2 flex-wrap">
@@ -2489,12 +2521,16 @@ export function CalendarEventsTool({ toolId }: CalendarEventsToolProps) {
       {/* Export Popup */}
       {showExportPopup && (
         <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
-          <div className={isLight ? 'bg-white rounded-2xl border border-slate-200 p-6 max-w-md w-full mx-4 shadow-xl' : 'bg-slate-800 rounded-2xl border border-slate-700 p-6 max-w-md w-full mx-4'}>
+          <div className={modalCardClass} role="dialog" aria-modal="true" aria-labelledby="calendar-export-title">
             <div className="flex items-center justify-between mb-4">
-              <h3 className={isLight ? 'text-lg font-semibold text-slate-900' : 'text-lg font-semibold text-slate-50'}>Export Options</h3>
+              <h3 id="calendar-export-title" className={isLight ? 'text-lg font-semibold text-slate-900' : 'text-lg font-semibold text-slate-50'}>
+                Export Options
+              </h3>
               <button
-                onClick={() => setShowExportPopup(false)}
-                className={isLight ? 'text-slate-600 hover:text-slate-900 transition-colors' : 'text-slate-400 hover:text-slate-200 transition-colors'}
+                type="button"
+                onClick={() => !isExportingPdf && setShowExportPopup(false)}
+                disabled={isExportingPdf}
+                className={isLight ? 'text-slate-600 hover:text-slate-900 transition-colors disabled:opacity-50' : 'text-slate-400 hover:text-slate-200 transition-colors disabled:opacity-50'}
                 title="Close"
                 aria-label="Close"
               >
@@ -2503,34 +2539,73 @@ export function CalendarEventsTool({ toolId }: CalendarEventsToolProps) {
                 </svg>
               </button>
             </div>
-            
+
             <div className="space-y-4">
-              <p className={`${bodyTextClass} text-sm mb-4`}>
-                Generate a comprehensive PDF report of all your calendar events grouped by category. The report will include all event details and summary statistics.
+              <p className={`${bodyTextClass} text-sm`}>
+                Attachment files are listed by name at the end.
               </p>
-              
-              <div className="flex items-center gap-3">
+
+              <div className="flex items-start gap-3">
                 <input
                   type="checkbox"
                   id="includeHistoryExport"
                   checked={includeHistory}
                   onChange={(e) => setIncludeHistory(e.target.checked)}
-                  className="w-5 h-5 rounded border-slate-600 bg-slate-700 text-emerald-500 focus:ring-emerald-500 focus:ring-offset-slate-800"
+                  disabled={isExportingPdf}
+                  className={isLight
+                    ? 'mt-0.5 h-4 w-4 rounded border-slate-400 text-emerald-600 focus:ring-emerald-500'
+                    : 'mt-0.5 h-4 w-4 rounded border-slate-600 bg-slate-700 text-emerald-500 focus:ring-emerald-500'}
                 />
                 <label htmlFor="includeHistoryExport" className={`${bodyTextClass} cursor-pointer`}>
-                  Include inactive events in the report
+                  Include inactive events
                 </label>
               </div>
 
-              <div className="flex gap-3 pt-4">
+              <fieldset className="space-y-2" disabled={isExportingPdf}>
+                <legend className={`${labelClass} mb-0`}>Categories</legend>
+                <label className={`flex items-start gap-3 ${bodyTextClass} cursor-pointer`}>
+                  <input
+                    type="radio"
+                    name="calendarExportScope"
+                    checked={exportAllCategories || !selectedCategoryId}
+                    onChange={() => setExportAllCategories(true)}
+                    className={isLight
+                      ? 'mt-0.5 h-4 w-4 border-slate-400 text-emerald-600 focus:ring-emerald-500'
+                      : 'mt-0.5 h-4 w-4 border-slate-600 bg-slate-700 text-emerald-500 focus:ring-emerald-500'}
+                  />
+                  <span>All categories</span>
+                </label>
+                <label className={`flex items-start gap-3 ${selectedCategoryId ? `${bodyTextClass} cursor-pointer` : `${mutedTextClass} cursor-not-allowed`}`}>
+                  <input
+                    type="radio"
+                    name="calendarExportScope"
+                    checked={!exportAllCategories && Boolean(selectedCategoryId)}
+                    onChange={() => setExportAllCategories(false)}
+                    disabled={!selectedCategoryId}
+                    className={isLight
+                      ? 'mt-0.5 h-4 w-4 border-slate-400 text-emerald-600 focus:ring-emerald-500'
+                      : 'mt-0.5 h-4 w-4 border-slate-600 bg-slate-700 text-emerald-500 focus:ring-emerald-500'}
+                  />
+                  <span>
+                    Current category only
+                    {selectedCategory ? ` (${selectedCategory.name})` : ''}
+                  </span>
+                </label>
+              </fieldset>
+
+              <div className="flex gap-3 pt-2">
                 <button
+                  type="button"
                   onClick={exportToPDF}
+                  disabled={isExportingPdf}
                   className={`flex-1 ${primaryButtonClass}`}
                 >
-                  Export to PDF
+                  {isExportingPdf ? 'Generating…' : 'Export to PDF'}
                 </button>
                 <button
+                  type="button"
                   onClick={() => setShowExportPopup(false)}
+                  disabled={isExportingPdf}
                   className={secondaryButtonClass}
                 >
                   Cancel
