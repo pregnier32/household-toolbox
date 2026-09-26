@@ -65,6 +65,10 @@ function formatLocalCalendarDate(dateStr: string): string {
   return new Date(Number(match[1]), Number(match[2]) - 1, Number(match[3])).toLocaleDateString();
 }
 
+function formatReportDate(date: Date): string {
+  return date.toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' });
+}
+
 function mapApiRecord(r: any): HistoryRecord {
   return {
     id: r.id,
@@ -526,6 +530,9 @@ export function RepairHistoryTool({ toolId }: RepairHistoryToolProps) {
   
   // Export
   const [showExportPopup, setShowExportPopup] = useState(false);
+  const [exportAllCategories, setExportAllCategories] = useState(false);
+  const [exportHeaderId, setExportHeaderId] = useState('');
+  const [isExportingPdf, setIsExportingPdf] = useState(false);
   
   // Load items when selected header changes
   useEffect(() => {
@@ -536,6 +543,16 @@ export function RepairHistoryTool({ toolId }: RepairHistoryToolProps) {
       }
     }
   }, [selectedHeaderId, headers, toolId]);
+
+  useEffect(() => {
+    const onKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape' && showExportPopup && !isExportingPdf) {
+        setShowExportPopup(false);
+      }
+    };
+    window.addEventListener('keydown', onKeyDown);
+    return () => window.removeEventListener('keydown', onKeyDown);
+  }, [showExportPopup, isExportingPdf]);
 
   // Load headers from API
   const loadHeaders = async () => {
@@ -1438,6 +1455,186 @@ export function RepairHistoryTool({ toolId }: RepairHistoryToolProps) {
     }
   };
 
+  const fetchExportRecords = async (): Promise<HistoryRecord[]> => {
+    if (!toolId) throw new Error('Tool ID is missing.');
+    const response = await fetch(`/api/tools/repair-history?toolId=${toolId}&resource=records`);
+    const data = await response.json().catch(() => ({}));
+    if (!response.ok) {
+      throw new Error(data.error || 'Failed to load repair history');
+    }
+    return (data.records || []).map(mapApiRecord);
+  };
+
+  const exportToPDF = async () => {
+    if (isExportingPdf) return;
+    const chosenHeader = headers.find((header) => header.id === exportHeaderId) ?? null;
+    if (!exportAllCategories && !chosenHeader) {
+      showError('Select a category, or choose All categories.');
+      return;
+    }
+
+    const categories = (exportAllCategories ? headers : chosenHeader ? [chosenHeader] : [])
+      .slice()
+      .sort((a, b) => a.name.localeCompare(b.name));
+    if (categories.length === 0) {
+      showError('Select a category, or choose All categories.');
+      return;
+    }
+
+    setIsExportingPdf(true);
+
+    try {
+      const records = await fetchExportRecords();
+      const { jsPDF } = await import('jspdf');
+      const pdf = new jsPDF({
+        orientation: 'portrait',
+        unit: 'mm',
+        format: 'a4',
+      });
+
+      const pageWidth = pdf.internal.pageSize.getWidth();
+      const pageHeight = pdf.internal.pageSize.getHeight();
+      const margin = 15;
+      const contentWidth = pageWidth - margin * 2;
+      let yPos = margin;
+
+      const colors = {
+        background: [255, 255, 255] as const,
+        text: [15, 23, 42] as const,
+        title: [15, 23, 42] as const,
+        header: [241, 245, 249] as const,
+        muted: [71, 85, 105] as const,
+      };
+
+      const fillPage = () => {
+        pdf.setFillColor(colors.background[0], colors.background[1], colors.background[2]);
+        pdf.rect(0, 0, pageWidth, pageHeight, 'F');
+      };
+
+      const checkNewPage = (requiredHeight: number) => {
+        if (yPos + requiredHeight > pageHeight - margin) {
+          pdf.addPage();
+          fillPage();
+          yPos = margin;
+          return true;
+        }
+        return false;
+      };
+
+      const addSectionHeader = (title: string) => {
+        checkNewPage(15);
+        pdf.setFillColor(colors.header[0], colors.header[1], colors.header[2]);
+        pdf.rect(margin, yPos, contentWidth, 10, 'F');
+        pdf.setFontSize(13);
+        pdf.setFont('helvetica', 'bold');
+        pdf.setTextColor(colors.title[0], colors.title[1], colors.title[2]);
+        pdf.text(title, margin + 5, yPos + 7);
+        yPos += 15;
+      };
+
+      const addText = (text: string, fontSize = 10, isBold = false, indent = 0, muted = false) => {
+        pdf.setFontSize(fontSize);
+        pdf.setFont('helvetica', isBold ? 'bold' : 'normal');
+        const color = muted ? colors.muted : colors.text;
+        pdf.setTextColor(color[0], color[1], color[2]);
+        const maxWidth = contentWidth - indent - 5;
+        const lines = pdf.splitTextToSize(text, maxWidth) as string[];
+        const lineHeight = fontSize * 0.42;
+        checkNewPage(lines.length * lineHeight + 2);
+        lines.forEach((line) => {
+          pdf.text(line, margin + indent, yPos);
+          yPos += lineHeight;
+        });
+        yPos += 2;
+      };
+
+      fillPage();
+
+      pdf.setFontSize(20);
+      pdf.setFont('helvetica', 'bold');
+      pdf.setTextColor(colors.title[0], colors.title[1], colors.title[2]);
+      const title = 'Repair History Report';
+      pdf.text(title, (pageWidth - pdf.getTextWidth(title)) / 2, yPos);
+      yPos += 10;
+
+      pdf.setFontSize(10);
+      pdf.setFont('helvetica', 'normal');
+      pdf.setTextColor(colors.muted[0], colors.muted[1], colors.muted[2]);
+      pdf.text(`Generated on: ${formatReportDate(new Date())}`, margin, yPos);
+      yPos += 6;
+
+      const scopeLabel = exportAllCategories
+        ? 'All categories'
+        : `One category  ·  ${chosenHeader?.name || 'Selected category'}`;
+      pdf.text(scopeLabel, margin, yPos);
+      yPos += 10;
+
+      const attachmentRefs: string[] = [];
+      let printedCategories = 0;
+
+      categories.forEach((category) => {
+        const categoryRecords = records
+          .filter((record) => record.headerId === category.id)
+          .sort((a, b) => b.date.localeCompare(a.date) || a.itemName.localeCompare(b.itemName));
+        if (categoryRecords.length === 0) return;
+
+        printedCategories += 1;
+        addSectionHeader(`${category.name} (${category.categoryType})`);
+
+        categoryRecords.forEach((record) => {
+          const itemLabel = record.itemName.trim() || 'Repair';
+          const typeLabel = record.type === 'replace' ? 'Replace' : 'Repair';
+          addText(`${itemLabel}  ·  ${typeLabel}`, 11, true, 5);
+          if (record.date) addText(`Date: ${formatLocalCalendarDate(record.date)}`, 9, false, 8);
+          if (record.description.trim()) addText(`Description: ${record.description.trim()}`, 9, false, 8);
+          if (record.cost.trim()) addText(`Cost: ${record.cost.trim()}`, 9, false, 8);
+          if (record.serviceProvider.trim()) addText(`Service provider: ${record.serviceProvider.trim()}`, 9, false, 8);
+          if (record.warrantyEndDate) addText(`Warranty end: ${formatLocalCalendarDate(record.warrantyEndDate)}`, 9, false, 8);
+          if (record.submittedToInsurance) {
+            addText('Submitted to insurance: Yes', 9, false, 8);
+            if (record.insuranceCarrier.trim()) addText(`Carrier: ${record.insuranceCarrier.trim()}`, 9, false, 10);
+            if (record.claimNumber.trim()) addText(`Claim number: ${record.claimNumber.trim()}`, 9, false, 10);
+            if (record.amountInsurancePaid.trim()) addText(`Amount paid: ${record.amountInsurancePaid.trim()}`, 9, false, 10);
+            if (record.agentContactInfo.trim()) addText(`Agent: ${record.agentContactInfo.trim()}`, 9, false, 10);
+            if (record.claimNotes.trim()) addText(`Claim notes: ${record.claimNotes.trim()}`, 9, false, 10);
+          }
+          if (category.categoryType === 'Auto' && record.odometerReading.trim()) {
+            addText(`Odometer: ${record.odometerReading.trim()}`, 9, false, 8);
+          }
+          if (category.categoryType === 'Home' && record.manualLink.trim()) {
+            addText(`Manual: ${record.manualLink.trim()}`, 9, false, 8);
+          }
+          if (record.notes.trim()) addText(`Notes: ${record.notes.trim()}`, 9, false, 8);
+          (record.attachments || []).forEach((file) => {
+            const fileName = file.name?.trim();
+            if (!fileName) return;
+            const dateLabel = record.date ? formatLocalCalendarDate(record.date) : 'Undated';
+            attachmentRefs.push(`${category.name} — ${itemLabel} — ${dateLabel} — ${fileName}`);
+          });
+          yPos += 2;
+        });
+      });
+
+      if (printedCategories === 0) {
+        addText('No repairs match the selected options.', 10, false, 5, true);
+      }
+
+      if (attachmentRefs.length > 0) {
+        addSectionHeader('Attachments');
+        addText('File names only. Files themselves are not included in this report.', 8, false, 5, true);
+        attachmentRefs.forEach((line) => addText(line, 9, false, 8));
+      }
+
+      pdf.save(`Repair_History_Report_${new Date().toISOString().split('T')[0]}.pdf`);
+      setShowExportPopup(false);
+    } catch (error) {
+      console.error('Error exporting repair history PDF:', error);
+      showError(error instanceof Error ? error.message : 'Failed to generate PDF');
+    } finally {
+      setIsExportingPdf(false);
+    }
+  };
+
   const selectedHeader = headers.find(h => h.id === selectedHeaderId);
 
   return (
@@ -1458,7 +1655,15 @@ export function RepairHistoryTool({ toolId }: RepairHistoryToolProps) {
           )}
           <ExportPdfIconButton
             title="Export repair history to PDF"
-            onClick={() => setShowExportPopup(true)}
+            onClick={() => {
+              const fallback = [...headers].sort((a, b) => a.name.localeCompare(b.name))[0]?.id || '';
+              if (!exportAllCategories) {
+                setExportHeaderId(selectedHeaderId || exportHeaderId || fallback);
+              } else if (!exportHeaderId) {
+                setExportHeaderId(selectedHeaderId || fallback);
+              }
+              setShowExportPopup(true);
+            }}
           />
         </div>
       </div>
@@ -2834,35 +3039,101 @@ export function RepairHistoryTool({ toolId }: RepairHistoryToolProps) {
         </div>
       )}
 
-      {/* Export Popup */}
       {showExportPopup && (
         <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
-          <div className={modalCardClass}>
+          <div className={`${modalCardClass} max-h-[90vh] overflow-y-auto`} role="dialog" aria-modal="true" aria-labelledby="rh-export-title">
             <div className="flex items-center justify-between mb-4">
-              <h3 className={sectionTitleClass}>Export Options</h3>
+              <h3 id="rh-export-title" className={sectionTitleClass}>
+                Export Options
+              </h3>
               <button
-                onClick={() => setShowExportPopup(false)}
-                className="text-slate-400 hover:text-slate-200 transition-colors"
+                type="button"
+                onClick={() => !isExportingPdf && setShowExportPopup(false)}
+                disabled={isExportingPdf}
+                className={isLight ? 'text-slate-600 hover:text-slate-900 transition-colors disabled:opacity-50' : 'text-slate-400 hover:text-slate-200 transition-colors disabled:opacity-50'}
+                title="Close"
+                aria-label="Close"
               >
                 <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
                 </svg>
               </button>
             </div>
-            
+
             <div className="space-y-4">
-              <div className="flex gap-3 pt-4">
+              <p className={descClass}>
+                Attachment files are listed by name at the end.
+              </p>
+
+              <fieldset className="space-y-2" disabled={isExportingPdf}>
+                <legend className={`${labelClass} mb-0`}>Categories</legend>
+                <label className={`flex items-start gap-3 ${isLight ? 'text-slate-700' : 'text-slate-300'} cursor-pointer`}>
+                  <input
+                    type="radio"
+                    name="rhExportScope"
+                    checked={exportAllCategories}
+                    onChange={() => setExportAllCategories(true)}
+                    className={isLight
+                      ? 'mt-0.5 h-4 w-4 border-slate-400 text-emerald-600 focus:ring-emerald-500'
+                      : 'mt-0.5 h-4 w-4 border-slate-600 bg-slate-700 text-emerald-500 focus:ring-emerald-500'}
+                  />
+                  <span>All categories</span>
+                </label>
+                <label className={`flex items-start gap-3 ${isLight ? 'text-slate-700' : 'text-slate-300'} cursor-pointer`}>
+                  <input
+                    type="radio"
+                    name="rhExportScope"
+                    checked={!exportAllCategories}
+                    onChange={() => {
+                      setExportAllCategories(false);
+                      if (!exportHeaderId) {
+                        const fallback = [...headers].sort((a, b) => a.name.localeCompare(b.name))[0]?.id || '';
+                        setExportHeaderId(selectedHeaderId || fallback);
+                      }
+                    }}
+                    className={isLight
+                      ? 'mt-0.5 h-4 w-4 border-slate-400 text-emerald-600 focus:ring-emerald-500'
+                      : 'mt-0.5 h-4 w-4 border-slate-600 bg-slate-700 text-emerald-500 focus:ring-emerald-500'}
+                  />
+                  <span>One category</span>
+                </label>
+                {!exportAllCategories && (
+                  <div className="ml-7">
+                    <label className={labelClass} htmlFor="rh-export-category">
+                      Category
+                    </label>
+                    <select
+                      id="rh-export-category"
+                      value={exportHeaderId}
+                      onChange={(e) => setExportHeaderId(e.target.value)}
+                      className={selectClass}
+                    >
+                      <option value="">Select a category</option>
+                      {[...headers]
+                        .sort((a, b) => a.name.localeCompare(b.name))
+                        .map((header) => (
+                          <option key={header.id} value={header.id}>
+                            {header.name} ({header.categoryType})
+                          </option>
+                        ))}
+                    </select>
+                  </div>
+                )}
+              </fieldset>
+
+              <div className="flex gap-3 pt-2">
                 <button
-                  onClick={() => {
-                    // TODO: Implement PDF export functionality
-                    setShowExportPopup(false);
-                  }}
-                  className={primaryButtonClass}
+                  type="button"
+                  onClick={exportToPDF}
+                  disabled={isExportingPdf || headers.length === 0 || (!exportAllCategories && !exportHeaderId)}
+                  className={`flex-1 ${primaryButtonClass}`}
                 >
-                  Export to PDF
+                  {isExportingPdf ? 'Generating…' : 'Export to PDF'}
                 </button>
                 <button
+                  type="button"
                   onClick={() => setShowExportPopup(false)}
+                  disabled={isExportingPdf}
                   className={secondaryButtonClass}
                 >
                   Cancel

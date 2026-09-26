@@ -484,9 +484,13 @@ export async function POST(request: NextRequest) {
     }
 
     if (notes && Array.isArray(notes)) {
-      await supabaseServer.from('tools_pcs_notes').delete().eq('pet_id', finalPetId);
+      const { error: deleteNotesError } = await supabaseServer.from('tools_pcs_notes').delete().eq('pet_id', finalPetId);
+      if (deleteNotesError) {
+        console.error('Error deleting pet notes:', deleteNotesError);
+        return NextResponse.json({ error: 'Failed to save notes' }, { status: 500 });
+      }
       if (notes.length > 0) {
-        await supabaseServer.from('tools_pcs_notes').insert(
+        const { error: insertNotesError } = await supabaseServer.from('tools_pcs_notes').insert(
           notes.map((n: any) => ({
             pet_id: finalPetId,
             content: n.content,
@@ -494,6 +498,10 @@ export async function POST(request: NextRequest) {
             is_current: n.isCurrent !== undefined ? n.isCurrent : true,
           }))
         );
+        if (insertNotesError) {
+          console.error('Error saving pet notes:', insertNotesError);
+          return NextResponse.json({ error: 'Failed to save notes' }, { status: 500 });
+        }
       }
     }
 

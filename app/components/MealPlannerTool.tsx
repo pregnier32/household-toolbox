@@ -213,6 +213,41 @@ function formatDateDisplay(isoDate: string): string {
   return `${m}/${day}/${y}`;
 }
 
+function formatReportDate(date: Date): string {
+  return date.toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' });
+}
+
+function todayIso(): string {
+  const d = new Date();
+  const y = d.getFullYear();
+  const m = String(d.getMonth() + 1).padStart(2, '0');
+  const day = String(d.getDate()).padStart(2, '0');
+  return `${y}-${m}-${day}`;
+}
+
+function weekEndIso(startMonday: string): string {
+  const d = parseLocalDate(startMonday);
+  d.setDate(d.getDate() + 6);
+  const y = d.getFullYear();
+  const m = String(d.getMonth() + 1).padStart(2, '0');
+  const day = String(d.getDate()).padStart(2, '0');
+  return `${y}-${m}-${day}`;
+}
+
+function pickDefaultMealPlanId(plans: MealPlanRecord[], includeHistory: boolean): string {
+  const list = includeHistory ? plans : plans.filter((plan) => plan.isActive);
+  const pool = list.length > 0 ? list : plans;
+  if (pool.length === 0) return '';
+  const today = todayIso();
+  const containing = pool.find((plan) => plan.startDate <= today && today <= weekEndIso(plan.startDate));
+  if (containing) return containing.id;
+  const upcoming = [...pool]
+    .filter((plan) => plan.startDate >= today)
+    .sort((a, b) => a.startDate.localeCompare(b.startDate));
+  if (upcoming[0]) return upcoming[0].id;
+  return [...pool].sort((a, b) => b.startDate.localeCompare(a.startDate))[0].id;
+}
+
 function getNextMonday(): string {
   const d = new Date();
   const day = d.getDay();
@@ -277,6 +312,11 @@ export function MealPlannerTool({ toolId }: MealPlannerToolProps) {
   const modalCardClass = isLight
     ? 'rounded-2xl border border-slate-200 bg-white p-6 max-w-md w-full mx-4 shadow-2xl'
     : 'rounded-2xl border border-slate-800 bg-slate-900 p-6 max-w-md w-full mx-4';
+  const sectionTitleClass = isLight ? 'text-lg font-semibold text-slate-900' : 'text-lg font-semibold text-slate-50';
+  const labelClass = isLight ? 'block text-sm font-medium text-slate-700 mb-2' : 'block text-sm font-medium text-slate-300 mb-2';
+  const selectClass = isLight
+    ? 'w-full px-3 py-2 rounded-lg border border-slate-300 bg-white text-slate-900 focus:border-emerald-500/50 focus:outline-none focus:ring-1 focus:ring-emerald-500/50'
+    : 'w-full px-3 py-2 rounded-lg border border-slate-700 bg-slate-900/70 text-slate-100 focus:border-emerald-500/50 focus:outline-none focus:ring-1 focus:ring-emerald-500/50';
   const deleteModalTitleClass = isLight ? 'text-xl font-semibold text-slate-900 mb-2' : 'text-xl font-semibold text-slate-50 mb-2';
   const deleteWarningBoxClass = isLight
     ? 'rounded-lg border border-red-300 bg-red-50 px-4 py-3 mb-4'
@@ -1017,9 +1057,18 @@ export function MealPlannerTool({ toolId }: MealPlannerToolProps) {
   const [groceryConfirmPlan, setGroceryConfirmPlan] = useState<MealPlanRecord | null>(null);
   const [isPushingGrocery, setIsPushingGrocery] = useState(false);
   const [printingPlanId, setPrintingPlanId] = useState<string | null>(null);
+  const [showExportPopup, setShowExportPopup] = useState(false);
+  const [exportAllPlans, setExportAllPlans] = useState(false);
+  const [exportPlanId, setExportPlanId] = useState('');
+  const [includeHistory, setIncludeHistory] = useState(false);
+  const [isExportingPdf, setIsExportingPdf] = useState(false);
 
   const activePlans = useMemo(() => mealPlans.filter((p) => p.isActive), [mealPlans]);
   const historyPlans = useMemo(() => mealPlans.filter((p) => !p.isActive), [mealPlans]);
+  const exportPlanChoices = useMemo(() => {
+    const list = includeHistory ? mealPlans : activePlans;
+    return [...list].sort((a, b) => b.startDate.localeCompare(a.startDate) || a.name.localeCompare(b.name));
+  }, [mealPlans, activePlans, includeHistory]);
 
   const getPlanAssignments = (plan: MealPlanRecord) =>
     editingPlanId === plan.id && editingPlanAssignments
@@ -1436,6 +1485,16 @@ export function MealPlannerTool({ toolId }: MealPlannerToolProps) {
   }, [cartOpenPlanId]);
 
   useEffect(() => {
+    const onKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape' && showExportPopup && !isExportingPdf) {
+        setShowExportPopup(false);
+      }
+    };
+    window.addEventListener('keydown', onKeyDown);
+    return () => window.removeEventListener('keydown', onKeyDown);
+  }, [showExportPopup, isExportingPdf]);
+
+  useEffect(() => {
     if (!printingPlanId) return;
     const onAfterPrint = () => setPrintingPlanId(null);
     window.addEventListener('afterprint', onAfterPrint);
@@ -1463,6 +1522,292 @@ export function MealPlannerTool({ toolId }: MealPlannerToolProps) {
     }
     return list;
   }, [meals, mealPickerTypeFilter, mealPickerSearch, mealTypes]);
+
+  const exportToPDF = async () => {
+    if (isExportingPdf) return;
+    const chosenPlan = mealPlans.find((plan) => plan.id === exportPlanId) ?? null;
+    if (!exportAllPlans && !chosenPlan) {
+      showError('Select a meal plan, or choose All active plans.');
+      return;
+    }
+
+    const plansToExport = (exportAllPlans
+      ? mealPlans.filter((plan) => plan.isActive || includeHistory)
+      : chosenPlan
+        ? [chosenPlan]
+        : []
+    ).sort((a, b) => b.startDate.localeCompare(a.startDate) || a.name.localeCompare(b.name));
+
+    if (plansToExport.length === 0) {
+      showError('Select a meal plan, or choose All active plans.');
+      return;
+    }
+
+    setIsExportingPdf(true);
+
+    try {
+      const { jsPDF } = await import('jspdf');
+      const pdf = new jsPDF({
+        orientation: 'portrait',
+        unit: 'mm',
+        format: 'a4',
+      });
+
+      const pageWidth = pdf.internal.pageSize.getWidth();
+      const pageHeight = pdf.internal.pageSize.getHeight();
+      const margin = 15;
+      const contentWidth = pageWidth - margin * 2;
+      let yPos = margin;
+
+      const colors = {
+        background: [255, 255, 255] as const,
+        text: [15, 23, 42] as const,
+        title: [15, 23, 42] as const,
+        header: [241, 245, 249] as const,
+        muted: [71, 85, 105] as const,
+      };
+
+      const fillPage = () => {
+        pdf.setFillColor(colors.background[0], colors.background[1], colors.background[2]);
+        pdf.rect(0, 0, pageWidth, pageHeight, 'F');
+      };
+
+      const checkNewPage = (requiredHeight: number) => {
+        if (yPos + requiredHeight > pageHeight - margin) {
+          pdf.addPage();
+          fillPage();
+          yPos = margin;
+          return true;
+        }
+        return false;
+      };
+
+      const addSectionHeader = (title: string) => {
+        checkNewPage(15);
+        pdf.setFillColor(colors.header[0], colors.header[1], colors.header[2]);
+        pdf.rect(margin, yPos, contentWidth, 10, 'F');
+        pdf.setFontSize(13);
+        pdf.setFont('helvetica', 'bold');
+        pdf.setTextColor(colors.title[0], colors.title[1], colors.title[2]);
+        pdf.text(title, margin + 5, yPos + 7);
+        yPos += 15;
+      };
+
+      const addText = (text: string, fontSize = 10, isBold = false, indent = 0, muted = false) => {
+        pdf.setFontSize(fontSize);
+        pdf.setFont('helvetica', isBold ? 'bold' : 'normal');
+        const color = muted ? colors.muted : colors.text;
+        pdf.setTextColor(color[0], color[1], color[2]);
+        const maxWidth = contentWidth - indent - 5;
+        const lines = pdf.splitTextToSize(text, maxWidth) as string[];
+        const lineHeight = fontSize * 0.42;
+        checkNewPage(lines.length * lineHeight + 2);
+        lines.forEach((line) => {
+          pdf.text(line, margin + indent, yPos);
+          yPos += lineHeight;
+        });
+        yPos += 2;
+      };
+
+      const groceryForPlan = (plan: MealPlanRecord) => {
+        const assign = normalizeWeekAssignments(plan.assignments);
+        const countByItemId = new Map<string, number>();
+        for (const day of DAY_KEYS_LIST) {
+          for (const { key: slot } of DAY_SLOTS) {
+            const value = assign[day]?.[slot];
+            const mealId = slotMealId(value);
+            if (!mealId || slotIsLeftover(value)) continue;
+            const meal = meals.find((entry) => entry.id === mealId);
+            if (!meal) continue;
+            const scale = mealScale(meal);
+            for (const itemId of meal.ingredientIds) {
+              countByItemId.set(itemId, (countByItemId.get(itemId) ?? 0) + scale);
+            }
+          }
+        }
+        const rows = Array.from(countByItemId.entries()).map(([itemId, count]) => {
+          const item = masterItems.find((entry) => entry.id === itemId);
+          return {
+            name: item?.name ?? 'Unknown',
+            count,
+            category: item?.category ?? 'Other',
+          };
+        });
+        const byCategory = new Map<string, typeof rows>();
+        for (const row of rows) {
+          const category = row.category || 'Other';
+          if (!byCategory.has(category)) byCategory.set(category, []);
+          byCategory.get(category)!.push(row);
+        }
+        return Array.from(byCategory.entries())
+          .map(([category, items]) => ({
+            category,
+            items: [...items].sort((a, b) => a.name.localeCompare(b.name)),
+          }))
+          .sort((a, b) => a.category.localeCompare(b.category));
+      };
+
+      const uniqueMealsForPlan = (plan: MealPlanRecord) => {
+        const assign = normalizeWeekAssignments(plan.assignments);
+        const seen = new Set<string>();
+        const result: Meal[] = [];
+        for (const day of DAY_KEYS_LIST) {
+          for (const { key: slot } of DAY_SLOTS) {
+            const mealId = slotMealId(assign[day]?.[slot]);
+            if (!mealId || seen.has(mealId)) continue;
+            seen.add(mealId);
+            const meal = meals.find((entry) => entry.id === mealId);
+            if (meal) result.push(meal);
+          }
+        }
+        return result.sort((a, b) => a.name.localeCompare(b.name));
+      };
+
+      fillPage();
+
+      pdf.setFontSize(20);
+      pdf.setFont('helvetica', 'bold');
+      pdf.setTextColor(colors.title[0], colors.title[1], colors.title[2]);
+      const title = 'Meal Planner Report';
+      pdf.text(title, (pageWidth - pdf.getTextWidth(title)) / 2, yPos);
+      yPos += 10;
+
+      pdf.setFontSize(10);
+      pdf.setFont('helvetica', 'normal');
+      pdf.setTextColor(colors.muted[0], colors.muted[1], colors.muted[2]);
+      pdf.text(`Generated on: ${formatReportDate(new Date())}`, margin, yPos);
+      yPos += 6;
+
+      const historyLabel = exportAllPlans
+        ? includeHistory
+          ? 'Active and history plans'
+          : 'Active plans only'
+        : chosenPlan && !chosenPlan.isActive
+          ? 'History plan'
+          : 'One plan';
+      const scopeLabel = exportAllPlans
+        ? 'All plans'
+        : chosenPlan
+          ? `${chosenPlan.name}  ·  Week of ${formatDateDisplay(chosenPlan.startDate)}`
+          : 'Selected plan';
+      pdf.text(`${historyLabel}  ·  ${scopeLabel}`, margin, yPos);
+      yPos += 10;
+
+      addSectionHeader('Summary');
+      addText(`Plans: ${plansToExport.length}`, 11, true, 5);
+      addText(`Active plans: ${plansToExport.filter((plan) => plan.isActive).length}`, 10, false, 5);
+      if (exportAllPlans && includeHistory) {
+        addText(`History plans: ${plansToExport.filter((plan) => !plan.isActive).length}`, 10, false, 5);
+      }
+      yPos += 4;
+
+      plansToExport.forEach((plan) => {
+        const dates = getDatesForWeek(plan.startDate);
+        const assignments = normalizeWeekAssignments(plan.assignments);
+        const grocery = groceryForPlan(plan);
+        const usedMeals = uniqueMealsForPlan(plan);
+        const assignedSlots = dates.reduce((count, { key }) => {
+          return count + DAY_SLOTS.filter(({ key: slot }) => slotMealId(assignments[key]?.[slot])).length;
+        }, 0);
+
+        addSectionHeader(
+          plan.isActive
+            ? `${plan.name}  ·  Week of ${formatDateDisplay(plan.startDate)}`
+            : `${plan.name}  ·  Week of ${formatDateDisplay(plan.startDate)} (history)`
+        );
+        addText(`Week: ${formatDateDisplay(plan.startDate)} – ${formatDateDisplay(weekEndIso(plan.startDate))}`, 10, false, 5);
+        addText(`Assigned meals: ${assignedSlots}`, 10, false, 5);
+        yPos += 2;
+
+        addText('Week', 11, true, 5);
+        dates.forEach(({ key, date, label }) => {
+          addText(`${label} ${formatDateDisplay(date)}`, 10, true, 8);
+          let slotPrinted = false;
+          DAY_SLOTS.forEach(({ key: slot, label: slotLabel }) => {
+            const value = assignments[key]?.[slot];
+            const mealId = slotMealId(value);
+            if (!mealId) return;
+            const meal = meals.find((entry) => entry.id === mealId);
+            const leftover = slotIsLeftover(value) ? ' (Leftover)' : '';
+            addText(`${slotLabel}: ${meal?.name || 'Unknown meal'}${leftover}`, 9, false, 10);
+            slotPrinted = true;
+          });
+          if (!slotPrinted) {
+            addText('No meals assigned.', 9, false, 10, true);
+          }
+        });
+        yPos += 2;
+
+        addText('Grocery list', 11, true, 5);
+        if (grocery.length === 0) {
+          addText('No grocery lines. Assign cook-day meals first.', 9, false, 8, true);
+        } else {
+          grocery.forEach((group) => {
+            addText(group.category, 10, true, 8);
+            group.items.forEach((item) => {
+              const qty = Number.isInteger(item.count) ? String(item.count) : item.count.toFixed(2);
+              addText(`${item.name}  × ${qty}`, 9, false, 10);
+            });
+          });
+        }
+        yPos += 2;
+
+        addText('Recipes', 11, true, 5);
+        if (usedMeals.length === 0) {
+          addText('No meals assigned.', 9, false, 8, true);
+        } else {
+          usedMeals.forEach((meal) => {
+            checkNewPage(28);
+            addText(meal.name, 11, true, 8);
+            const typeName = mealTypes.find((type) => type.id === meal.mealTypeId)?.name;
+            if (typeName) addText(`Type: ${typeName}`, 9, false, 10);
+            if (meal.prepTimeMinutes != null) addText(`Prep time: ${meal.prepTimeMinutes} min`, 9, false, 10);
+            addText(`Scale: ${mealScale(meal)}`, 9, false, 10);
+            if (meal.difficulty) {
+              addText(`Difficulty: ${meal.difficulty.charAt(0).toUpperCase()}${meal.difficulty.slice(1)}`, 9, false, 10);
+            }
+            if (meal.rating > 0) addText(`Rating: ${meal.rating} of 5`, 9, false, 10);
+            if (meal.description.trim()) addText(`Description: ${meal.description.trim()}`, 9, false, 10);
+            const ingredientNames = meal.ingredientIds
+              .map((itemId) => masterItems.find((item) => item.id === itemId)?.name)
+              .filter((name): name is string => Boolean(name))
+              .sort((a, b) => a.localeCompare(b));
+            if (ingredientNames.length > 0) {
+              addText(`Ingredients: ${ingredientNames.join(', ')}`, 9, false, 10);
+            }
+            if (meal.instructions.trim()) addText(`Instructions: ${meal.instructions.trim()}`, 9, false, 10);
+            yPos += 2;
+          });
+        }
+        yPos += 3;
+      });
+
+      const attachmentRefs = plansToExport.flatMap((plan) =>
+        uniqueMealsForPlan(plan).flatMap((meal) =>
+          (meal.attachments || [])
+            .map((file) => file.name?.trim())
+            .filter((name): name is string => Boolean(name))
+            .map((fileName) =>
+              `Week of ${formatDateDisplay(plan.startDate)} — ${meal.name} — ${fileName}`
+            )
+        )
+      );
+
+      if (attachmentRefs.length > 0) {
+        addSectionHeader('Attachments');
+        addText('File names only. Files themselves are not included in this report.', 8, false, 5, true);
+        attachmentRefs.forEach((line) => addText(line, 9, false, 8));
+      }
+
+      pdf.save(`Meal_Planner_Report_${new Date().toISOString().split('T')[0]}.pdf`);
+      setShowExportPopup(false);
+    } catch (error) {
+      console.error('Error exporting meal planner PDF:', error);
+      showError(error instanceof Error ? error.message : 'Failed to generate PDF');
+    } finally {
+      setIsExportingPdf(false);
+    }
+  };
 
   const isLoading = toolId && (itemsLoading || mealTypesLoading || mealsLoading || plansLoading);
 
@@ -1547,7 +1892,15 @@ export function MealPlannerTool({ toolId }: MealPlannerToolProps) {
             Create a weekly meal plan, manage meals and ingredients, and generate a shopping list for the week.
           </p>
         </div>
-        <ExportPdfIconButton />
+        <ExportPdfIconButton
+          title="Export meal planner to PDF"
+          onClick={() => {
+            if (!exportPlanId) {
+              setExportPlanId(pickDefaultMealPlanId(mealPlans, includeHistory) || editingPlanId || '');
+            }
+            setShowExportPopup(true);
+          }}
+        />
       </div>
       {isLoading && (
         <p className={mutedClass}>Loading your meal planner data…</p>
@@ -3359,6 +3712,132 @@ export function MealPlannerTool({ toolId }: MealPlannerToolProps) {
         onView={handleViewAttachment}
         onDownload={attachmentModal === 'add' ? undefined : handleDownloadAttachment}
       />
+
+      {showExportPopup && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
+          <div className={modalCardClass} role="dialog" aria-modal="true" aria-labelledby="mp-export-title">
+            <div className="flex items-center justify-between mb-4">
+              <h3 id="mp-export-title" className={sectionTitleClass}>
+                Export Options
+              </h3>
+              <button
+                type="button"
+                onClick={() => !isExportingPdf && setShowExportPopup(false)}
+                disabled={isExportingPdf}
+                className={isLight ? 'text-slate-600 hover:text-slate-900 transition-colors disabled:opacity-50' : 'text-slate-400 hover:text-slate-200 transition-colors disabled:opacity-50'}
+                title="Close"
+                aria-label="Close"
+              >
+                <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                </svg>
+              </button>
+            </div>
+
+            <div className="space-y-4">
+              <p className={descClass}>
+                Attachment files are listed by name at the end.
+              </p>
+
+              <fieldset className="space-y-2" disabled={isExportingPdf}>
+                <legend className={`${labelClass} mb-0`}>Plans</legend>
+                <label className={`flex items-start gap-3 ${isLight ? 'text-slate-700' : 'text-slate-300'} cursor-pointer`}>
+                  <input
+                    type="radio"
+                    name="mpExportScope"
+                    checked={exportAllPlans}
+                    onChange={() => setExportAllPlans(true)}
+                    className={isLight
+                      ? 'mt-0.5 h-4 w-4 border-slate-400 text-emerald-600 focus:ring-emerald-500'
+                      : 'mt-0.5 h-4 w-4 border-slate-600 bg-slate-700 text-emerald-500 focus:ring-emerald-500'}
+                  />
+                  <span>All active plans</span>
+                </label>
+                <label className={`flex items-start gap-3 ${isLight ? 'text-slate-700' : 'text-slate-300'} cursor-pointer`}>
+                  <input
+                    type="radio"
+                    name="mpExportScope"
+                    checked={!exportAllPlans}
+                    onChange={() => {
+                      setExportAllPlans(false);
+                      if (!exportPlanId) {
+                        setExportPlanId(pickDefaultMealPlanId(mealPlans, includeHistory) || editingPlanId || '');
+                      }
+                    }}
+                    className={isLight
+                      ? 'mt-0.5 h-4 w-4 border-slate-400 text-emerald-600 focus:ring-emerald-500'
+                      : 'mt-0.5 h-4 w-4 border-slate-600 bg-slate-700 text-emerald-500 focus:ring-emerald-500'}
+                  />
+                  <span>One plan</span>
+                </label>
+                {!exportAllPlans && (
+                  <div className="ml-7">
+                    <label className={labelClass} htmlFor="mp-export-plan">
+                      Plan
+                    </label>
+                    <select
+                      id="mp-export-plan"
+                      value={exportPlanId}
+                      onChange={(e) => setExportPlanId(e.target.value)}
+                      className={selectClass}
+                    >
+                      <option value="">Select a plan</option>
+                      {exportPlanChoices.map((plan) => (
+                        <option key={plan.id} value={plan.id}>
+                          {plan.isActive
+                            ? `${plan.name} · Week of ${formatDateDisplay(plan.startDate)}`
+                            : `${plan.name} · Week of ${formatDateDisplay(plan.startDate)} (history)`}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                )}
+              </fieldset>
+
+              <div className="flex items-start gap-3">
+                <input
+                  type="checkbox"
+                  id="mpIncludeHistoryExport"
+                  checked={includeHistory}
+                  onChange={(e) => {
+                    const next = e.target.checked;
+                    setIncludeHistory(next);
+                    if (next && !exportPlanId) {
+                      setExportPlanId(pickDefaultMealPlanId(mealPlans, true) || '');
+                    }
+                  }}
+                  disabled={isExportingPdf}
+                  className={isLight
+                    ? 'mt-0.5 h-4 w-4 rounded border-slate-400 text-emerald-600 focus:ring-emerald-500'
+                    : 'mt-0.5 h-4 w-4 rounded border-slate-600 bg-slate-700 text-emerald-500 focus:ring-emerald-500'}
+                />
+                <label htmlFor="mpIncludeHistoryExport" className={`${isLight ? 'text-slate-700' : 'text-slate-300'} cursor-pointer`}>
+                  Include history plans
+                </label>
+              </div>
+
+              <div className="flex gap-3 pt-2">
+                <button
+                  type="button"
+                  onClick={exportToPDF}
+                  disabled={isExportingPdf || mealPlans.length === 0 || (!exportAllPlans && !exportPlanId)}
+                  className={`flex-1 ${primaryButtonClass}`}
+                >
+                  {isExportingPdf ? 'Generating…' : 'Export to PDF'}
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setShowExportPopup(false)}
+                  disabled={isExportingPdf}
+                  className={secondaryButtonClass}
+                >
+                  Cancel
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
 
       {groceryConfirmPlan && (
         <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/50">

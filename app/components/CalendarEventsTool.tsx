@@ -1261,7 +1261,14 @@ export function CalendarEventsTool({ toolId }: CalendarEventsToolProps) {
       }
 
       const fileName = `Calendar_Events_Report_${new Date().toISOString().split('T')[0]}.pdf`;
-      pdf.save(fileName);
+      const url = window.URL.createObjectURL(pdf.output('blob'));
+      const link = document.createElement('a');
+      link.href = url;
+      link.download = fileName;
+      document.body.appendChild(link);
+      link.click();
+      window.URL.revokeObjectURL(url);
+      document.body.removeChild(link);
       setShowExportPopup(false);
     } catch (error) {
       console.error('Error exporting calendar events PDF:', error);

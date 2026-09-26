@@ -137,6 +137,16 @@ const formatLocalCalendarDate = (dateStr: string) => {
   return new Date(Number(match[1]), Number(match[2]) - 1, Number(match[3])).toLocaleDateString();
 };
 
+function formatReportDate(date: Date): string {
+  return date.toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' });
+}
+
+function pickDefaultNoteId(notes: Note[], includeHistory: boolean): string {
+  const list = includeHistory ? notes : notes.filter((note) => note.isActive);
+  const pool = [...list].sort((a, b) => a.noteName.localeCompare(b.noteName));
+  return pool[0]?.id ?? '';
+}
+
 type NotesToolProps = {
   toolId?: string;
 };
@@ -273,6 +283,13 @@ export function NotesTool({ toolId }: NotesToolProps) {
   const [showNewPassword, setShowNewPassword] = useState(false);
   const [showConfirmNewPassword, setShowConfirmNewPassword] = useState(false);
   const [passwordResetStep, setPasswordResetStep] = useState<'questions' | 'reset'>('questions');
+  const [showExportPopup, setShowExportPopup] = useState(false);
+  const [exportAllNotes, setExportAllNotes] = useState(true);
+  const [exportNoteId, setExportNoteId] = useState('');
+  const [includeHistory, setIncludeHistory] = useState(false);
+  const [exportAllTags, setExportAllTags] = useState(true);
+  const [exportTagIds, setExportTagIds] = useState<string[]>([]);
+  const [isExportingPdf, setIsExportingPdf] = useState(false);
 
   // Load notes and tags from API
   useEffect(() => {
@@ -385,6 +402,16 @@ export function NotesTool({ toolId }: NotesToolProps) {
     
     loadData();
   }, [toolId]);
+
+  useEffect(() => {
+    const onKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape' && showExportPopup && !isExportingPdf) {
+        setShowExportPopup(false);
+      }
+    };
+    window.addEventListener('keydown', onKeyDown);
+    return () => window.removeEventListener('keydown', onKeyDown);
+  }, [showExportPopup, isExportingPdf]);
 
   // Filter notes based on search and tag filter
   const filteredNotes = notes.filter(note => {
@@ -1083,6 +1110,21 @@ export function NotesTool({ toolId }: NotesToolProps) {
     return tag ? tag.name : 'Unknown';
   };
 
+  const exportNoteChoices = [...(includeHistory ? notes : notes.filter((note) => note.isActive))]
+    .sort((a, b) => a.noteName.localeCompare(b.noteName));
+
+  const exportTagOptions = [...tags].sort((a, b) => {
+    if (a.isActive !== b.isActive) return a.isActive ? -1 : 1;
+    return a.name.localeCompare(b.name);
+  });
+
+  const toggleExportTag = (tagId: string) => {
+    setExportAllTags(false);
+    setExportTagIds((prev) =>
+      prev.includes(tagId) ? prev.filter((id) => id !== tagId) : [...prev, tagId]
+    );
+  };
+
   const getTagUsageCount = (tagId: string) => {
     return notes.filter(note => note.tags.includes(tagId)).length;
   };
@@ -1512,6 +1554,236 @@ export function NotesTool({ toolId }: NotesToolProps) {
     }
   };
 
+  const exportToPDF = async () => {
+    if (isExportingPdf) return;
+    const chosenNote = notes.find((note) => note.id === exportNoteId) ?? null;
+    if (!exportAllNotes && !chosenNote) {
+      showError('Select a note, or choose All notes.');
+      return;
+    }
+    if (exportAllNotes && !exportAllTags && exportTagIds.length === 0) {
+      showError('Select at least one tag, or choose All tags.');
+      return;
+    }
+
+    setIsExportingPdf(true);
+
+    try {
+      const matchesExportTags = (note: Note) =>
+        exportAllTags || exportTagIds.some((tagId) => note.tags.includes(tagId));
+      const sortByName = (a: Note, b: Note) => a.noteName.localeCompare(b.noteName);
+
+      let activeRecords: Note[] = [];
+      let inactiveRecords: Note[] = [];
+      let exportedRecords: Note[] = [];
+
+      if (!exportAllNotes && chosenNote) {
+        exportedRecords = [chosenNote];
+        activeRecords = chosenNote.isActive ? [chosenNote] : [];
+        inactiveRecords = chosenNote.isActive ? [] : [chosenNote];
+      } else {
+        const scoped = notes.filter(matchesExportTags);
+        activeRecords = scoped.filter((note) => note.isActive).sort(sortByName);
+        inactiveRecords = scoped.filter((note) => !note.isActive).sort(sortByName);
+        exportedRecords = includeHistory ? [...activeRecords, ...inactiveRecords] : activeRecords;
+      }
+
+      const selectedTagNames = exportTagIds
+        .map((tagId) => getTagName(tagId))
+        .filter((name) => name && name !== 'Unknown');
+
+      const tagCounts = new Map<string, number>();
+      exportedRecords.forEach((note) => {
+        const names = note.tags
+          .map((tagId) => getTagName(tagId))
+          .filter((name) => name && name !== 'Unknown');
+        if (names.length === 0) {
+          tagCounts.set('Untagged', (tagCounts.get('Untagged') || 0) + 1);
+          return;
+        }
+        names.forEach((name) => {
+          tagCounts.set(name, (tagCounts.get(name) || 0) + 1);
+        });
+      });
+      const tagBreakdown = Array.from(tagCounts.entries()).sort((a, b) => {
+        if (a[0] === 'Untagged') return 1;
+        if (b[0] === 'Untagged') return -1;
+        return a[0].localeCompare(b[0]);
+      });
+
+      const { jsPDF } = await import('jspdf');
+      const pdf = new jsPDF({
+        orientation: 'portrait',
+        unit: 'mm',
+        format: 'a4',
+      });
+
+      const pageWidth = pdf.internal.pageSize.getWidth();
+      const pageHeight = pdf.internal.pageSize.getHeight();
+      const margin = 15;
+      const contentWidth = pageWidth - margin * 2;
+      let yPos = margin;
+
+      const colors = {
+        background: [255, 255, 255] as const,
+        text: [15, 23, 42] as const,
+        title: [15, 23, 42] as const,
+        header: [241, 245, 249] as const,
+        muted: [71, 85, 105] as const,
+      };
+
+      const fillPage = () => {
+        pdf.setFillColor(colors.background[0], colors.background[1], colors.background[2]);
+        pdf.rect(0, 0, pageWidth, pageHeight, 'F');
+      };
+
+      const checkNewPage = (requiredHeight: number) => {
+        if (yPos + requiredHeight > pageHeight - margin) {
+          pdf.addPage();
+          fillPage();
+          yPos = margin;
+          return true;
+        }
+        return false;
+      };
+
+      const addSectionHeader = (title: string) => {
+        checkNewPage(15);
+        pdf.setFillColor(colors.header[0], colors.header[1], colors.header[2]);
+        pdf.rect(margin, yPos, contentWidth, 10, 'F');
+        pdf.setFontSize(13);
+        pdf.setFont('helvetica', 'bold');
+        pdf.setTextColor(colors.title[0], colors.title[1], colors.title[2]);
+        pdf.text(title, margin + 5, yPos + 7);
+        yPos += 15;
+      };
+
+      const addText = (text: string, fontSize = 10, isBold = false, indent = 0, muted = false) => {
+        pdf.setFontSize(fontSize);
+        pdf.setFont('helvetica', isBold ? 'bold' : 'normal');
+        const color = muted ? colors.muted : colors.text;
+        pdf.setTextColor(color[0], color[1], color[2]);
+        const maxWidth = contentWidth - indent - 5;
+        const lines = pdf.splitTextToSize(text, maxWidth) as string[];
+        const lineHeight = fontSize * 0.42;
+        checkNewPage(lines.length * lineHeight + 2);
+        lines.forEach((line) => {
+          pdf.text(line, margin + indent, yPos);
+          yPos += lineHeight;
+        });
+        yPos += 2;
+      };
+
+      const writeNote = (note: Note) => {
+        checkNewPage(28);
+        addText(note.noteName.trim() || 'Untitled note', 11, true, 8);
+        const tagNames = note.tags
+          .map((tagId) => getTagName(tagId))
+          .filter((name) => name && name !== 'Unknown');
+        if (tagNames.length > 0) {
+          addText(`Tags: ${tagNames.join(', ')}`, 9, false, 8);
+        }
+        if (note.createdDate) {
+          addText(`Created: ${formatLocalCalendarDate(note.createdDate)}`, 9, false, 8);
+        }
+        if (note.note.trim()) {
+          addText(note.note.trim(), 9, false, 8);
+        }
+        if (note.requiresPasswordForView) {
+          addText('Password protected: Yes', 9, false, 8);
+        }
+        if (!note.isActive && note.dateInactivated) {
+          addText(`Date inactivated: ${formatLocalCalendarDate(note.dateInactivated)}`, 9, false, 8);
+        }
+        yPos += 3;
+      };
+
+      fillPage();
+
+      pdf.setFontSize(20);
+      pdf.setFont('helvetica', 'bold');
+      pdf.setTextColor(colors.title[0], colors.title[1], colors.title[2]);
+      const title = 'Notes Report';
+      pdf.text(title, (pageWidth - pdf.getTextWidth(title)) / 2, yPos);
+      yPos += 10;
+
+      pdf.setFontSize(10);
+      pdf.setFont('helvetica', 'normal');
+      pdf.setTextColor(colors.muted[0], colors.muted[1], colors.muted[2]);
+      pdf.text(`Generated on: ${formatReportDate(new Date())}`, margin, yPos);
+      yPos += 6;
+
+      const subtitle = !exportAllNotes
+        ? `${chosenNote && !chosenNote.isActive ? 'History note' : 'One note'}  ·  ${chosenNote?.noteName.trim() || 'Selected note'}`
+        : `${includeHistory ? 'Active and inactive notes' : 'Active notes only'}  ·  All notes  ·  ${
+            exportAllTags
+              ? 'All tags'
+              : selectedTagNames.length > 0
+                ? selectedTagNames.join(', ')
+                : 'Selected tags'
+          }`;
+      pdf.text(subtitle, margin, yPos);
+      yPos += 10;
+
+      addSectionHeader('Summary');
+      addText(`Total notes: ${exportedRecords.length}`, 11, true, 5);
+      addText(`Active notes: ${activeRecords.length}`, 10, false, 5);
+      if (includeHistory || (!exportAllNotes && chosenNote && !chosenNote.isActive)) {
+        addText(`Inactive notes: ${inactiveRecords.length}`, 10, false, 5);
+      }
+      addText(`Tags used: ${tagBreakdown.filter(([name]) => name !== 'Untagged').length}`, 10, false, 5);
+      if (tagBreakdown.length > 0) {
+        yPos += 1;
+        addText('By tag', 10, true, 5);
+        tagBreakdown.forEach(([name, count]) => {
+          addText(`${name}: ${count}`, 9, false, 8);
+        });
+      }
+      yPos += 4;
+
+      if (exportedRecords.length === 0) {
+        addText('No notes match the selected options.', 10, false, 5, true);
+      } else if (!exportAllNotes) {
+        addSectionHeader('Notes');
+        exportedRecords.forEach(writeNote);
+      } else {
+        addSectionHeader('Notes');
+        if (activeRecords.length > 0) {
+          activeRecords.forEach(writeNote);
+        } else {
+          addText('No active notes.', 9, false, 8, true);
+        }
+        if (includeHistory && inactiveRecords.length > 0) {
+          yPos += 2;
+          addText('Inactive', 11, true, 5);
+          yPos += 1;
+          inactiveRecords.forEach(writeNote);
+        }
+      }
+
+      const attachmentRefs = exportedRecords.flatMap((note) =>
+        (note.attachments || [])
+          .map((file) => file.name?.trim())
+          .filter((name): name is string => Boolean(name))
+          .map((fileName) => `${note.noteName.trim() || 'Note'} — ${fileName}`)
+      );
+
+      if (attachmentRefs.length > 0) {
+        addSectionHeader('Attachments');
+        addText('File names only. Files themselves are not included in this report.', 8, false, 5, true);
+        attachmentRefs.forEach((line) => addText(line, 9, false, 8));
+      }
+
+      pdf.save(`Notes_Report_${new Date().toISOString().split('T')[0]}.pdf`);
+      setShowExportPopup(false);
+    } catch (error) {
+      console.error('Error exporting notes PDF:', error);
+      showError(error instanceof Error ? error.message : 'Failed to generate PDF');
+    } finally {
+      setIsExportingPdf(false);
+    }
+  };
+
   return (
     <div className="space-y-6">
       {/* Header */}
@@ -1528,7 +1800,15 @@ export function NotesTool({ toolId }: NotesToolProps) {
               Loading...
             </div>
           )}
-          <ExportPdfIconButton />
+          <ExportPdfIconButton
+            title="Export notes to PDF"
+            onClick={() => {
+              if (!exportNoteId) {
+                setExportNoteId(pickDefaultNoteId(notes, includeHistory));
+              }
+              setShowExportPopup(true);
+            }}
+          />
         </div>
       </div>
 
@@ -2489,6 +2769,191 @@ export function NotesTool({ toolId }: NotesToolProps) {
       )}
 
       {/* Delete Confirmation Modal */}
+      {showExportPopup && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
+          <div className={`${modalCardClass} max-h-[90vh] overflow-y-auto`} role="dialog" aria-modal="true" aria-labelledby="notes-export-title">
+            <div className="flex items-center justify-between mb-4">
+              <h3 id="notes-export-title" className={sectionTitleClass}>
+                Export Options
+              </h3>
+              <button
+                type="button"
+                onClick={() => !isExportingPdf && setShowExportPopup(false)}
+                disabled={isExportingPdf}
+                className={isLight ? 'text-slate-600 hover:text-slate-900 transition-colors disabled:opacity-50' : 'text-slate-400 hover:text-slate-200 transition-colors disabled:opacity-50'}
+                title="Close"
+                aria-label="Close"
+              >
+                <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                </svg>
+              </button>
+            </div>
+
+            <div className="space-y-4">
+              <p className={descClass}>
+                Attachment files are listed by name at the end.
+              </p>
+
+              <fieldset className="space-y-2" disabled={isExportingPdf}>
+                <legend className={`${labelClass} mb-0`}>Notes</legend>
+                <label className={`flex items-start gap-3 ${isLight ? 'text-slate-700' : 'text-slate-300'} cursor-pointer`}>
+                  <input
+                    type="radio"
+                    name="notesExportScope"
+                    checked={exportAllNotes}
+                    onChange={() => setExportAllNotes(true)}
+                    className={isLight
+                      ? 'mt-0.5 h-4 w-4 border-slate-400 text-emerald-600 focus:ring-emerald-500'
+                      : 'mt-0.5 h-4 w-4 border-slate-600 bg-slate-700 text-emerald-500 focus:ring-emerald-500'}
+                  />
+                  <span>All notes</span>
+                </label>
+                <label className={`flex items-start gap-3 ${isLight ? 'text-slate-700' : 'text-slate-300'} cursor-pointer`}>
+                  <input
+                    type="radio"
+                    name="notesExportScope"
+                    checked={!exportAllNotes}
+                    onChange={() => {
+                      setExportAllNotes(false);
+                      if (!exportNoteId) {
+                        setExportNoteId(pickDefaultNoteId(notes, includeHistory));
+                      }
+                    }}
+                    className={isLight
+                      ? 'mt-0.5 h-4 w-4 border-slate-400 text-emerald-600 focus:ring-emerald-500'
+                      : 'mt-0.5 h-4 w-4 border-slate-600 bg-slate-700 text-emerald-500 focus:ring-emerald-500'}
+                  />
+                  <span>One note</span>
+                </label>
+                {!exportAllNotes && (
+                  <div className="ml-7">
+                    <label className={labelClass} htmlFor="notes-export-note">
+                      Note
+                    </label>
+                    <select
+                      id="notes-export-note"
+                      value={exportNoteId}
+                      onChange={(e) => setExportNoteId(e.target.value)}
+                      className={selectClass}
+                    >
+                      <option value="">Select a note</option>
+                      {exportNoteChoices.map((note) => (
+                        <option key={note.id} value={note.id}>
+                          {note.isActive ? note.noteName : `${note.noteName} (history)`}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                )}
+              </fieldset>
+
+              <div className="flex items-start gap-3">
+                <input
+                  type="checkbox"
+                  id="notesIncludeHistoryExport"
+                  checked={includeHistory}
+                  onChange={(e) => {
+                    const next = e.target.checked;
+                    setIncludeHistory(next);
+                    if (next && !exportNoteId) {
+                      setExportNoteId(pickDefaultNoteId(notes, true));
+                    }
+                  }}
+                  disabled={isExportingPdf}
+                  className={isLight
+                    ? 'mt-0.5 h-4 w-4 rounded border-slate-400 text-emerald-600 focus:ring-emerald-500'
+                    : 'mt-0.5 h-4 w-4 rounded border-slate-600 bg-slate-700 text-emerald-500 focus:ring-emerald-500'}
+                />
+                <label htmlFor="notesIncludeHistoryExport" className={`${isLight ? 'text-slate-700' : 'text-slate-300'} cursor-pointer`}>
+                  Include inactive notes
+                </label>
+              </div>
+
+              {exportAllNotes && (
+                <fieldset className="space-y-2" disabled={isExportingPdf}>
+                  <legend className={`${labelClass} mb-0`}>Tags</legend>
+                  <label className={`flex items-start gap-3 ${isLight ? 'text-slate-700' : 'text-slate-300'} cursor-pointer`}>
+                    <input
+                      type="radio"
+                      name="notesExportTags"
+                      checked={exportAllTags}
+                      onChange={() => {
+                        setExportAllTags(true);
+                        setExportTagIds([]);
+                      }}
+                      className={isLight
+                        ? 'mt-0.5 h-4 w-4 border-slate-400 text-emerald-600 focus:ring-emerald-500'
+                        : 'mt-0.5 h-4 w-4 border-slate-600 bg-slate-700 text-emerald-500 focus:ring-emerald-500'}
+                    />
+                    <span>All tags</span>
+                  </label>
+                  <label className={`flex items-start gap-3 ${isLight ? 'text-slate-700' : 'text-slate-300'} cursor-pointer`}>
+                    <input
+                      type="radio"
+                      name="notesExportTags"
+                      checked={!exportAllTags}
+                      onChange={() => setExportAllTags(false)}
+                      className={isLight
+                        ? 'mt-0.5 h-4 w-4 border-slate-400 text-emerald-600 focus:ring-emerald-500'
+                        : 'mt-0.5 h-4 w-4 border-slate-600 bg-slate-700 text-emerald-500 focus:ring-emerald-500'}
+                    />
+                    <span>Selected tags only</span>
+                  </label>
+                  {!exportAllTags && (
+                    <div className={`ml-7 max-h-40 overflow-y-auto space-y-2 pr-1 ${exportTagOptions.length === 0 ? descClass : ''}`}>
+                      {exportTagOptions.length === 0 ? (
+                        <p>No tags to select.</p>
+                      ) : (
+                        exportTagOptions.map((tag) => (
+                          <label key={tag.id} className={`flex items-start gap-3 ${isLight ? 'text-slate-700' : 'text-slate-300'} cursor-pointer`}>
+                            <input
+                              type="checkbox"
+                              checked={exportTagIds.includes(tag.id)}
+                              onChange={() => toggleExportTag(tag.id)}
+                              className={isLight
+                                ? 'mt-0.5 h-4 w-4 rounded border-slate-400 text-emerald-600 focus:ring-emerald-500'
+                                : 'mt-0.5 h-4 w-4 rounded border-slate-600 bg-slate-700 text-emerald-500 focus:ring-emerald-500'}
+                            />
+                            <span>
+                              {tag.name}
+                              {!tag.isActive ? ' (inactive)' : ''}
+                            </span>
+                          </label>
+                        ))
+                      )}
+                    </div>
+                  )}
+                </fieldset>
+              )}
+
+              <div className="flex gap-3 pt-2">
+                <button
+                  type="button"
+                  onClick={exportToPDF}
+                  disabled={
+                    isExportingPdf
+                    || (!exportAllNotes && !exportNoteId)
+                    || (exportAllNotes && !exportAllTags && exportTagIds.length === 0)
+                  }
+                  className={`flex-1 ${primaryButtonClass}`}
+                >
+                  {isExportingPdf ? 'Generating…' : 'Export to PDF'}
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setShowExportPopup(false)}
+                  disabled={isExportingPdf}
+                  className={secondaryButtonClass}
+                >
+                  Cancel
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
       {deleteConfirmId && (
         <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
           <div className={modalCardClass}>

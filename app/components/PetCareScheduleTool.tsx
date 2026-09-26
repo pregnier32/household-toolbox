@@ -190,6 +190,163 @@ function formatLocalDate(isoDate: string): string {
   return d ? d.toLocaleDateString() : isoDate;
 }
 
+function formatReportDate(date: Date): string {
+  return date.toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' });
+}
+
+function formatClockTime(value: string): string {
+  const match = /^(\d{2}):(\d{2})/.exec(value);
+  return match ? `${match[1]}:${match[2]}` : value;
+}
+
+function formatPriorityLabel(value: string): string {
+  const priority = value || 'medium';
+  return priority.charAt(0).toUpperCase() + priority.slice(1);
+}
+
+function mapStoredFiles(raw: unknown): StoredAttachment[] {
+  if (!Array.isArray(raw)) return [];
+  return raw
+    .map((item) => {
+      const file = item as {
+        id?: string;
+        name?: string;
+        file_name?: string;
+        size?: number;
+        file_size?: number;
+        type?: string;
+        file_type?: string;
+      };
+      return {
+        id: file.id || '',
+        name: (file.name || file.file_name || '').trim(),
+        size: file.size ?? file.file_size ?? 0,
+        type: file.type || file.file_type || '',
+      };
+    })
+    .filter((file) => file.name);
+}
+
+type PetReportSnapshot = {
+  id: string;
+  name: string;
+  petTypeLabel: string;
+  birthdate: string;
+  breed: string;
+  whereGotPet: string;
+  weight: string;
+  color: string;
+  microchipNumber: string;
+  attachments: StoredAttachment[];
+  foods: FoodEntry[];
+  veterinaryRecords: VeterinaryRecord[];
+  carePlanItems: CarePlanItem[];
+  vaccinations: Vaccination[];
+  appointments: Appointment[];
+  documents: Document[];
+  notes: Note[];
+};
+
+function mapPetReport(pet: {
+  id: string;
+  name?: string | null;
+  pet_type?: string | null;
+  custom_pet_type?: string | null;
+  birthdate?: string | null;
+  breed?: string | null;
+  where_got_pet?: string | null;
+  weight?: string | null;
+  color?: string | null;
+  microchip_number?: string | null;
+  attachments?: unknown;
+  foods?: Array<Record<string, unknown>>;
+  veterinaryRecords?: Array<Record<string, unknown>>;
+  carePlanItems?: Array<Record<string, unknown>>;
+  vaccinations?: Array<Record<string, unknown>>;
+  appointments?: Array<Record<string, unknown>>;
+  documents?: Array<Record<string, unknown>>;
+  notes?: Array<Record<string, unknown>>;
+}): PetReportSnapshot {
+  const customType = String(pet.custom_pet_type || '').trim();
+  const standardType = String(pet.pet_type || '').trim();
+  return {
+    id: pet.id,
+    name: String(pet.name || '').trim() || 'Unnamed pet',
+    petTypeLabel: customType || standardType,
+    birthdate: pet.birthdate || '',
+    breed: pet.breed || '',
+    whereGotPet: pet.where_got_pet || '',
+    weight: pet.weight || '',
+    color: pet.color || '',
+    microchipNumber: pet.microchip_number || '',
+    attachments: mapStoredFiles(pet.attachments),
+    foods: (pet.foods || []).map((food) => ({
+      id: String(food.id || ''),
+      name: String(food.name || ''),
+      rating: typeof food.rating === 'number' ? food.rating : null,
+      startDate: String(food.start_date || ''),
+      endDate: food.end_date ? String(food.end_date) : null,
+      isCurrent: food.is_current === true,
+      notes: String(food.notes || ''),
+    })),
+    veterinaryRecords: (pet.veterinaryRecords || []).map((record) => ({
+      id: String(record.id || ''),
+      veterinarianName: String(record.veterinarian_name || ''),
+      clinicName: String(record.clinic_name || ''),
+      phone: String(record.phone || ''),
+      email: String(record.email || ''),
+      address: String(record.address || ''),
+      status: record.status === 'History' ? 'History' : 'Active',
+      dateAdded: String(record.date_added || ''),
+      notes: String(record.notes || ''),
+      attachments: mapStoredFiles(record.attachments),
+    })),
+    carePlanItems: (pet.carePlanItems || []).map((item) => ({
+      id: String(item.id || ''),
+      name: String(item.name || ''),
+      frequency: String(item.frequency || ''),
+      isActive: item.is_active !== false,
+      startDate: String(item.start_date || ''),
+      endDate: item.end_date ? String(item.end_date) : null,
+      notes: String(item.notes || '').trim(),
+      priority: item.priority === 'low' || item.priority === 'high' ? item.priority : 'medium',
+    })),
+    vaccinations: (pet.vaccinations || []).map((item) => ({
+      id: String(item.id || ''),
+      name: String(item.name || ''),
+      date: String(item.date || ''),
+      veterinarian: String(item.veterinarian || ''),
+      notes: String(item.notes || ''),
+      attachments: mapStoredFiles(item.attachments),
+    })),
+    appointments: (pet.appointments || []).map((item) =>
+      mapAppointment({
+        id: String(item.id || ''),
+        date: String(item.date || ''),
+        time: item.time ? String(item.time) : '',
+        type: String(item.type || ''),
+        veterinarian: item.veterinarian ? String(item.veterinarian) : '',
+        notes: item.notes ? String(item.notes) : '',
+        is_upcoming: item.is_upcoming === true,
+        attachments: mapStoredFiles(item.attachments),
+      })
+    ),
+    documents: (pet.documents || []).map((item) => ({
+      id: String(item.id || ''),
+      name: String(item.name || ''),
+      date: String(item.date || ''),
+      description: String(item.description || ''),
+      attachments: mapStoredFiles(item.attachments),
+    })),
+    notes: (pet.notes || []).map((item) => ({
+      id: String(item.id || ''),
+      content: String(item.content || ''),
+      date: String(item.date || ''),
+      isCurrent: item.is_current !== false,
+    })),
+  };
+}
+
 function localToday(): string {
   const d = new Date();
   const year = d.getFullYear();
@@ -424,7 +581,10 @@ export function PetCareScheduleTool({ toolId }: PetCareScheduleToolProps) {
   const [appointmentSearch, setAppointmentSearch] = useState('');
   const [documentSearch, setDocumentSearch] = useState('');
   const [showExportPopup, setShowExportPopup] = useState(false);
+  const [exportAllPets, setExportAllPets] = useState(false);
+  const [exportPetId, setExportPetId] = useState('');
   const [includeHistory, setIncludeHistory] = useState(false);
+  const [isExportingPdf, setIsExportingPdf] = useState(false);
 
   // Load pets on mount
   useEffect(() => {
@@ -435,6 +595,16 @@ export function PetCareScheduleTool({ toolId }: PetCareScheduleToolProps) {
       setSaveMessage({ type: 'error', text: 'Tool ID is missing. Please refresh the page.' });
     }
   }, [toolId]);
+
+  useEffect(() => {
+    const onKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape' && showExportPopup && !isExportingPdf) {
+        setShowExportPopup(false);
+      }
+    };
+    window.addEventListener('keydown', onKeyDown);
+    return () => window.removeEventListener('keydown', onKeyDown);
+  }, [showExportPopup, isExportingPdf]);
 
   // Helper function to create a normalized snapshot for comparison
   // This must be defined after all state variables
@@ -1856,19 +2026,19 @@ export function PetCareScheduleTool({ toolId }: PetCareScheduleToolProps) {
   };
 
   const addNote = async () => {
-    if (currentNote.trim()) {
-      const note: Note = {
-        id: Date.now().toString(),
-        content: currentNote,
-        date: localToday(),
-        isCurrent: true
-      };
-      setNotes(prev => [...prev, note]);
-      setCurrentNote('');
-      setAddingSection(null);
-      // Save to database immediately
-      setTimeout(() => savePetData(), 100);
-    }
+    const content = currentNote.trim();
+    if (!content || isSaving) return;
+    const note: Note = {
+      id: Date.now().toString(),
+      content,
+      date: localToday(),
+      isCurrent: true,
+    };
+    const updatedNotes = [...notes, note];
+    setNotes(updatedNotes);
+    setCurrentNote('');
+    setAddingSection(null);
+    await savePetData(undefined, undefined, undefined, undefined, undefined, undefined, updatedNotes);
   };
 
   const archiveNote = (noteId: string) => {
@@ -1919,290 +2089,333 @@ export function PetCareScheduleTool({ toolId }: PetCareScheduleToolProps) {
     }, 100);
   };
 
-  const exportToPDF = async () => {
-    if (!selectedPetId) return;
-
-    // Load jsPDF from CDN
-    let jsPDF: any;
-    if ((window as any).jspdf?.jsPDF) {
-      jsPDF = (window as any).jspdf.jsPDF;
-    } else {
-      await new Promise<void>((resolve) => {
-        const script = document.createElement('script');
-        script.src = 'https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js';
-        script.onload = () => {
-          jsPDF = (window as any).jspdf.jsPDF;
-          resolve();
-        };
-        document.head.appendChild(script);
-      });
+  const fetchPetReport = async (petId: string): Promise<PetReportSnapshot> => {
+    if (!toolId) throw new Error('Tool ID is missing.');
+    const response = await fetch(`${API_BASE}?toolId=${toolId}&petId=${petId}`);
+    const data = await response.json();
+    if (!response.ok || !data.pet) {
+      throw new Error(data.error || 'Failed to load pet data');
     }
-
-    const pdf = new jsPDF({
-      orientation: 'portrait',
-      unit: 'mm',
-      format: 'a4'
-    });
-
-    const pageWidth = pdf.internal.pageSize.getWidth();
-    const pageHeight = pdf.internal.pageSize.getHeight();
-    const margin = 15;
-    const contentWidth = pageWidth - (margin * 2);
-    let yPos = margin;
-
-    // Light mode colors
-    const colors = {
-      background: [255, 255, 255],
-      text: [0, 0, 0],
-      title: [0, 0, 0],
-      header: [240, 240, 240],
-      border: [200, 200, 200],
-      accent: [16, 185, 129] // emerald-500
-    };
-
-    // Helper function to add a new page if needed
-    const checkNewPage = (requiredHeight: number) => {
-      if (yPos + requiredHeight > pageHeight - margin) {
-        pdf.addPage();
-        yPos = margin;
-        return true;
-      }
-      return false;
-    };
-
-    // Helper function to add a section header
-    const addSectionHeader = (title: string) => {
-      checkNewPage(15);
-      pdf.setFillColor(...colors.header);
-      pdf.rect(margin, yPos, contentWidth, 10, 'F');
-      pdf.setFontSize(16);
-      pdf.setFont('helvetica', 'bold');
-      pdf.setTextColor(...colors.title);
-      pdf.text(title, margin + 5, yPos + 7);
-      yPos += 15;
-    };
-
-    // Helper function to add text with wrapping
-    const addText = (text: string, fontSize: number = 10, isBold: boolean = false, indent: number = 0) => {
-      pdf.setFontSize(fontSize);
-      pdf.setFont('helvetica', isBold ? 'bold' : 'normal');
-      pdf.setTextColor(...colors.text);
-      
-      const maxWidth = contentWidth - indent - 5;
-      const lines = pdf.splitTextToSize(text, maxWidth);
-      
-      checkNewPage(lines.length * (fontSize * 0.4) + 2);
-      
-      lines.forEach((line: string) => {
-        pdf.text(line, margin + indent, yPos);
-        yPos += fontSize * 0.4;
-      });
-      yPos += 2;
-    };
-
-    // Title
-    pdf.setFillColor(...colors.background);
-    pdf.rect(0, 0, pageWidth, pageHeight, 'F');
-    
-    pdf.setFontSize(20);
-    pdf.setFont('helvetica', 'bold');
-    pdf.setTextColor(...colors.title);
-    const title = `${petName || 'Pet'} - Complete Report`;
-    const titleWidth = pdf.getTextWidth(title);
-    pdf.text(title, (pageWidth - titleWidth) / 2, yPos);
-    yPos += 15;
-
-    pdf.setFontSize(10);
-    pdf.setFont('helvetica', 'normal');
-    pdf.setTextColor(...colors.text);
-    const dateStr = new Date().toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' });
-    pdf.text(`Generated on: ${dateStr}`, margin, yPos);
-    yPos += 10;
-
-    // Pet Info Section
-    addSectionHeader('Pet Information');
-    if (petType) {
-      addText(`Type: ${petType.name}`, 10, false, 5);
-    }
-    if (birthdate) {
-      addText(`Birthdate: ${new Date(birthdate).toLocaleDateString()}`, 10, false, 5);
-    }
-    if (breed) {
-      addText(`Breed: ${breed}`, 10, false, 5);
-    }
-    if (weight) {
-      addText(`Weight: ${weight}`, 10, false, 5);
-    }
-    if (color) {
-      addText(`Color: ${color}`, 10, false, 5);
-    }
-    if (microchipNumber) {
-      addText(`Microchip Number: ${microchipNumber}`, 10, false, 5);
-    }
-    if (whereGotPet) {
-      addText(`Where Got Pet: ${whereGotPet}`, 10, false, 5);
-    }
-    yPos += 5;
-
-    // Food Section
-    const foodItems = includeHistory ? foods : foods.filter(f => f.isCurrent);
-    if (foodItems.length > 0) {
-      addSectionHeader('Food');
-      foodItems.forEach((food) => {
-        checkNewPage(15);
-        
-        addText(food.name, 11, true, 10);
-        if (food.startDate) {
-          addText(`Started: ${new Date(food.startDate).toLocaleDateString()}`, 9, false, 10);
-        }
-        if (food.endDate) {
-          addText(`Ended: ${new Date(food.endDate).toLocaleDateString()}`, 9, false, 10);
-        }
-        if (food.rating) {
-          addText(`Rating: ${'★'.repeat(food.rating)}${'☆'.repeat(5 - food.rating)}`, 9, false, 10);
-        }
-        if (food.notes) {
-          addText(`Notes: ${food.notes}`, 9, false, 10);
-        }
-        yPos += 3;
-      });
-    }
-
-    // Veterinary Section
-    const vetItems = includeHistory ? veterinaryRecords : veterinaryRecords.filter(v => v.status === 'Active');
-    if (vetItems.length > 0) {
-      addSectionHeader('Veterinary Contacts');
-      vetItems.forEach((vet) => {
-        checkNewPage(15);
-        
-        const vetName = vet.veterinarianName || vet.clinicName || 'Unnamed Contact';
-        addText(vetName, 11, true, 10);
-        if (vet.veterinarianName && vet.clinicName) {
-          addText(`${vet.veterinarianName} - ${vet.clinicName}`, 9, false, 10);
-        }
-        if (vet.phone) {
-          addText(`Phone: ${vet.phone}`, 9, false, 10);
-        }
-        if (vet.email) {
-          addText(`Email: ${vet.email}`, 9, false, 10);
-        }
-        if (vet.address) {
-          addText(`Address: ${vet.address}`, 9, false, 10);
-        }
-        if (vet.notes) {
-          addText(`Notes: ${vet.notes}`, 9, false, 10);
-        }
-        yPos += 3;
-      });
-    }
-
-    // Care Plan Section
-    const careItems = includeHistory ? carePlanItems : carePlanItems.filter(c => c.isActive);
-    if (careItems.length > 0) {
-      addSectionHeader('Care Plan');
-      careItems.forEach((item) => {
-        checkNewPage(15);
-        
-        addText(item.name, 11, true, 10);
-        addText(`Frequency: ${item.frequency}`, 9, false, 10);
-        if (item.startDate) {
-          addText(`Start Date: ${new Date(item.startDate).toLocaleDateString()}`, 9, false, 10);
-        }
-        if (item.endDate) {
-          addText(`End Date: ${new Date(item.endDate).toLocaleDateString()}`, 9, false, 10);
-        }
-        if (item.notes) {
-          addText(`Notes: ${item.notes}`, 9, false, 10);
-        }
-        yPos += 3;
-      });
-    }
-
-    // Vaccinations Section
-    if (vaccinations.length > 0) {
-      addSectionHeader('Vaccinations');
-      vaccinations.forEach((vaccination) => {
-        checkNewPage(15);
-        
-        addText(vaccination.name, 11, true, 10);
-        if (vaccination.date) {
-          addText(`Date: ${new Date(vaccination.date).toLocaleDateString()}`, 9, false, 10);
-        }
-        if (vaccination.veterinarian) {
-          addText(`Veterinarian: ${vaccination.veterinarian}`, 9, false, 10);
-        }
-        if (vaccination.notes) {
-          addText(`Notes: ${vaccination.notes}`, 9, false, 10);
-        }
-        yPos += 3;
-      });
-    }
-
-    // Appointments Section
-    if (appointments.length > 0) {
-      addSectionHeader('Appointments');
-      appointments.forEach((appointment) => {
-        checkNewPage(15);
-        
-        addText(appointment.type, 11, true, 10);
-        if (appointment.date) {
-          addText(`Date: ${new Date(appointment.date).toLocaleDateString()}`, 9, false, 10);
-        }
-        if (appointment.time) {
-          addText(`Time: ${appointment.time}`, 9, false, 10);
-        }
-        if (appointment.veterinarian) {
-          addText(`Veterinarian: ${appointment.veterinarian}`, 9, false, 10);
-        }
-        if (appointment.notes) {
-          addText(`Notes: ${appointment.notes}`, 9, false, 10);
-        }
-        yPos += 3;
-      });
-    }
-
-    // Documents Section
-    if (documents.length > 0) {
-      addSectionHeader('Documents');
-      documents.forEach((doc) => {
-        checkNewPage(12);
-        
-        addText(doc.name, 11, true, 10);
-        if (doc.date) {
-          addText(`Date: ${new Date(doc.date).toLocaleDateString()}`, 9, false, 10);
-        }
-        if (doc.description) {
-          addText(`Description: ${doc.description}`, 9, false, 10);
-        }
-        if ((doc.attachments || []).length > 0) {
-          addText(`Files: ${(doc.attachments || []).length}`, 9, false, 10);
-        }
-        yPos += 3;
-      });
-    }
-
-    // Notes Section
-    const noteItems = includeHistory ? notes : notes.filter(n => n.isCurrent);
-    if (noteItems.length > 0) {
-      addSectionHeader('Notes');
-      noteItems.forEach((note) => {
-        checkNewPage(15);
-        
-        if (note.date) {
-          addText(`Date: ${new Date(note.date).toLocaleDateString()}`, 9, false, 10);
-        }
-        if (note.content) {
-          addText(note.content, 10, false, 10);
-        }
-        yPos += 3;
-      });
-    }
-
-    // Save PDF
-    const fileName = `${petName || 'Pet'}_Report_${new Date().toISOString().split('T')[0]}.pdf`;
-    pdf.save(fileName);
-    setShowExportPopup(false);
+    return mapPetReport(data.pet);
   };
+
+  const exportToPDF = async () => {
+    if (isExportingPdf) return;
+    const chosenPet = pets.find((pet) => pet.id === exportPetId) ?? null;
+    if (!exportAllPets && !chosenPet) {
+      showError('Select a pet, or choose All pets.');
+      return;
+    }
+    const petIds = exportAllPets ? pets.map((pet) => pet.id) : chosenPet ? [chosenPet.id] : [];
+    if (petIds.length === 0) {
+      showError('Select a pet, or choose All pets.');
+      return;
+    }
+
+    setIsExportingPdf(true);
+
+    try {
+      const reports = (await Promise.all(petIds.map((petId) => fetchPetReport(petId))))
+        .sort((a, b) => a.name.localeCompare(b.name));
+
+      const { jsPDF } = await import('jspdf');
+
+      const pdf = new jsPDF({
+        orientation: 'portrait',
+        unit: 'mm',
+        format: 'a4',
+      });
+
+      const pageWidth = pdf.internal.pageSize.getWidth();
+      const pageHeight = pdf.internal.pageSize.getHeight();
+      const margin = 15;
+      const contentWidth = pageWidth - margin * 2;
+      let yPos = margin;
+      const todayKey = localToday();
+
+      const colors = {
+        background: [255, 255, 255] as const,
+        text: [15, 23, 42] as const,
+        title: [15, 23, 42] as const,
+        header: [241, 245, 249] as const,
+        muted: [71, 85, 105] as const,
+      };
+
+      const fillPage = () => {
+        pdf.setFillColor(colors.background[0], colors.background[1], colors.background[2]);
+        pdf.rect(0, 0, pageWidth, pageHeight, 'F');
+      };
+
+      const checkNewPage = (requiredHeight: number) => {
+        if (yPos + requiredHeight > pageHeight - margin) {
+          pdf.addPage();
+          fillPage();
+          yPos = margin;
+          return true;
+        }
+        return false;
+      };
+
+      const addSectionHeader = (title: string) => {
+        checkNewPage(15);
+        pdf.setFillColor(colors.header[0], colors.header[1], colors.header[2]);
+        pdf.rect(margin, yPos, contentWidth, 10, 'F');
+        pdf.setFontSize(13);
+        pdf.setFont('helvetica', 'bold');
+        pdf.setTextColor(colors.title[0], colors.title[1], colors.title[2]);
+        pdf.text(title, margin + 5, yPos + 7);
+        yPos += 15;
+      };
+
+      const addText = (text: string, fontSize = 10, isBold = false, indent = 0, muted = false) => {
+        pdf.setFontSize(fontSize);
+        pdf.setFont('helvetica', isBold ? 'bold' : 'normal');
+        const color = muted ? colors.muted : colors.text;
+        pdf.setTextColor(color[0], color[1], color[2]);
+        const maxWidth = contentWidth - indent - 5;
+        const lines = pdf.splitTextToSize(text, maxWidth) as string[];
+        const lineHeight = fontSize * 0.42;
+        checkNewPage(lines.length * lineHeight + 2);
+        lines.forEach((line) => {
+          pdf.text(line, margin + indent, yPos);
+          yPos += lineHeight;
+        });
+        yPos += 2;
+      };
+
+      const fileLines = (files: StoredAttachment[] | undefined) =>
+        (files || []).map((file) => file.name?.trim()).filter((name): name is string => Boolean(name));
+
+      fillPage();
+
+      pdf.setFontSize(20);
+      pdf.setFont('helvetica', 'bold');
+      pdf.setTextColor(colors.title[0], colors.title[1], colors.title[2]);
+      const title = 'Pet Care Schedule Report';
+      pdf.text(title, (pageWidth - pdf.getTextWidth(title)) / 2, yPos);
+      yPos += 10;
+
+      pdf.setFontSize(10);
+      pdf.setFont('helvetica', 'normal');
+      pdf.setTextColor(colors.muted[0], colors.muted[1], colors.muted[2]);
+      pdf.text(`Generated on: ${formatReportDate(new Date())}`, margin, yPos);
+      yPos += 6;
+
+      const historyLabel = includeHistory ? 'Current and history records' : 'Current records only';
+      const scopeLabel = exportAllPets
+        ? 'All pets'
+        : `One pet  ·  ${reports[0]?.name || chosenPet?.name || 'Selected pet'}`;
+      pdf.text(`${historyLabel}  ·  ${scopeLabel}`, margin, yPos);
+      yPos += 10;
+
+      const attachmentRefs: string[] = [];
+
+      reports.forEach((report) => {
+        addSectionHeader(report.name);
+
+        addText('Pet information', 11, true, 5);
+        if (report.petTypeLabel) addText(`Type: ${report.petTypeLabel}`, 9, false, 8);
+        if (report.birthdate) addText(`Birthdate: ${formatLocalDate(report.birthdate)}`, 9, false, 8);
+        if (report.breed) addText(`Breed: ${report.breed}`, 9, false, 8);
+        if (report.weight) addText(`Weight: ${report.weight}`, 9, false, 8);
+        if (report.color) addText(`Color: ${report.color}`, 9, false, 8);
+        if (report.microchipNumber) addText(`Microchip: ${report.microchipNumber}`, 9, false, 8);
+        if (report.whereGotPet) addText(`Where got pet: ${report.whereGotPet}`, 9, false, 8);
+        yPos += 2;
+        fileLines(report.attachments).forEach((fileName) => {
+          attachmentRefs.push(`${report.name} — Pet — ${report.name} — ${fileName}`);
+        });
+
+        const currentFood = report.foods.filter((food) => food.isCurrent).sort((a, b) => a.name.localeCompare(b.name));
+        const historyFood = report.foods
+          .filter((food) => !food.isCurrent)
+          .sort((a, b) => (b.startDate || '').localeCompare(a.startDate || '') || a.name.localeCompare(b.name));
+        const foodRows = includeHistory ? [...currentFood, ...historyFood] : currentFood;
+        if (foodRows.length > 0) {
+          addText('Food', 11, true, 5);
+          const writeFood = (food: FoodEntry) => {
+            addText(food.name || 'Food', 10, true, 8);
+            if (food.startDate) addText(`Started: ${formatLocalDate(food.startDate)}`, 9, false, 10);
+            if (food.endDate) addText(`Ended: ${formatLocalDate(food.endDate)}`, 9, false, 10);
+            if (food.rating) addText(`Rating: ${food.rating} of 5`, 9, false, 10);
+            if (food.notes.trim()) addText(`Notes: ${food.notes.trim()}`, 9, false, 10);
+            yPos += 1;
+          };
+          currentFood.forEach(writeFood);
+          if (includeHistory && historyFood.length > 0) {
+            addText('History', 10, true, 8);
+            historyFood.forEach(writeFood);
+          }
+          yPos += 2;
+        }
+
+        const activeVets = report.veterinaryRecords
+          .filter((record) => record.status === 'Active')
+          .sort((a, b) => (a.veterinarianName || a.clinicName).localeCompare(b.veterinarianName || b.clinicName));
+        const historyVets = report.veterinaryRecords
+          .filter((record) => record.status === 'History')
+          .sort((a, b) => (a.veterinarianName || a.clinicName).localeCompare(b.veterinarianName || b.clinicName));
+        const vetRows = includeHistory ? [...activeVets, ...historyVets] : activeVets;
+        if (vetRows.length > 0) {
+          addText('Veterinary contacts', 11, true, 5);
+          const writeVet = (record: VeterinaryRecord) => {
+            const label = record.veterinarianName || record.clinicName || 'Veterinary contact';
+            addText(label, 10, true, 8);
+            if (record.veterinarianName && record.clinicName) {
+              addText(`Clinic: ${record.clinicName}`, 9, false, 10);
+            }
+            if (record.phone) addText(`Phone: ${record.phone}`, 9, false, 10);
+            if (record.email) addText(`Email: ${record.email}`, 9, false, 10);
+            if (record.address) addText(`Address: ${record.address}`, 9, false, 10);
+            if (record.notes.trim()) addText(`Notes: ${record.notes.trim()}`, 9, false, 10);
+            fileLines(record.attachments).forEach((fileName) => {
+              attachmentRefs.push(`${report.name} — Veterinary — ${label} — ${fileName}`);
+            });
+            yPos += 1;
+          };
+          activeVets.forEach(writeVet);
+          if (includeHistory && historyVets.length > 0) {
+            addText('History', 10, true, 8);
+            historyVets.forEach(writeVet);
+          }
+          yPos += 2;
+        }
+
+        const activeCare = report.carePlanItems
+          .filter((item) => item.isActive)
+          .sort((a, b) => a.name.localeCompare(b.name));
+        const historyCare = report.carePlanItems
+          .filter((item) => !item.isActive)
+          .sort((a, b) => a.name.localeCompare(b.name));
+        const careRows = includeHistory ? [...activeCare, ...historyCare] : activeCare;
+        if (careRows.length > 0) {
+          addText('Care plan', 11, true, 5);
+          const writeCare = (item: CarePlanItem) => {
+            addText(item.name || 'Care item', 10, true, 8);
+            if (item.frequency) addText(`Frequency: ${item.frequency}`, 9, false, 10);
+            addText(`Priority: ${formatPriorityLabel(item.priority)}`, 9, false, 10);
+            if (item.startDate) addText(`Started: ${formatLocalDate(item.startDate)}`, 9, false, 10);
+            if (item.endDate) addText(`Ended: ${formatLocalDate(item.endDate)}`, 9, false, 10);
+            if (item.notes.trim()) addText(`Notes: ${item.notes.trim()}`, 9, false, 10);
+            yPos += 1;
+          };
+          activeCare.forEach(writeCare);
+          if (includeHistory && historyCare.length > 0) {
+            addText('History', 10, true, 8);
+            historyCare.forEach(writeCare);
+          }
+          yPos += 2;
+        }
+
+        const vaccinationRows = [...report.vaccinations].sort(
+          (a, b) => b.date.localeCompare(a.date) || a.name.localeCompare(b.name)
+        );
+        if (vaccinationRows.length > 0) {
+          addText('Vaccinations', 11, true, 5);
+          vaccinationRows.forEach((item) => {
+            const label = item.name || 'Vaccination';
+            addText(label, 10, true, 8);
+            if (item.date) addText(`Date: ${formatLocalDate(item.date)}`, 9, false, 10);
+            if (item.veterinarian) addText(`Veterinarian: ${item.veterinarian}`, 9, false, 10);
+            if (item.notes.trim()) addText(`Notes: ${item.notes.trim()}`, 9, false, 10);
+            fileLines(item.attachments).forEach((fileName) => {
+              attachmentRefs.push(`${report.name} — Vaccination — ${label} — ${fileName}`);
+            });
+            yPos += 1;
+          });
+          yPos += 2;
+        }
+
+        const upcomingAppointments = report.appointments
+          .filter((item) => item.date >= todayKey)
+          .sort((a, b) => a.date.localeCompare(b.date) || a.type.localeCompare(b.type));
+        const pastAppointments = report.appointments
+          .filter((item) => item.date < todayKey)
+          .sort((a, b) => b.date.localeCompare(a.date) || a.type.localeCompare(b.type));
+        const appointmentRows = includeHistory
+          ? [...upcomingAppointments, ...pastAppointments]
+          : upcomingAppointments;
+        if (appointmentRows.length > 0) {
+          addText('Appointments', 11, true, 5);
+          const writeAppointment = (item: Appointment) => {
+            const label = item.type || 'Appointment';
+            addText(label, 10, true, 8);
+            if (item.date) addText(`Date: ${formatLocalDate(item.date)}`, 9, false, 10);
+            if (item.time) addText(`Time: ${formatClockTime(item.time)}`, 9, false, 10);
+            if (item.veterinarian) addText(`Veterinarian: ${item.veterinarian}`, 9, false, 10);
+            if (item.notes.trim()) addText(`Notes: ${item.notes.trim()}`, 9, false, 10);
+            fileLines(item.attachments).forEach((fileName) => {
+              attachmentRefs.push(`${report.name} — Appointment — ${label} — ${fileName}`);
+            });
+            yPos += 1;
+          };
+          upcomingAppointments.forEach(writeAppointment);
+          if (includeHistory && pastAppointments.length > 0) {
+            addText('History', 10, true, 8);
+            pastAppointments.forEach(writeAppointment);
+          }
+          yPos += 2;
+        }
+
+        const documentRows = [...report.documents].sort(
+          (a, b) => b.date.localeCompare(a.date) || a.name.localeCompare(b.name)
+        );
+        if (documentRows.length > 0) {
+          addText('Documents', 11, true, 5);
+          documentRows.forEach((doc) => {
+            const label = doc.name || 'Document';
+            addText(label, 10, true, 8);
+            if (doc.date) addText(`Date: ${formatLocalDate(doc.date)}`, 9, false, 10);
+            if (doc.description.trim()) addText(`Description: ${doc.description.trim()}`, 9, false, 10);
+            fileLines(doc.attachments).forEach((fileName) => {
+              attachmentRefs.push(`${report.name} — Document — ${label} — ${fileName}`);
+            });
+            yPos += 1;
+          });
+          yPos += 2;
+        }
+
+        const currentNotes = report.notes
+          .filter((note) => note.isCurrent)
+          .sort((a, b) => b.date.localeCompare(a.date));
+        const historyNotes = report.notes
+          .filter((note) => !note.isCurrent)
+          .sort((a, b) => b.date.localeCompare(a.date));
+        const noteRows = includeHistory ? [...currentNotes, ...historyNotes] : currentNotes;
+        if (noteRows.length > 0) {
+          addText('Notes', 11, true, 5);
+          const writeNote = (note: Note) => {
+            if (note.date) addText(formatLocalDate(note.date), 10, true, 8);
+            if (note.content.trim()) addText(note.content.trim(), 9, false, 10);
+            yPos += 1;
+          };
+          currentNotes.forEach(writeNote);
+          if (includeHistory && historyNotes.length > 0) {
+            addText('History', 10, true, 8);
+            historyNotes.forEach(writeNote);
+          }
+          yPos += 2;
+        }
+
+        yPos += 3;
+      });
+
+      if (attachmentRefs.length > 0) {
+        addSectionHeader('Attachments');
+        addText('File names only. Files themselves are not included in this report.', 8, false, 5, true);
+        attachmentRefs.forEach((line) => addText(line, 9, false, 8));
+      }
+
+      pdf.save(`Pet_Care_Schedule_Report_${new Date().toISOString().split('T')[0]}.pdf`);
+      setShowExportPopup(false);
+    } catch (error) {
+      console.error('Error exporting pet care PDF:', error);
+      showError(error instanceof Error ? error.message : 'Failed to generate PDF');
+    } finally {
+      setIsExportingPdf(false);
+    }
+  };
+
 
   const deleteItem = (array: any[], setter: any, id: string) => {
     setter(array.filter(item => item.id !== id));
@@ -2301,7 +2514,15 @@ export function PetCareScheduleTool({ toolId }: PetCareScheduleToolProps) {
         </div>
         <ExportPdfIconButton
           title="Export pet care to PDF"
-          onClick={() => setShowExportPopup(true)}
+          onClick={() => {
+            const fallback = [...pets].sort((a, b) => a.name.localeCompare(b.name))[0]?.id || '';
+            if (!exportAllPets) {
+              setExportPetId(selectedPetId || exportPetId || fallback);
+            } else if (!exportPetId) {
+              setExportPetId(selectedPetId || fallback);
+            }
+            setShowExportPopup(true);
+          }}
         />
       </div>
 
@@ -4722,10 +4943,12 @@ export function PetCareScheduleTool({ toolId }: PetCareScheduleToolProps) {
             />
             <div className="flex gap-2 mt-4">
               <button
+                type="button"
                 onClick={addNote}
+                disabled={!currentNote.trim() || isSaving}
                 className={primaryButtonClass}
               >
-                Add Note
+                {isSaving ? 'Saving...' : 'Add Note'}
               </button>
               <button
                 type="button"
@@ -4893,45 +5116,121 @@ export function PetCareScheduleTool({ toolId }: PetCareScheduleToolProps) {
         </div>
       )}
 
-      {/* Export Popup */}
+        </>
+      )}
+
       {showExportPopup && (
         <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
-          <div className={modalCardClass}>
+          <div className={`${modalCardClass} max-h-[90vh] overflow-y-auto`} role="dialog" aria-modal="true" aria-labelledby="pcs-export-title">
             <div className="flex items-center justify-between mb-4">
-              <h3 className={isLight ? 'text-lg font-semibold text-slate-900' : 'text-lg font-semibold text-slate-50'}>Export Options</h3>
+              <h3 id="pcs-export-title" className={sectionTitleClass}>
+                Export Options
+              </h3>
               <button
-                onClick={() => setShowExportPopup(false)}
-                className="text-slate-400 hover:text-slate-200 transition-colors"
+                type="button"
+                onClick={() => !isExportingPdf && setShowExportPopup(false)}
+                disabled={isExportingPdf}
+                className={isLight ? 'text-slate-600 hover:text-slate-900 transition-colors disabled:opacity-50' : 'text-slate-400 hover:text-slate-200 transition-colors disabled:opacity-50'}
+                title="Close"
+                aria-label="Close"
               >
                 <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
                 </svg>
               </button>
             </div>
-            
+
             <div className="space-y-4">
-              <div className="flex items-center gap-3">
+              <p className={descClass}>
+                Attachment files are listed by name at the end.
+              </p>
+
+              <fieldset className="space-y-2" disabled={isExportingPdf}>
+                <legend className={`${labelClass} mb-0`}>Pets</legend>
+                <label className={`flex items-start gap-3 ${isLight ? 'text-slate-700' : 'text-slate-300'} cursor-pointer`}>
+                  <input
+                    type="radio"
+                    name="pcsExportScope"
+                    checked={exportAllPets}
+                    onChange={() => setExportAllPets(true)}
+                    className={isLight
+                      ? 'mt-0.5 h-4 w-4 border-slate-400 text-emerald-600 focus:ring-emerald-500'
+                      : 'mt-0.5 h-4 w-4 border-slate-600 bg-slate-700 text-emerald-500 focus:ring-emerald-500'}
+                  />
+                  <span>All pets</span>
+                </label>
+                <label className={`flex items-start gap-3 ${isLight ? 'text-slate-700' : 'text-slate-300'} cursor-pointer`}>
+                  <input
+                    type="radio"
+                    name="pcsExportScope"
+                    checked={!exportAllPets}
+                    onChange={() => {
+                      setExportAllPets(false);
+                      if (!exportPetId) {
+                        const fallback = [...pets].sort((a, b) => a.name.localeCompare(b.name))[0]?.id || '';
+                        setExportPetId(selectedPetId || fallback);
+                      }
+                    }}
+                    className={isLight
+                      ? 'mt-0.5 h-4 w-4 border-slate-400 text-emerald-600 focus:ring-emerald-500'
+                      : 'mt-0.5 h-4 w-4 border-slate-600 bg-slate-700 text-emerald-500 focus:ring-emerald-500'}
+                  />
+                  <span>One pet</span>
+                </label>
+                {!exportAllPets && (
+                  <div className="ml-7">
+                    <label className={labelClass} htmlFor="pcs-export-pet">
+                      Pet
+                    </label>
+                    <select
+                      id="pcs-export-pet"
+                      value={exportPetId}
+                      onChange={(e) => setExportPetId(e.target.value)}
+                      className={selectClass}
+                    >
+                      <option value="">Select a pet</option>
+                      {[...pets]
+                        .sort((a, b) => a.name.localeCompare(b.name))
+                        .map((pet) => (
+                          <option key={pet.id} value={pet.id}>
+                            {pet.name}
+                            {pet.custom_pet_type || pet.pet_type ? ` · ${pet.custom_pet_type || pet.pet_type}` : ''}
+                          </option>
+                        ))}
+                    </select>
+                  </div>
+                )}
+              </fieldset>
+
+              <div className="flex items-start gap-3">
                 <input
                   type="checkbox"
-                  id="includeHistory"
+                  id="pcsIncludeHistoryExport"
                   checked={includeHistory}
                   onChange={(e) => setIncludeHistory(e.target.checked)}
-                  className="w-5 h-5 rounded border-slate-600 bg-slate-700 text-emerald-500 focus:ring-emerald-500 focus:ring-offset-slate-800"
+                  disabled={isExportingPdf}
+                  className={isLight
+                    ? 'mt-0.5 h-4 w-4 rounded border-slate-400 text-emerald-600 focus:ring-emerald-500'
+                    : 'mt-0.5 h-4 w-4 rounded border-slate-600 bg-slate-700 text-emerald-500 focus:ring-emerald-500'}
                 />
-                <label htmlFor="includeHistory" className={isLight ? 'text-slate-700 cursor-pointer' : 'text-slate-300 cursor-pointer'}>
-                  Include history items (archived food, veterinary contacts, care plan items, and notes)
+                <label htmlFor="pcsIncludeHistoryExport" className={`${isLight ? 'text-slate-700' : 'text-slate-300'} cursor-pointer`}>
+                  Include history
                 </label>
               </div>
 
-              <div className="flex gap-3 pt-4">
+              <div className="flex gap-3 pt-2">
                 <button
+                  type="button"
                   onClick={exportToPDF}
-                  className={isLight ? 'flex-1 px-4 py-2 rounded-lg bg-emerald-600 text-white font-medium hover:bg-emerald-500 transition-colors' : 'flex-1 px-4 py-2 rounded-lg bg-emerald-500 text-slate-950 font-medium hover:bg-emerald-400 transition-colors'}
+                  disabled={isExportingPdf || pets.length === 0 || (!exportAllPets && !exportPetId)}
+                  className={`flex-1 ${primaryButtonClass}`}
                 >
-                  Export to PDF
+                  {isExportingPdf ? 'Generating…' : 'Export to PDF'}
                 </button>
                 <button
+                  type="button"
                   onClick={() => setShowExportPopup(false)}
+                  disabled={isExportingPdf}
                   className={secondaryButtonClass}
                 >
                   Cancel
@@ -4940,8 +5239,6 @@ export function PetCareScheduleTool({ toolId }: PetCareScheduleToolProps) {
             </div>
           </div>
         </div>
-      )}
-        </>
       )}
 
       <AttachmentModal

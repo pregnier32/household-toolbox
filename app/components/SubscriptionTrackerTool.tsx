@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { useTheme } from './AppThemeProvider';
 import { useAppNotice } from './AppNotice';
 import { AttachmentButton } from './AttachmentButton';
@@ -153,6 +153,45 @@ function formatLocalDate(isoDate: string): string {
   return d ? d.toLocaleDateString() : isoDate;
 }
 
+function formatReportDate(date: Date): string {
+  return date.toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' });
+}
+
+function formatMoney(amount: number): string {
+  return `$${amount.toFixed(2)}`;
+}
+
+function monthlyEquivalent(subscription: Pick<Subscription, 'amount' | 'frequency'>): number {
+  if (subscription.frequency === 'annual') return subscription.amount / 12;
+  if (subscription.frequency === 'quarterly') return subscription.amount / 3;
+  return subscription.amount;
+}
+
+function frequencyLabel(frequency: SubscriptionFrequency): string {
+  if (frequency === 'annual') return 'Annual';
+  if (frequency === 'quarterly') return 'Quarterly';
+  return 'Monthly';
+}
+
+function sortSubscriptionsByName(subscriptions: Subscription[]): Subscription[] {
+  return [...subscriptions].sort((a, b) => a.name.localeCompare(b.name));
+}
+
+function pickDefaultSubscriptionId(
+  subscriptions: Subscription[],
+  includeHistory: boolean,
+  editingId: string | null
+): string {
+  if (editingId) {
+    const editing = subscriptions.find((subscription) => subscription.id === editingId);
+    if (editing && (editing.isActive || includeHistory)) return editing.id;
+  }
+  const active = sortSubscriptionsByName(subscriptions.filter((subscription) => subscription.isActive));
+  if (active[0]) return active[0].id;
+  if (!includeHistory) return '';
+  return sortSubscriptionsByName(subscriptions.filter((subscription) => !subscription.isActive))[0]?.id || '';
+}
+
 function mapDbSubscription(sub: any): Subscription {
   return {
     id: sub.id,
@@ -216,7 +255,10 @@ export function SubscriptionTrackerTool({ toolId }: SubscriptionTrackerToolProps
   const [subscriptions, setSubscriptions] = useState<Subscription[]>([]);
   const [isLoading, setIsLoading] = useState(false);
   const [showExportPopup, setShowExportPopup] = useState(false);
+  const [exportAllSubscriptions, setExportAllSubscriptions] = useState(false);
+  const [exportSubscriptionId, setExportSubscriptionId] = useState('');
   const [includeHistory, setIncludeHistory] = useState(false);
+  const [isExportingPdf, setIsExportingPdf] = useState(false);
   
   // Form state
   const [newSubscription, setNewSubscription] = useState<SubscriptionFormState>(emptySubscriptionForm());
@@ -236,6 +278,10 @@ export function SubscriptionTrackerTool({ toolId }: SubscriptionTrackerToolProps
   const [showHistory, setShowHistory] = useState(false);
   const [deleteConfirmId, setDeleteConfirmId] = useState<string | null>(null);
   const [deleteConfirmText, setDeleteConfirmText] = useState('');
+  const deleteConfirmIdRef = useRef<string | null>(null);
+  deleteConfirmIdRef.current = deleteConfirmId;
+  const deleteInFlightIdsRef = useRef<Set<string>>(new Set());
+  const subscriptionReloadSeqRef = useRef(0);
   const [pendingAttachments, setPendingAttachments] = useState<AttachmentItem[]>([]);
   const [attachmentModal, setAttachmentModal] = useState<null | 'add' | string>(null);
   const [attachmentBusy, setAttachmentBusy] = useState(false);
@@ -243,9 +289,11 @@ export function SubscriptionTrackerTool({ toolId }: SubscriptionTrackerToolProps
 
   const reloadSubscriptions = async () => {
     if (!toolId) return;
+    const seq = ++subscriptionReloadSeqRef.current;
     const response = await fetch(`${API_BASE}?toolId=${toolId}`);
     if (!response.ok) return;
     const data = await response.json();
+    if (seq !== subscriptionReloadSeqRef.current) return;
     setSubscriptions((data.subscriptions || []).map(mapDbSubscription));
   };
 
@@ -390,6 +438,16 @@ export function SubscriptionTrackerTool({ toolId }: SubscriptionTrackerToolProps
 
     loadSubscriptions();
   }, [toolId]);
+
+  useEffect(() => {
+    const onKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape' && showExportPopup && !isExportingPdf) {
+        setShowExportPopup(false);
+      }
+    };
+    window.addEventListener('keydown', onKeyDown);
+    return () => window.removeEventListener('keydown', onKeyDown);
+  }, [showExportPopup, isExportingPdf]);
 
   // Calculate monthly spend
   const calculateMonthlySpend = () => {
@@ -778,7 +836,8 @@ export function SubscriptionTrackerTool({ toolId }: SubscriptionTrackerToolProps
   };
 
   const deleteSubscription = async () => {
-    if (!deleteConfirmId) return;
+    const subscriptionId = deleteConfirmId;
+    if (!subscriptionId) return;
 
     if (deleteConfirmText.toLowerCase() !== 'delete') {
       return;
@@ -789,210 +848,246 @@ export function SubscriptionTrackerTool({ toolId }: SubscriptionTrackerToolProps
       return;
     }
 
+    if (deleteInFlightIdsRef.current.has(subscriptionId)) return;
+    deleteInFlightIdsRef.current.add(subscriptionId);
+
+    // Drop the row immediately and ignore any list reload already in flight
+    // so a second click cannot resend this id after it is gone.
+    subscriptionReloadSeqRef.current += 1;
+    setSubscriptions((prev) => prev.filter((sub) => sub.id !== subscriptionId));
     setIsLoading(true);
     try {
-      const response = await fetch(`/api/tools/subscription-tracker?subscriptionId=${deleteConfirmId}`, {
+      const response = await fetch(`/api/tools/subscription-tracker?subscriptionId=${subscriptionId}`, {
         method: 'DELETE',
       });
 
-      if (response.ok) {
+      const alreadyGone = response.status === 404;
+      if (response.ok || alreadyGone) {
         await reloadSubscriptions();
-        if (attachmentModal === deleteConfirmId) closeAttachmentModal();
-        setDeleteConfirmId(null);
-        setDeleteConfirmText('');
+        if (attachmentModal === subscriptionId) closeAttachmentModal();
+        if (deleteConfirmIdRef.current === subscriptionId) {
+          setDeleteConfirmId(null);
+          setDeleteConfirmText('');
+        }
       } else {
-        const errorData = await response.json();
+        const errorData = await response.json().catch(() => ({}));
         console.error('Failed to delete subscription:', errorData.error);
         showError('Failed to delete subscription: ' + (errorData.error || 'Unknown error'));
+        await reloadSubscriptions();
       }
     } catch (error) {
       console.error('Error deleting subscription:', error);
       showError('Error deleting subscription. Please try again.');
+      await reloadSubscriptions();
     } finally {
-      setIsLoading(false);
+      deleteInFlightIdsRef.current.delete(subscriptionId);
+      if (deleteInFlightIdsRef.current.size === 0) setIsLoading(false);
     }
   };
 
+  const exportSubscriptionChoices = [
+    ...sortSubscriptionsByName(subscriptions.filter((subscription) => subscription.isActive)),
+    ...(includeHistory
+      ? sortSubscriptionsByName(subscriptions.filter((subscription) => !subscription.isActive))
+      : []),
+  ];
+
+  const fetchExportSubscriptions = async (): Promise<Subscription[]> => {
+    if (!toolId) throw new Error('Tool ID is missing.');
+    const response = await fetch(`${API_BASE}?toolId=${encodeURIComponent(toolId)}`);
+    const data = await response.json().catch(() => ({}));
+    if (!response.ok) throw new Error(data.error || 'Failed to load subscriptions');
+    return (data.subscriptions || []).map(mapDbSubscription);
+  };
+
   const exportToPDF = async () => {
-    // Calculate active and inactive subscriptions for export
-    const activeSubs = subscriptions.filter(sub => sub.isActive);
-    const inactiveSubs = subscriptions.filter(sub => !sub.isActive);
-
-    // Load jsPDF from CDN
-    let jsPDF: any;
-    if ((window as any).jspdf?.jsPDF) {
-      jsPDF = (window as any).jspdf.jsPDF;
-    } else {
-      await new Promise<void>((resolve) => {
-        const script = document.createElement('script');
-        script.src = 'https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js';
-        script.onload = () => {
-          jsPDF = (window as any).jspdf.jsPDF;
-          resolve();
-        };
-        document.head.appendChild(script);
-      });
+    if (isExportingPdf) return;
+    const chosenFromScreen = subscriptions.find((subscription) => subscription.id === exportSubscriptionId) ?? null;
+    if (!exportAllSubscriptions && !chosenFromScreen) {
+      showError('Select a subscription, or choose All subscriptions.');
+      return;
     }
 
-    const pdf = new jsPDF({
-      orientation: 'portrait',
-      unit: 'mm',
-      format: 'a4'
-    });
-
-    const pageWidth = pdf.internal.pageSize.getWidth();
-    const pageHeight = pdf.internal.pageSize.getHeight();
-    const margin = 15;
-    const contentWidth = pageWidth - (margin * 2);
-    let yPos = margin;
-
-    // Light mode colors
-    const colors = {
-      background: [255, 255, 255],
-      text: [0, 0, 0],
-      title: [0, 0, 0],
-      header: [240, 240, 240],
-      border: [200, 200, 200],
-      accent: [16, 185, 129] // emerald-500
-    };
-
-    // Helper function to add a new page if needed
-    const checkNewPage = (requiredHeight: number) => {
-      if (yPos + requiredHeight > pageHeight - margin) {
-        pdf.addPage();
-        yPos = margin;
-        return true;
+    setIsExportingPdf(true);
+    try {
+      const loaded = await fetchExportSubscriptions();
+      const chosen = loaded.find((subscription) => subscription.id === exportSubscriptionId) ?? null;
+      if (!exportAllSubscriptions && !chosen) {
+        showError('Select a subscription, or choose All subscriptions.');
+        return;
       }
-      return false;
-    };
 
-    // Helper function to add a section header
-    const addSectionHeader = (title: string) => {
-      checkNewPage(15);
-      pdf.setFillColor(...colors.header);
-      pdf.rect(margin, yPos, contentWidth, 10, 'F');
-      pdf.setFontSize(16);
+      const active = sortSubscriptionsByName(loaded.filter((subscription) => subscription.isActive));
+      const history = sortSubscriptionsByName(loaded.filter((subscription) => !subscription.isActive));
+      const { jsPDF } = await import('jspdf');
+
+      const pdf = new jsPDF({
+        orientation: 'portrait',
+        unit: 'mm',
+        format: 'a4',
+      });
+
+      const pageWidth = pdf.internal.pageSize.getWidth();
+      const pageHeight = pdf.internal.pageSize.getHeight();
+      const margin = 15;
+      const contentWidth = pageWidth - margin * 2;
+      let yPos = margin;
+
+      const colors = {
+        background: [255, 255, 255] as const,
+        text: [15, 23, 42] as const,
+        title: [15, 23, 42] as const,
+        header: [241, 245, 249] as const,
+        muted: [71, 85, 105] as const,
+      };
+
+      const fillPage = () => {
+        pdf.setFillColor(colors.background[0], colors.background[1], colors.background[2]);
+        pdf.rect(0, 0, pageWidth, pageHeight, 'F');
+      };
+
+      const checkNewPage = (requiredHeight: number) => {
+        if (yPos + requiredHeight > pageHeight - margin) {
+          pdf.addPage();
+          fillPage();
+          yPos = margin;
+          return true;
+        }
+        return false;
+      };
+
+      const addSectionHeader = (title: string) => {
+        pdf.setFontSize(13);
+        pdf.setFont('helvetica', 'bold');
+        const lines = pdf.splitTextToSize(title, contentWidth - 10) as string[];
+        const barHeight = Math.max(10, lines.length * 6 + 4);
+        checkNewPage(barHeight + 5);
+        pdf.setFillColor(colors.header[0], colors.header[1], colors.header[2]);
+        pdf.rect(margin, yPos, contentWidth, barHeight, 'F');
+        pdf.setTextColor(colors.title[0], colors.title[1], colors.title[2]);
+        lines.forEach((line, index) => {
+          pdf.text(line, margin + 5, yPos + 7 + index * 6);
+        });
+        yPos += barHeight + 5;
+      };
+
+      const addText = (text: string, fontSize = 10, isBold = false, indent = 0, muted = false) => {
+        pdf.setFontSize(fontSize);
+        pdf.setFont('helvetica', isBold ? 'bold' : 'normal');
+        const color = muted ? colors.muted : colors.text;
+        pdf.setTextColor(color[0], color[1], color[2]);
+        const maxWidth = contentWidth - indent - 5;
+        const lines = pdf.splitTextToSize(text, maxWidth) as string[];
+        const lineHeight = fontSize * 0.42;
+        checkNewPage(lines.length * lineHeight + 2);
+        lines.forEach((line) => {
+          pdf.text(line, margin + indent, yPos);
+          yPos += lineHeight;
+        });
+        yPos += 2;
+      };
+
+      fillPage();
+      pdf.setFontSize(20);
       pdf.setFont('helvetica', 'bold');
-      pdf.setTextColor(...colors.title);
-      pdf.text(title, margin + 5, yPos + 7);
-      yPos += 15;
-    };
+      pdf.setTextColor(colors.title[0], colors.title[1], colors.title[2]);
+      const title = 'Subscription Tracker Report';
+      pdf.text(title, (pageWidth - pdf.getTextWidth(title)) / 2, yPos);
+      yPos += 10;
 
-    // Helper function to add text with wrapping
-    const addText = (text: string, fontSize: number = 10, isBold: boolean = false, indent: number = 0) => {
-      pdf.setFontSize(fontSize);
-      pdf.setFont('helvetica', isBold ? 'bold' : 'normal');
-      pdf.setTextColor(...colors.text);
-      
-      const maxWidth = contentWidth - indent - 5;
-      const lines = pdf.splitTextToSize(text, maxWidth);
-      
-      checkNewPage(lines.length * (fontSize * 0.4) + 2);
-      
-      lines.forEach((line: string) => {
-        pdf.text(line, margin + indent, yPos);
-        yPos += fontSize * 0.4;
+      pdf.setFontSize(10);
+      pdf.setFont('helvetica', 'normal');
+      pdf.setTextColor(colors.muted[0], colors.muted[1], colors.muted[2]);
+      pdf.text(`Generated on: ${formatReportDate(new Date())}`, margin, yPos);
+      yPos += 6;
+
+      const scopeLabel = !exportAllSubscriptions
+        ? chosen && !chosen.isActive
+          ? `History subscription  ·  ${chosen.name}`
+          : `Active subscriptions only  ·  One subscription  ·  ${chosen?.name || 'Selected subscription'}`
+        : includeHistory
+          ? 'Active and history subscriptions  ·  All subscriptions'
+          : 'Active subscriptions only  ·  All subscriptions';
+      const scopeLines = pdf.splitTextToSize(scopeLabel, contentWidth) as string[];
+      scopeLines.forEach((line) => {
+        pdf.text(line, margin, yPos);
+        yPos += 5;
       });
-      yPos += 2;
-    };
+      yPos += 5;
 
-    // Title
-    pdf.setFillColor(...colors.background);
-    pdf.rect(0, 0, pageWidth, pageHeight, 'F');
-    
-    pdf.setFontSize(20);
-    pdf.setFont('helvetica', 'bold');
-    pdf.setTextColor(...colors.title);
-    const title = 'Subscription Tracker - Complete Report';
-    const titleWidth = pdf.getTextWidth(title);
-    pdf.text(title, (pageWidth - titleWidth) / 2, yPos);
-    yPos += 15;
-
-    pdf.setFontSize(10);
-    pdf.setFont('helvetica', 'normal');
-    pdf.setTextColor(...colors.text);
-    const dateStr = new Date().toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' });
-    pdf.text(`Generated on: ${dateStr}`, margin, yPos);
-    yPos += 10;
-
-    // Summary Section
-    addSectionHeader('Summary');
-    const totalMonthlySpend = calculateMonthlySpend();
-    addText(`Total Monthly Spend: $${totalMonthlySpend.toFixed(2)}`, 12, true, 5);
-    addText(`Active Subscriptions: ${activeSubs.length}`, 10, false, 5);
-    if (includeHistory) {
-      addText(`Inactive Subscriptions: ${inactiveSubs.length}`, 10, false, 5);
-    }
-    yPos += 5;
-
-    // Category Breakdown Section
-    const categoryData = calculateCategoryBreakdown();
-    if (categoryData.length > 0) {
-      addSectionHeader('Monthly Spend by Category');
-      categoryData.forEach((category) => {
-        checkNewPage(8);
-        addText(`${category.name}: $${category.value.toFixed(2)}`, 10, false, 10);
-        yPos += 1;
-      });
-    }
-
-    // Subscriptions Section
-    const subscriptionsToExport = includeHistory ? subscriptions : activeSubs;
-    // Sort subscriptions alphabetically by name
-    const sortedSubscriptions = [...subscriptionsToExport].sort((a, b) => a.name.localeCompare(b.name));
-    if (sortedSubscriptions.length > 0) {
-      addSectionHeader(includeHistory ? 'All Subscriptions' : 'Active Subscriptions');
-      
-      sortedSubscriptions.forEach((subscription) => {
-        checkNewPage(20);
-        
-        addText(subscription.name, 11, true, 10);
-        addText(`Category: ${subscription.category}`, 9, false, 10);
-        addText(`Frequency: ${subscription.frequency.charAt(0).toUpperCase() + subscription.frequency.slice(1)}`, 9, false, 10);
-        addText(`Amount: $${subscription.amount.toFixed(2)}`, 9, false, 10);
-        
-        // Calculate monthly equivalent
-        let monthlyAmount = subscription.amount;
+      const attachmentRefs: string[] = [];
+      const printSubscription = (subscription: Subscription) => {
+        addSectionHeader(subscription.name.trim() || 'Subscription');
+        if ((subscription.category || '').trim()) addText(`Category: ${subscription.category.trim()}`, 9, false, 5);
+        addText(`Frequency: ${frequencyLabel(subscription.frequency)}`, 9, false, 5);
+        if (Number.isFinite(subscription.amount)) {
+          addText(`Amount: ${formatMoney(subscription.amount)}`, 9, false, 5);
+          addText(`Monthly equivalent: ${formatMoney(monthlyEquivalent(subscription))}`, 9, false, 5);
+        }
         if (subscription.frequency === 'annual') {
-          monthlyAmount = subscription.amount / 12;
-        } else if (subscription.frequency === 'quarterly') {
-          monthlyAmount = subscription.amount / 3;
+          if (subscription.billedDate) addText(`Billed date: ${formatLocalDate(subscription.billedDate)}`, 9, false, 5);
+          if (subscription.renewalDate) addText(`Renewal date: ${formatLocalDate(subscription.renewalDate)}`, 9, false, 5);
+        } else if (subscription.dayOfMonth) {
+          addText(`Day of month: ${subscription.dayOfMonth}`, 9, false, 5);
         }
-        addText(`Monthly Equivalent: $${monthlyAmount.toFixed(2)}`, 9, false, 10);
-        
-        if (subscription.frequency === 'annual') {
-          if (subscription.billedDate) {
-            addText(`Billed Date: ${formatLocalDate(subscription.billedDate)}`, 9, false, 10);
-          }
-          if (subscription.renewalDate) {
-            addText(`Renewal Date: ${formatLocalDate(subscription.renewalDate)}`, 9, false, 10);
-          }
-        } else {
-          if (subscription.dayOfMonth) {
-            addText(`Day of Month: ${subscription.dayOfMonth}`, 9, false, 10);
-          }
-        }
-        
-        if (subscription.dateAdded) {
-          addText(`Date Added: ${formatLocalDate(subscription.dateAdded)}`, 9, false, 10);
-        }
-        
+        if (subscription.dateAdded) addText(`Date added: ${formatLocalDate(subscription.dateAdded)}`, 9, false, 5);
         if (!subscription.isActive && subscription.dateInactivated) {
-          addText(`Date Inactivated: ${formatLocalDate(subscription.dateInactivated)}`, 9, false, 10);
+          addText(`Date inactivated: ${formatLocalDate(subscription.dateInactivated)}`, 9, false, 5);
         }
-        
-        if (subscription.notes) {
-          addText(`Notes: ${subscription.notes}`, 9, false, 10);
-        }
-        
-        yPos += 3;
-      });
-    }
+        if (subscription.notes.trim()) addText(`Notes: ${subscription.notes.trim()}`, 9, false, 5);
+        (subscription.attachments || []).forEach((file) => {
+          const fileName = file.name?.trim();
+          if (!fileName) return;
+          attachmentRefs.push(`${subscription.name} — ${fileName}`);
+        });
+        yPos += 2;
+      };
 
-    // Save PDF
-    const fileName = `Subscription_Report_${new Date().toISOString().split('T')[0]}.pdf`;
-    pdf.save(fileName);
-    setShowExportPopup(false);
+      if (!exportAllSubscriptions && chosen) {
+        printSubscription(chosen);
+      } else if (active.length === 0 && (!includeHistory || history.length === 0)) {
+        addText('No subscriptions match the selected options.', 10, false, 5, true);
+      } else {
+        if (active.length > 0) {
+          const totalMonthly = active.reduce((sum, subscription) => sum + monthlyEquivalent(subscription), 0);
+          const categoryTotals = new Map<string, number>();
+          active.forEach((subscription) => {
+            const category = subscription.category.trim() || 'Other';
+            categoryTotals.set(category, (categoryTotals.get(category) || 0) + monthlyEquivalent(subscription));
+          });
+          addSectionHeader('Summary');
+          addText(`Total monthly spend: ${formatMoney(totalMonthly)}`, 11, true, 5);
+          addText(`Active subscriptions: ${active.length}`, 10, false, 5);
+          if (categoryTotals.size > 0) {
+            addText('Monthly spend by category', 10, true, 5);
+            [...categoryTotals.entries()]
+              .sort((a, b) => a[0].localeCompare(b[0]))
+              .forEach(([name, value]) => {
+                addText(`${name}: ${formatMoney(Math.round(value * 100) / 100)}`, 9, false, 8);
+              });
+          }
+          active.forEach(printSubscription);
+        }
+        if (includeHistory && history.length > 0) {
+          addSectionHeader('History');
+          history.forEach(printSubscription);
+        }
+      }
+
+      if (attachmentRefs.length > 0) {
+        addSectionHeader('Attachments');
+        addText('File names only. Files themselves are not included in this report.', 8, false, 5, true);
+        attachmentRefs.forEach((line) => addText(line, 9, false, 8));
+      }
+
+      pdf.save(`Subscription_Tracker_Report_${new Date().toISOString().split('T')[0]}.pdf`);
+      setShowExportPopup(false);
+    } catch (error) {
+      console.error('Error exporting subscription tracker PDF:', error);
+      showError(error instanceof Error ? error.message : 'Failed to generate PDF');
+    } finally {
+      setIsExportingPdf(false);
+    }
   };
 
   const categoryOptions = (() => {
@@ -1062,7 +1157,14 @@ export function SubscriptionTrackerTool({ toolId }: SubscriptionTrackerToolProps
         </div>
         <ExportPdfIconButton
           title="Export subscriptions to PDF"
-          onClick={() => setShowExportPopup(true)}
+          onClick={() => {
+            if (!exportAllSubscriptions) {
+              setExportSubscriptionId(pickDefaultSubscriptionId(subscriptions, includeHistory, editingId));
+            } else if (!exportSubscriptionId) {
+              setExportSubscriptionId(pickDefaultSubscriptionId(subscriptions, includeHistory, editingId));
+            }
+            setShowExportPopup(true);
+          }}
         />
       </div>
 
@@ -1747,48 +1849,133 @@ export function SubscriptionTrackerTool({ toolId }: SubscriptionTrackerToolProps
           </div>
       </div>
 
-      {/* Export Popup */}
       {showExportPopup && (
         <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
-          <div className={isLight ? 'bg-white rounded-2xl border border-slate-200 p-6 max-w-md w-full mx-4 shadow-2xl' : 'bg-slate-800 rounded-2xl border border-slate-700 p-6 max-w-md w-full mx-4'}>
+          <div
+            className={isLight
+              ? 'bg-white rounded-2xl border border-slate-200 p-6 max-w-md w-full mx-4 shadow-2xl max-h-[90vh] overflow-y-auto'
+              : 'bg-slate-800 rounded-2xl border border-slate-700 p-6 max-w-md w-full mx-4 max-h-[90vh] overflow-y-auto'}
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="st-export-title"
+          >
             <div className="flex items-center justify-between mb-4">
-              <h3 className={isLight ? 'text-lg font-semibold text-slate-900' : 'text-lg font-semibold text-slate-50'}>Export Options</h3>
+              <h3 id="st-export-title" className={isLight ? 'text-lg font-semibold text-slate-900' : 'text-lg font-semibold text-slate-50'}>
+                Export Options
+              </h3>
               <button
-                onClick={() => setShowExportPopup(false)}
-                className={isLight ? 'text-slate-600 hover:text-slate-900 transition-colors' : 'text-slate-400 hover:text-slate-200 transition-colors'}
-                aria-label="Close modal"
-                title="Close modal"
+                type="button"
+                onClick={() => !isExportingPdf && setShowExportPopup(false)}
+                disabled={isExportingPdf}
+                className={isLight ? 'text-slate-600 hover:text-slate-900 transition-colors disabled:opacity-50' : 'text-slate-400 hover:text-slate-200 transition-colors disabled:opacity-50'}
+                aria-label="Close"
+                title="Close"
               >
                 <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
                 </svg>
               </button>
             </div>
-            
+
             <div className="space-y-4">
-              <div className="flex items-center gap-3">
+              <p className={descClass}>
+                Attachment files are listed by name at the end.
+              </p>
+
+              <fieldset className="space-y-2" disabled={isExportingPdf}>
+                <legend className={`${labelClass} mb-0`}>Subscriptions</legend>
+                <label className={`flex items-start gap-3 ${isLight ? 'text-slate-700' : 'text-slate-300'} cursor-pointer`}>
+                  <input
+                    type="radio"
+                    name="stExportScope"
+                    checked={exportAllSubscriptions}
+                    onChange={() => setExportAllSubscriptions(true)}
+                    className={isLight
+                      ? 'mt-0.5 h-4 w-4 border-slate-400 text-emerald-600 focus:ring-emerald-500'
+                      : 'mt-0.5 h-4 w-4 border-slate-600 bg-slate-700 text-emerald-500 focus:ring-emerald-500'}
+                  />
+                  <span>All subscriptions</span>
+                </label>
+                <label className={`flex items-start gap-3 ${isLight ? 'text-slate-700' : 'text-slate-300'} cursor-pointer`}>
+                  <input
+                    type="radio"
+                    name="stExportScope"
+                    checked={!exportAllSubscriptions}
+                    onChange={() => {
+                      setExportAllSubscriptions(false);
+                      if (!exportSubscriptionId || !exportSubscriptionChoices.some((subscription) => subscription.id === exportSubscriptionId)) {
+                        setExportSubscriptionId(pickDefaultSubscriptionId(subscriptions, includeHistory, editingId));
+                      }
+                    }}
+                    className={isLight
+                      ? 'mt-0.5 h-4 w-4 border-slate-400 text-emerald-600 focus:ring-emerald-500'
+                      : 'mt-0.5 h-4 w-4 border-slate-600 bg-slate-700 text-emerald-500 focus:ring-emerald-500'}
+                  />
+                  <span>One subscription</span>
+                </label>
+                {!exportAllSubscriptions && (
+                  <div className="ml-7">
+                    <label className={labelClass} htmlFor="st-export-subscription">
+                      Subscription
+                    </label>
+                    <select
+                      id="st-export-subscription"
+                      value={exportSubscriptionId}
+                      onChange={(e) => setExportSubscriptionId(e.target.value)}
+                      className={selectClass}
+                    >
+                      <option value="">Select a subscription</option>
+                      {exportSubscriptionChoices.map((subscription) => (
+                        <option key={subscription.id} value={subscription.id}>
+                          {subscription.isActive ? subscription.name : `${subscription.name} (history)`}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                )}
+              </fieldset>
+
+              <div className="flex items-start gap-3">
                 <input
                   type="checkbox"
-                  id="includeHistory"
+                  id="stIncludeHistoryExport"
                   checked={includeHistory}
-                  onChange={(e) => setIncludeHistory(e.target.checked)}
-                  className={isLight ? 'w-5 h-5 rounded border-slate-400 bg-white text-emerald-600 focus:ring-emerald-500 focus:ring-offset-white' : 'w-5 h-5 rounded border-slate-600 bg-slate-700 text-emerald-500 focus:ring-emerald-500 focus:ring-offset-slate-800'}
+                  onChange={(e) => {
+                    const next = e.target.checked;
+                    setIncludeHistory(next);
+                    if (!next) {
+                      const selected = subscriptions.find((subscription) => subscription.id === exportSubscriptionId);
+                      if (!selected?.isActive) {
+                        setExportSubscriptionId(pickDefaultSubscriptionId(subscriptions, false, editingId));
+                      }
+                    } else if (!exportSubscriptionId) {
+                      setExportSubscriptionId(pickDefaultSubscriptionId(subscriptions, true, editingId));
+                    }
+                  }}
+                  disabled={isExportingPdf}
+                  className={isLight
+                    ? 'mt-0.5 h-4 w-4 rounded border-slate-400 text-emerald-600 focus:ring-emerald-500'
+                    : 'mt-0.5 h-4 w-4 rounded border-slate-600 bg-slate-700 text-emerald-500 focus:ring-emerald-500'}
                 />
-                <label htmlFor="includeHistory" className={isLight ? 'text-slate-700 cursor-pointer' : 'text-slate-300 cursor-pointer'}>
-                  Include inactive subscriptions in the report
+                <label htmlFor="stIncludeHistoryExport" className={`${isLight ? 'text-slate-700' : 'text-slate-300'} cursor-pointer`}>
+                  Include history
                 </label>
               </div>
 
-              <div className="flex gap-3 pt-4">
+              <div className="flex gap-3 pt-2">
                 <button
+                  type="button"
                   onClick={exportToPDF}
+                  disabled={isExportingPdf || (!exportAllSubscriptions && !exportSubscriptionId)}
                   className={`flex-1 ${primaryButtonClass}`}
                 >
-                  Export to PDF
+                  {isExportingPdf ? 'Generating…' : 'Export to PDF'}
                 </button>
                 <button
+                  type="button"
                   onClick={() => setShowExportPopup(false)}
-                  className={secondaryButtonClass}
+                  disabled={isExportingPdf}
+                  className={`${secondaryButtonClass} disabled:opacity-50 disabled:cursor-not-allowed`}
                 >
                   Cancel
                 </button>
@@ -1831,7 +2018,7 @@ export function SubscriptionTrackerTool({ toolId }: SubscriptionTrackerToolProps
             <div className="flex gap-3">
               <button
                 onClick={deleteSubscription}
-                disabled={deleteConfirmText.toLowerCase() !== 'delete'}
+                disabled={deleteConfirmText.toLowerCase() !== 'delete' || isLoading}
                 className="flex-1 px-4 py-2 rounded-lg bg-red-600 text-white font-medium hover:bg-red-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
               >
                 Delete Subscription

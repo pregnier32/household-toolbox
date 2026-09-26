@@ -52,11 +52,17 @@ export function AttachmentModal({
   const { resolvedTheme } = useTheme();
   const isLight = resolvedTheme === 'light';
   const inputRef = useRef<HTMLInputElement>(null);
+  const onCloseRef = useRef(onClose);
+  onCloseRef.current = onClose;
+  const previewRef = useRef<AttachmentItem | null>(null);
   const [isDragging, setIsDragging] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
   const [preview, setPreview] = useState<AttachmentItem | null>(null);
   const [storage, setStorage] = useState<StorageSummary | null>(null);
+  previewRef.current = preview;
+
+  const closePreview = () => setPreview(null);
 
   useEffect(() => {
     if (!open) {
@@ -67,19 +73,25 @@ export function AttachmentModal({
       return;
     }
 
-    if (previewItem) {
-      setPreview(previewItem);
-    }
+    setPreview(previewItem ?? null);
+  }, [open, previewItem]);
+
+  useEffect(() => {
+    if (!open) return;
 
     const handleEscape = (event: KeyboardEvent) => {
-      if (event.key === 'Escape') {
-        if (preview) setPreview(null);
-        else onClose();
+      if (event.key !== 'Escape') return;
+      if (previewRef.current) {
+        event.preventDefault();
+        event.stopPropagation();
+        setPreview(null);
+        return;
       }
+      onCloseRef.current();
     };
     window.addEventListener('keydown', handleEscape);
 
-    fetch('/api/account/storage')
+    fetch('/api/account/storage?refresh=1')
       .then((res) => (res.ok ? res.json() : null))
       .then((data) => {
         if (!data?.storage) return;
@@ -93,7 +105,7 @@ export function AttachmentModal({
       .catch(() => setStorage(null));
 
     return () => window.removeEventListener('keydown', handleEscape);
-  }, [open, onClose, preview, previewItem]);
+  }, [open]);
 
   if (!open) return null;
 
@@ -222,7 +234,7 @@ export function AttachmentModal({
           {preview && preview.url ? (
             <div className="mb-4">
               <img src={preview.url} alt={preview.name} className="max-h-64 w-full rounded-lg object-contain" />
-              <button type="button" onClick={() => setPreview(null)} className={`${actionClass} mt-2`}>
+              <button type="button" onClick={closePreview} className={`${actionClass} mt-2`}>
                 Back to files
               </button>
             </div>
@@ -315,7 +327,7 @@ export function AttachmentModal({
         {storage && (
           <div className={`border-t px-5 py-3 ${isLight ? 'border-slate-200' : 'border-slate-800'}`}>
             <p className={mutedClass}>
-              Storage used: {storage.usedLabel} of {storage.limitLabel}
+              Storage used: {storage.usedLabel} of {storage.limitLabel}.
             </p>
           </div>
         )}

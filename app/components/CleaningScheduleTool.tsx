@@ -810,6 +810,7 @@ export function CleaningScheduleTool({ toolId }: CleaningScheduleToolProps) {
     const data = await response.json().catch(() => ({ error: 'Failed to load Cleaning Schedule' }));
     if (!response.ok) throw new Error(toErrorText(data?.error ?? data, 'Failed to load Cleaning Schedule'));
     applyData(data as CleaningScheduleData);
+    return data as CleaningScheduleData;
   }, [toolId, applyData]);
 
   useEffect(() => {
@@ -1484,10 +1485,12 @@ export function CleaningScheduleTool({ toolId }: CleaningScheduleToolProps) {
     setIsSaving(true);
     try {
       if (deleteTarget.kind === 'item') {
-        const item = libraryItems.find((entry) => entry.id === deleteTarget.id);
-        if (!item || item.isDefault) return;
-        const taskIds = scheduledTasks.filter((task) => task.libraryItemId === item.id).map((task) => task.id);
-        await postAction({ action: 'deleteItem', itemId: item.id });
+        const itemId = deleteTarget.id;
+        const taskIds = scheduledTasks.filter((task) => task.libraryItemId === itemId).map((task) => task.id);
+        await postAction({ action: 'deleteItem', itemId });
+        const fresh = await refreshData();
+        const stillListed = !fresh || fresh.items.some((row) => row.id === itemId);
+        if (stillListed) throw new Error('Failed to delete');
         if (detailTaskId && taskIds.includes(detailTaskId)) setDetailTaskId(null);
       } else if (deleteTarget.kind === 'category') {
         const category = categories.find((entry) => entry.id === deleteTarget.id);

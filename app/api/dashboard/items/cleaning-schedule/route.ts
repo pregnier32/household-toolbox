@@ -99,6 +99,7 @@ export async function GET(request: NextRequest) {
 
     const windowStart = toIso(new Date(year, month, 1));
     const windowEnd = toIso(new Date(year, month + 1, 0));
+    const seenOccurrence = new Set<string>();
     const items: Array<{
       id: string;
       title: string;
@@ -117,6 +118,9 @@ export async function GET(request: NextRequest) {
 
       const dates = expandOccurrences(nextDue, dbToFrequency(task), windowStart, windowEnd);
       for (const date of dates) {
+        const occurrenceKey = `${task.item_id || task.id}-${date}`;
+        if (seenOccurrence.has(occurrenceKey)) continue;
+        seenOccurrence.add(occurrenceKey);
         items.push({
           id: `${task.id}-${date}`,
           title: item?.name || 'Cleaning task',

@@ -99,6 +99,10 @@ function formatLocalDateLong(isoDate: string): string {
   return d ? d.toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' }) : isoDate;
 }
 
+function formatReportDate(date: Date): string {
+  return date.toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' });
+}
+
 function toDateInputValue(isoDate: string): string {
   const match = /^(\d{4})-(\d{2})-(\d{2})/.exec(isoDate);
   return match ? `${match[1]}-${match[2]}-${match[3]}` : isoDate;
@@ -240,6 +244,12 @@ export function ImportantDocumentsTool({ toolId }: ImportantDocumentsToolProps) 
   const [editingTagId, setEditingTagId] = useState<string | null>(null);
   const [editingTagName, setEditingTagName] = useState('');
   
+  const [showExportPopup, setShowExportPopup] = useState(false);
+  const [includeHistory, setIncludeHistory] = useState(false);
+  const [exportAllTags, setExportAllTags] = useState(true);
+  const [exportTagIds, setExportTagIds] = useState<string[]>([]);
+  const [isExportingPdf, setIsExportingPdf] = useState(false);
+
   // History state
   const [showHistory, setShowHistory] = useState(true);
   const [deleteConfirmId, setDeleteConfirmId] = useState<string | null>(null);
@@ -283,6 +293,16 @@ export function ImportantDocumentsTool({ toolId }: ImportantDocumentsToolProps) 
       }
     };
   }, [viewPreview]);
+
+  useEffect(() => {
+    const onKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape' && showExportPopup && !isExportingPdf) {
+        setShowExportPopup(false);
+      }
+    };
+    window.addEventListener('keydown', onKeyDown);
+    return () => window.removeEventListener('keydown', onKeyDown);
+  }, [showExportPopup, isExportingPdf]);
 
   // Load documents and tags from API
   useEffect(() => {
@@ -1203,10 +1223,24 @@ export function ImportantDocumentsTool({ toolId }: ImportantDocumentsToolProps) 
       return;
     }
 
+    const openPdfTab = isPdfAttachment(doc.fileType || '', doc.fileName);
+    const previewTab = openPdfTab ? window.open('', '_blank') : null;
+    if (openPdfTab && !previewTab) {
+      showError('Failed to open file. Please try again.');
+      return;
+    }
+
     try {
       const blob = await fetchDocumentBlob(doc, undefined, true);
+      if (previewTab) {
+        const pdfBlob =
+          blob.type === 'application/pdf' ? blob : new Blob([await blob.arrayBuffer()], { type: 'application/pdf' });
+        previewTab.location.href = window.URL.createObjectURL(pdfBlob);
+        return;
+      }
       await openDocumentForView(doc, blob);
     } catch (error) {
+      previewTab?.close();
       console.error('Error viewing file:', error);
       showError('Failed to open file. Please try again.');
     }
@@ -1528,6 +1562,233 @@ export function ImportantDocumentsTool({ toolId }: ImportantDocumentsToolProps) 
     }
   };
 
+  const exportTagOptions = [...tags].sort((a, b) => {
+    if (a.isActive !== b.isActive) return a.isActive ? -1 : 1;
+    return a.name.localeCompare(b.name);
+  });
+
+  const toggleExportTag = (tagId: string) => {
+    setExportAllTags(false);
+    setExportTagIds((prev) =>
+      prev.includes(tagId) ? prev.filter((id) => id !== tagId) : [...prev, tagId]
+    );
+  };
+
+  const exportToPDF = async () => {
+    if (isExportingPdf) return;
+    if (!exportAllTags && exportTagIds.length === 0) {
+      showError('Select at least one tag, or choose All tags.');
+      return;
+    }
+
+    setIsExportingPdf(true);
+
+    try {
+      const matchesExportTags = (doc: Document) =>
+        exportAllTags || exportTagIds.some((tagId) => doc.tags.includes(tagId));
+
+      const sortByName = (a: Document, b: Document) => a.documentName.localeCompare(b.documentName);
+
+      const scoped = documents.filter(matchesExportTags);
+      const activeRecords = scoped.filter((doc) => doc.isActive).sort(sortByName);
+      const inactiveRecords = scoped.filter((doc) => !doc.isActive).sort(sortByName);
+      const exportedRecords = includeHistory ? [...activeRecords, ...inactiveRecords] : activeRecords;
+
+      const selectedTagNames = exportTagIds
+        .map((tagId) => getTagName(tagId))
+        .filter((name) => name && name !== 'Unknown');
+
+      const tagCounts = new Map<string, number>();
+      exportedRecords.forEach((doc) => {
+        const names = doc.tags
+          .map((tagId) => getTagName(tagId))
+          .filter((name) => name && name !== 'Unknown');
+        if (names.length === 0) {
+          tagCounts.set('Untagged', (tagCounts.get('Untagged') || 0) + 1);
+          return;
+        }
+        names.forEach((name) => {
+          tagCounts.set(name, (tagCounts.get(name) || 0) + 1);
+        });
+      });
+      const tagBreakdown = Array.from(tagCounts.entries()).sort((a, b) => {
+        if (a[0] === 'Untagged') return 1;
+        if (b[0] === 'Untagged') return -1;
+        return a[0].localeCompare(b[0]);
+      });
+
+      const { jsPDF } = await import('jspdf');
+      const pdf = new jsPDF({
+        orientation: 'portrait',
+        unit: 'mm',
+        format: 'a4',
+      });
+
+      const pageWidth = pdf.internal.pageSize.getWidth();
+      const pageHeight = pdf.internal.pageSize.getHeight();
+      const margin = 15;
+      const contentWidth = pageWidth - margin * 2;
+      let yPos = margin;
+
+      const colors = {
+        background: [255, 255, 255] as const,
+        text: [15, 23, 42] as const,
+        title: [15, 23, 42] as const,
+        header: [241, 245, 249] as const,
+        muted: [71, 85, 105] as const,
+      };
+
+      const fillPage = () => {
+        pdf.setFillColor(colors.background[0], colors.background[1], colors.background[2]);
+        pdf.rect(0, 0, pageWidth, pageHeight, 'F');
+      };
+
+      const checkNewPage = (requiredHeight: number) => {
+        if (yPos + requiredHeight > pageHeight - margin) {
+          pdf.addPage();
+          fillPage();
+          yPos = margin;
+          return true;
+        }
+        return false;
+      };
+
+      const addSectionHeader = (title: string) => {
+        checkNewPage(15);
+        pdf.setFillColor(colors.header[0], colors.header[1], colors.header[2]);
+        pdf.rect(margin, yPos, contentWidth, 10, 'F');
+        pdf.setFontSize(13);
+        pdf.setFont('helvetica', 'bold');
+        pdf.setTextColor(colors.title[0], colors.title[1], colors.title[2]);
+        pdf.text(title, margin + 5, yPos + 7);
+        yPos += 15;
+      };
+
+      const addText = (text: string, fontSize = 10, isBold = false, indent = 0, muted = false) => {
+        pdf.setFontSize(fontSize);
+        pdf.setFont('helvetica', isBold ? 'bold' : 'normal');
+        const color = muted ? colors.muted : colors.text;
+        pdf.setTextColor(color[0], color[1], color[2]);
+        const maxWidth = contentWidth - indent - 5;
+        const lines = pdf.splitTextToSize(text, maxWidth) as string[];
+        const lineHeight = fontSize * 0.42;
+        checkNewPage(lines.length * lineHeight + 2);
+        lines.forEach((line) => {
+          pdf.text(line, margin + indent, yPos);
+          yPos += lineHeight;
+        });
+        yPos += 2;
+      };
+
+      const writeDocument = (doc: Document) => {
+        checkNewPage(28);
+        addText(doc.documentName.trim() || 'Untitled document', 11, true, 8);
+        const tagNames = doc.tags
+          .map((tagId) => getTagName(tagId))
+          .filter((name) => name && name !== 'Unknown');
+        if (tagNames.length > 0) {
+          addText(`Tags: ${tagNames.join(', ')}`, 9, false, 8);
+        }
+        if (doc.uploadedDate) {
+          addText(`Uploaded: ${formatLocalDate(doc.uploadedDate)}`, 9, false, 8);
+        }
+        if (doc.effectiveDate) {
+          addText(`Effective: ${formatLocalDate(doc.effectiveDate)}`, 9, false, 8);
+        }
+        if (doc.note?.trim()) {
+          addText(`Note: ${doc.note.trim()}`, 9, false, 8);
+        }
+        if (doc.requiresPasswordForDownload) {
+          addText('Password protected: Yes', 9, false, 8);
+        }
+        if (!doc.isActive && doc.dateInactivated) {
+          addText(`Date inactivated: ${formatLocalDate(doc.dateInactivated)}`, 9, false, 8);
+        }
+        yPos += 3;
+      };
+
+      fillPage();
+
+      pdf.setFontSize(20);
+      pdf.setFont('helvetica', 'bold');
+      pdf.setTextColor(colors.title[0], colors.title[1], colors.title[2]);
+      const title = 'Important Documents Report';
+      pdf.text(title, (pageWidth - pdf.getTextWidth(title)) / 2, yPos);
+      yPos += 10;
+
+      pdf.setFontSize(10);
+      pdf.setFont('helvetica', 'normal');
+      pdf.setTextColor(colors.muted[0], colors.muted[1], colors.muted[2]);
+      pdf.text(`Generated on: ${formatReportDate(new Date())}`, margin, yPos);
+      yPos += 6;
+
+      const historyLabel = includeHistory ? 'Active and inactive documents' : 'Active documents only';
+      const tagScopeLabel = exportAllTags
+        ? 'All tags'
+        : selectedTagNames.length > 0
+          ? selectedTagNames.join(', ')
+          : 'Selected tags';
+      pdf.text(`${historyLabel}  ·  ${tagScopeLabel}`, margin, yPos);
+      yPos += 10;
+
+      addSectionHeader('Summary');
+      addText(`Total documents: ${exportedRecords.length}`, 11, true, 5);
+      addText(`Active documents: ${activeRecords.length}`, 10, false, 5);
+      if (includeHistory) {
+        addText(`Inactive documents: ${inactiveRecords.length}`, 10, false, 5);
+      }
+      addText(`Tags used: ${tagBreakdown.filter(([name]) => name !== 'Untagged').length}`, 10, false, 5);
+      if (tagBreakdown.length > 0) {
+        yPos += 1;
+        addText('By tag', 10, true, 5);
+        tagBreakdown.forEach(([name, count]) => {
+          addText(`${name}: ${count}`, 9, false, 8);
+        });
+      }
+      yPos += 4;
+
+      if (exportedRecords.length === 0) {
+        addText('No documents match the selected options.', 10, false, 5, true);
+      } else {
+        addSectionHeader('Documents');
+        if (activeRecords.length > 0) {
+          activeRecords.forEach(writeDocument);
+        } else {
+          addText('No active documents.', 9, false, 8, true);
+        }
+
+        if (includeHistory && inactiveRecords.length > 0) {
+          yPos += 2;
+          addText('Inactive', 11, true, 5);
+          yPos += 1;
+          inactiveRecords.forEach(writeDocument);
+        }
+      }
+
+      const attachmentRefs = exportedRecords
+        .map((doc) => {
+          const fileName = doc.fileName?.trim();
+          if (!fileName) return null;
+          return `${doc.documentName.trim() || 'Document'} — ${fileName}`;
+        })
+        .filter((line): line is string => Boolean(line));
+
+      if (attachmentRefs.length > 0) {
+        addSectionHeader('Attachments');
+        addText('File names only. Files themselves are not included in this report.', 8, false, 5, true);
+        attachmentRefs.forEach((line) => addText(line, 9, false, 8));
+      }
+
+      pdf.save(`Important_Documents_Report_${new Date().toISOString().split('T')[0]}.pdf`);
+      setShowExportPopup(false);
+    } catch (error) {
+      console.error('Error exporting important documents PDF:', error);
+      showError(error instanceof Error ? error.message : 'Failed to generate PDF');
+    } finally {
+      setIsExportingPdf(false);
+    }
+  };
+
   const savedAttachmentDoc =
     attachmentModal && attachmentModal !== 'add'
       ? documents.find((doc) => doc.id === attachmentModal) || null
@@ -1566,7 +1827,10 @@ export function ImportantDocumentsTool({ toolId }: ImportantDocumentsToolProps) 
               Loading...
             </div>
           )}
-          <ExportPdfIconButton />
+          <ExportPdfIconButton
+            title="Export important documents to PDF"
+            onClick={() => setShowExportPopup(true)}
+          />
         </div>
       </div>
 
@@ -2550,6 +2814,126 @@ export function ImportantDocumentsTool({ toolId }: ImportantDocumentsToolProps) 
             ) : (
               <p className="text-slate-400 text-center py-8">No inactive tags.</p>
             )}
+          </div>
+        </div>
+      )}
+
+      {showExportPopup && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
+          <div className={modalCardClass} role="dialog" aria-modal="true" aria-labelledby="important-documents-export-title">
+            <div className="flex items-center justify-between mb-4">
+              <h3 id="important-documents-export-title" className={sectionTitleClass}>
+                Export Options
+              </h3>
+              <button
+                type="button"
+                onClick={() => !isExportingPdf && setShowExportPopup(false)}
+                disabled={isExportingPdf}
+                className={isLight ? 'text-slate-600 hover:text-slate-900 transition-colors disabled:opacity-50' : 'text-slate-400 hover:text-slate-200 transition-colors disabled:opacity-50'}
+                title="Close"
+                aria-label="Close"
+              >
+                <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                </svg>
+              </button>
+            </div>
+
+            <div className="space-y-4">
+              <p className={descClass}>
+                Attachment files are listed by name at the end.
+              </p>
+
+              <div className="flex items-start gap-3">
+                <input
+                  type="checkbox"
+                  id="idIncludeHistoryExport"
+                  checked={includeHistory}
+                  onChange={(e) => setIncludeHistory(e.target.checked)}
+                  disabled={isExportingPdf}
+                  className={isLight
+                    ? 'mt-0.5 h-4 w-4 rounded border-slate-400 text-emerald-600 focus:ring-emerald-500'
+                    : 'mt-0.5 h-4 w-4 rounded border-slate-600 bg-slate-700 text-emerald-500 focus:ring-emerald-500'}
+                />
+                <label htmlFor="idIncludeHistoryExport" className={`${isLight ? 'text-slate-700' : 'text-slate-300'} cursor-pointer`}>
+                  Include inactive documents
+                </label>
+              </div>
+
+              <fieldset className="space-y-2" disabled={isExportingPdf}>
+                <legend className={`${labelClass} mb-0`}>Tags</legend>
+                <label className={`flex items-start gap-3 ${isLight ? 'text-slate-700' : 'text-slate-300'} cursor-pointer`}>
+                  <input
+                    type="radio"
+                    name="importantDocumentsExportTags"
+                    checked={exportAllTags}
+                    onChange={() => {
+                      setExportAllTags(true);
+                      setExportTagIds([]);
+                    }}
+                    className={isLight
+                      ? 'mt-0.5 h-4 w-4 border-slate-400 text-emerald-600 focus:ring-emerald-500'
+                      : 'mt-0.5 h-4 w-4 border-slate-600 bg-slate-700 text-emerald-500 focus:ring-emerald-500'}
+                  />
+                  <span>All tags</span>
+                </label>
+                <label className={`flex items-start gap-3 ${isLight ? 'text-slate-700' : 'text-slate-300'} cursor-pointer`}>
+                  <input
+                    type="radio"
+                    name="importantDocumentsExportTags"
+                    checked={!exportAllTags}
+                    onChange={() => setExportAllTags(false)}
+                    className={isLight
+                      ? 'mt-0.5 h-4 w-4 border-slate-400 text-emerald-600 focus:ring-emerald-500'
+                      : 'mt-0.5 h-4 w-4 border-slate-600 bg-slate-700 text-emerald-500 focus:ring-emerald-500'}
+                  />
+                  <span>Selected tags only</span>
+                </label>
+                {!exportAllTags && (
+                  <div className={`ml-7 max-h-40 overflow-y-auto space-y-2 pr-1 ${exportTagOptions.length === 0 ? descClass : ''}`}>
+                    {exportTagOptions.length === 0 ? (
+                      <p>No tags to select.</p>
+                    ) : (
+                      exportTagOptions.map((tag) => (
+                        <label key={tag.id} className={`flex items-start gap-3 ${isLight ? 'text-slate-700' : 'text-slate-300'} cursor-pointer`}>
+                          <input
+                            type="checkbox"
+                            checked={exportTagIds.includes(tag.id)}
+                            onChange={() => toggleExportTag(tag.id)}
+                            className={isLight
+                              ? 'mt-0.5 h-4 w-4 rounded border-slate-400 text-emerald-600 focus:ring-emerald-500'
+                              : 'mt-0.5 h-4 w-4 rounded border-slate-600 bg-slate-700 text-emerald-500 focus:ring-emerald-500'}
+                          />
+                          <span>
+                            {tag.name}
+                            {!tag.isActive ? ' (inactive)' : ''}
+                          </span>
+                        </label>
+                      ))
+                    )}
+                  </div>
+                )}
+              </fieldset>
+
+              <div className="flex gap-3 pt-2">
+                <button
+                  type="button"
+                  onClick={exportToPDF}
+                  disabled={isExportingPdf || (!exportAllTags && exportTagIds.length === 0)}
+                  className={`flex-1 ${primaryButtonClass}`}
+                >
+                  {isExportingPdf ? 'Generating…' : 'Export to PDF'}
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setShowExportPopup(false)}
+                  disabled={isExportingPdf}
+                  className={secondaryButtonClass}
+                >
+                  Cancel
+                </button>
+              </div>
+            </div>
           </div>
         </div>
       )}

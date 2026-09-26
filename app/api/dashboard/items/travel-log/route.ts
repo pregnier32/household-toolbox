@@ -15,9 +15,10 @@ function parseLocalDate(dateString: string): Date {
 }
 
 function formatScheduledDate(isoDate: string): string {
-  const scheduled = parseLocalDate(isoDate);
-  scheduled.setHours(9, 0, 0, 0);
-  return scheduled.toISOString();
+  const [year, month, day] = asDateOnly(isoDate).split('-');
+  // Wall-clock 9:00 AM with no offset. toISOString() on a UTC server is 09:00Z,
+  // which the day popup shows as 4:00 AM CDT / 3:00 AM CST.
+  return `${year}-${month}-${day}T09:00:00`;
 }
 
 function tripTitle(name: string | null | undefined): string {

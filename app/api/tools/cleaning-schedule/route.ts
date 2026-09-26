@@ -26,6 +26,7 @@ import {
   attachmentsByItemIds,
   deleteItemStorageFiles,
   deleteTaskCompletionStorageFiles,
+  isMissingRelationError,
 } from '@/lib/cleaning-storage';
 
 type DbCategory = {
@@ -817,20 +818,51 @@ export async function POST(request: NextRequest) {
         return NextResponse.json({ error: 'Default items cannot be deleted' }, { status: 400 });
       }
 
-      const { data: itemTasks } = await supabaseServer
+      const { data: itemTasks, error: itemTasksError } = await supabaseServer
         .from('tools_cs_tasks')
         .select('id')
         .eq('item_id', itemId)
         .eq('user_id', user.id)
         .eq('tool_id', toolId);
 
+      if (itemTasksError) {
+        console.error('Error loading cleaning tasks for item delete:', itemTasksError);
+        return NextResponse.json({ error: 'Failed to delete item' }, { status: 500 });
+      }
+
+      const taskIds = (itemTasks || []).map((row) => row.id);
+
       await deleteCalendarPinsForSources({
         userId: user.id,
         sourceType: CALENDAR_SOURCE_CLEANING_TASK,
-        sourceIds: (itemTasks || []).map((row) => row.id),
+        sourceIds: taskIds,
       });
 
       await deleteItemStorageFiles(itemId, user.id);
+
+      if (taskIds.length > 0) {
+        const { error: completionError } = await supabaseServer
+          .from('tools_cs_completions')
+          .delete()
+          .eq('user_id', user.id)
+          .eq('tool_id', toolId)
+          .in('task_id', taskIds);
+        if (completionError && !isMissingRelationError(completionError)) {
+          console.error('Error deleting cleaning completions for item:', completionError);
+          return NextResponse.json({ error: 'Failed to delete item' }, { status: 500 });
+        }
+
+        const { error: taskError } = await supabaseServer
+          .from('tools_cs_tasks')
+          .delete()
+          .eq('item_id', itemId)
+          .eq('user_id', user.id)
+          .eq('tool_id', toolId);
+        if (taskError) {
+          console.error('Error deleting cleaning tasks for item:', taskError);
+          return NextResponse.json({ error: 'Failed to delete item' }, { status: 500 });
+        }
+      }
 
       const { error } = await supabaseServer
         .from('tools_cs_items')
@@ -844,7 +876,13 @@ export async function POST(request: NextRequest) {
         return NextResponse.json({ error: 'Failed to delete item' }, { status: 500 });
       }
 
-      return NextResponse.json({ success: true, ...(await fetchAllData(user.id, toolId)) });
+      const fresh = await fetchAllData(user.id, toolId);
+      if (fresh.items.some((row) => row.id === itemId)) {
+        console.error('Cleaning library item still present after delete:', itemId);
+        return NextResponse.json({ error: 'Failed to delete item' }, { status: 500 });
+      }
+
+      return NextResponse.json({ success: true, ...fresh });
     }
 
     if (action === 'activateTask') {
@@ -880,16 +918,22 @@ export async function POST(request: NextRequest) {
         date_inactivated: null,
       };
 
-      const { data: existing } = await supabaseServer
+      const { data: existingRows, error: existingError } = await supabaseServer
         .from('tools_cs_tasks')
         .select('id')
         .eq('item_id', itemId)
         .eq('user_id', user.id)
         .eq('tool_id', toolId)
-        .maybeSingle();
+        .limit(1);
 
-      const { data: saved, error } = existing
-        ? await supabaseServer.from('tools_cs_tasks').update(payload).eq('id', existing.id).select('id').single()
+      if (existingError) {
+        console.error('Error looking up cleaning task:', existingError);
+        return NextResponse.json({ error: 'Failed to activate task' }, { status: 500 });
+      }
+
+      const existingId = existingRows?.[0]?.id;
+      const { data: saved, error } = existingId
+        ? await supabaseServer.from('tools_cs_tasks').update(payload).eq('id', existingId).select('id').single()
         : await supabaseServer.from('tools_cs_tasks').insert(payload).select('id').single();
 
       if (error || !saved) {

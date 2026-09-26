@@ -62,6 +62,29 @@ function formatLineItemLabel(ref: ShoppingListItemRef, fallbackName = ''): strin
   return prefix ? `${prefix} ${name}` : name;
 }
 
+function formatLocalCalendarDate(dateStr: string): string {
+  const match = /^(\d{4})-(\d{2})-(\d{2})/.exec(dateStr);
+  if (!match) return dateStr;
+  return new Date(Number(match[1]), Number(match[2]) - 1, Number(match[3])).toLocaleDateString();
+}
+
+function formatReportDate(date: Date): string {
+  return date.toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' });
+}
+
+function sortListsNewestFirst(lists: ShoppingListRecord[]): ShoppingListRecord[] {
+  return [...lists].sort(
+    (a, b) => (b.date || '').localeCompare(a.date || '') || a.name.localeCompare(b.name)
+  );
+}
+
+function pickDefaultShoppingListId(lists: ShoppingListRecord[], includeHistory: boolean): string {
+  const active = sortListsNewestFirst(lists.filter((list) => list.isActive));
+  if (active[0]) return active[0].id;
+  if (!includeHistory) return '';
+  return sortListsNewestFirst(lists.filter((list) => !list.isActive))[0]?.id || '';
+}
+
 export type ShoppingListDashboardSummary = { listId: string; name: string; date: string; itemCount: number };
 
 export function ShoppingListTool({ toolId }: ShoppingListToolProps) {
@@ -183,6 +206,12 @@ export function ShoppingListTool({ toolId }: ShoppingListToolProps) {
   // After Move to History: offer to start a new list from the moved list
   const [startFromHistoryOfferId, setStartFromHistoryOfferId] = useState<string | null>(null);
 
+  const [showExportPopup, setShowExportPopup] = useState(false);
+  const [exportAllLists, setExportAllLists] = useState(false);
+  const [exportListId, setExportListId] = useState('');
+  const [includeHistory, setIncludeHistory] = useState(false);
+  const [isExportingPdf, setIsExportingPdf] = useState(false);
+
   const fetchItems = async () => {
     if (!toolId) return;
     setItemsLoading(true);
@@ -245,13 +274,17 @@ export function ShoppingListTool({ toolId }: ShoppingListToolProps) {
   }, [toolId]);
 
   useEffect(() => {
-    if (!viewListId) return;
     const onKeyDown = (e: KeyboardEvent) => {
-      if (e.key === 'Escape' && attachmentModal === null) setViewListId(null);
+      if (e.key !== 'Escape') return;
+      if (showExportPopup) {
+        if (!isExportingPdf) setShowExportPopup(false);
+        return;
+      }
+      if (viewListId && attachmentModal === null) setViewListId(null);
     };
     window.addEventListener('keydown', onKeyDown);
     return () => window.removeEventListener('keydown', onKeyDown);
-  }, [viewListId, attachmentModal]);
+  }, [showExportPopup, isExportingPdf, viewListId, attachmentModal]);
 
   const revokePending = (items: AttachmentItem[]) => {
     items.forEach((item) => {
@@ -813,6 +846,201 @@ export function ShoppingListTool({ toolId }: ShoppingListToolProps) {
     }
   };
 
+  const exportListChoices = [
+    ...sortListsNewestFirst(shoppingLists.filter((list) => list.isActive)),
+    ...(includeHistory ? sortListsNewestFirst(shoppingLists.filter((list) => !list.isActive)) : []),
+  ];
+
+  const fetchExportLists = async (): Promise<ShoppingListRecord[]> => {
+    if (!toolId) throw new Error('Tool ID is missing.');
+    const res = await fetch(`/api/tools/shopping-list?toolId=${encodeURIComponent(toolId)}&resource=lists`);
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok) throw new Error(data.error || 'Failed to load shopping lists');
+    return (data.lists ?? []).map(
+      (list: {
+        id: string;
+        name: string;
+        date: string;
+        isActive: boolean;
+        items?: ShoppingListItemRef[];
+        attachments?: { id: string; name: string; size: number; type: string }[];
+      }): ShoppingListRecord => ({
+        id: list.id,
+        name: list.name,
+        date: list.date,
+        isActive: !!list.isActive,
+        items: (list.items ?? []).map((item) => ({
+          ...item,
+          category: item.category ?? '',
+          isChecked: !!item.isChecked,
+          quantity: item.quantity == null || !Number.isFinite(Number(item.quantity)) ? null : Number(item.quantity),
+          unit: item.unit ?? '',
+        })),
+        attachments: list.attachments ?? [],
+      })
+    );
+  };
+
+  const exportToPDF = async () => {
+    if (isExportingPdf) return;
+    const chosenFromScreen = shoppingLists.find((list) => list.id === exportListId) ?? null;
+    if (!exportAllLists && !chosenFromScreen) {
+      showError('Select a list, or choose All lists.');
+      return;
+    }
+
+    setIsExportingPdf(true);
+    try {
+      const lists = await fetchExportLists();
+      const chosen = lists.find((list) => list.id === exportListId) ?? null;
+      if (!exportAllLists && !chosen) {
+        showError('Select a list, or choose All lists.');
+        return;
+      }
+
+      const active = sortListsNewestFirst(lists.filter((list) => list.isActive));
+      const history = sortListsNewestFirst(lists.filter((list) => !list.isActive));
+      const { jsPDF } = await import('jspdf');
+      const pdf = new jsPDF({ orientation: 'portrait', unit: 'mm', format: 'a4' });
+      const pageWidth = pdf.internal.pageSize.getWidth();
+      const pageHeight = pdf.internal.pageSize.getHeight();
+      const margin = 15;
+      const contentWidth = pageWidth - margin * 2;
+      let yPos = margin;
+
+      const colors = {
+        background: [255, 255, 255] as const,
+        text: [15, 23, 42] as const,
+        title: [15, 23, 42] as const,
+        header: [241, 245, 249] as const,
+        muted: [71, 85, 105] as const,
+      };
+
+      const fillPage = () => {
+        pdf.setFillColor(colors.background[0], colors.background[1], colors.background[2]);
+        pdf.rect(0, 0, pageWidth, pageHeight, 'F');
+      };
+
+      const checkNewPage = (requiredHeight: number) => {
+        if (yPos + requiredHeight > pageHeight - margin) {
+          pdf.addPage();
+          fillPage();
+          yPos = margin;
+          return true;
+        }
+        return false;
+      };
+
+      const addSectionHeader = (title: string) => {
+        pdf.setFontSize(13);
+        pdf.setFont('helvetica', 'bold');
+        const lines = pdf.splitTextToSize(title, contentWidth - 10) as string[];
+        const barHeight = Math.max(10, lines.length * 6 + 4);
+        checkNewPage(barHeight + 5);
+        pdf.setFillColor(colors.header[0], colors.header[1], colors.header[2]);
+        pdf.rect(margin, yPos, contentWidth, barHeight, 'F');
+        pdf.setTextColor(colors.title[0], colors.title[1], colors.title[2]);
+        lines.forEach((line, index) => {
+          pdf.text(line, margin + 5, yPos + 7 + index * 6);
+        });
+        yPos += barHeight + 5;
+      };
+
+      const addText = (text: string, fontSize = 10, isBold = false, indent = 0, muted = false) => {
+        pdf.setFontSize(fontSize);
+        pdf.setFont('helvetica', isBold ? 'bold' : 'normal');
+        const color = muted ? colors.muted : colors.text;
+        pdf.setTextColor(color[0], color[1], color[2]);
+        const maxWidth = contentWidth - indent - 5;
+        const lines = pdf.splitTextToSize(text, maxWidth) as string[];
+        const lineHeight = fontSize * 0.42;
+        checkNewPage(lines.length * lineHeight + 2);
+        lines.forEach((line) => {
+          pdf.text(line, margin + indent, yPos);
+          yPos += lineHeight;
+        });
+        yPos += 2;
+      };
+
+      fillPage();
+      pdf.setFontSize(20);
+      pdf.setFont('helvetica', 'bold');
+      pdf.setTextColor(colors.title[0], colors.title[1], colors.title[2]);
+      const title = 'Shopping List Report';
+      pdf.text(title, (pageWidth - pdf.getTextWidth(title)) / 2, yPos);
+      yPos += 10;
+
+      pdf.setFontSize(10);
+      pdf.setFont('helvetica', 'normal');
+      pdf.setTextColor(colors.muted[0], colors.muted[1], colors.muted[2]);
+      pdf.text(`Generated on: ${formatReportDate(new Date())}`, margin, yPos);
+      yPos += 6;
+
+      const scopeLabel = !exportAllLists
+        ? chosen && !chosen.isActive
+          ? `History list  ·  ${chosen.name}`
+          : `Active lists only  ·  One list  ·  ${chosen?.name || 'Selected list'}`
+        : includeHistory
+          ? 'Active and history lists  ·  All lists'
+          : 'Active lists only  ·  All lists';
+      const scopeLines = pdf.splitTextToSize(scopeLabel, contentWidth) as string[];
+      scopeLines.forEach((line) => {
+        pdf.text(line, margin, yPos);
+        yPos += 5;
+      });
+      yPos += 5;
+
+      const attachmentRefs: string[] = [];
+      const printList = (list: ShoppingListRecord) => {
+        const dateLabel = list.date ? formatLocalCalendarDate(list.date) : '';
+        addSectionHeader(dateLabel ? `${list.name} — ${dateLabel}` : list.name || 'Shopping list');
+        const groups = groupListItemsByCategory(list.items);
+        if (groups.length === 0) {
+          addText('No items.', 10, false, 5, true);
+        } else {
+          groups.forEach(({ category, items }) => {
+            addText(category, 11, true, 5);
+            items.forEach((ref) => {
+              const label = formatLineItemLabel(ref);
+              addText(ref.isChecked ? `${label} (checked)` : label, 9, false, 8);
+            });
+          });
+        }
+        (list.attachments || []).forEach((file) => {
+          const fileName = file.name?.trim();
+          if (!fileName) return;
+          attachmentRefs.push(`${list.name} — ${dateLabel || 'Undated'} — ${fileName}`);
+        });
+      };
+
+      if (!exportAllLists && chosen) {
+        printList(chosen);
+      } else if (active.length === 0 && (!includeHistory || history.length === 0)) {
+        addText('No shopping lists match the selected options.', 10, false, 5, true);
+      } else {
+        active.forEach(printList);
+        if (includeHistory && history.length > 0) {
+          addSectionHeader('History');
+          history.forEach(printList);
+        }
+      }
+
+      if (attachmentRefs.length > 0) {
+        addSectionHeader('Attachments');
+        addText('File names only. Files themselves are not included in this report.', 8, false, 5, true);
+        attachmentRefs.forEach((line) => addText(line, 9, false, 8));
+      }
+
+      pdf.save(`Shopping_List_Report_${new Date().toISOString().split('T')[0]}.pdf`);
+      setShowExportPopup(false);
+    } catch (error) {
+      console.error('Error exporting shopping list PDF:', error);
+      showError(error instanceof Error ? error.message : 'Failed to generate PDF');
+    } finally {
+      setIsExportingPdf(false);
+    }
+  };
+
   const isLoading = toolId && (itemsLoading || listsLoading);
 
   return (
@@ -824,7 +1052,17 @@ export function ShoppingListTool({ toolId }: ShoppingListToolProps) {
             Create shopping lists from your master list of items. Manage active lists and history.
           </p>
         </div>
-        <ExportPdfIconButton />
+        <ExportPdfIconButton
+          title="Export shopping lists to PDF"
+          onClick={() => {
+            if (!exportAllLists) {
+              setExportListId(pickDefaultShoppingListId(shoppingLists, includeHistory));
+            } else if (!exportListId) {
+              setExportListId(pickDefaultShoppingListId(shoppingLists, includeHistory));
+            }
+            setShowExportPopup(true);
+          }}
+        />
       </div>
       {isLoading && (
         <p className={loadingClass}>Loading your lists and items…</p>
@@ -2066,6 +2304,137 @@ export function ShoppingListTool({ toolId }: ShoppingListToolProps) {
               >
                 Cancel
               </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {showExportPopup && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
+          <div className={`${modalCardClass} max-h-[90vh] overflow-y-auto`} role="dialog" aria-modal="true" aria-labelledby="sl-export-title">
+            <div className="flex items-center justify-between mb-4">
+              <h3 id="sl-export-title" className={isLight ? 'text-lg font-semibold text-slate-900' : 'text-lg font-semibold text-slate-50'}>
+                Export Options
+              </h3>
+              <button
+                type="button"
+                onClick={() => !isExportingPdf && setShowExportPopup(false)}
+                disabled={isExportingPdf}
+                className={isLight ? 'text-slate-600 hover:text-slate-900 transition-colors disabled:opacity-50' : 'text-slate-400 hover:text-slate-200 transition-colors disabled:opacity-50'}
+                title="Close"
+                aria-label="Close"
+              >
+                <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                </svg>
+              </button>
+            </div>
+
+            <div className="space-y-4">
+              <p className={descClass}>
+                Attachment files are listed by name at the end.
+              </p>
+
+              <fieldset className="space-y-2" disabled={isExportingPdf}>
+                <legend className={`${labelClass} mb-0`}>Lists</legend>
+                <label className={`flex items-start gap-3 ${isLight ? 'text-slate-700' : 'text-slate-300'} cursor-pointer`}>
+                  <input
+                    type="radio"
+                    name="slExportScope"
+                    checked={exportAllLists}
+                    onChange={() => setExportAllLists(true)}
+                    className={isLight
+                      ? 'mt-0.5 h-4 w-4 border-slate-400 text-emerald-600 focus:ring-emerald-500'
+                      : 'mt-0.5 h-4 w-4 border-slate-600 bg-slate-700 text-emerald-500 focus:ring-emerald-500'}
+                  />
+                  <span>All lists</span>
+                </label>
+                <label className={`flex items-start gap-3 ${isLight ? 'text-slate-700' : 'text-slate-300'} cursor-pointer`}>
+                  <input
+                    type="radio"
+                    name="slExportScope"
+                    checked={!exportAllLists}
+                    onChange={() => {
+                      setExportAllLists(false);
+                      if (!exportListId || !exportListChoices.some((list) => list.id === exportListId)) {
+                        setExportListId(pickDefaultShoppingListId(shoppingLists, includeHistory));
+                      }
+                    }}
+                    className={isLight
+                      ? 'mt-0.5 h-4 w-4 border-slate-400 text-emerald-600 focus:ring-emerald-500'
+                      : 'mt-0.5 h-4 w-4 border-slate-600 bg-slate-700 text-emerald-500 focus:ring-emerald-500'}
+                  />
+                  <span>One list</span>
+                </label>
+                {!exportAllLists && (
+                  <div className="ml-7">
+                    <label className={labelClass} htmlFor="sl-export-list">
+                      List
+                    </label>
+                    <select
+                      id="sl-export-list"
+                      value={exportListId}
+                      onChange={(e) => setExportListId(e.target.value)}
+                      className={selectClass}
+                    >
+                      <option value="">Select a list</option>
+                      {exportListChoices.map((list) => (
+                        <option key={list.id} value={list.id}>
+                          {list.isActive
+                            ? `${list.name} (${formatLocalCalendarDate(list.date)})`
+                            : `${list.name} (${formatLocalCalendarDate(list.date)}) (history)`}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                )}
+              </fieldset>
+
+              <div className="flex items-start gap-3">
+                <input
+                  type="checkbox"
+                  id="slIncludeHistoryExport"
+                  checked={includeHistory}
+                  onChange={(e) => {
+                    const next = e.target.checked;
+                    setIncludeHistory(next);
+                    if (!next) {
+                      const selected = shoppingLists.find((list) => list.id === exportListId);
+                      if (!selected?.isActive) {
+                        setExportListId(pickDefaultShoppingListId(shoppingLists, false));
+                      }
+                    } else if (!exportListId) {
+                      setExportListId(pickDefaultShoppingListId(shoppingLists, true));
+                    }
+                  }}
+                  disabled={isExportingPdf}
+                  className={isLight
+                    ? 'mt-0.5 h-4 w-4 rounded border-slate-400 text-emerald-600 focus:ring-emerald-500'
+                    : 'mt-0.5 h-4 w-4 rounded border-slate-600 bg-slate-700 text-emerald-500 focus:ring-emerald-500'}
+                />
+                <label htmlFor="slIncludeHistoryExport" className={`${isLight ? 'text-slate-700' : 'text-slate-300'} cursor-pointer`}>
+                  Include history
+                </label>
+              </div>
+
+              <div className="flex gap-3 pt-2">
+                <button
+                  type="button"
+                  onClick={exportToPDF}
+                  disabled={isExportingPdf || (!exportAllLists && !exportListId)}
+                  className={`flex-1 ${primaryButtonClass}`}
+                >
+                  {isExportingPdf ? 'Generating…' : 'Export to PDF'}
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setShowExportPopup(false)}
+                  disabled={isExportingPdf}
+                  className={`${secondaryButtonClass} disabled:opacity-50 disabled:cursor-not-allowed`}
+                >
+                  Cancel
+                </button>
+              </div>
             </div>
           </div>
         </div>

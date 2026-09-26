@@ -135,6 +135,7 @@ export async function deleteItemStorageFiles(itemId: string, userId: string): Pr
   }
 
   const taskIds = (tasks || []).map((task) => task.id);
+  let completionIds: string[] = [];
   if (taskIds.length > 0) {
     const { data: completions, error: completionError } = await supabaseServer
       .from('tools_cs_completions')
@@ -144,7 +145,7 @@ export async function deleteItemStorageFiles(itemId: string, userId: string): Pr
     if (completionError && !isMissingRelationError(completionError)) {
       console.error('Error loading cleaning completions for item file delete:', completionError);
     }
-    const completionIds = (completions || []).map((row) => row.id);
+    completionIds = (completions || []).map((row) => row.id);
     if (completionIds.length > 0) {
       const { data: completionFiles, error: completionFileError } = await supabaseServer
         .from('tools_cs_completion_attachments')
@@ -158,7 +159,31 @@ export async function deleteItemStorageFiles(itemId: string, userId: string): Pr
     }
   }
 
-  await removeCleaningStorageFiles(urls, userId);
+  const { error: itemAttachmentDeleteError } = await supabaseServer
+    .from('tools_cs_item_attachments')
+    .delete()
+    .eq('item_id', itemId)
+    .eq('user_id', userId);
+  if (itemAttachmentDeleteError && !isMissingRelationError(itemAttachmentDeleteError)) {
+    throw itemAttachmentDeleteError;
+  }
+
+  if (completionIds.length > 0) {
+    const { error: completionAttachmentDeleteError } = await supabaseServer
+      .from('tools_cs_completion_attachments')
+      .delete()
+      .eq('user_id', userId)
+      .in('completion_id', completionIds);
+    if (completionAttachmentDeleteError && !isMissingRelationError(completionAttachmentDeleteError)) {
+      throw completionAttachmentDeleteError;
+    }
+  }
+
+  try {
+    await removeCleaningStorageFiles(urls, userId);
+  } catch (error) {
+    console.error('Error removing cleaning item storage files:', error);
+  }
 }
 
 export async function deleteTaskCompletionStorageFiles(taskId: string, userId: string): Promise<void> {

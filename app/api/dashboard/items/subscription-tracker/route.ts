@@ -23,9 +23,11 @@ function clampDay(year: number, month: number, day: number): number {
 }
 
 function formatScheduledDate(year: number, month: number, day: number): string {
-  const scheduled = new Date(year, month, day);
-  scheduled.setHours(9, 0, 0, 0);
-  return scheduled.toISOString();
+  const monthText = String(month + 1).padStart(2, '0');
+  const dayText = String(day).padStart(2, '0');
+  // Wall-clock 9:00 AM with no offset. toISOString() on a UTC server is 09:00Z,
+  // which the day popup shows as 4:00 AM CDT / 3:00 AM CST.
+  return `${year}-${monthText}-${dayText}T09:00:00`;
 }
 
 function subscriptionTitle(name: string | null | undefined): string {

@@ -15,7 +15,7 @@ function parseLocalDate(dateString: string): Date {
 }
 
 function formatScheduledDate(isoDate: string, time?: string | null): string {
-  const scheduled = parseLocalDate(isoDate);
+  const dateOnly = asDateOnly(isoDate);
   let hours = 9;
   let minutes = 0;
   if (time) {
@@ -27,8 +27,11 @@ function formatScheduledDate(isoDate: string, time?: string | null): string {
       minutes = parsedMinutes;
     }
   }
-  scheduled.setHours(hours, minutes, 0, 0);
-  return scheduled.toISOString();
+  const hourText = String(hours).padStart(2, '0');
+  const minuteText = String(minutes).padStart(2, '0');
+  // Wall-clock time with no offset. toISOString() on a UTC server is 10:30Z / 09:00Z,
+  // which the day popup shows as 5:30 AM CDT / 4:00 AM CDT.
+  return `${dateOnly}T${hourText}:${minuteText}:00`;
 }
 
 function appointmentTitle(type: string | null | undefined, veterinarian: string | null | undefined): string {
