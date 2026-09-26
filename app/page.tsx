@@ -90,9 +90,9 @@ export default function Home() {
             </h1>
 
             <p className="mt-4 max-w-xl text-pretty text-sm text-slate-300 sm:text-base">
-              Household Toolbox brings your maintenance schedules, important documents,
-              checklists, and planning tools together so nothing around the house slips
-              through the cracks again.
+              Household Toolbox is a store of tools for the records a household keeps.
+              Dates you pin from those tools show up on one dashboard calendar.               Files stay
+              on the record they belong to, and you can export a PDF when you want a copy.
             </p>
 
             {/* Coming Soon Message */}
@@ -226,7 +226,7 @@ export default function Home() {
                       type="text"
                       id="firstName"
                       name="firstName"
-                      className="w-full rounded-lg border border-slate-700 bg-slate-900/70 px-3 py-2 text-sm text-slate-100 placeholder-slate-500 focus:border-emerald-500/50 focus:outline-none focus:ring-1 focus:ring-emerald-500/50"
+                      className="auth-field w-full rounded-lg border border-slate-700 bg-slate-900/70 px-3 py-2 text-sm text-slate-100 placeholder-slate-500 focus:border-emerald-500/50 focus:outline-none focus:ring-1 focus:ring-emerald-500/50"
                       placeholder="First name"
                       required
                     />
@@ -239,7 +239,7 @@ export default function Home() {
                       type="text"
                       id="lastName"
                       name="lastName"
-                      className="w-full rounded-lg border border-slate-700 bg-slate-900/70 px-3 py-2 text-sm text-slate-100 placeholder-slate-500 focus:border-emerald-500/50 focus:outline-none focus:ring-1 focus:ring-emerald-500/50"
+                      className="auth-field w-full rounded-lg border border-slate-700 bg-slate-900/70 px-3 py-2 text-sm text-slate-100 placeholder-slate-500 focus:border-emerald-500/50 focus:outline-none focus:ring-1 focus:ring-emerald-500/50"
                       placeholder="Last name"
                       required
                     />
@@ -257,7 +257,7 @@ export default function Home() {
                   id="email"
                   name="email"
                   defaultValue={savedEmail}
-                  className="w-full rounded-lg border border-slate-700 bg-slate-900/70 px-3 py-2 text-sm text-slate-100 placeholder-slate-500 focus:border-emerald-500/50 focus:outline-none focus:ring-1 focus:ring-emerald-500/50"
+                  className="auth-field w-full rounded-lg border border-slate-700 bg-slate-900/70 px-3 py-2 text-sm text-slate-100 placeholder-slate-500 focus:border-emerald-500/50 focus:outline-none focus:ring-1 focus:ring-emerald-500/50"
                   placeholder="you@example.com"
                   required
                 />
@@ -271,10 +271,14 @@ export default function Home() {
                   type="password"
                   id="password"
                   name="password"
-                  className="w-full rounded-lg border border-slate-700 bg-slate-900/70 px-3 py-2 text-sm text-slate-100 placeholder-slate-500 focus:border-emerald-500/50 focus:outline-none focus:ring-1 focus:ring-emerald-500/50"
+                  minLength={isSignUp ? 8 : undefined}
+                  className="auth-field w-full rounded-lg border border-slate-700 bg-slate-900/70 px-3 py-2 text-sm text-slate-100 placeholder-slate-500 focus:border-emerald-500/50 focus:outline-none focus:ring-1 focus:ring-emerald-500/50"
                   placeholder="••••••••"
                   required
                 />
+                {isSignUp && (
+                  <p className="mt-1.5 text-xs text-slate-500">At least 8 characters.</p>
+                )}
               </div>
 
               {!isSignUp && (
@@ -286,7 +290,7 @@ export default function Home() {
                       onChange={(e) => setRememberMe(e.target.checked)}
                       className="rounded border-slate-700 bg-slate-900/70 text-emerald-500 focus:ring-emerald-500/50"
                     />
-                    <span>Remember me</span>
+                    <span>Remember email</span>
                   </label>
                   <Link href="/forgot-password" className="text-emerald-400 hover:text-emerald-300">
                     Forgot password?
@@ -322,48 +326,61 @@ export default function Home() {
           </div>
         </section>
 
-        {/* Control Panel Section */}
+        {/* Shared across tools */}
         <section className="mb-16">
           <p className="text-xs font-medium uppercase tracking-[0.18em] text-emerald-300">
-            At-a-glance
+            In every tool
           </p>
           <h2 className="mt-2 text-xl font-semibold text-slate-50 sm:text-2xl">
-            Your household control panel
+            The same basics, whichever app you open
           </h2>
           <p className="mt-2 max-w-xl text-sm text-slate-300">
-            See what needs attention this week across maintenance, bills, and
-            tasks—without digging through emails, texts, and paper folders.
+            Each tool keeps its own records. The store, the calendar, file attachments,
+            and PDF export work the same way across the toolbox.
           </p>
 
-          <div className="mt-6 grid gap-5 md:grid-cols-3">
+          <div className="mt-6 grid gap-5 md:grid-cols-2">
             <div className="rounded-2xl border border-slate-800 bg-slate-900/70 p-4">
               <p className="text-2xl">🧰</p>
               <h3 className="mt-3 text-sm font-semibold text-slate-100">
-                Maintenance timeline
+                A store of tools
               </h3>
               <p className="mt-2 text-xs text-slate-400">
-                Track filters, gutters, inspections, and more with reminders.
+                Add an app when you need it. Home upkeep, health, money, plans, and
+                records each live in their own tool, and you choose which ones are on.
               </p>
             </div>
 
             <div className="rounded-2xl border border-slate-800 bg-slate-900/70 p-4">
-              <p className="text-2xl">📂</p>
+              <p className="text-2xl">🗓️</p>
               <h3 className="mt-3 text-sm font-semibold text-slate-100">
-                Important documents
+                One dashboard calendar
               </h3>
               <p className="mt-2 text-xs text-slate-400">
-                Keep warranties, policies, and records organized and easy to find.
+                Pin a trip, appointment, chore, bill, or other dated item and it shows
+                on the household calendar with the rest of your dates.
               </p>
             </div>
 
             <div className="rounded-2xl border border-slate-800 bg-slate-900/70 p-4">
-              <p className="text-2xl">✅</p>
+              <p className="text-2xl">📎</p>
               <h3 className="mt-3 text-sm font-semibold text-slate-100">
-                Shared checklists
+                Files on the record
               </h3>
               <p className="mt-2 text-xs text-slate-400">
-                Coordinate move-in, hosting, packing, and seasonal checklists with
-                your whole household.
+                Photos, scans, and receipts stay attached to the trip, repair, document,
+                or other record they belong to.
+              </p>
+            </div>
+
+            <div className="rounded-2xl border border-slate-800 bg-slate-900/70 p-4">
+              <p className="text-2xl">📄</p>
+              <h3 className="mt-3 text-sm font-semibold text-slate-100">
+                PDF export
+              </h3>
+              <p className="mt-2 text-xs text-slate-400">
+                Export a PDF of the records you choose. Attachment file names are listed
+                at the end of the report.
               </p>
             </div>
           </div>
@@ -372,44 +389,66 @@ export default function Home() {
         {/* Features */}
         <section id="features" className="mb-16">
           <h2 className="text-xl font-semibold text-slate-50 sm:text-2xl">
-            Designed for real-life households
+            Tools for the records a household keeps
           </h2>
           <p className="mt-2 max-w-xl text-sm text-slate-300">
-            Household Toolbox isn't another todo app. It's a practical command center
-            for the boring but important stuff that keeps your home running.
+            Turn on the groups you use. Each tool inside a group has its own list,
+            history, and export.
           </p>
 
-          <div className="mt-6 grid gap-5 md:grid-cols-3">
+          <div className="mt-6 grid gap-5 md:grid-cols-2 lg:grid-cols-3">
             <div className="rounded-2xl border border-slate-800 bg-slate-900/70 p-4">
-              <p className="text-2xl">🗓️</p>
-              <h3 className="mt-3 text-sm font-semibold text-slate-100">
-                Preventive maintenance
+              <h3 className="text-sm font-semibold text-slate-100">
+                Home
               </h3>
               <p className="mt-2 text-xs text-slate-400">
-                Build a repeating schedule for home tasks so you stay ahead of repairs
-                instead of reacting to them.
+                Cleaning Schedule and Home Maintenance Schedule keep repeating work on
+                a plan, with reminders before a task is due. Repair History logs the
+                job, the cost, the warranty, and the files that go with it.
               </p>
             </div>
 
             <div className="rounded-2xl border border-slate-800 bg-slate-900/70 p-4">
-              <p className="text-2xl">👥</p>
-              <h3 className="mt-3 text-sm font-semibold text-slate-100">
-                Everyone on the same page
+              <h3 className="text-sm font-semibold text-slate-100">
+                Health and care
               </h3>
               <p className="mt-2 text-xs text-slate-400">
-                Share responsibility with partners, roommates, or family—see who&apos;s
-                doing what and when.
+                Healthcare Appts & History keeps visits by family member. Pet Care
+                Schedule holds food, shots, appointments, and documents for each pet.
+                HSA Tracker follows deposits, expenses, receipts, and reimbursements.
               </p>
             </div>
 
             <div className="rounded-2xl border border-slate-800 bg-slate-900/70 p-4">
-              <p className="text-2xl">🔐</p>
-              <h3 className="mt-3 text-sm font-semibold text-slate-100">
-                Peace-of-mind records
+              <h3 className="text-sm font-semibold text-slate-100">
+                Money and events
               </h3>
               <p className="mt-2 text-xs text-slate-400">
-                Store key details and docs in one place so you&apos;re not hunting
-                through drawers or old emails.
+                Subscription Tracker lists repeating bills and renewal dates. Event
+                Budget Planner sets a budget, vendors, and expenses for an occasion.
+                Percent of my Order figures what you paid after a percent-off discount.
+              </p>
+            </div>
+
+            <div className="rounded-2xl border border-slate-800 bg-slate-900/70 p-4">
+              <h3 className="text-sm font-semibold text-slate-100">
+                Plans and lists
+              </h3>
+              <p className="mt-2 text-xs text-slate-400">
+                Calendar Events, To Do List, and Goals Tracking cover dates, open work,
+                and longer aims. Meal Planner lays meals onto a week, and Shopping List
+                keeps each store run on its own list.
+              </p>
+            </div>
+
+            <div className="rounded-2xl border border-slate-800 bg-slate-900/70 p-4">
+              <h3 className="text-sm font-semibold text-slate-100">
+                People and records
+              </h3>
+              <p className="mt-2 text-xs text-slate-400">
+                Address Book, Important Documents, and Notes keep contacts, papers, and
+                anything that needs its own page. Travel Log holds each trip, and End of
+                Life Planner keeps a private plan for what someone else would need.
               </p>
             </div>
           </div>
@@ -427,10 +466,11 @@ export default function Home() {
                 Step 1
               </p>
               <p className="mt-2 text-sm font-semibold text-slate-100">
-                Add your home basics
+                Create an account
               </p>
               <p className="mt-1 text-xs text-slate-400">
-                Enter your home type, key systems, and existing maintenance habits.
+                Sign in with the email and password you choose. Your toolbox opens from
+                there.
               </p>
             </div>
 
@@ -439,11 +479,11 @@ export default function Home() {
                 Step 2
               </p>
               <p className="mt-2 text-sm font-semibold text-slate-100">
-                Build your toolbox
+                Add tools from the store
               </p>
               <p className="mt-1 text-xs text-slate-400">
-                Turn on the tools you need: maintenance calendar, document vault,
-                checklists, and more.
+                Turn on the apps you want, such as home maintenance, documents, or a
+                travel log. Each tool keeps its own records and files.
               </p>
             </div>
 
@@ -452,11 +492,11 @@ export default function Home() {
                 Step 3
               </p>
               <p className="mt-2 text-sm font-semibold text-slate-100">
-                Stay ahead effortlessly
+                Pin dates and export a PDF
               </p>
               <p className="mt-1 text-xs text-slate-400">
-                Get gentle reminders and a single dashboard view of what matters this
-                week.
+                Pin dates to the dashboard calendar so they sit in one place. Export a
+                PDF when you want a copy, with attachment file names listed at the end.
               </p>
             </div>
           </div>
@@ -465,11 +505,25 @@ export default function Home() {
 
         {/* Footer */}
         <footer className="border-t border-slate-800 pt-4 text-xs text-slate-500">
-          <div className="flex flex-col items-center justify-between gap-2 sm:flex-row">
+          <div className="flex flex-col items-center justify-between gap-3 sm:flex-row">
             <p>© {new Date().getFullYear()} Household Toolbox. All rights reserved.</p>
-            <p className="text-[11px] text-slate-500">
-              Built to make home life admin less painful.
-            </p>
+            <nav className="flex flex-wrap items-center justify-center gap-x-4 gap-y-2">
+              <Link href="/pricing" className="hover:text-emerald-300">
+                Pricing
+              </Link>
+              <Link href="/faq" className="hover:text-emerald-300">
+                FAQ
+              </Link>
+              <Link href="/support" className="hover:text-emerald-300">
+                Support
+              </Link>
+              <Link href="/terms-of-service" className="hover:text-emerald-300">
+                Terms
+              </Link>
+              <Link href="/privacy-policy" className="hover:text-emerald-300">
+                Privacy
+              </Link>
+            </nav>
           </div>
         </footer>
       </div>

@@ -5,7 +5,14 @@ import { useTheme } from './AppThemeProvider';
 import { useAppNotice } from './AppNotice';
 import { AttachmentButton } from './AttachmentButton';
 import { AttachmentModal } from './AttachmentModal';
+import { ExportLabelsIconButton } from './ExportLabelsIconButton';
 import { ExportPdfIconButton } from './ExportPdfIconButton';
+import {
+  AVERY_TEMPLATES,
+  type AveryTemplateId,
+  getAveryTemplate,
+  prepareMailingLabels,
+} from '@/lib/mailing-labels';
 import {
   canPreviewAttachment,
   createPendingAttachment,
@@ -262,6 +269,14 @@ export function AddressBookTool({ toolId }: AddressBookToolProps) {
   const [exportAllTags, setExportAllTags] = useState(true);
   const [exportTagIds, setExportTagIds] = useState<string[]>([]);
   const [isExportingPdf, setIsExportingPdf] = useState(false);
+  const [showLabelPopup, setShowLabelPopup] = useState(false);
+  const [labelTemplateId, setLabelTemplateId] = useState<AveryTemplateId>('5160');
+  const [labelFormat, setLabelFormat] = useState<'pdf' | 'docx'>('pdf');
+  const [labelIncludeInactive, setLabelIncludeInactive] = useState(false);
+  const [labelIncludeCountry, setLabelIncludeCountry] = useState(false);
+  const [labelAllTags, setLabelAllTags] = useState(true);
+  const [labelTagIds, setLabelTagIds] = useState<string[]>([]);
+  const [isExportingLabels, setIsExportingLabels] = useState(false);
   const [pendingAttachments, setPendingAttachments] = useState<AttachmentItem[]>([]);
   const [attachmentModal, setAttachmentModal] = useState<null | 'add' | string>(null);
   const [attachmentBusy, setAttachmentBusy] = useState(false);
@@ -889,10 +904,11 @@ export function AddressBookTool({ toolId }: AddressBookToolProps) {
       }
       if (viewAddressModal) setViewAddressModal(null);
       if (showExportPopup && !isExportingPdf) setShowExportPopup(false);
+      if (showLabelPopup && !isExportingLabels) setShowLabelPopup(false);
     };
     window.addEventListener('keydown', onKeyDown);
     return () => window.removeEventListener('keydown', onKeyDown);
-  }, [deleteConfirmId, deleteTagConfirmId, viewAddressModal, attachmentModal, showExportPopup, isExportingPdf]);
+  }, [deleteConfirmId, deleteTagConfirmId, viewAddressModal, attachmentModal, showExportPopup, isExportingPdf, showLabelPopup, isExportingLabels]);
 
   const renderAddressFields = (
     form: AddressFormState,
@@ -1223,6 +1239,50 @@ export function AddressBookTool({ toolId }: AddressBookToolProps) {
     );
   };
 
+  const toggleLabelTag = (tagId: string) => {
+    setLabelAllTags(false);
+    setLabelTagIds((prev) =>
+      prev.includes(tagId) ? prev.filter((id) => id !== tagId) : [...prev, tagId]
+    );
+  };
+
+  const exportLabels = async () => {
+    if (isExportingLabels) return;
+    if (!labelAllTags && labelTagIds.length === 0) {
+      showError('Select at least one tag, or choose All tags.');
+      return;
+    }
+
+    const template = getAveryTemplate(labelTemplateId);
+    const matchesTags = (record: AddressRecord) =>
+      labelAllTags || labelTagIds.some((tagId) => record.tags.includes(tagId));
+    const contacts = prepareMailingLabels(
+      addresses.filter((record) => matchesTags(record) && (labelIncludeInactive || record.isActive))
+    );
+
+    if (contacts.length === 0) {
+      showError('No mailing addresses match these options. A label needs a street, city, state, or ZIP.');
+      return;
+    }
+
+    setIsExportingLabels(true);
+    try {
+      if (labelFormat === 'pdf') {
+        const { downloadMailingLabelPdf } = await import('@/lib/mailing-label-pdf');
+        downloadMailingLabelPdf(template, contacts, { includeCountry: labelIncludeCountry });
+      } else {
+        const { downloadMailingLabelDocx } = await import('@/lib/mailing-label-docx');
+        await downloadMailingLabelDocx(template, contacts, { includeCountry: labelIncludeCountry });
+      }
+      setShowLabelPopup(false);
+    } catch (error) {
+      console.error('Error exporting mailing labels:', error);
+      showError(error instanceof Error ? error.message : 'Failed to generate labels');
+    } finally {
+      setIsExportingLabels(false);
+    }
+  };
+
   const exportToPDF = async () => {
     if (isExportingPdf) return;
     if (!exportAllTags && exportTagIds.length === 0) {
@@ -1437,10 +1497,13 @@ export function AddressBookTool({ toolId }: AddressBookToolProps) {
         </div>
         <div className="flex items-center gap-3 shrink-0">
           {isLoading && <div className={loadingClass}>Loading...</div>}
-          <ExportPdfIconButton
-            title="Export address book to PDF"
-            onClick={() => setShowExportPopup(true)}
-          />
+          <div className="flex items-center">
+            <ExportLabelsIconButton onClick={() => setShowLabelPopup(true)} />
+            <ExportPdfIconButton
+              title="Export address book to PDF"
+              onClick={() => setShowExportPopup(true)}
+            />
+          </div>
         </div>
       </div>
 
@@ -2000,6 +2063,191 @@ export function AddressBookTool({ toolId }: AddressBookToolProps) {
               <button type="button" onClick={() => setViewAddressModal(null)} className={secondaryButtonClass}>
                 Close
               </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {showLabelPopup && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
+          <div className={`${modalCardClass} max-h-[90vh] overflow-y-auto`} role="dialog" aria-modal="true" aria-labelledby="address-book-labels-title">
+            <div className="flex items-center justify-between mb-4">
+              <h3 id="address-book-labels-title" className={sectionTitleClass}>
+                Mailing Labels
+              </h3>
+              <button
+                type="button"
+                onClick={() => !isExportingLabels && setShowLabelPopup(false)}
+                disabled={isExportingLabels}
+                className={isLight ? 'text-slate-600 hover:text-slate-900 transition-colors disabled:opacity-50' : 'text-slate-400 hover:text-slate-200 transition-colors disabled:opacity-50'}
+                title="Close"
+                aria-label="Close"
+              >
+                <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                </svg>
+              </button>
+            </div>
+
+            <div className="space-y-4">
+              <p className={descClass}>
+                Print at actual size on US Letter paper. Each label uses the addressee, street, city, state, and ZIP. Addresses without a street, city, state, or ZIP are skipped.
+              </p>
+
+              <fieldset className="space-y-2" disabled={isExportingLabels}>
+                <legend className={`${labelClass} mb-0`}>Avery template</legend>
+                {AVERY_TEMPLATES.map((template) => (
+                  <label key={template.id} className={`flex items-start gap-3 ${isLight ? 'text-slate-700' : 'text-slate-300'} cursor-pointer`}>
+                    <input
+                      type="radio"
+                      name="averyLabelTemplate"
+                      checked={labelTemplateId === template.id}
+                      onChange={() => setLabelTemplateId(template.id)}
+                      className={isLight
+                        ? 'mt-1 h-4 w-4 border-slate-400 text-emerald-600 focus:ring-emerald-500'
+                        : 'mt-1 h-4 w-4 border-slate-600 bg-slate-700 text-emerald-500 focus:ring-emerald-500'}
+                    />
+                    <span>
+                      <span className="block font-medium">{template.name}</span>
+                      <span className={`block ${descClass}`}>
+                        {`${template.description} · ${template.sizeLabel} · ${template.columns * template.rows} per sheet`}
+                      </span>
+                    </span>
+                  </label>
+                ))}
+              </fieldset>
+
+              <fieldset className="space-y-2" disabled={isExportingLabels}>
+                <legend className={`${labelClass} mb-0`}>Download as</legend>
+                <label className={`flex items-start gap-3 ${isLight ? 'text-slate-700' : 'text-slate-300'} cursor-pointer`}>
+                  <input
+                    type="radio"
+                    name="mailingLabelFormat"
+                    checked={labelFormat === 'pdf'}
+                    onChange={() => setLabelFormat('pdf')}
+                    className={isLight
+                      ? 'mt-0.5 h-4 w-4 border-slate-400 text-emerald-600 focus:ring-emerald-500'
+                      : 'mt-0.5 h-4 w-4 border-slate-600 bg-slate-700 text-emerald-500 focus:ring-emerald-500'}
+                  />
+                  <span>PDF</span>
+                </label>
+                <label className={`flex items-start gap-3 ${isLight ? 'text-slate-700' : 'text-slate-300'} cursor-pointer`}>
+                  <input
+                    type="radio"
+                    name="mailingLabelFormat"
+                    checked={labelFormat === 'docx'}
+                    onChange={() => setLabelFormat('docx')}
+                    className={isLight
+                      ? 'mt-0.5 h-4 w-4 border-slate-400 text-emerald-600 focus:ring-emerald-500'
+                      : 'mt-0.5 h-4 w-4 border-slate-600 bg-slate-700 text-emerald-500 focus:ring-emerald-500'}
+                  />
+                  <span>Word document</span>
+                </label>
+                <p className={descClass}>A Word document can be edited before you print.</p>
+              </fieldset>
+
+              <div className="flex items-start gap-3">
+                <input
+                  type="checkbox"
+                  id="labelIncludeCountry"
+                  checked={labelIncludeCountry}
+                  onChange={(e) => setLabelIncludeCountry(e.target.checked)}
+                  disabled={isExportingLabels}
+                  className={isLight
+                    ? 'mt-0.5 h-4 w-4 rounded border-slate-400 text-emerald-600 focus:ring-emerald-500'
+                    : 'mt-0.5 h-4 w-4 rounded border-slate-600 bg-slate-700 text-emerald-500 focus:ring-emerald-500'}
+                />
+                <label htmlFor="labelIncludeCountry" className={`${isLight ? 'text-slate-700' : 'text-slate-300'} cursor-pointer`}>
+                  Include country
+                </label>
+              </div>
+
+              <div className="flex items-start gap-3">
+                <input
+                  type="checkbox"
+                  id="labelIncludeInactive"
+                  checked={labelIncludeInactive}
+                  onChange={(e) => setLabelIncludeInactive(e.target.checked)}
+                  disabled={isExportingLabels}
+                  className={isLight
+                    ? 'mt-0.5 h-4 w-4 rounded border-slate-400 text-emerald-600 focus:ring-emerald-500'
+                    : 'mt-0.5 h-4 w-4 rounded border-slate-600 bg-slate-700 text-emerald-500 focus:ring-emerald-500'}
+                />
+                <label htmlFor="labelIncludeInactive" className={`${isLight ? 'text-slate-700' : 'text-slate-300'} cursor-pointer`}>
+                  Include inactive addresses
+                </label>
+              </div>
+
+              <fieldset className="space-y-2" disabled={isExportingLabels}>
+                <legend className={`${labelClass} mb-0`}>Tags</legend>
+                <label className={`flex items-start gap-3 ${isLight ? 'text-slate-700' : 'text-slate-300'} cursor-pointer`}>
+                  <input
+                    type="radio"
+                    name="addressBookLabelTags"
+                    checked={labelAllTags}
+                    onChange={() => {
+                      setLabelAllTags(true);
+                      setLabelTagIds([]);
+                    }}
+                    className={isLight
+                      ? 'mt-0.5 h-4 w-4 border-slate-400 text-emerald-600 focus:ring-emerald-500'
+                      : 'mt-0.5 h-4 w-4 border-slate-600 bg-slate-700 text-emerald-500 focus:ring-emerald-500'}
+                  />
+                  <span>All tags</span>
+                </label>
+                <label className={`flex items-start gap-3 ${isLight ? 'text-slate-700' : 'text-slate-300'} cursor-pointer`}>
+                  <input
+                    type="radio"
+                    name="addressBookLabelTags"
+                    checked={!labelAllTags}
+                    onChange={() => setLabelAllTags(false)}
+                    className={isLight
+                      ? 'mt-0.5 h-4 w-4 border-slate-400 text-emerald-600 focus:ring-emerald-500'
+                      : 'mt-0.5 h-4 w-4 border-slate-600 bg-slate-700 text-emerald-500 focus:ring-emerald-500'}
+                  />
+                  <span>Selected tags only</span>
+                </label>
+                {!labelAllTags && (
+                  <div className={`ml-7 max-h-40 overflow-y-auto space-y-2 pr-1 ${activeTags.length === 0 ? descClass : ''}`}>
+                    {activeTags.length === 0 ? (
+                      <p>No active tags to select.</p>
+                    ) : (
+                      activeTags.map((tag) => (
+                        <label key={tag.id} className={`flex items-start gap-3 ${isLight ? 'text-slate-700' : 'text-slate-300'} cursor-pointer`}>
+                          <input
+                            type="checkbox"
+                            checked={labelTagIds.includes(tag.id)}
+                            onChange={() => toggleLabelTag(tag.id)}
+                            className={isLight
+                              ? 'mt-0.5 h-4 w-4 rounded border-slate-400 text-emerald-600 focus:ring-emerald-500'
+                              : 'mt-0.5 h-4 w-4 rounded border-slate-600 bg-slate-700 text-emerald-500 focus:ring-emerald-500'}
+                          />
+                          <span>{tag.name}</span>
+                        </label>
+                      ))
+                    )}
+                  </div>
+                )}
+              </fieldset>
+
+              <div className="flex gap-3 pt-2">
+                <button
+                  type="button"
+                  onClick={exportLabels}
+                  disabled={isExportingLabels || (!labelAllTags && labelTagIds.length === 0)}
+                  className={`flex-1 ${primaryButtonClass}`}
+                >
+                  {isExportingLabels ? 'Generating…' : labelFormat === 'pdf' ? 'Download PDF' : 'Download Word'}
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setShowLabelPopup(false)}
+                  disabled={isExportingLabels}
+                  className={secondaryButtonClass}
+                >
+                  Cancel
+                </button>
+              </div>
             </div>
           </div>
         </div>

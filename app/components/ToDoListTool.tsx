@@ -137,6 +137,21 @@ function formatDateForDisplay(isoDate: string): string {
   return `${month}/${day}/${year}`;
 }
 
+function formatReportDate(date: Date): string {
+  return date.toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' });
+}
+
+function sortCategoriesByName(categories: Category[]): Category[] {
+  return [...categories].sort((a, b) => a.name.localeCompare(b.name));
+}
+
+function compareTasksForReport(a: Task, b: Task): number {
+  if (!a.dueDate && !b.dueDate) return a.taskName.localeCompare(b.taskName);
+  if (!a.dueDate) return 1;
+  if (!b.dueDate) return -1;
+  return a.dueDate.localeCompare(b.dueDate) || a.taskName.localeCompare(b.taskName);
+}
+
 function lastCategoryStorageKey(toolId: string) {
   return `tdl-last-category:${toolId}`;
 }
@@ -257,6 +272,12 @@ export function ToDoListTool({ toolId }: ToDoListToolProps) {
   const [filterPopoverOpen, setFilterPopoverOpen] = useState(false);
   const filterPopoverRef = useRef<HTMLDivElement>(null);
 
+  const [showExportPopup, setShowExportPopup] = useState(false);
+  const [exportAllCategories, setExportAllCategories] = useState(false);
+  const [exportCategoryId, setExportCategoryId] = useState('');
+  const [includeCompleted, setIncludeCompleted] = useState(false);
+  const [isExportingPdf, setIsExportingPdf] = useState(false);
+
   const selectedCategory = categories.find((c) => c.id === selectedCategoryId);
   const tasksForCategory = tasks.filter((t) => t.categoryId === selectedCategoryId);
 
@@ -314,6 +335,16 @@ export function ToDoListTool({ toolId }: ToDoListToolProps) {
   useEffect(() => {
     if (toolId) loadCategories();
   }, [toolId]);
+
+  useEffect(() => {
+    const onKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape' && showExportPopup && !isExportingPdf) {
+        setShowExportPopup(false);
+      }
+    };
+    window.addEventListener('keydown', onKeyDown);
+    return () => window.removeEventListener('keydown', onKeyDown);
+  }, [showExportPopup, isExportingPdf]);
 
   useEffect(() => {
     if (toolId && selectedCategoryId) loadTasks(selectedCategoryId);
@@ -827,6 +858,204 @@ export function ToDoListTool({ toolId }: ToDoListToolProps) {
     }
   };
 
+  const exportCategoryChoices = sortCategoriesByName(categories);
+
+  const fetchCategoryTasks = async (categoryId: string): Promise<Task[]> => {
+    if (!toolId) throw new Error('Tool ID is missing.');
+    const res = await fetch(
+      `/api/tools/to-do-list?toolId=${encodeURIComponent(toolId)}&resource=tasks&categoryId=${encodeURIComponent(categoryId)}`
+    );
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok) throw new Error(data.error || 'Failed to load tasks');
+    return (data.tasks || []).map((task: Task) => ({
+      ...task,
+      dueDate: task.dueDate || '',
+      notes: task.notes || '',
+      addToDashboard: task.addToDashboard === true,
+      attachments: task.attachments || [],
+    }));
+  };
+
+  const exportToPDF = async () => {
+    if (isExportingPdf) return;
+    const chosenFromScreen = categories.find((category) => category.id === exportCategoryId) ?? null;
+    if (!exportAllCategories && !chosenFromScreen) {
+      showError('Select a category, or choose All categories.');
+      return;
+    }
+
+    const categoriesToExport = sortCategoriesByName(
+      exportAllCategories ? categories : chosenFromScreen ? [chosenFromScreen] : []
+    );
+    if (categoriesToExport.length === 0) {
+      showError('Select a category, or choose All categories.');
+      return;
+    }
+
+    setIsExportingPdf(true);
+    try {
+      const tasksByCategory = new Map<string, Task[]>();
+      await Promise.all(
+        categoriesToExport.map(async (category) => {
+          tasksByCategory.set(category.id, await fetchCategoryTasks(category.id));
+        })
+      );
+
+      const { jsPDF } = await import('jspdf');
+      const pdf = new jsPDF({ orientation: 'portrait', unit: 'mm', format: 'a4' });
+      const pageWidth = pdf.internal.pageSize.getWidth();
+      const pageHeight = pdf.internal.pageSize.getHeight();
+      const margin = 15;
+      const contentWidth = pageWidth - margin * 2;
+      let yPos = margin;
+
+      const colors = {
+        background: [255, 255, 255] as const,
+        text: [15, 23, 42] as const,
+        title: [15, 23, 42] as const,
+        header: [241, 245, 249] as const,
+        muted: [71, 85, 105] as const,
+      };
+
+      const fillPage = () => {
+        pdf.setFillColor(colors.background[0], colors.background[1], colors.background[2]);
+        pdf.rect(0, 0, pageWidth, pageHeight, 'F');
+      };
+
+      const checkNewPage = (requiredHeight: number) => {
+        if (yPos + requiredHeight > pageHeight - margin) {
+          pdf.addPage();
+          fillPage();
+          yPos = margin;
+          return true;
+        }
+        return false;
+      };
+
+      const addSectionHeader = (title: string) => {
+        pdf.setFontSize(13);
+        pdf.setFont('helvetica', 'bold');
+        const lines = pdf.splitTextToSize(title, contentWidth - 10) as string[];
+        const barHeight = Math.max(10, lines.length * 6 + 4);
+        checkNewPage(barHeight + 5);
+        pdf.setFillColor(colors.header[0], colors.header[1], colors.header[2]);
+        pdf.rect(margin, yPos, contentWidth, barHeight, 'F');
+        pdf.setTextColor(colors.title[0], colors.title[1], colors.title[2]);
+        lines.forEach((line, index) => {
+          pdf.text(line, margin + 5, yPos + 7 + index * 6);
+        });
+        yPos += barHeight + 5;
+      };
+
+      const addText = (text: string, fontSize = 10, isBold = false, indent = 0, muted = false) => {
+        pdf.setFontSize(fontSize);
+        pdf.setFont('helvetica', isBold ? 'bold' : 'normal');
+        const color = muted ? colors.muted : colors.text;
+        pdf.setTextColor(color[0], color[1], color[2]);
+        const maxWidth = contentWidth - indent - 5;
+        const lines = pdf.splitTextToSize(text, maxWidth) as string[];
+        const lineHeight = fontSize * 0.42;
+        checkNewPage(lines.length * lineHeight + 2);
+        lines.forEach((line) => {
+          pdf.text(line, margin + indent, yPos);
+          yPos += lineHeight;
+        });
+        yPos += 2;
+      };
+
+      fillPage();
+      pdf.setFontSize(20);
+      pdf.setFont('helvetica', 'bold');
+      pdf.setTextColor(colors.title[0], colors.title[1], colors.title[2]);
+      const title = 'To Do List Report';
+      pdf.text(title, (pageWidth - pdf.getTextWidth(title)) / 2, yPos);
+      yPos += 10;
+
+      pdf.setFontSize(10);
+      pdf.setFont('helvetica', 'normal');
+      pdf.setTextColor(colors.muted[0], colors.muted[1], colors.muted[2]);
+      pdf.text(`Generated on: ${formatReportDate(new Date())}`, margin, yPos);
+      yPos += 6;
+
+      const scopeLabel = exportAllCategories
+        ? includeCompleted
+          ? 'Open and completed tasks  ·  All categories'
+          : 'Open tasks only  ·  All categories'
+        : includeCompleted
+          ? `Open and completed tasks  ·  One category  ·  ${chosenFromScreen?.name || 'Selected category'}`
+          : `Open tasks only  ·  One category  ·  ${chosenFromScreen?.name || 'Selected category'}`;
+      const scopeLines = pdf.splitTextToSize(scopeLabel, contentWidth) as string[];
+      scopeLines.forEach((line) => {
+        pdf.text(line, margin, yPos);
+        yPos += 5;
+      });
+      yPos += 5;
+
+      const attachmentRefs: string[] = [];
+      const printTask = (category: Category, task: Task) => {
+        const taskLabel = task.taskName.trim() || 'Task';
+        addText(taskLabel, 11, true, 5);
+        addText(`Status: ${task.status}`, 9, false, 8);
+        addText(`Priority: ${task.priority}`, 9, false, 8);
+        if (task.dueDate) addText(`Due date: ${formatDateForDisplay(task.dueDate)}`, 9, false, 8);
+        if (task.notes.trim()) addText(`Notes: ${task.notes.trim()}`, 9, false, 8);
+        (task.attachments || []).forEach((file) => {
+          const fileName = file.name?.trim();
+          if (!fileName) return;
+          const dateLabel = task.dueDate ? formatDateForDisplay(task.dueDate) : '';
+          attachmentRefs.push(
+            dateLabel
+              ? `${category.name} — ${taskLabel} — ${dateLabel} — ${fileName}`
+              : `${category.name} — ${taskLabel} — ${fileName}`
+          );
+        });
+        yPos += 2;
+      };
+
+      let printedCategories = 0;
+      categoriesToExport.forEach((category) => {
+        const categoryTasks = tasksByCategory.get(category.id) || [];
+        const openTasks = categoryTasks
+          .filter((task) => task.status !== 'Completed')
+          .sort(compareTasksForReport);
+        const completedTasks = includeCompleted
+          ? categoryTasks.filter((task) => task.status === 'Completed').sort(compareTasksForReport)
+          : [];
+        if (exportAllCategories && openTasks.length === 0 && completedTasks.length === 0) return;
+
+        printedCategories += 1;
+        addSectionHeader(category.name);
+        if (openTasks.length === 0 && completedTasks.length === 0) {
+          addText('No tasks match the selected options.', 10, false, 5, true);
+          return;
+        }
+        openTasks.forEach((task) => printTask(category, task));
+        if (completedTasks.length > 0) {
+          addSectionHeader('Completed');
+          completedTasks.forEach((task) => printTask(category, task));
+        }
+      });
+
+      if (printedCategories === 0) {
+        addText('No tasks match the selected options.', 10, false, 5, true);
+      }
+
+      if (attachmentRefs.length > 0) {
+        addSectionHeader('Attachments');
+        addText('File names only. Files themselves are not included in this report.', 8, false, 5, true);
+        attachmentRefs.forEach((line) => addText(line, 9, false, 8));
+      }
+
+      pdf.save(`To_Do_List_Report_${new Date().toISOString().split('T')[0]}.pdf`);
+      setShowExportPopup(false);
+    } catch (error) {
+      console.error('Error exporting to-do list PDF:', error);
+      showError(error instanceof Error ? error.message : 'Failed to generate PDF');
+    } finally {
+      setIsExportingPdf(false);
+    }
+  };
+
   return (
     <div className="space-y-6">
       <div className="flex items-start justify-between gap-3">
@@ -836,7 +1065,18 @@ export function ToDoListTool({ toolId }: ToDoListToolProps) {
             Manage tasks by category. Add and edit categories, then add tasks with due date, priority, and status.
           </p>
         </div>
-        <ExportPdfIconButton />
+        <ExportPdfIconButton
+          title="Export to-do list to PDF"
+          onClick={() => {
+            const fallback = sortCategoriesByName(categories)[0]?.id || '';
+            if (!exportAllCategories) {
+              setExportCategoryId(selectedCategoryId || exportCategoryId || fallback);
+            } else if (!exportCategoryId) {
+              setExportCategoryId(selectedCategoryId || fallback);
+            }
+            setShowExportPopup(true);
+          }}
+        />
       </div>
 
       {saveMessage && (
@@ -1640,6 +1880,131 @@ export function ToDoListTool({ toolId }: ToDoListToolProps) {
             );
           })()}
         </>
+      )}
+
+      {showExportPopup && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
+          <div
+            className={isLight
+              ? 'w-full max-w-lg rounded-2xl border border-slate-200 bg-white p-6 shadow-2xl mx-4 max-h-[90vh] overflow-y-auto'
+              : 'w-full max-w-lg rounded-2xl border border-slate-800 bg-slate-900 p-6 shadow-2xl mx-4 max-h-[90vh] overflow-y-auto'}
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="tdl-export-title"
+          >
+            <div className="flex items-center justify-between mb-4">
+              <h3 id="tdl-export-title" className={isLight ? 'text-lg font-semibold text-slate-900' : 'text-lg font-semibold text-slate-50'}>
+                Export Options
+              </h3>
+              <button
+                type="button"
+                onClick={() => !isExportingPdf && setShowExportPopup(false)}
+                disabled={isExportingPdf}
+                className={isLight ? 'text-slate-600 hover:text-slate-900 transition-colors disabled:opacity-50' : 'text-slate-400 hover:text-slate-200 transition-colors disabled:opacity-50'}
+                title="Close"
+                aria-label="Close"
+              >
+                <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                </svg>
+              </button>
+            </div>
+
+            <div className="space-y-4">
+              <p className={descClass}>
+                Attachment files are listed by name at the end.
+              </p>
+
+              <fieldset className="space-y-2" disabled={isExportingPdf}>
+                <legend className={`${labelClass} mb-0`}>Categories</legend>
+                <label className={`flex items-start gap-3 ${isLight ? 'text-slate-700' : 'text-slate-300'} cursor-pointer`}>
+                  <input
+                    type="radio"
+                    name="tdlExportScope"
+                    checked={exportAllCategories}
+                    onChange={() => setExportAllCategories(true)}
+                    className={isLight
+                      ? 'mt-0.5 h-4 w-4 border-slate-400 text-emerald-600 focus:ring-emerald-500'
+                      : 'mt-0.5 h-4 w-4 border-slate-600 bg-slate-700 text-emerald-500 focus:ring-emerald-500'}
+                  />
+                  <span>All categories</span>
+                </label>
+                <label className={`flex items-start gap-3 ${isLight ? 'text-slate-700' : 'text-slate-300'} cursor-pointer`}>
+                  <input
+                    type="radio"
+                    name="tdlExportScope"
+                    checked={!exportAllCategories}
+                    onChange={() => {
+                      setExportAllCategories(false);
+                      if (!exportCategoryId) {
+                        setExportCategoryId(selectedCategoryId || sortCategoriesByName(categories)[0]?.id || '');
+                      }
+                    }}
+                    className={isLight
+                      ? 'mt-0.5 h-4 w-4 border-slate-400 text-emerald-600 focus:ring-emerald-500'
+                      : 'mt-0.5 h-4 w-4 border-slate-600 bg-slate-700 text-emerald-500 focus:ring-emerald-500'}
+                  />
+                  <span>One category</span>
+                </label>
+                {!exportAllCategories && (
+                  <div className="ml-7">
+                    <label className={labelClass} htmlFor="tdl-export-category">
+                      Category
+                    </label>
+                    <select
+                      id="tdl-export-category"
+                      value={exportCategoryId}
+                      onChange={(e) => setExportCategoryId(e.target.value)}
+                      className={selectClass}
+                    >
+                      <option value="">Select a category</option>
+                      {exportCategoryChoices.map((category) => (
+                        <option key={category.id} value={category.id}>
+                          {category.name}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                )}
+              </fieldset>
+
+              <div className="flex items-start gap-3">
+                <input
+                  type="checkbox"
+                  id="tdlIncludeCompletedExport"
+                  checked={includeCompleted}
+                  onChange={(e) => setIncludeCompleted(e.target.checked)}
+                  disabled={isExportingPdf}
+                  className={isLight
+                    ? 'mt-0.5 h-4 w-4 rounded border-slate-400 text-emerald-600 focus:ring-emerald-500'
+                    : 'mt-0.5 h-4 w-4 rounded border-slate-600 bg-slate-700 text-emerald-500 focus:ring-emerald-500'}
+                />
+                <label htmlFor="tdlIncludeCompletedExport" className={`${isLight ? 'text-slate-700' : 'text-slate-300'} cursor-pointer`}>
+                  Include completed
+                </label>
+              </div>
+
+              <div className="flex gap-3 pt-2">
+                <button
+                  type="button"
+                  onClick={exportToPDF}
+                  disabled={isExportingPdf || categories.length === 0 || (!exportAllCategories && !exportCategoryId)}
+                  className={`flex-1 ${primaryButtonClass}`}
+                >
+                  {isExportingPdf ? 'Generating…' : 'Export to PDF'}
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setShowExportPopup(false)}
+                  disabled={isExportingPdf}
+                  className={`${secondaryButtonClass} disabled:opacity-50 disabled:cursor-not-allowed`}
+                >
+                  Cancel
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
       )}
 
       <AttachmentModal

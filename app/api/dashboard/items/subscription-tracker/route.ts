@@ -3,6 +3,7 @@ import { getSession } from '@/lib/session';
 import { supabaseServer } from '@/lib/supabaseServer';
 import { CALENDAR_SOURCE_SUBSCRIPTION } from '@/lib/calendarPins';
 import { getPinnedSourceIds } from '@/lib/calendarPinsServer';
+import { isQuarterMonth, quarterAnchorMonthIndex } from '@/lib/subscription-schedule';
 
 function asDateOnly(value: string | null | undefined): string {
   if (!value) return '';
@@ -81,7 +82,7 @@ export async function GET(request: NextRequest) {
 
     let query = supabaseServer
       .from('tools_st_subscriptions')
-      .select('id, name, amount, frequency, day_of_month, billed_date, renewal_date, notes, tool_id, is_active')
+      .select('id, name, amount, frequency, day_of_month, billed_date, renewal_date, date_added, notes, tool_id, is_active')
       .eq('user_id', user.id)
       .eq('is_active', true)
       .in('id', Array.from(pinnedIds));
@@ -113,6 +114,36 @@ export async function GET(request: NextRequest) {
         if (subscription.frequency === 'monthly') {
           const day = Number(subscription.day_of_month);
           if (!Number.isFinite(day) || day < 1) return [];
+          const occurrenceDay = clampDay(year, month, day);
+          return [
+            {
+              id: `${subscription.id}-${year}-${String(month + 1).padStart(2, '0')}-${String(occurrenceDay).padStart(2, '0')}`,
+              title,
+              description,
+              type: 'calendar_event',
+              scheduled_date: formatScheduledDate(year, month, occurrenceDay),
+              status: 'pending',
+              metadata: {
+                referenceType: 'subscription',
+                referenceId: subscription.id,
+                subscriptionName: title,
+                frequency: subscription.frequency,
+                dayOfMonth: day,
+              },
+              tools: subscription.tool_id ? { id: subscription.tool_id, name: 'Subscription Tracker' } : undefined,
+            },
+          ];
+        }
+
+        if (subscription.frequency === 'quarterly') {
+          const day = Number(subscription.day_of_month);
+          if (!Number.isFinite(day) || day < 1) return [];
+          const anchorMonth = quarterAnchorMonthIndex(
+            asDateOnly(subscription.billed_date),
+            asDateOnly(subscription.date_added)
+          );
+          if (anchorMonth == null || !isQuarterMonth(month, anchorMonth)) return [];
+
           const occurrenceDay = clampDay(year, month, day);
           return [
             {

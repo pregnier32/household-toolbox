@@ -66,3 +66,35 @@ html.light [class*='border-slate-700'] { border-color: #94a3b8 !important; }
 
 :root[data-theme='light'] [class*='border-slate-600'],
 html.light [class*='border-slate-600'] { border-color: #94a3b8 !important; }
+
+/*
+ * Chrome paints autofilled inputs with a light background. On the dark sign-in
+ * form that stays until the user edits the field. Cover it with the same color
+ * the field already composites to (slate-900 at 70% over the sign-in card).
+ */
+input.auth-field {
+  color-scheme: dark;
+}
+
+input.auth-field:-webkit-autofill,
+input.auth-field:-webkit-autofill:hover,
+input.auth-field:-webkit-autofill:active,
+input.auth-field:autofill,
+input.auth-field:autofill:hover,
+input.auth-field:autofill:active {
+  -webkit-text-fill-color: #f1f5f9 !important;
+  caret-color: #f1f5f9;
+  box-shadow: 0 0 0 1000px #0d1427 inset !important;
+  transition: background-color 9999s ease-out 0s;
+}
+
+input.auth-field:-webkit-autofill:focus,
+input.auth-field:autofill:focus {
+  -webkit-text-fill-color: #f1f5f9 !important;
+  caret-color: #f1f5f9;
+  border-color: rgb(16 185 129 / 0.5);
+  box-shadow:
+    0 0 0 1000px #0d1427 inset,
+    0 0 0 1px rgb(16 185 129 / 0.5) !important;
+  transition: background-color 9999s ease-out 0s;
+}

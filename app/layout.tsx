@@ -16,7 +16,7 @@ const geistMono = Geist_Mono({
 
 export const metadata: Metadata = {
   title: "Household Toolbox - All your home life admin, in one place",
-  description: "The digital toolbox for your whole household. Track maintenance schedules, organize important documents, and coordinate checklists so nothing around the house slips through the cracks.",
+  description: "The digital toolbox for your whole household. Add tools from the store, pin dates to one dashboard calendar, keep files on each record, and export a PDF when you want a copy.",
 };
 
 export default function RootLayout({

@@ -13,6 +13,15 @@ import {
   isPdfAttachment,
   type AttachmentItem,
 } from '@/lib/attachments';
+import {
+  QUARTER_GROUPS,
+  isQuarterAnchorDate,
+  monthIndexFromIso,
+  quarterAnchorDate,
+  quarterGroupLabel,
+  quarterOffsetFromIso,
+  quarterOffsetFromMonth,
+} from '@/lib/subscription-schedule';
 
 const API_BASE = '/api/tools/subscription-tracker';
 
@@ -25,7 +34,7 @@ type Subscription = {
   frequency: SubscriptionFrequency;
   amount: number;
   dayOfMonth: number | null; // null for annual subscriptions
-  billedDate: string | null; // only for annual subscriptions
+  billedDate: string | null; // annual bill date, or the quarterly billing-month anchor
   renewalDate: string | null; // only for annual subscriptions
   notes: string;
   isActive: boolean;
@@ -63,26 +72,102 @@ function emptySubscriptionForm(): SubscriptionFormState {
   };
 }
 
-function canPinFrequency(frequency: SubscriptionFrequency): boolean {
-  return frequency === 'monthly' || frequency === 'annual';
+function localTodayIso(): string {
+  const now = new Date();
+  const month = String(now.getMonth() + 1).padStart(2, '0');
+  const day = String(now.getDate()).padStart(2, '0');
+  return `${now.getFullYear()}-${month}-${day}`;
+}
+
+function quarterAnchorFor(isoDate: string | null | undefined): string {
+  const offset = quarterOffsetFromIso(isoDate) ?? quarterOffsetFromMonth(new Date().getMonth());
+  return quarterAnchorDate(offset);
+}
+
+function billingMonthsLabel(billedDate: string | null | undefined, dateAdded?: string | null): string {
+  const anchor = monthIndexFromIso(billedDate) ?? monthIndexFromIso(dateAdded);
+  if (anchor == null) return '';
+  return quarterGroupLabel(quarterOffsetFromMonth(anchor));
+}
+
+function applyFrequencyChange(
+  current: SubscriptionFormState,
+  newFrequency: SubscriptionFrequency
+): SubscriptionFormState {
+  if (newFrequency === 'annual') {
+    const keepBilled = current.billedDate && !isQuarterAnchorDate(current.billedDate) ? current.billedDate : '';
+    return {
+      ...current,
+      frequency: newFrequency,
+      dayOfMonth: '',
+      billedDate: keepBilled,
+      renewalDate: current.renewalDate || '',
+    };
+  }
+  if (newFrequency === 'quarterly') {
+    const offsetSource = current.billedDate && !isQuarterAnchorDate(current.billedDate)
+      ? current.billedDate
+      : localTodayIso();
+    return {
+      ...current,
+      frequency: newFrequency,
+      dayOfMonth: current.dayOfMonth || '',
+      billedDate: quarterAnchorFor(offsetSource),
+      renewalDate: '',
+    };
+  }
+  return {
+    ...current,
+    frequency: 'monthly',
+    dayOfMonth: current.dayOfMonth || '',
+    billedDate: '',
+    renewalDate: '',
+  };
+}
+
+function QuarterMonthsField({
+  billedDate,
+  onChange,
+  labelClassName,
+  selectClassName,
+}: {
+  billedDate: string;
+  onChange: (billedDate: string) => void;
+  labelClassName: string;
+  selectClassName: string;
+}) {
+  const offset = quarterOffsetFromIso(billedDate);
+  return (
+    <div>
+      <label className={labelClassName}>
+        Billing months <span className="text-red-400">*</span>
+      </label>
+      <select
+        value={offset == null ? '0' : String(offset)}
+        onChange={(e) => onChange(quarterAnchorDate(Number(e.target.value)))}
+        className={selectClassName}
+      >
+        {QUARTER_GROUPS.map((group) => (
+          <option key={group.offset} value={group.offset}>
+            {group.label}
+          </option>
+        ))}
+      </select>
+    </div>
+  );
 }
 
 function DashboardCalendarSwitch({
   isOn,
   onToggle,
   isLight,
-  disabled = false,
 }: {
   isOn: boolean;
   onToggle: () => void;
   isLight: boolean;
-  disabled?: boolean;
 }) {
   return (
-    <label
-      className={`flex items-center gap-2 ${disabled ? 'cursor-not-allowed' : 'cursor-pointer'}`}
-      title={disabled ? 'Quarterly subscriptions cannot be added to the dashboard calendar yet' : 'Add to dashboard calendar'}
-    >
+    <label className="flex items-center gap-2 cursor-pointer" title="Add to dashboard calendar">
       <span className={`text-xs whitespace-nowrap ${isLight ? 'text-slate-600' : 'text-slate-400'}`}>
         Add to dashboard calendar
       </span>
@@ -90,18 +175,12 @@ function DashboardCalendarSwitch({
         type="button"
         role="switch"
         aria-checked={isOn}
-        aria-disabled={disabled}
         aria-label="Add to dashboard calendar"
-        title={disabled ? 'Quarterly subscriptions cannot be added to the dashboard calendar yet' : 'Add to dashboard calendar'}
-        disabled={disabled}
-        onClick={() => {
-          if (!disabled) onToggle();
-        }}
-        className={`relative inline-flex h-6 w-11 flex-shrink-0 rounded-full border-2 border-transparent transition-colors focus:outline-none focus:ring-2 focus:ring-emerald-500/50 focus:ring-offset-2 ${
-          disabled ? 'cursor-not-allowed opacity-50' : 'cursor-pointer'
-        } ${isLight ? 'focus:ring-offset-white' : 'focus:ring-offset-slate-900'} ${
-          isOn ? 'bg-emerald-500' : isLight ? 'bg-slate-300' : 'bg-slate-700'
-        }`}
+        title="Add to dashboard calendar"
+        onClick={onToggle}
+        className={`relative inline-flex h-6 w-11 flex-shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors focus:outline-none focus:ring-2 focus:ring-emerald-500/50 focus:ring-offset-2 ${
+          isLight ? 'focus:ring-offset-white' : 'focus:ring-offset-slate-900'
+        } ${isOn ? 'bg-emerald-500' : isLight ? 'bg-slate-300' : 'bg-slate-700'}`}
       >
         <span
           className={`pointer-events-none inline-block h-5 w-5 transform rounded-full bg-white shadow ring-0 transition ${
@@ -568,7 +647,7 @@ export function SubscriptionTrackerTool({ toolId }: SubscriptionTrackerToolProps
         frequency: newSubscription.frequency,
         amount: parseFloat(newSubscription.amount),
         day_of_month: newSubscription.frequency === 'annual' ? null : parseInt(newSubscription.dayOfMonth),
-        billed_date: newSubscription.frequency === 'annual' ? newSubscription.billedDate : null,
+        billed_date: newSubscription.frequency === 'monthly' ? null : newSubscription.billedDate || null,
         renewal_date: newSubscription.frequency === 'annual' ? newSubscription.renewalDate : null,
         notes: newSubscription.notes.trim() || null,
         is_active: true
@@ -582,7 +661,7 @@ export function SubscriptionTrackerTool({ toolId }: SubscriptionTrackerToolProps
         body: JSON.stringify({
           toolId,
           subscriptionData,
-          addToDashboard: newSubscription.addToDashboard === true && canPinFrequency(newSubscription.frequency),
+          addToDashboard: newSubscription.addToDashboard === true,
         }),
       });
 
@@ -641,10 +720,12 @@ export function SubscriptionTrackerTool({ toolId }: SubscriptionTrackerToolProps
       frequency: subscription.frequency,
       amount: subscription.amount.toString(),
       dayOfMonth: subscription.dayOfMonth?.toString() || '',
-      billedDate: subscription.billedDate || '',
+      billedDate: subscription.frequency === 'quarterly'
+        ? subscription.billedDate || quarterAnchorFor(subscription.dateAdded)
+        : subscription.billedDate || '',
       renewalDate: subscription.renewalDate || '',
       notes: subscription.notes,
-      addToDashboard: subscription.addToDashboard === true && canPinFrequency(subscription.frequency),
+      addToDashboard: subscription.addToDashboard === true,
     });
     setShowCustomCategoryEdit(false);
   };
@@ -692,7 +773,7 @@ export function SubscriptionTrackerTool({ toolId }: SubscriptionTrackerToolProps
         frequency: editingSubscription.frequency,
         amount: parseFloat(editingSubscription.amount),
         day_of_month: editingSubscription.frequency === 'annual' ? null : parseInt(editingSubscription.dayOfMonth),
-        billed_date: editingSubscription.frequency === 'annual' ? editingSubscription.billedDate : null,
+        billed_date: editingSubscription.frequency === 'monthly' ? null : editingSubscription.billedDate || null,
         renewal_date: editingSubscription.frequency === 'annual' ? editingSubscription.renewalDate : null,
         notes: editingSubscription.notes.trim() || null,
         is_active: subscriptions.find(sub => sub.id === editingId)?.isActive !== false
@@ -707,7 +788,7 @@ export function SubscriptionTrackerTool({ toolId }: SubscriptionTrackerToolProps
           subscriptionId: editingId,
           toolId,
           subscriptionData,
-          addToDashboard: editingSubscription.addToDashboard === true && canPinFrequency(editingSubscription.frequency),
+          addToDashboard: editingSubscription.addToDashboard === true,
         }),
       });
 
@@ -1029,6 +1110,10 @@ export function SubscriptionTrackerTool({ toolId }: SubscriptionTrackerToolProps
           if (subscription.renewalDate) addText(`Renewal date: ${formatLocalDate(subscription.renewalDate)}`, 9, false, 5);
         } else if (subscription.dayOfMonth) {
           addText(`Day of month: ${subscription.dayOfMonth}`, 9, false, 5);
+          if (subscription.frequency === 'quarterly') {
+            const months = billingMonthsLabel(subscription.billedDate, subscription.dateAdded);
+            if (months) addText(`Billing months: ${months}`, 9, false, 5);
+          }
         }
         if (subscription.dateAdded) addText(`Date added: ${formatLocalDate(subscription.dateAdded)}`, 9, false, 5);
         if (!subscription.isActive && subscription.dateInactivated) {
@@ -1261,25 +1346,7 @@ export function SubscriptionTrackerTool({ toolId }: SubscriptionTrackerToolProps
                       value={newSubscription.frequency}
                       onChange={(e) => {
                         const newFrequency = e.target.value as SubscriptionFrequency;
-                        if (newFrequency === 'annual') {
-                          setNewSubscription({ 
-                            ...newSubscription, 
-                            frequency: newFrequency,
-                            dayOfMonth: '',
-                            billedDate: newSubscription.billedDate || '',
-                            renewalDate: newSubscription.renewalDate || '',
-                            addToDashboard: newSubscription.addToDashboard,
-                          });
-                        } else {
-                          setNewSubscription({ 
-                            ...newSubscription, 
-                            frequency: newFrequency,
-                            dayOfMonth: newSubscription.dayOfMonth || '',
-                            billedDate: '',
-                            renewalDate: '',
-                            addToDashboard: newFrequency === 'quarterly' ? false : newSubscription.addToDashboard,
-                          });
-                        }
+                        setNewSubscription(applyFrequencyChange(newSubscription, newFrequency));
                       }}
                       className={selectClass}
                     >
@@ -1332,20 +1399,30 @@ export function SubscriptionTrackerTool({ toolId }: SubscriptionTrackerToolProps
                       </div>
                     </>
                   ) : (
-                    <div>
-                      <label className={labelClass}>
-                        Day of Month <span className="text-red-400">*</span>
-                      </label>
-                      <input
-                        type="number"
-                        min="1"
-                        max="31"
-                        value={newSubscription.dayOfMonth}
-                        onChange={(e) => setNewSubscription({ ...newSubscription, dayOfMonth: e.target.value })}
-                        placeholder="1-31"
-                        className={inputClass}
-                      />
-                    </div>
+                    <>
+                      <div>
+                        <label className={labelClass}>
+                          Day of Month <span className="text-red-400">*</span>
+                        </label>
+                        <input
+                          type="number"
+                          min="1"
+                          max="31"
+                          value={newSubscription.dayOfMonth}
+                          onChange={(e) => setNewSubscription({ ...newSubscription, dayOfMonth: e.target.value })}
+                          placeholder="1-31"
+                          className={inputClass}
+                        />
+                      </div>
+                      {newSubscription.frequency === 'quarterly' && (
+                        <QuarterMonthsField
+                          billedDate={newSubscription.billedDate}
+                          onChange={(billedDate) => setNewSubscription({ ...newSubscription, billedDate })}
+                          labelClassName={labelClass}
+                          selectClassName={selectClass}
+                        />
+                      )}
+                    </>
                   )}
                 </div>
                 <div>
@@ -1362,7 +1439,6 @@ export function SubscriptionTrackerTool({ toolId }: SubscriptionTrackerToolProps
                 </div>
                 <DashboardCalendarSwitch
                   isOn={newSubscription.addToDashboard}
-                  disabled={!canPinFrequency(newSubscription.frequency)}
                   isLight={isLight}
                   onToggle={() => setNewSubscription((prev) => ({ ...prev, addToDashboard: !prev.addToDashboard }))}
                 />
@@ -1538,25 +1614,7 @@ export function SubscriptionTrackerTool({ toolId }: SubscriptionTrackerToolProps
                               value={editingSubscription.frequency}
                               onChange={(e) => {
                                 const newFrequency = e.target.value as SubscriptionFrequency;
-                                if (newFrequency === 'annual') {
-                                  setEditingSubscription({ 
-                                    ...editingSubscription, 
-                                    frequency: newFrequency,
-                                    dayOfMonth: '',
-                                    billedDate: editingSubscription.billedDate || '',
-                                    renewalDate: editingSubscription.renewalDate || '',
-                                    addToDashboard: editingSubscription.addToDashboard,
-                                  });
-                                } else {
-                                  setEditingSubscription({ 
-                                    ...editingSubscription, 
-                                    frequency: newFrequency,
-                                    dayOfMonth: editingSubscription.dayOfMonth || '',
-                                    billedDate: '',
-                                    renewalDate: '',
-                                    addToDashboard: newFrequency === 'quarterly' ? false : editingSubscription.addToDashboard,
-                                  });
-                                }
+                                setEditingSubscription(applyFrequencyChange(editingSubscription, newFrequency));
                               }}
                               className="w-full px-4 py-2 rounded-lg border border-slate-700 bg-slate-900/70 text-slate-100 focus:border-emerald-500/50 focus:outline-none focus:ring-1 focus:ring-emerald-500/50"
                             >
@@ -1608,19 +1666,29 @@ export function SubscriptionTrackerTool({ toolId }: SubscriptionTrackerToolProps
                               </div>
                             </>
                           ) : (
-                            <div>
-                              <label className="block text-sm font-medium text-slate-300 mb-2">
-                                Day of Month <span className="text-red-400">*</span>
-                              </label>
-                              <input
-                                type="number"
-                                min="1"
-                                max="31"
-                                value={editingSubscription.dayOfMonth}
-                                onChange={(e) => setEditingSubscription({ ...editingSubscription, dayOfMonth: e.target.value })}
-                                className="w-full px-4 py-2 rounded-lg border border-slate-700 bg-slate-900/70 text-slate-100 focus:border-emerald-500/50 focus:outline-none focus:ring-1 focus:ring-emerald-500/50"
-                              />
-                            </div>
+                            <>
+                              <div>
+                                <label className="block text-sm font-medium text-slate-300 mb-2">
+                                  Day of Month <span className="text-red-400">*</span>
+                                </label>
+                                <input
+                                  type="number"
+                                  min="1"
+                                  max="31"
+                                  value={editingSubscription.dayOfMonth}
+                                  onChange={(e) => setEditingSubscription({ ...editingSubscription, dayOfMonth: e.target.value })}
+                                  className="w-full px-4 py-2 rounded-lg border border-slate-700 bg-slate-900/70 text-slate-100 focus:border-emerald-500/50 focus:outline-none focus:ring-1 focus:ring-emerald-500/50"
+                                />
+                              </div>
+                              {editingSubscription.frequency === 'quarterly' && (
+                                <QuarterMonthsField
+                                  billedDate={editingSubscription.billedDate}
+                                  onChange={(billedDate) => setEditingSubscription({ ...editingSubscription, billedDate })}
+                                  labelClassName="block text-sm font-medium text-slate-300 mb-2"
+                                  selectClassName="w-full px-4 py-2 rounded-lg border border-slate-700 bg-slate-900/70 text-slate-100 focus:border-emerald-500/50 focus:outline-none focus:ring-1 focus:ring-emerald-500/50"
+                                />
+                              )}
+                            </>
                           )}
                         </div>
                         <div>
@@ -1636,7 +1704,6 @@ export function SubscriptionTrackerTool({ toolId }: SubscriptionTrackerToolProps
                         </div>
                         <DashboardCalendarSwitch
                           isOn={editingSubscription.addToDashboard}
-                          disabled={!canPinFrequency(editingSubscription.frequency)}
                           isLight={isLight}
                           onToggle={() => setEditingSubscription((prev) => ({ ...prev, addToDashboard: !prev.addToDashboard }))}
                         />
@@ -1698,8 +1765,18 @@ export function SubscriptionTrackerTool({ toolId }: SubscriptionTrackerToolProps
                               </div>
                             ) : (
                               <div>
-                                <span className="text-slate-400">Day of Month:</span>
-                                <span className="ml-2 text-slate-200">{subscription.dayOfMonth}</span>
+                                <div>
+                                  <span className="text-slate-400">Day of Month:</span>
+                                  <span className="ml-2 text-slate-200">{subscription.dayOfMonth}</span>
+                                </div>
+                                {subscription.frequency === 'quarterly' && (
+                                  <div className="mt-1">
+                                    <span className="text-slate-400">Billing months:</span>
+                                    <span className="ml-2 text-slate-200">
+                                      {billingMonthsLabel(subscription.billedDate, subscription.dateAdded) || 'N/A'}
+                                    </span>
+                                  </div>
+                                )}
                               </div>
                             )}
                             <div className="md:col-start-4">

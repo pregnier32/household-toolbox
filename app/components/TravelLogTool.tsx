@@ -160,6 +160,25 @@ function formatDateDisplay(isoDate: string): string {
   return `${d.getMonth() + 1}/${d.getDate()}/${d.getFullYear()}`;
 }
 
+function formatReportDate(date: Date): string {
+  return date.toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' });
+}
+
+function filledText(value: string | null | undefined): string {
+  return (value || '').trim();
+}
+
+function sortTripsNewestFirst(trips: TripRecord[]): TripRecord[] {
+  return [...trips].sort(
+    (a, b) => (b.startDate || '').localeCompare(a.startDate || '') || a.tripName.localeCompare(b.tripName)
+  );
+}
+
+function pickDefaultTripId(trips: TripRecord[], editingId: string | null): string {
+  if (editingId && trips.some((trip) => trip.id === editingId)) return editingId;
+  return sortTripsNewestFirst(trips)[0]?.id || '';
+}
+
 function calculateTripDays(startDate: string, endDate: string): number | null {
   const start = parseLocalDate(startDate);
   const end = parseLocalDate(endDate);
@@ -1177,6 +1196,9 @@ export function TravelLogTool({ toolId }: TravelLogToolProps) {
   const [deleteConfirmId, setDeleteConfirmId] = useState<string | null>(null);
   const [deleteConfirmText, setDeleteConfirmText] = useState('');
   const [showExportPopup, setShowExportPopup] = useState(false);
+  const [exportAllTrips, setExportAllTrips] = useState(false);
+  const [exportTripId, setExportTripId] = useState('');
+  const [isExportingPdf, setIsExportingPdf] = useState(false);
   const [pendingAttachments, setPendingAttachments] = useState<AttachmentItem[]>([]);
   const [attachmentModal, setAttachmentModal] = useState<null | 'add' | string>(null);
   const [attachmentBusy, setAttachmentBusy] = useState(false);
@@ -1359,12 +1381,12 @@ export function TravelLogTool({ toolId }: TravelLogToolProps) {
           setDeleteConfirmId(null);
           setDeleteConfirmText('');
         }
-        if (showExportPopup) setShowExportPopup(false);
+        if (showExportPopup && !isExportingPdf) setShowExportPopup(false);
       }
     };
     window.addEventListener('keydown', onKeyDown);
     return () => window.removeEventListener('keydown', onKeyDown);
-  }, [deleteConfirmId, showExportPopup]);
+  }, [deleteConfirmId, showExportPopup, isExportingPdf]);
 
   const tripSearchText = useCallback((trip: TripRecord) => {
     return [
@@ -2131,9 +2153,213 @@ export function TravelLogTool({ toolId }: TravelLogToolProps) {
     );
   };
 
-  const exportToPDF = () => {
-    showError('PDF export will be available once the Travel Log database is connected.');
-    setShowExportPopup(false);
+  const exportTripChoices = sortTripsNewestFirst(trips);
+
+  const fetchExportTrips = async (): Promise<TripRecord[]> => {
+    if (!toolId) throw new Error('Tool ID is missing.');
+    const response = await fetch(`/api/tools/travel-log?toolId=${encodeURIComponent(toolId)}`);
+    const data = await response.json().catch(() => ({}));
+    if (!response.ok) throw new Error(data.error || 'Failed to load trips');
+    return Array.isArray(data.trips) ? data.trips.map((trip: TripRecord) => normalizeTripRecord(trip)) : [];
+  };
+
+  const exportToPDF = async () => {
+    if (isExportingPdf) return;
+    const chosenFromScreen = trips.find((trip) => trip.id === exportTripId) ?? null;
+    if (!exportAllTrips && !chosenFromScreen) {
+      showError('Select a trip, or choose All trips.');
+      return;
+    }
+
+    setIsExportingPdf(true);
+    try {
+      const loaded = sortTripsNewestFirst(await fetchExportTrips());
+      const chosen = loaded.find((trip) => trip.id === exportTripId) ?? null;
+      if (!exportAllTrips && !chosen) {
+        showError('Select a trip, or choose All trips.');
+        return;
+      }
+
+      const tripsToPrint = exportAllTrips ? loaded : chosen ? [chosen] : [];
+      const { jsPDF } = await import('jspdf');
+      const pdf = new jsPDF({ orientation: 'portrait', unit: 'mm', format: 'a4' });
+      const pageWidth = pdf.internal.pageSize.getWidth();
+      const pageHeight = pdf.internal.pageSize.getHeight();
+      const margin = 15;
+      const contentWidth = pageWidth - margin * 2;
+      let yPos = margin;
+
+      const colors = {
+        background: [255, 255, 255] as const,
+        text: [15, 23, 42] as const,
+        title: [15, 23, 42] as const,
+        header: [241, 245, 249] as const,
+        muted: [71, 85, 105] as const,
+      };
+
+      const fillPage = () => {
+        pdf.setFillColor(colors.background[0], colors.background[1], colors.background[2]);
+        pdf.rect(0, 0, pageWidth, pageHeight, 'F');
+      };
+
+      const checkNewPage = (requiredHeight: number) => {
+        if (yPos + requiredHeight > pageHeight - margin) {
+          pdf.addPage();
+          fillPage();
+          yPos = margin;
+          return true;
+        }
+        return false;
+      };
+
+      const addSectionHeader = (title: string) => {
+        pdf.setFontSize(13);
+        pdf.setFont('helvetica', 'bold');
+        const lines = pdf.splitTextToSize(title, contentWidth - 10) as string[];
+        const barHeight = Math.max(10, lines.length * 6 + 4);
+        checkNewPage(barHeight + 5);
+        pdf.setFillColor(colors.header[0], colors.header[1], colors.header[2]);
+        pdf.rect(margin, yPos, contentWidth, barHeight, 'F');
+        pdf.setTextColor(colors.title[0], colors.title[1], colors.title[2]);
+        lines.forEach((line, index) => {
+          pdf.text(line, margin + 5, yPos + 7 + index * 6);
+        });
+        yPos += barHeight + 5;
+      };
+
+      const addText = (text: string, fontSize = 10, isBold = false, indent = 0, muted = false) => {
+        pdf.setFontSize(fontSize);
+        pdf.setFont('helvetica', isBold ? 'bold' : 'normal');
+        const color = muted ? colors.muted : colors.text;
+        pdf.setTextColor(color[0], color[1], color[2]);
+        const maxWidth = contentWidth - indent - 5;
+        const lines = pdf.splitTextToSize(text, maxWidth) as string[];
+        const lineHeight = fontSize * 0.42;
+        checkNewPage(lines.length * lineHeight + 2);
+        lines.forEach((line) => {
+          pdf.text(line, margin + indent, yPos);
+          yPos += lineHeight;
+        });
+        yPos += 2;
+      };
+
+      fillPage();
+      pdf.setFontSize(20);
+      pdf.setFont('helvetica', 'bold');
+      pdf.setTextColor(colors.title[0], colors.title[1], colors.title[2]);
+      const title = 'Travel Log Report';
+      pdf.text(title, (pageWidth - pdf.getTextWidth(title)) / 2, yPos);
+      yPos += 10;
+
+      pdf.setFontSize(10);
+      pdf.setFont('helvetica', 'normal');
+      pdf.setTextColor(colors.muted[0], colors.muted[1], colors.muted[2]);
+      pdf.text(`Generated on: ${formatReportDate(new Date())}`, margin, yPos);
+      yPos += 6;
+
+      const scopeLabel = exportAllTrips
+        ? 'All trips'
+        : `One trip  ·  ${chosen?.tripName || chosenFromScreen?.tripName || 'Selected trip'}`;
+      const scopeLines = pdf.splitTextToSize(scopeLabel, contentWidth) as string[];
+      scopeLines.forEach((line) => {
+        pdf.text(line, margin, yPos);
+        yPos += 5;
+      });
+      yPos += 5;
+
+      const attachmentRefs: string[] = [];
+      const samePlace = (a: string, b: string) => a.toLowerCase() === b.toLowerCase();
+
+      const printTrip = (trip: TripRecord) => {
+        const tripName = filledText(trip.tripName) || 'Trip';
+        addSectionHeader(tripName);
+        const destination = filledText(trip.destination) || filledText(trip.primaryDestination);
+        const departure = filledText(trip.departureLocation);
+        const primary = filledText(trip.primaryDestination);
+        if (destination) addText(`Destination: ${destination}`, 9, false, 5);
+        if (departure && !samePlace(departure, destination)) addText(`Departure: ${departure}`, 9, false, 5);
+        if (primary && destination && !samePlace(primary, destination)) addText(`Primary destination: ${primary}`, 9, false, 5);
+        if (trip.startDate) {
+          const days = calculateTripDays(trip.startDate, trip.endDate);
+          const range = trip.endDate
+            ? `${formatDateDisplay(trip.startDate)} – ${formatDateDisplay(trip.endDate)}`
+            : formatDateDisplay(trip.startDate);
+          addText(days !== null ? `Dates: ${range} (${days} day${days === 1 ? '' : 's'})` : `Dates: ${range}`, 9, false, 5);
+        }
+        if (filledText(trip.tripType)) addText(`Trip type: ${filledText(trip.tripType)}`, 9, false, 5);
+        const goal = trip.tripGoal === 'Other' ? filledText(trip.tripGoalOther) : filledText(trip.tripGoal);
+        if (goal) addText(`Goal: ${goal}`, 9, false, 5);
+        const transport = (trip.transportationMethods || []).map((method) => filledText(method)).filter(Boolean);
+        if (transport.length > 0) addText(`Transportation: ${transport.join(', ')}`, 9, false, 5);
+        if (filledText(trip.travelCompanions)) addText(`Companions: ${filledText(trip.travelCompanions)}`, 9, false, 5);
+        if (trip.tripRating > 0) addText(`Rating: ${trip.tripRating} of 5`, 9, false, 5);
+        if (filledText(trip.plannedBudget)) addText(`Planned budget: ${filledText(trip.plannedBudget)}`, 9, false, 5);
+        if (filledText(trip.totalTripCost)) addText(`Total cost: ${filledText(trip.totalTripCost)}`, 9, false, 5);
+        if (filledText(trip.budgetNotes)) addText(`Budget notes: ${filledText(trip.budgetNotes)}`, 9, false, 5);
+
+        const lodging = [...(trip.lodging || [])].sort(
+          (a, b) => (a.checkInDate || '').localeCompare(b.checkInDate || '') || (a.name || '').localeCompare(b.name || '')
+        );
+        if (lodging.length > 0) {
+          addText('Lodging', 11, true, 5);
+          lodging.forEach((stay) => {
+            const stayName = filledText(stay.name) || 'Lodging';
+            addText(stayName, 10, true, 8);
+            if (filledText(stay.type)) addText(`Type: ${filledText(stay.type)}`, 9, false, 10);
+            if (stay.checkInDate) addText(`Check in: ${formatDateDisplay(stay.checkInDate)}`, 9, false, 10);
+            if (stay.checkOutDate) addText(`Check out: ${formatDateDisplay(stay.checkOutDate)}`, 9, false, 10);
+            if (stay.rating > 0) addText(`Rating: ${stay.rating} of 5`, 9, false, 10);
+            if (filledText(stay.notes)) addText(`Notes: ${filledText(stay.notes)}`, 9, false, 10);
+          });
+        }
+
+        const journal = [...(trip.journalNotes || [])].sort(
+          (a, b) => (a.noteDate || '').localeCompare(b.noteDate || '') || (a.name || '').localeCompare(b.name || '')
+        );
+        if (journal.length > 0) {
+          addText('Journal', 11, true, 5);
+          journal.forEach((note) => {
+            const noteName = filledText(note.name) || 'Journal note';
+            addText(note.noteDate ? `${noteName} — ${formatDateDisplay(note.noteDate)}` : noteName, 10, true, 8);
+            if (filledText(note.text)) addText(filledText(note.text), 9, false, 10);
+          });
+        }
+
+        if (filledText(trip.bestMemory)) addText(`Best memory: ${filledText(trip.bestMemory)}`, 9, false, 5);
+        if (filledText(trip.biggestSurprise)) addText(`Biggest surprise: ${filledText(trip.biggestSurprise)}`, 9, false, 5);
+        if (filledText(trip.highlightOfTrip)) addText(`Highlight: ${filledText(trip.highlightOfTrip)}`, 9, false, 5);
+        if (filledText(trip.wouldReturn)) addText(`Would you return: ${filledText(trip.wouldReturn)}`, 9, false, 5);
+        if (filledText(trip.wouldRecommend)) addText(`Would you recommend: ${filledText(trip.wouldRecommend)}`, 9, false, 5);
+
+        (trip.attachments || []).forEach((file) => {
+          const fileName = file.name?.trim();
+          if (!fileName) return;
+          const dateLabel = trip.startDate ? formatDateDisplay(trip.startDate) : '';
+          attachmentRefs.push(dateLabel ? `${tripName} — ${dateLabel} — ${fileName}` : `${tripName} — ${fileName}`);
+        });
+        yPos += 2;
+      };
+
+      if (tripsToPrint.length === 0) {
+        addText('No trips match the selected options.', 10, false, 5, true);
+      } else {
+        tripsToPrint.forEach(printTrip);
+      }
+
+      if (attachmentRefs.length > 0) {
+        addSectionHeader('Attachments');
+        addText('File names only. Files themselves are not included in this report.', 8, false, 5, true);
+        attachmentRefs.forEach((line) => addText(line, 9, false, 8));
+      }
+
+      pdf.save(`Travel_Log_Report_${new Date().toISOString().split('T')[0]}.pdf`);
+      setShowExportPopup(false);
+    } catch (error) {
+      console.error('Error exporting travel log PDF:', error);
+      showError(error instanceof Error ? error.message : 'Failed to generate PDF');
+    } finally {
+      setIsExportingPdf(false);
+    }
   };
 
   return (
@@ -2148,7 +2374,14 @@ export function TravelLogTool({ toolId }: TravelLogToolProps) {
         </div>
         <ExportPdfIconButton
           title="Export travel log to PDF"
-          onClick={() => setShowExportPopup(true)}
+          onClick={() => {
+            if (!exportAllTrips) {
+              setExportTripId(pickDefaultTripId(trips, editingId));
+            } else if (!exportTripId) {
+              setExportTripId(pickDefaultTripId(trips, editingId));
+            }
+            setShowExportPopup(true);
+          }}
         />
       </div>
 
@@ -2214,28 +2447,92 @@ export function TravelLogTool({ toolId }: TravelLogToolProps) {
 
       {showExportPopup && (
         <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
-          <div className={modalCardClass}>
+          <div className={`${modalCardClass} max-h-[90vh] overflow-y-auto`} role="dialog" aria-modal="true" aria-labelledby="tl-export-title">
             <div className="flex items-center justify-between mb-4">
-              <h3 className={sectionTitleClass}>Export Options</h3>
+              <h3 id="tl-export-title" className={sectionTitleClass}>Export Options</h3>
               <button
                 type="button"
-                onClick={() => setShowExportPopup(false)}
-                aria-label="Close modal"
-                title="Close modal"
-                className={isLight ? 'text-slate-500 hover:text-slate-900' : 'text-slate-400 hover:text-slate-200'}
+                onClick={() => !isExportingPdf && setShowExportPopup(false)}
+                disabled={isExportingPdf}
+                aria-label="Close"
+                title="Close"
+                className={isLight ? 'text-slate-500 hover:text-slate-900 disabled:opacity-50' : 'text-slate-400 hover:text-slate-200 disabled:opacity-50'}
               >
                 <svg className="h-6 w-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
                 </svg>
               </button>
             </div>
-            <div className="flex gap-3 pt-2">
-              <button type="button" onClick={exportToPDF} className={`flex-1 ${primaryButtonClass}`}>
-                Export to PDF
-              </button>
-              <button type="button" onClick={() => setShowExportPopup(false)} className={secondaryButtonClass}>
-                Cancel
-              </button>
+            <div className="space-y-4">
+              <p className={descClass}>
+                Attachment files are listed by name at the end.
+              </p>
+              <fieldset className="space-y-2" disabled={isExportingPdf}>
+                <legend className={`${labelClass} mb-0`}>Trips</legend>
+                <label className={`flex items-start gap-3 ${isLight ? 'text-slate-700' : 'text-slate-300'} cursor-pointer`}>
+                  <input
+                    type="radio"
+                    name="tlExportScope"
+                    checked={exportAllTrips}
+                    onChange={() => setExportAllTrips(true)}
+                    className={isLight
+                      ? 'mt-0.5 h-4 w-4 border-slate-400 text-emerald-600 focus:ring-emerald-500'
+                      : 'mt-0.5 h-4 w-4 border-slate-600 bg-slate-700 text-emerald-500 focus:ring-emerald-500'}
+                  />
+                  <span>All trips</span>
+                </label>
+                <label className={`flex items-start gap-3 ${isLight ? 'text-slate-700' : 'text-slate-300'} cursor-pointer`}>
+                  <input
+                    type="radio"
+                    name="tlExportScope"
+                    checked={!exportAllTrips}
+                    onChange={() => {
+                      setExportAllTrips(false);
+                      if (!exportTripId) setExportTripId(pickDefaultTripId(trips, editingId));
+                    }}
+                    className={isLight
+                      ? 'mt-0.5 h-4 w-4 border-slate-400 text-emerald-600 focus:ring-emerald-500'
+                      : 'mt-0.5 h-4 w-4 border-slate-600 bg-slate-700 text-emerald-500 focus:ring-emerald-500'}
+                  />
+                  <span>One trip</span>
+                </label>
+                {!exportAllTrips && (
+                  <div className="ml-7">
+                    <label className={labelClass} htmlFor="tl-export-trip">Trip</label>
+                    <select
+                      id="tl-export-trip"
+                      value={exportTripId}
+                      onChange={(e) => setExportTripId(e.target.value)}
+                      className={selectClass}
+                    >
+                      <option value="">Select a trip</option>
+                      {exportTripChoices.map((trip) => (
+                        <option key={trip.id} value={trip.id}>
+                          {trip.startDate ? `${trip.tripName} (${formatDateDisplay(trip.startDate)})` : trip.tripName}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                )}
+              </fieldset>
+              <div className="flex gap-3 pt-2">
+                <button
+                  type="button"
+                  onClick={exportToPDF}
+                  disabled={isExportingPdf || (!exportAllTrips && !exportTripId)}
+                  className={`flex-1 ${primaryButtonClass}`}
+                >
+                  {isExportingPdf ? 'Generating…' : 'Export to PDF'}
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setShowExportPopup(false)}
+                  disabled={isExportingPdf}
+                  className={`${secondaryButtonClass} disabled:opacity-50 disabled:cursor-not-allowed`}
+                >
+                  Cancel
+                </button>
+              </div>
             </div>
           </div>
         </div>

@@ -6,7 +6,15 @@ import { SideLogo } from '../components/SideLogo';
 
 export default function Pricing() {
   const router = useRouter();
-  const basePlatformFee = 5;
+  const money = (amount: number) =>
+    new Intl.NumberFormat('en-US', {
+      style: 'currency',
+      currency: 'USD',
+      minimumFractionDigits: Number.isInteger(amount) ? 0 : 2,
+      maximumFractionDigits: 2,
+    }).format(amount);
+  const extraToolPrice = 2;
+  const extraStoragePrice = 1;
 
   return (
     <main className="min-h-screen bg-slate-950 text-slate-100">
@@ -44,8 +52,8 @@ export default function Pricing() {
             Affordable tools for your household
           </h1>
           <p className="mt-2 max-w-2xl mx-auto text-sm text-slate-300">
-            Pay only for what you use. No hidden fees, no long-term contracts. 
-            Cancel anytime, and invite up to 4 guests at no extra cost.
+            Your first two tools are free. Each tool after that is {money(extraToolPrice)} a month.
+            Storage is included with your plan, and you can add more when you need it.
           </p>
         </div>
 
@@ -65,12 +73,11 @@ export default function Pricing() {
                 </div>
                 <div>
                   <p className="text-sm font-medium text-slate-100">
-                    Low monthly platform fee
+                    Your first 2 tools are free
                   </p>
                   <p className="text-xs text-slate-400 mt-1">
-                    Currently <span className="font-semibold text-emerald-300">
-                      {new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' }).format(basePlatformFee)}
-                    </span> per month when you have at least one active tool. No platform fee if you have no active tools.
+                    Choose any two tools and use them with no monthly charge. This is the free plan,
+                    and it includes <span className="font-semibold text-emerald-300">200MB</span> of storage.
                   </p>
                 </div>
               </div>
@@ -85,12 +92,13 @@ export default function Pricing() {
                 </div>
                 <div>
                   <p className="text-sm font-medium text-slate-100">
-                    Pay only for the tools you use
+                    Additional tools are {money(extraToolPrice)} a month
                   </p>
                   <p className="text-xs text-slate-400 mt-1">
-                    Each tool has its own monthly subscription fee. All tools are{' '}
-                    <span className="font-semibold text-emerald-300">$1</span> per month, making it incredibly affordable. 
-                    Activate only the tools you need, and you'll only be charged for those. No need to pay for features you don't use.
+                    Each tool after the first two is{' '}
+                    <span className="font-semibold text-emerald-300">{money(extraToolPrice)}</span> per month.
+                    Adding a paid tool moves you to the paid plan, which includes{' '}
+                    <span className="font-semibold text-emerald-300">1GB</span> of storage.
                   </p>
                 </div>
               </div>
@@ -105,11 +113,12 @@ export default function Pricing() {
                 </div>
                 <div>
                   <p className="text-sm font-medium text-slate-100">
-                    7-day free trial on every tool
+                    Extra storage is {money(extraStoragePrice)} a month per GB
                   </p>
                   <p className="text-xs text-slate-400 mt-1">
-                    Try any tool risk-free for 7 days. No charges during the trial period. 
-                    You can cancel before the trial ends with no obligation.
+                    Need more room for files? Add storage in 1GB blocks at{' '}
+                    <span className="font-semibold text-emerald-300">{money(extraStoragePrice)}</span> per
+                    month for each GB. That charge is on top of any paid tools.
                   </p>
                 </div>
               </div>
@@ -159,36 +168,34 @@ export default function Pricing() {
               <h3 className="text-sm font-semibold text-slate-100 mb-3">
                 Example monthly cost
               </h3>
-              <div className="space-y-2 text-sm">
-                <div className="flex justify-between text-slate-300">
-                  <span>Platform Fee</span>
-                  <span className="font-medium text-emerald-300">
-                    {new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' }).format(basePlatformFee)}
-                  </span>
+              <div className="space-y-3 text-sm">
+                <div className="flex justify-between gap-4 text-slate-300">
+                  <span>2 tools, free plan</span>
+                  <span className="shrink-0 text-right font-medium text-emerald-300">{money(0)} · 200MB</span>
                 </div>
-                <div className="flex justify-between text-slate-300">
-                  <span>Active Tool Subscriptions ($1 per tool/month)</span>
-                  <span className="font-medium text-slate-200">$2-$3</span>
+                <div className="flex justify-between gap-4 text-slate-300">
+                  <span>4 tools, paid plan</span>
+                  <span className="shrink-0 text-right font-medium text-emerald-300">{money(extraToolPrice * 2)} · 1GB</span>
                 </div>
-                <div className="flex justify-between text-slate-300 pt-2 border-t border-slate-700">
-                  <span className="font-medium text-slate-100">Total Monthly Cost</span>
-                  <span className="font-semibold text-emerald-300">
-                    {new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' }).format(basePlatformFee + 2)} - {new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' }).format(basePlatformFee + 3)}
+                <div className="flex justify-between gap-4 border-t border-slate-700 pt-3 text-slate-300">
+                  <span>4 tools plus 1 extra GB</span>
+                  <span className="shrink-0 text-right font-semibold text-emerald-300">
+                    {money(extraToolPrice * 2 + extraStoragePrice)} · 2GB
                   </span>
                 </div>
               </div>
               <p className="text-xs text-slate-400 mt-4">
-                *Example assumes 2-3 tools. All tools are $1 per month. 
-                View individual tools in your dashboard to see specific pricing. All prices are per month, 
-                billed on the same date each month. You only pay for tools you actively use.
+                The first two tools are free. Each tool after that is {money(extraToolPrice)} per month,
+                and that is when the included storage becomes 1GB. Extra storage is {money(extraStoragePrice)} per
+                month for each additional GB. Prices are billed monthly.
               </p>
             </div>
           </div>
 
           <div className="mt-6 rounded-lg border border-emerald-500/30 bg-emerald-500/10 px-4 py-3">
             <p className="text-sm text-emerald-200 text-center">
-              <strong>Start free today.</strong> No credit card required to sign up. 
-              Try any tool for 7 days, then pay only if you decide to keep it.
+              <strong>Start with two free tools.</strong> Add more at {money(extraToolPrice)} a month
+              each, and add storage at {money(extraStoragePrice)} a month per GB when you need the room.
             </p>
           </div>
         </div>

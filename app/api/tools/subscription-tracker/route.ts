@@ -13,9 +13,14 @@ import {
 } from '@/lib/calendarPinsServer';
 
 function canPinSubscription(frequency: string, billedDate?: string | null, dayOfMonth?: number | null): boolean {
-  if (frequency === 'monthly') return Boolean(dayOfMonth);
+  if (frequency === 'monthly' || frequency === 'quarterly') return Boolean(dayOfMonth);
   if (frequency === 'annual') return Boolean(billedDate);
   return false;
+}
+
+function billedDateForSave(frequency: string, billedDate?: string | null): string | null {
+  if (frequency === 'annual' || frequency === 'quarterly') return billedDate || null;
+  return null;
 }
 
 async function attachDashboardFlags<T extends { id: string }>(
@@ -178,7 +183,7 @@ export async function POST(request: NextRequest) {
         frequency: subscriptionData.frequency,
         amount: subscriptionData.amount,
         day_of_month: subscriptionData.frequency === 'annual' ? null : subscriptionData.day_of_month,
-        billed_date: subscriptionData.frequency === 'annual' ? subscriptionData.billed_date : null,
+        billed_date: billedDateForSave(subscriptionData.frequency, subscriptionData.billed_date),
         renewal_date: subscriptionData.frequency === 'annual' ? subscriptionData.renewal_date : null,
         notes: subscriptionData.notes || null,
         is_active: subscriptionData.is_active !== undefined ? subscriptionData.is_active : true,
@@ -227,7 +232,7 @@ export async function POST(request: NextRequest) {
       frequency: subscriptionData.frequency,
       amount: subscriptionData.amount,
       day_of_month: subscriptionData.frequency === 'annual' ? null : subscriptionData.day_of_month,
-      billed_date: subscriptionData.frequency === 'annual' ? subscriptionData.billed_date : null,
+      billed_date: billedDateForSave(subscriptionData.frequency, subscriptionData.billed_date),
       renewal_date: subscriptionData.frequency === 'annual' ? subscriptionData.renewal_date : null,
       notes: subscriptionData.notes || null,
       is_active: true,

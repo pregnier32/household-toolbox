@@ -21,6 +21,11 @@ import {
 } from '@/lib/attachments';
 import type { EolAttachmentStore } from '@/lib/end-of-life-planner-storage';
 import {
+  downloadEolPlannerPdf,
+  eolExportPlanChoices,
+  pickDefaultEolPlanId,
+} from '@/lib/end-of-life-planner-pdf';
+import {
   ACCOUNT_DISPOSITIONS,
   BANK_ACCOUNT_TYPES,
   cloneCustomSection,
@@ -1021,6 +1026,12 @@ export function EndOfLifePlannerTool({ toolId }: EndOfLifePlannerToolProps) {
   const [deleteConfirmText, setDeleteConfirmText] = useState('');
   const [archiveConfirmPlanId, setArchiveConfirmPlanId] = useState<string | null>(null);
   const [showExportPopup, setShowExportPopup] = useState(false);
+  const [exportAllPlans, setExportAllPlans] = useState(false);
+  const [exportPlanId, setExportPlanId] = useState('');
+  const [exportIncludeArchived, setExportIncludeArchived] = useState(false);
+  const [exportIncludeSecrets, setExportIncludeSecrets] = useState(false);
+  const [exportIncludePrivateLetters, setExportIncludePrivateLetters] = useState(false);
+  const [isExportingPdf, setIsExportingPdf] = useState(false);
   const [renamingSectionId, setRenamingSectionId] = useState<string | null>(null);
   const [renameValue, setRenameValue] = useState('');
   const [menuOpenSubsectionId, setMenuOpenSubsectionId] = useState<string | null>(null);
@@ -1159,7 +1170,7 @@ export function EndOfLifePlannerTool({ toolId }: EndOfLifePlannerToolProps) {
         return;
       }
       if (showExportPopup) {
-        setShowExportPopup(false);
+        if (!isExportingPdf) setShowExportPopup(false);
         return;
       }
       if (renamingSectionId) {
@@ -1172,7 +1183,7 @@ export function EndOfLifePlannerTool({ toolId }: EndOfLifePlannerToolProps) {
     };
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
-  }, [attachmentModal, archiveConfirmPlanId, deleteTarget, showExportPopup, renamingSectionId, menuOpenPlanId, menuOpenTabId, menuOpenSubsectionId]);
+  }, [attachmentModal, archiveConfirmPlanId, deleteTarget, showExportPopup, isExportingPdf, renamingSectionId, menuOpenPlanId, menuOpenTabId, menuOpenSubsectionId]);
 
   const visiblePlans = useMemo(
     () => plans.filter((plan) => showArchived || plan.status === 'Active'),
@@ -3291,6 +3302,37 @@ export function EndOfLifePlannerTool({ toolId }: EndOfLifePlannerToolProps) {
     .filter((tab): tab is { id: TabId; label: string; custom: boolean; inactive: boolean } => Boolean(tab));
   const contentTabs = tabs;
   const contentTabCount = contentTabs.filter((tab) => !tab.inactive).length;
+  const exportPlanChoices = eolExportPlanChoices(plans);
+
+  const exportToPDF = async () => {
+    if (isExportingPdf) return;
+    if (!exportAllPlans && !plans.some((plan) => plan.id === exportPlanId)) {
+      showError('Select a plan, or choose All plans.');
+      return;
+    }
+    if (!toolId) {
+      showError('This tool is missing its workspace id.');
+      return;
+    }
+    setIsExportingPdf(true);
+    try {
+      await persist(plans, selectedPlanId, true);
+      const result = await eolPlannerRequest<{ plans: EolPlan[]; selectedPlanId: string | null }>(eolPlannerUrl(toolId));
+      await downloadEolPlannerPdf(result.plans, {
+        exportAll: exportAllPlans,
+        planId: exportPlanId,
+        includeArchived: exportIncludeArchived,
+        includeSecrets: exportIncludeSecrets,
+        includePrivateLetters: exportIncludePrivateLetters,
+      });
+      setShowExportPopup(false);
+    } catch (error) {
+      console.error('Error exporting end of life planner PDF:', error);
+      showError(error instanceof Error ? error.message : 'Failed to generate PDF');
+    } finally {
+      setIsExportingPdf(false);
+    }
+  };
 
   return (
     <div className="space-y-6">
@@ -3301,7 +3343,12 @@ export function EndOfLifePlannerTool({ toolId }: EndOfLifePlannerToolProps) {
         </div>
         <ExportPdfIconButton
           title="Export end of life planner to PDF"
-          onClick={() => setShowExportPopup(true)}
+          onClick={() => {
+            if (!exportAllPlans || !exportPlanId) {
+              setExportPlanId(pickDefaultEolPlanId(plans, editingPlanId, selectedPlanId));
+            }
+            setShowExportPopup(true);
+          }}
         />
       </div>
 
@@ -4983,21 +5030,111 @@ export function EndOfLifePlannerTool({ toolId }: EndOfLifePlannerToolProps) {
 
       {showExportPopup ? (
         <div className={overlayClass}>
-          <div className={modalCardClass}>
+          <div className={`${modalCardClass} max-h-[90vh] overflow-y-auto`} role="dialog" aria-modal="true" aria-labelledby="eol-export-title">
             <div className="flex items-center justify-between mb-4">
-              <h3 className={isLight ? 'text-lg font-semibold text-slate-900' : 'text-lg font-semibold text-slate-50'}>Export Options</h3>
-              <button type="button" onClick={() => setShowExportPopup(false)} className={iconButtonClass} aria-label="Close modal" title="Close modal">
+              <h3 id="eol-export-title" className={isLight ? 'text-lg font-semibold text-slate-900' : 'text-lg font-semibold text-slate-50'}>Export Options</h3>
+              <button
+                type="button"
+                onClick={() => !isExportingPdf && setShowExportPopup(false)}
+                disabled={isExportingPdf}
+                className={`${iconButtonClass} disabled:opacity-50`}
+                aria-label="Close"
+                title="Close"
+              >
                 <OutlineIcon d={ICON.close} />
               </button>
             </div>
-            <p className={`${mutedTextClass} text-sm mb-4`}>PDF export is not available in this pass. Closing this dialog will not generate a file.</p>
-            <div className="flex gap-3 pt-2">
-              <button type="button" onClick={() => setShowExportPopup(false)} className={`flex-1 ${primaryButtonClass}`}>
-                Export to PDF
-              </button>
-              <button type="button" onClick={() => setShowExportPopup(false)} className={secondaryButtonClass}>
-                Cancel
-              </button>
+            <div className="space-y-4">
+              <p className={`${mutedTextClass} text-sm`}>Attachment files are listed by name at the end.</p>
+              <fieldset className="space-y-2" disabled={isExportingPdf}>
+                <legend className={labelClass}>Plans</legend>
+                <label className={`flex items-start gap-3 cursor-pointer ${bodyTextClass}`}>
+                  <input
+                    type="radio"
+                    name="eolExportScope"
+                    checked={exportAllPlans}
+                    onChange={() => setExportAllPlans(true)}
+                    className="mt-0.5 h-4 w-4 border-slate-400 text-emerald-600 focus:ring-emerald-500"
+                  />
+                  <span>All plans</span>
+                </label>
+                <label className={`flex items-start gap-3 cursor-pointer ${bodyTextClass}`}>
+                  <input
+                    type="radio"
+                    name="eolExportScope"
+                    checked={!exportAllPlans}
+                    onChange={() => {
+                      setExportAllPlans(false);
+                      if (!exportPlanId) setExportPlanId(pickDefaultEolPlanId(plans, editingPlanId, selectedPlanId));
+                    }}
+                    className="mt-0.5 h-4 w-4 border-slate-400 text-emerald-600 focus:ring-emerald-500"
+                  />
+                  <span>One plan</span>
+                </label>
+                {!exportAllPlans ? (
+                  <div className="ml-7">
+                    <label className={labelClass} htmlFor="eol-export-plan">Plan</label>
+                    <select
+                      id="eol-export-plan"
+                      value={exportPlanId}
+                      onChange={(event) => setExportPlanId(event.target.value)}
+                      className={selectClass}
+                    >
+                      <option value="">Select a plan</option>
+                      {exportPlanChoices.map((plan) => (
+                        <option key={plan.id} value={plan.id}>
+                          {plan.status === 'Archived' ? `${plan.name} (Archived)` : plan.name}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                ) : null}
+              </fieldset>
+              <div className="space-y-2">
+                <label className={`flex items-start gap-3 cursor-pointer ${bodyTextClass}`}>
+                  <input
+                    type="checkbox"
+                    checked={exportIncludeArchived}
+                    onChange={(event) => setExportIncludeArchived(event.target.checked)}
+                    disabled={isExportingPdf}
+                    className="mt-0.5 h-4 w-4 rounded border-slate-400 text-emerald-600 focus:ring-emerald-500"
+                  />
+                  <span>Include archived plans</span>
+                </label>
+                <label className={`flex items-start gap-3 cursor-pointer ${bodyTextClass}`}>
+                  <input
+                    type="checkbox"
+                    checked={exportIncludeSecrets}
+                    onChange={(event) => setExportIncludeSecrets(event.target.checked)}
+                    disabled={isExportingPdf}
+                    className="mt-0.5 h-4 w-4 rounded border-slate-400 text-emerald-600 focus:ring-emerald-500"
+                  />
+                  <span>Include passwords and access codes</span>
+                </label>
+                <label className={`flex items-start gap-3 cursor-pointer ${bodyTextClass}`}>
+                  <input
+                    type="checkbox"
+                    checked={exportIncludePrivateLetters}
+                    onChange={(event) => setExportIncludePrivateLetters(event.target.checked)}
+                    disabled={isExportingPdf}
+                    className="mt-0.5 h-4 w-4 rounded border-slate-400 text-emerald-600 focus:ring-emerald-500"
+                  />
+                  <span>Include private letters</span>
+                </label>
+              </div>
+              <div className="flex gap-3 pt-2">
+                <button
+                  type="button"
+                  onClick={exportToPDF}
+                  disabled={isExportingPdf || (!exportAllPlans && !exportPlanId)}
+                  className={`flex-1 ${primaryButtonClass}`}
+                >
+                  {isExportingPdf ? 'Generating…' : 'Export to PDF'}
+                </button>
+                <button type="button" onClick={() => setShowExportPopup(false)} disabled={isExportingPdf} className={secondaryButtonClass}>
+                  Cancel
+                </button>
+              </div>
             </div>
           </div>
         </div>
