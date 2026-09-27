@@ -478,6 +478,9 @@ export async function resetPassword(data: ResetPasswordData): Promise<ResetPassw
     const updated = await supabase.auth.updateUser({ password: data.newPassword });
     if (updated.error) {
       console.error('Recovery password update failed', updated.error.code);
+      if (updated.error.code === 'insufficient_aal') {
+        return { success: false, error: 'Enter the current code from your authenticator app, then try again.' };
+      }
       return { success: false, error: 'This reset link is invalid or has expired. Request a new one.' };
     }
 

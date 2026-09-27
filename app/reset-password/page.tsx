@@ -6,12 +6,15 @@ import Link from 'next/link';
 import { resetPassword, hasPasswordRecoverySession } from '../actions/auth';
 import { SideLogo } from '../components/SideLogo';
 import { PasswordField } from '../components/PasswordField';
+import { createSupabaseAuthBrowserClient } from '@/lib/supabaseAuthBrowser';
 
 function ResetPasswordForm() {
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState(false);
   const [recoveryReady, setRecoveryReady] = useState<boolean | null>(null);
+  const [factorId, setFactorId] = useState<string | null>(null);
+  const [authenticatorCode, setAuthenticatorCode] = useState('');
   const formRef = useRef<HTMLFormElement>(null);
   const router = useRouter();
   const searchParams = useSearchParams();
@@ -19,8 +22,23 @@ function ResetPasswordForm() {
   useEffect(() => {
     let cancelled = false;
     hasPasswordRecoverySession()
-      .then((ready) => {
-        if (!cancelled) setRecoveryReady(ready);
+      .then(async (ready) => {
+        if (!ready) {
+          if (!cancelled) setRecoveryReady(false);
+          return;
+        }
+        try {
+          const supabase = createSupabaseAuthBrowserClient();
+          const listed = await supabase.auth.mfa.listFactors();
+          const factor =
+            listed.data?.totp.find((item) => item.status === 'verified') ??
+            listed.data?.all.find((item) => item.factor_type === 'totp' && item.status === 'verified');
+          if (!cancelled) setFactorId(factor?.id ?? null);
+        } catch {
+          console.error('Password reset MFA check failed');
+          if (!cancelled) setFactorId(null);
+        }
+        if (!cancelled) setRecoveryReady(true);
       })
       .catch(() => {
         if (!cancelled) setRecoveryReady(false);
@@ -135,6 +153,26 @@ function ResetPasswordForm() {
                     const newPassword = formData.get('newPassword') as string;
                     const confirmPassword = formData.get('confirmPassword') as string;
 
+                    if (factorId) {
+                      const code = authenticatorCode.replace(/\s/g, '');
+                      if (!/^\d{6}$/.test(code)) {
+                        setError('Enter the current 6-digit code from your authenticator app.');
+                        setIsLoading(false);
+                        return;
+                      }
+                      const supabase = createSupabaseAuthBrowserClient();
+                      const verified = await supabase.auth.mfa.challengeAndVerify({
+                        factorId,
+                        code,
+                      });
+                      if (verified.error) {
+                        console.error('Password reset MFA verify failed', verified.error.code);
+                        setError('That code is not correct. Enter the current code from your authenticator app.');
+                        setIsLoading(false);
+                        return;
+                      }
+                    }
+
                     const result = await resetPassword({
                       newPassword,
                       confirmPassword,
@@ -188,6 +226,29 @@ function ResetPasswordForm() {
                       minLength={8}
                     />
                   </div>
+
+                  {factorId && (
+                    <div>
+                      <label htmlFor="authenticatorCode" className="block text-xs font-medium text-slate-300 mb-1.5">
+                        Authentication Code <span className="text-red-400">*</span>
+                      </label>
+                      <input
+                        id="authenticatorCode"
+                        inputMode="numeric"
+                        autoComplete="one-time-code"
+                        maxLength={6}
+                        value={authenticatorCode}
+                        onChange={(event) => setAuthenticatorCode(event.target.value.replace(/\D/g, '').slice(0, 6))}
+                        className="w-full rounded-lg border border-slate-700 bg-slate-900/70 px-3 py-2 text-sm tracking-widest text-slate-100 placeholder-slate-500 focus:border-emerald-500/50 focus:outline-none focus:ring-1 focus:ring-emerald-500/50"
+                        placeholder="123456"
+                        required
+                        disabled={isLoading}
+                      />
+                      <p className="mt-1 text-xs text-slate-500">
+                        Enter the current code from your authenticator app. This does not turn off two-factor authentication.
+                      </p>
+                    </div>
+                  )}
 
                   <button
                     type="submit"
