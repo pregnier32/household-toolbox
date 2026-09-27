@@ -1,13 +1,25 @@
 import { NextResponse } from 'next/server';
 import { deleteSession } from '@/lib/session';
+import { createSupabaseAuthServerClient } from '@/lib/supabaseAuthServer';
 
-// Must match lib/session.ts — expire on this response so Sign Out cannot leave a leftover cookie.
 const SESSION_COOKIE_NAME = 'household-toolbox-session';
 
 export const dynamic = 'force-dynamic';
 
 export async function POST() {
-  await deleteSession();
+  try {
+    const supabase = await createSupabaseAuthServerClient();
+    await supabase.auth.signOut();
+  } catch {
+    console.error('Supabase Auth sign-out failed');
+  }
+
+  try {
+    await deleteSession();
+  } catch {
+    console.error('Legacy session sign-out failed');
+  }
+
   const response = NextResponse.json(
     { success: true },
     { headers: { 'Cache-Control': 'no-store, max-age=0' } }

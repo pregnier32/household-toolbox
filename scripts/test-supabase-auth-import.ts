@@ -134,6 +134,7 @@ function parseArgs(argv: string[]) {
   let email: string | undefined
   let id: string | undefined
   let rollback: string | undefined
+  let allowSuperadmin = false
   for (let i = 0; i < argv.length; i++) {
     const arg = argv[i]
     const next = argv[i + 1]
@@ -146,6 +147,8 @@ function parseArgs(argv: string[]) {
     } else if (arg === '--rollback' && next) {
       rollback = next.trim()
       i++
+    } else if (arg === '--allow-superadmin') {
+      allowSuperadmin = true
     } else if (arg === '--help' || arg === '-h') {
       printHelp()
       process.exit(0)
@@ -158,7 +161,7 @@ function parseArgs(argv: string[]) {
     printHelp()
     fail('Provide exactly one of --email, --id, or --rollback.')
   }
-  return { email, id, rollback }
+  return { email, id, rollback, allowSuperadmin }
 }
 
 function printHelp() {
@@ -167,6 +170,7 @@ function printHelp() {
   npm run auth:test-import -- --email you@example.com
   npm run auth:test-import -- --id <public.users.id>
   npm run auth:test-import -- --rollback <public.users.id>
+  npm run auth:test-import -- --email you@example.com --allow-superadmin
 
 The password is requested in a hidden prompt, or taken from AUTH_TEST_PASSWORD
 for this process only. Do not put that variable in .env.local.`)
@@ -256,12 +260,16 @@ async function loadAppUser(supabase: SupabaseClient, selector: { email?: string;
   return data as AppUser
 }
 
-function assertCandidate(user: AppUser) {
+function assertCandidate(user: AppUser, allowSuperadmin: boolean) {
   if (!UUID_V4.test(user.id)) fail('public.users.id is not a UUID v4. Stopped.')
   if (!user.email?.trim()) fail('The user has no email. Stopped.')
   if (user.active !== 'Y') fail('The user is not active. Stopped.')
-  if (user.user_status === 'superadmin') fail('Refusing to test the superadmin account.')
-  if (user.user_status !== 'admin') fail(`Refusing user_status ${user.user_status}. Only admin is allowed.`)
+  if (user.user_status === 'superadmin' && !allowSuperadmin) {
+    fail('Refusing to test the superadmin account. Pass --allow-superadmin to import this account.')
+  }
+  if (user.user_status !== 'admin' && user.user_status !== 'superadmin') {
+    fail(`Refusing user_status ${user.user_status}. Only admin is allowed.`)
+  }
   if (!user.password) fail('The user has no password hash. Stopped.')
   if (!BCRYPT_2B.test(user.password) || user.password.length !== 60) {
     fail('The password hash is not a 60-character bcrypt $2b$ hash. Stopped.')
@@ -389,13 +397,13 @@ async function passwordUnchanged(supabase: SupabaseClient, user: AppUser): Promi
   return data.password === user.password
 }
 
-async function runImport(selector: { email?: string; id?: string }) {
+async function runImport(selector: { email?: string; id?: string }, allowSuperadmin: boolean) {
   const supabase = adminClient()
   anonClient()
   const user = await loadAppUser(supabase, selector)
   const baseline = await snapshot(supabase, user.id)
   printSummary(user, baseline)
-  assertCandidate(user)
+  assertCandidate(user, allowSuperadmin)
   await assertAuthClear(supabase, user)
 
   console.log('Preflight passed. public.users, tool rows, and storage will not be modified.')
@@ -488,11 +496,11 @@ async function runImport(selector: { email?: string; id?: string }) {
   if (!authOk || !signInOk || !profileOk || !dataSame || !storageSame) process.exitCode = 1
 }
 
-async function runRollback(userId: string) {
+async function runRollback(userId: string, allowSuperadmin: boolean) {
   if (!UUID_V4.test(userId)) fail('Rollback id is not a UUID v4. No changes were made.')
   const supabase = adminClient()
   const user = await loadAppUser(supabase, { id: userId })
-  assertCandidate(user)
+  assertCandidate(user, allowSuperadmin)
   const authUser = await getAuthUser(supabase, user.id)
   if (!authUser) {
     fail(`No Auth user exists for ${user.id}. public.users was not changed.`)
@@ -526,8 +534,8 @@ async function runRollback(userId: string) {
 async function main() {
   loadEnvFile(resolve(root, '.env.local'))
   const args = parseArgs(process.argv.slice(2))
-  if (args.rollback) await runRollback(args.rollback)
-  else await runImport({ email: args.email, id: args.id })
+  if (args.rollback) await runRollback(args.rollback, args.allowSuperadmin)
+  else await runImport({ email: args.email, id: args.id }, args.allowSuperadmin)
 }
 
 main().catch((error) => {

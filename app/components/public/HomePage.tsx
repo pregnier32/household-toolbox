@@ -1,7 +1,6 @@
 'use client';
 
 import { useState, useRef, useEffect, type ReactNode } from 'react'
-import { useRouter } from 'next/navigation'
 import Link from 'next/link'
 import { signUp, signIn } from '../../actions/auth'
 import { HelpMenu } from '../HelpMenu'
@@ -19,7 +18,6 @@ export function HomePage({ explore }: { explore?: ReactNode }) {
   const [isCheckingMaintenance, setIsCheckingMaintenance] = useState(true);
   const formRef = useRef<HTMLFormElement>(null);
   const emailInputRef = useRef<HTMLInputElement>(null);
-  const router = useRouter();
 
   // Load saved email on mount
   useEffect(() => {
@@ -193,8 +191,11 @@ export function HomePage({ explore }: { explore?: ReactNode }) {
                   setIsLoading(false);
 
                   if (result.success) {
-                    setSuccess('Account created successfully! You can now sign in.');
-                    // Reset form
+                    setSuccess(
+                      result.needsEmailConfirmation
+                        ? 'Check your email to confirm your account before signing in.'
+                        : 'Account created successfully! You can now sign in.',
+                    );
                     formRef.current?.reset();
                   } else {
                     setError(result.error || 'Failed to create account');
@@ -212,7 +213,7 @@ export function HomePage({ explore }: { explore?: ReactNode }) {
                       localStorage.removeItem('rememberedEmail');
                     }
                     // Redirect to dashboard
-                    router.push('/dashboard');
+                    window.location.assign('/dashboard');
                   } else {
                     setError(result.error || 'Failed to sign in');
                   }

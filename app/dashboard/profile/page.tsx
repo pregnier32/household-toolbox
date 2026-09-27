@@ -432,16 +432,14 @@ export default function Profile() {
                       Email <span className="text-red-400">*</span>
                     </label>
                     {isEditing ? (
-                      <input
-                        type="email"
-                        id="email"
-                        name="email"
-                        value={formData.email}
-                        onChange={(e) => setFormData({ ...formData, email: e.target.value })}
-                        className="w-full rounded-lg border border-slate-700 bg-slate-900/70 px-3 py-2 text-sm text-slate-100 placeholder-slate-500 focus:border-emerald-500/50 focus:outline-none focus:ring-1 focus:ring-emerald-500/50"
-                        placeholder="you@example.com"
-                        required
-                      />
+                      <div>
+                        <div className="rounded-lg border border-slate-700 bg-slate-900/70 px-3 py-2 text-sm text-slate-100">
+                          {user.email}
+                        </div>
+                        <p className="mt-1.5 text-xs text-slate-500">
+                          Email is part of your sign-in account and cannot be changed here.
+                        </p>
+                      </div>
                     ) : (
                       <div className="rounded-lg border border-slate-700 bg-slate-900/70 px-3 py-2 text-sm text-slate-100">
                         {user.email}

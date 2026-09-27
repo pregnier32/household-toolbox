@@ -3,28 +3,45 @@
 import { useState, useRef, useEffect, Suspense } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import Link from 'next/link';
-import { resetPassword } from '../actions/auth';
+import { resetPassword, hasPasswordRecoverySession } from '../actions/auth';
 import { SideLogo } from '../components/SideLogo';
 
 function ResetPasswordForm() {
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState(false);
-  const [token, setToken] = useState<string | null>(null);
+  const [recoveryReady, setRecoveryReady] = useState<boolean | null>(null);
   const formRef = useRef<HTMLFormElement>(null);
   const router = useRouter();
   const searchParams = useSearchParams();
 
   useEffect(() => {
-    const tokenParam = searchParams.get('token');
-    if (!tokenParam) {
-      setError('Invalid reset link. Please request a new password reset.');
-    } else {
-      setToken(tokenParam);
-    }
-  }, [searchParams]);
+    let cancelled = false;
+    hasPasswordRecoverySession()
+      .then((ready) => {
+        if (!cancelled) setRecoveryReady(ready);
+      })
+      .catch(() => {
+        if (!cancelled) setRecoveryReady(false);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
-  if (!token) {
+  const linkError = searchParams.get('error') === 'expired' || searchParams.get('token');
+
+  if (recoveryReady === null) {
+    return (
+      <main className="min-h-screen bg-slate-950 text-slate-100">
+        <div className="mx-auto flex min-h-screen max-w-5xl flex-col px-4 py-10 sm:px-6 lg:px-8">
+          <p className="text-sm text-slate-400">Checking reset link...</p>
+        </div>
+      </main>
+    );
+  }
+
+  if (!recoveryReady || linkError) {
     return (
       <main className="min-h-screen bg-slate-950 text-slate-100">
         <div className="mx-auto flex min-h-screen max-w-5xl flex-col px-4 py-10 sm:px-6 lg:px-8">
@@ -39,11 +56,9 @@ function ResetPasswordForm() {
           <div className="flex flex-1 items-center justify-center">
             <div className="w-full max-w-md">
               <div className="rounded-2xl border border-slate-800 bg-slate-900/50 p-8 shadow-2xl shadow-emerald-500/10">
-                {error && (
-                  <div className="mb-4 rounded-lg border border-red-500/50 bg-red-500/10 px-3 py-2 text-sm text-red-300">
-                    {error}
-                  </div>
-                )}
+                <div className="mb-4 rounded-lg border border-red-500/50 bg-red-500/10 px-3 py-2 text-sm text-red-300">
+                  This reset link is invalid or has expired. Request a new one.
+                </div>
                 <Link
                   href="/forgot-password"
                   className="block w-full rounded-lg bg-emerald-500 px-4 py-2.5 text-center text-sm font-semibold text-slate-950 transition-colors hover:bg-emerald-400 focus:outline-none focus:ring-2 focus:ring-emerald-500/50 focus:ring-offset-2 focus:ring-offset-slate-900"
@@ -120,7 +135,6 @@ function ResetPasswordForm() {
                     const confirmPassword = formData.get('confirmPassword') as string;
 
                     const result = await resetPassword({
-                      token: token!,
                       newPassword,
                       confirmPassword,
                     });

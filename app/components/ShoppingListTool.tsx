@@ -80,30 +80,11 @@ function sortListsNewestFirst(lists: ShoppingListRecord[]): ShoppingListRecord[]
   );
 }
 
-// Latest shopping date matches the lists screen. Created time, then updated time, then id break ties.
-function compareListRecency(a: ShoppingListRecord, b: ShoppingListRecord): number {
-  const byShoppingDate = (a.date || '').localeCompare(b.date || '');
-  if (byShoppingDate !== 0) return byShoppingDate;
-  const created = (a.createdAt || '').localeCompare(b.createdAt || '');
-  if (created !== 0) return created;
-  const updated = (a.updatedAt || '').localeCompare(b.updatedAt || '');
-  if (updated !== 0) return updated;
-  return a.id.localeCompare(b.id);
-}
-
-function pickNewestListId(lists: ShoppingListRecord[]): string {
-  let newest: ShoppingListRecord | null = null;
-  for (const list of lists) {
-    if (!newest || compareListRecency(list, newest) > 0) newest = list;
-  }
-  return newest?.id || '';
-}
-
 function pickDefaultShoppingListId(lists: ShoppingListRecord[], includeHistory: boolean): string {
-  const activeId = pickNewestListId(lists.filter((list) => list.isActive));
-  if (activeId) return activeId;
+  const active = lists.find((list) => list.isActive);
+  if (active) return active.id;
   if (!includeHistory) return '';
-  return pickNewestListId(lists.filter((list) => !list.isActive));
+  return lists.find((list) => !list.isActive)?.id || '';
 }
 
 export type ShoppingListDashboardSummary = { listId: string; name: string; date: string; itemCount: number };
