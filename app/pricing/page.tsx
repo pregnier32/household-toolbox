@@ -3,6 +3,7 @@
 import { useRouter } from 'next/navigation';
 import { HelpMenu } from '../components/HelpMenu';
 import { SideLogo } from '../components/SideLogo';
+import { PublicFooter } from '../components/public/PublicFooter';
 
 export default function Pricing() {
   const router = useRouter();
@@ -20,7 +21,7 @@ export default function Pricing() {
     <main className="min-h-screen bg-slate-950 text-slate-100">
       {/* Header */}
       <header className="border-b border-slate-800 bg-slate-900/50">
-        <div className="mx-auto flex max-w-7xl items-center justify-between px-4 py-4 sm:px-6 lg:px-8">
+        <div className="mx-auto flex max-w-7xl flex-wrap items-center justify-between gap-3 px-4 py-4 sm:px-6 lg:px-8">
           <div className="flex items-center">
             <button
               onClick={() => router.push('/')}
@@ -30,12 +31,18 @@ export default function Pricing() {
             </button>
           </div>
 
-          <nav className="hidden gap-6 text-sm text-slate-300 sm:flex items-center">
+          <nav className="flex flex-wrap items-center justify-end gap-x-5 gap-y-2 text-sm text-slate-300">
             <button
               onClick={() => router.push('/')}
               className="hover:text-emerald-300 transition-colors"
             >
               Home
+            </button>
+            <button
+              onClick={() => router.push('/tools')}
+              className="hover:text-emerald-300 transition-colors"
+            >
+              Tools
             </button>
             <HelpMenu />
           </nav>
@@ -209,6 +216,9 @@ export default function Pricing() {
             Get Started
           </button>
         </div>
+      </div>
+      <div className="mx-auto max-w-4xl px-4 pb-12 sm:px-6 lg:px-8">
+        <PublicFooter />
       </div>
     </main>
   );

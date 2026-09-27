@@ -124,7 +124,7 @@ export default function FAQ() {
     <main className="min-h-screen bg-slate-950 text-slate-100">
       {/* Header */}
       <header className={headerBarClass}>
-        <div className="mx-auto flex max-w-7xl items-center justify-between px-4 py-4 sm:px-6 lg:px-8">
+        <div className="mx-auto flex max-w-7xl flex-wrap items-center justify-between gap-3 px-4 py-4 sm:px-6 lg:px-8">
           <div className="flex items-center">
             <button onClick={() => router.push('/')} className="flex items-center">
               <SideLogo priority />
@@ -149,13 +149,20 @@ export default function FAQ() {
               />
             </div>
           ) : (
-            <nav className="hidden gap-6 text-sm sm:flex items-center">
+            <nav className="flex flex-wrap items-center justify-end gap-x-5 gap-y-2 text-sm">
               <button
                 type="button"
                 onClick={() => router.push('/')}
                 className={topNavHomeClass}
               >
                 Home
+              </button>
+              <button
+                type="button"
+                onClick={() => router.push('/tools')}
+                className={topNavHomeClass}
+              >
+                Tools
               </button>
             </nav>
           )}
