@@ -34,6 +34,7 @@ type Document = {
   tags: string[]; // Array of tag IDs
   isActive: boolean;
   dateAdded: string;
+  createdAt?: string;
   dateInactivated?: string;
   requiresPasswordForDownload: boolean;
   downloadPassword: string | null;
@@ -101,6 +102,40 @@ function formatLocalDateLong(isoDate: string): string {
 
 function formatReportDate(date: Date): string {
   return date.toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' });
+}
+
+function ownedAttachmentFileName(doc: Pick<Document, 'fileName' | 'fileUrl'>): string | null {
+  const fileUrl = doc.fileUrl?.trim();
+  const fileName = doc.fileName?.trim();
+  if (!fileUrl || !fileName) return null;
+  return fileName;
+}
+
+function importantDocumentAttachmentLines(allDocuments: Document[], exportedDocuments: Document[]): string[] {
+  const ownerIdByUrl = new Map<string, string>();
+  const ranked = [...allDocuments].sort((a, b) => {
+    const aKey = a.createdAt || a.dateAdded || '';
+    const bKey = b.createdAt || b.dateAdded || '';
+    const byCreated = aKey.localeCompare(bKey);
+    if (byCreated !== 0) return byCreated;
+    return a.id.localeCompare(b.id);
+  });
+
+  ranked.forEach((doc) => {
+    const fileUrl = doc.fileUrl?.trim();
+    if (!fileUrl || !ownedAttachmentFileName(doc)) return;
+    if (!ownerIdByUrl.has(fileUrl)) ownerIdByUrl.set(fileUrl, doc.id);
+  });
+
+  const lines: string[] = [];
+  exportedDocuments.forEach((doc) => {
+    const fileName = ownedAttachmentFileName(doc);
+    const fileUrl = doc.fileUrl?.trim();
+    if (!fileName || !fileUrl) return;
+    if (ownerIdByUrl.get(fileUrl) !== doc.id) return;
+    lines.push(`${doc.documentName.trim() || 'Document'} — ${fileName}`);
+  });
+  return lines;
 }
 
 function toDateInputValue(isoDate: string): string {
@@ -1574,6 +1609,17 @@ export function ImportantDocumentsTool({ toolId }: ImportantDocumentsToolProps) 
     );
   };
 
+  const resetExportTagSelection = () => {
+    setExportAllTags(true);
+    setExportTagIds([]);
+  };
+
+  const cancelExportOptions = () => {
+    if (isExportingPdf) return;
+    resetExportTagSelection();
+    setShowExportPopup(false);
+  };
+
   const exportToPDF = async () => {
     if (isExportingPdf) return;
     if (!exportAllTags && exportTagIds.length === 0) {
@@ -1589,7 +1635,34 @@ export function ImportantDocumentsTool({ toolId }: ImportantDocumentsToolProps) 
 
       const sortByName = (a: Document, b: Document) => a.documentName.localeCompare(b.documentName);
 
-      const scoped = documents.filter(matchesExportTags);
+      let sourceDocuments = documents;
+      if (toolId) {
+        const loadResponse = await fetch(`/api/tools/important-documents?toolId=${toolId}`, { cache: 'no-store' });
+        if (loadResponse.ok) {
+          const data = await loadResponse.json();
+          sourceDocuments = (data.documents || []).map((doc: any) => ({
+            id: doc.id,
+            documentName: doc.document_name,
+            uploadedDate: doc.uploaded_date,
+            effectiveDate: doc.effective_date,
+            note: doc.note,
+            fileUrl: doc.file_url || null,
+            fileName: doc.file_url ? doc.file_name : null,
+            fileSize: doc.file_url ? doc.file_size : null,
+            fileType: doc.file_url ? doc.file_type : null,
+            tags: doc.tags || [],
+            isActive: doc.is_active !== false,
+            dateAdded: doc.date_added,
+            createdAt: doc.created_at || doc.date_added,
+            dateInactivated: doc.date_inactivated,
+            requiresPasswordForDownload: doc.requires_password_for_download || false,
+            downloadPassword: null,
+            securityQuestions: null,
+          }));
+        }
+      }
+
+      const scoped = sourceDocuments.filter(matchesExportTags);
       const activeRecords = scoped.filter((doc) => doc.isActive).sort(sortByName);
       const inactiveRecords = scoped.filter((doc) => !doc.isActive).sort(sortByName);
       const exportedRecords = includeHistory ? [...activeRecords, ...inactiveRecords] : activeRecords;
@@ -1765,13 +1838,7 @@ export function ImportantDocumentsTool({ toolId }: ImportantDocumentsToolProps) 
         }
       }
 
-      const attachmentRefs = exportedRecords
-        .map((doc) => {
-          const fileName = doc.fileName?.trim();
-          if (!fileName) return null;
-          return `${doc.documentName.trim() || 'Document'} — ${fileName}`;
-        })
-        .filter((line): line is string => Boolean(line));
+      const attachmentRefs = importantDocumentAttachmentLines(sourceDocuments, exportedRecords);
 
       if (attachmentRefs.length > 0) {
         addSectionHeader('Attachments');
@@ -2926,7 +2993,7 @@ export function ImportantDocumentsTool({ toolId }: ImportantDocumentsToolProps) 
                 </button>
                 <button
                   type="button"
-                  onClick={() => setShowExportPopup(false)}
+                  onClick={cancelExportOptions}
                   disabled={isExportingPdf}
                   className={secondaryButtonClass}
                 >

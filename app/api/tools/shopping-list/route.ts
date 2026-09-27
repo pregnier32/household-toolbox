@@ -422,7 +422,7 @@ export async function GET(request: NextRequest) {
     if (resource === 'lists') {
       const { data: lists, error: listsError } = await supabaseServer
         .from('tools_sl_lists')
-        .select('id, name, list_date, is_active, show_on_dashboard')
+        .select('id, name, list_date, is_active, show_on_dashboard, created_at, updated_at')
         .eq('user_id', user.id)
         .eq('tool_id', toolId)
         .order('list_date', { ascending: false });
@@ -438,6 +438,8 @@ export async function GET(request: NextRequest) {
         date: string;
         isActive: boolean;
         showOnDashboard: boolean;
+        createdAt: string;
+        updatedAt: string;
         items: { itemId: string; name: string; category: string; isChecked: boolean; quantity: number | null; unit: string | null }[];
         attachments: { id: string; name: string; size: number; type: string }[];
       }[] = [];
@@ -453,6 +455,8 @@ export async function GET(request: NextRequest) {
           date: list.list_date,
           isActive: !!list.is_active,
           showOnDashboard: !!list.show_on_dashboard,
+          createdAt: list.created_at ?? '',
+          updatedAt: list.updated_at ?? '',
           items,
           attachments: attachmentMap[list.id] || [],
         });

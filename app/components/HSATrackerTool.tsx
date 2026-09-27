@@ -40,6 +40,10 @@ function formatReportDate(date: Date): string {
   return date.toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' });
 }
 
+function hsaReportFileSlug(accountName: string): string {
+  return accountName.trim().replace(/\s+/g, '_') || 'Account';
+}
+
 function ReceiptNeededWarning({ isLight }: { isLight: boolean }) {
   return (
     <div
@@ -1281,7 +1285,7 @@ export function HSATrackerTool({ toolId }: HSATrackerToolProps) {
       pdf.setFontSize(20);
       pdf.setFont('helvetica', 'bold');
       pdf.setTextColor(colors.title[0], colors.title[1], colors.title[2]);
-      const title = 'HSA Tracker Report';
+      const title = `HSA Tracker — ${accountLabel}`;
       pdf.text(title, (pageWidth - pdf.getTextWidth(title)) / 2, yPos);
       yPos += 10;
 
@@ -1390,7 +1394,7 @@ export function HSATrackerTool({ toolId }: HSATrackerToolProps) {
         attachmentRefs.forEach((line) => addText(line, 9, false, 8));
       }
 
-      pdf.save(`HSA_Tracker_Report_${new Date().toISOString().split('T')[0]}.pdf`);
+      pdf.save(`HSA_Report_${hsaReportFileSlug(accountLabel)}_${year}.pdf`);
       setShowReportModal(false);
     } catch (error) {
       console.error('Error exporting HSA tracker PDF:', error);

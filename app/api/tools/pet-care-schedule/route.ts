@@ -295,20 +295,42 @@ export async function POST(request: NextRequest) {
     // Save related data (foods, vet records, etc.)
     // Note: This is a simplified version - you may want to handle updates/deletes more granularly
     if (foods && Array.isArray(foods)) {
-      // Delete existing and insert new (or use upsert for better performance)
-      await supabaseServer.from('tools_pcs_food_entries').delete().eq('pet_id', finalPetId);
-      if (foods.length > 0) {
-        await supabaseServer.from('tools_pcs_food_entries').insert(
-          foods.map((f: any) => ({
-            pet_id: finalPetId,
-            name: f.name,
-            rating: f.rating,
-            start_date: f.startDate,
-            end_date: f.endDate || null,
-            is_current: f.isCurrent || false,
-            notes: f.notes || null,
-          }))
-        );
+      const foodRows = foods
+        .filter((f: { name?: string }) => String(f.name || '').trim())
+        .map((f: { name?: string; rating?: number | null; startDate?: string; endDate?: string | null; isCurrent?: boolean; notes?: string }) => ({
+          pet_id: finalPetId,
+          name: String(f.name).trim(),
+          rating: f.rating == null || !Number.isFinite(Number(f.rating)) ? null : Number(f.rating),
+          start_date: f.startDate || new Date().toISOString().split('T')[0],
+          end_date: f.endDate || null,
+          is_current: f.isCurrent === true,
+          notes: f.notes || null,
+        }));
+      const { data: existingFoods, error: existingFoodsError } = await supabaseServer
+        .from('tools_pcs_food_entries')
+        .select('id')
+        .eq('pet_id', finalPetId);
+      if (existingFoodsError) {
+        console.error('Error loading pet food before save:', existingFoodsError);
+        return NextResponse.json({ error: 'Failed to save food' }, { status: 500 });
+      }
+      if (foodRows.length > 0) {
+        const { error: insertFoodsError } = await supabaseServer.from('tools_pcs_food_entries').insert(foodRows);
+        if (insertFoodsError) {
+          console.error('Error saving pet food:', insertFoodsError);
+          return NextResponse.json({ error: 'Failed to save food' }, { status: 500 });
+        }
+      }
+      const existingIds = (existingFoods || []).map((row) => row.id);
+      if (existingIds.length > 0) {
+        const { error: deleteFoodsError } = await supabaseServer
+          .from('tools_pcs_food_entries')
+          .delete()
+          .in('id', existingIds);
+        if (deleteFoodsError) {
+          console.error('Error replacing pet food:', deleteFoodsError);
+          return NextResponse.json({ error: 'Failed to save food' }, { status: 500 });
+        }
       }
     }
 

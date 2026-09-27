@@ -32,6 +32,8 @@ type ShoppingListRecord = {
   items: ShoppingListItemRef[];
   isActive: boolean;
   showOnDashboard?: boolean;
+  createdAt?: string;
+  updatedAt?: string;
   attachments: { id: string; name: string; size: number; type: string }[];
 };
 
@@ -78,11 +80,27 @@ function sortListsNewestFirst(lists: ShoppingListRecord[]): ShoppingListRecord[]
   );
 }
 
+function compareListRecency(a: ShoppingListRecord, b: ShoppingListRecord): number {
+  const created = (a.createdAt || '').localeCompare(b.createdAt || '');
+  if (created !== 0) return created;
+  const updated = (a.updatedAt || '').localeCompare(b.updatedAt || '');
+  if (updated !== 0) return updated;
+  return a.id.localeCompare(b.id);
+}
+
+function pickNewestListId(lists: ShoppingListRecord[]): string {
+  let newest: ShoppingListRecord | null = null;
+  for (const list of lists) {
+    if (!newest || compareListRecency(list, newest) > 0) newest = list;
+  }
+  return newest?.id || '';
+}
+
 function pickDefaultShoppingListId(lists: ShoppingListRecord[], includeHistory: boolean): string {
-  const active = sortListsNewestFirst(lists.filter((list) => list.isActive));
-  if (active[0]) return active[0].id;
+  const activeId = pickNewestListId(lists.filter((list) => list.isActive));
+  if (activeId) return activeId;
   if (!includeHistory) return '';
-  return sortListsNewestFirst(lists.filter((list) => !list.isActive))[0]?.id || '';
+  return pickNewestListId(lists.filter((list) => !list.isActive));
 }
 
 export type ShoppingListDashboardSummary = { listId: string; name: string; date: string; itemCount: number };
@@ -241,6 +259,8 @@ export function ShoppingListTool({ toolId }: ShoppingListToolProps) {
           date: string;
           isActive: boolean;
           showOnDashboard?: boolean;
+          createdAt?: string;
+          updatedAt?: string;
           items: { itemId: string; name: string; category?: string; isChecked?: boolean; quantity?: number | null; unit?: string | null }[];
           attachments?: { id: string; name: string; size: number; type: string }[];
         }) => ({
@@ -256,6 +276,8 @@ export function ShoppingListTool({ toolId }: ShoppingListToolProps) {
           })),
           isActive: l.isActive,
           showOnDashboard: l.showOnDashboard,
+          createdAt: l.createdAt ?? '',
+          updatedAt: l.updatedAt ?? '',
           attachments: l.attachments ?? [],
         })
       );

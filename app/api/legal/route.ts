@@ -1,11 +1,16 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { supabaseServer } from '@/lib/supabaseServer';
+import {
+  LEGAL_LAST_UPDATED,
+  PRIVACY_POLICY_HTML,
+  TERMS_OF_SERVICE_HTML,
+} from '@/lib/legal-documents';
 
-// GET - Public endpoint to fetch legal documents (Terms of Service or Privacy Policy)
+// GET - Public endpoint for the Terms of Service or Privacy Policy.
+// Copy lives in lib/legal-documents.ts so the pages and this route stay in sync.
 export async function GET(request: NextRequest) {
   try {
     const { searchParams } = new URL(request.url);
-    const type = searchParams.get('type'); // 'terms' or 'privacy'
+    const type = searchParams.get('type');
 
     if (!type || !['terms', 'privacy'].includes(type)) {
       return NextResponse.json(
@@ -14,32 +19,12 @@ export async function GET(request: NextRequest) {
       );
     }
 
-    const key = type === 'terms' ? 'terms_of_service' : 'privacy_policy';
-
-    // Get the legal document from settings table
-    const { data, error } = await supabaseServer
-      .from('settings')
-      .select('value')
-      .eq('key', key)
-      .single();
-
-    if (error && error.code !== 'PGRST116') {
-      // PGRST116 is "not found" which is okay - will use default content
-      console.error(`Error fetching ${key}:`, error);
-    }
-
-    // If no document exists, return null (frontend will use default content)
-    if (!data || !data.value) {
-      return NextResponse.json({ content: null, lastUpdated: null });
-    }
-
     return NextResponse.json({
-      content: data.value.content || null,
-      lastUpdated: data.value.lastUpdated || null,
+      content: type === 'terms' ? TERMS_OF_SERVICE_HTML : PRIVACY_POLICY_HTML,
+      lastUpdated: LEGAL_LAST_UPDATED,
     });
   } catch (error) {
     console.error('Error in legal documents API:', error);
     return NextResponse.json({ content: null, lastUpdated: null });
   }
 }
-

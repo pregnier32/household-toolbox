@@ -24,6 +24,8 @@ import {
   downloadEolPlannerPdf,
   eolExportPlanChoices,
   pickDefaultEolPlanId,
+  plansWithEolAttachmentFallback,
+  plansWithLocalNextStepVisibility,
 } from '@/lib/end-of-life-planner-pdf';
 import {
   ACCOUNT_DISPOSITIONS,
@@ -3317,14 +3319,19 @@ export function EndOfLifePlannerTool({ toolId }: EndOfLifePlannerToolProps) {
     setIsExportingPdf(true);
     try {
       await persist(plans, selectedPlanId, true);
-      const result = await eolPlannerRequest<{ plans: EolPlan[]; selectedPlanId: string | null }>(eolPlannerUrl(toolId));
-      await downloadEolPlannerPdf(result.plans, {
-        exportAll: exportAllPlans,
-        planId: exportPlanId,
-        includeArchived: exportIncludeArchived,
-        includeSecrets: exportIncludeSecrets,
-        includePrivateLetters: exportIncludePrivateLetters,
+      const result = await eolPlannerRequest<{ plans: EolPlan[]; selectedPlanId: string | null }>(eolPlannerUrl(toolId), {
+        cache: 'no-store',
       });
+      await downloadEolPlannerPdf(
+        plansWithLocalNextStepVisibility(plansWithEolAttachmentFallback(result.plans, plans), plans),
+        {
+          exportAll: exportAllPlans,
+          planId: exportPlanId,
+          includeArchived: exportIncludeArchived,
+          includeSecrets: exportIncludeSecrets,
+          includePrivateLetters: exportIncludePrivateLetters,
+        }
+      );
       setShowExportPopup(false);
     } catch (error) {
       console.error('Error exporting end of life planner PDF:', error);

@@ -187,7 +187,7 @@ export async function POST(request: NextRequest) {
         renewal_date: subscriptionData.frequency === 'annual' ? subscriptionData.renewal_date : null,
         notes: subscriptionData.notes || null,
         is_active: subscriptionData.is_active !== undefined ? subscriptionData.is_active : true,
-        date_inactivated: subscriptionData.is_active === false ? (subscriptionData.date_inactivated || new Date().toISOString().split('T')[0]) : null,
+        date_inactivated: subscriptionData.is_active === false ? (subscriptionData.date_inactivated || null) : null,
       };
 
       const { error: updateError } = await supabaseServer

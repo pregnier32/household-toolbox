@@ -100,6 +100,96 @@ function shownDate(value: string | null | undefined): string {
   return shown === '—' ? '' : shown;
 }
 
+function attachmentFileName(file: EolAttachment): string {
+  const record = file as EolAttachment & { fileName?: string; file_name?: string };
+  return (record.name || record.fileName || record.file_name || '').trim();
+}
+
+function namedAttachments(files: EolAttachment[] | null | undefined): EolAttachment[] {
+  return (files || []).filter((file) => attachmentFileName(file));
+}
+
+function fillRecordAttachments<T extends { id: string; attachments?: EolAttachment[] | null }>(
+  server: T[] | null | undefined,
+  local: T[] | null | undefined
+): T[] {
+  const localById = new Map((local || []).map((item) => [item.id, item]));
+  return (server || []).map((item) => {
+    if (namedAttachments(item.attachments).length > 0) return item;
+    const localFiles = namedAttachments(localById.get(item.id)?.attachments);
+    if (localFiles.length === 0) return item;
+    return { ...item, attachments: localFiles };
+  });
+}
+
+/** Server reloads can omit files the screen already has. Copy those filenames onto matching records. */
+export function plansWithEolAttachmentFallback(serverPlans: EolPlan[], localPlans: EolPlan[]): EolPlan[] {
+  const localById = new Map(localPlans.map((plan) => [plan.id, plan]));
+  return serverPlans.map((plan) => {
+    const local = localById.get(plan.id);
+    if (!local) return plan;
+    const serverData = plan.data;
+    const localData = local.data;
+    const localCustom = new Map((localData.customSections || []).map((section) => [section.id, section]));
+    return {
+      ...plan,
+      data: {
+        ...serverData,
+        documents: fillRecordAttachments(serverData.documents, localData.documents),
+        insurance: fillRecordAttachments(serverData.insurance, localData.insurance),
+        letters: fillRecordAttachments(serverData.letters, localData.letters),
+        otherRecords: fillRecordAttachments(serverData.otherRecords, localData.otherRecords),
+        myWishes: {
+          ...serverData.myWishes,
+          personalItems: fillRecordAttachments(serverData.myWishes?.personalItems, localData.myWishes?.personalItems),
+        },
+        customSections: (serverData.customSections || []).map((section) => {
+          const fromLocal = localCustom.get(section.id);
+          if (!fromLocal) return section;
+          return {
+            ...section,
+            documents: fillRecordAttachments(section.documents, fromLocal.documents),
+            insurance: fillRecordAttachments(section.insurance, fromLocal.insurance),
+            letters: fillRecordAttachments(section.letters, fromLocal.letters),
+            otherRecords: fillRecordAttachments(section.otherRecords, fromLocal.otherRecords),
+          };
+        }),
+      },
+    };
+  });
+}
+
+function stepIsHidden(step: EolNextStep): boolean {
+  const record = step as EolNextStep & { is_hidden?: boolean; isHidden?: boolean };
+  return Boolean(step.hidden || record.is_hidden || record.isHidden);
+}
+
+function nextStepMatchKey(step: EolNextStep): string {
+  const seedKey = step.seedKey?.trim();
+  return seedKey ? `seed:${seedKey}` : `id:${step.id}`;
+}
+
+/** A reload can still list a step the screen already inactivated. Keep that step hidden for this plan only. */
+export function plansWithLocalNextStepVisibility(serverPlans: EolPlan[], localPlans: EolPlan[]): EolPlan[] {
+  const localById = new Map(localPlans.map((plan) => [plan.id, plan]));
+  return serverPlans.map((plan) => {
+    const local = localById.get(plan.id);
+    if (!local) return plan;
+    const hiddenByKey = new Map((local.data.nextSteps || []).map((step) => [nextStepMatchKey(step), stepIsHidden(step)]));
+    return {
+      ...plan,
+      data: {
+        ...plan.data,
+        nextSteps: (plan.data.nextSteps || []).map((step) => {
+          const localHidden = hiddenByKey.get(nextStepMatchKey(step));
+          const hidden = localHidden === true || stepIsHidden(step);
+          return step.hidden === hidden ? step : { ...step, hidden };
+        }),
+      },
+    };
+  });
+}
+
 class ReportDoc {
   chunks: Chunk[] = [];
   attachments: string[] = [];
@@ -178,10 +268,8 @@ class ReportDoc {
   }
 
   files(planName: string, section: string, record: string, files: EolAttachment[] | null | undefined) {
-    for (const file of files || []) {
-      const fileName = file.name?.trim();
-      if (!fileName) continue;
-      this.attachments.push(`${planName} — ${section} — ${record.trim() || 'Record'} — ${fileName}`);
+    for (const file of namedAttachments(files)) {
+      this.attachments.push(`${planName} — ${section} — ${record.trim() || 'Record'} — ${attachmentFileName(file)}`);
     }
   }
 }
@@ -548,7 +636,7 @@ function printOther(doc: ReportDoc, planName: string, section: string, records: 
 }
 
 function printSteps(doc: ReportDoc, data: EolPlanData, steps: EolNextStep[]) {
-  const visible = (steps || []).filter((step) => !step.hidden);
+  const visible = (steps || []).filter((step) => !stepIsHidden(step));
   if (visible.length === 0) return;
   doc.line(NEXT_STEPS_INTRO);
   for (const step of visible) {
@@ -1028,7 +1116,14 @@ function plansForExport(plans: EolPlan[], options: EolPdfExportOptions): EolPlan
   return [...active, ...archived];
 }
 
-function renderPdf(pdf: jsPDF, chunks: Chunk[], attachments: string[], subtitle: string) {
+function localCalendarDayStamp(date: Date): string {
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, '0');
+  const day = String(date.getDate()).padStart(2, '0');
+  return `${year}-${month}-${day}`;
+}
+
+function renderPdf(pdf: jsPDF, chunks: Chunk[], attachments: string[], subtitle: string, generatedAt: Date) {
   const pageWidth = pdf.internal.pageSize.getWidth();
   const pageHeight = pdf.internal.pageSize.getHeight();
   const margin = 15;
@@ -1095,7 +1190,7 @@ function renderPdf(pdf: jsPDF, chunks: Chunk[], attachments: string[], subtitle:
   pdf.setFontSize(10);
   pdf.setFont('helvetica', 'normal');
   pdf.setTextColor(colors.muted[0], colors.muted[1], colors.muted[2]);
-  const generated = new Date().toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' });
+  const generated = generatedAt.toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' });
   pdf.text(`Generated on: ${generated}`, margin, yPos);
   yPos += 6;
   for (const line of pdf.splitTextToSize(subtitle, contentWidth) as string[]) {
@@ -1132,8 +1227,9 @@ export async function downloadEolPlannerPdf(plans: EolPlan[], options: EolPdfExp
   for (const plan of included) {
     printPlan(doc, plan, options.includeSecrets, options.includePrivateLetters);
   }
+  const generatedAt = new Date();
   const { jsPDF } = await import('jspdf');
   const pdf = new jsPDF({ orientation: 'portrait', unit: 'mm', format: 'a4' });
-  renderPdf(pdf, doc.chunks, doc.attachments, eolExportSubtitle(chosen, options.exportAll, options.includeArchived));
-  pdf.save(`End_of_Life_Planner_Report_${new Date().toISOString().split('T')[0]}.pdf`);
+  renderPdf(pdf, doc.chunks, doc.attachments, eolExportSubtitle(chosen, options.exportAll, options.includeArchived), generatedAt);
+  pdf.save(`End_of_Life_Planner_Report_${localCalendarDayStamp(generatedAt)}.pdf`);
 }

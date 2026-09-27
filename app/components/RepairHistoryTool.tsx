@@ -224,6 +224,13 @@ function pickOpenHeaderId(list: HeaderRecord[], prev: string | null, toolId?: st
   return list[0].id;
 }
 
+function categoryIdOnScreen(headers: HeaderRecord[], selectedHeaderId: string | null): string {
+  if (selectedHeaderId && headers.some((header) => header.id === selectedHeaderId)) {
+    return selectedHeaderId;
+  }
+  return [...headers].sort((a, b) => a.name.localeCompare(b.name))[0]?.id || '';
+}
+
 const DEFAULT_ITEMS: Omit<Item, 'id'>[] = [
   // Interior – Major Systems
   { name: 'Furnace / Heating System', area: 'Interior – Major Systems', isDefault: true },
@@ -1656,12 +1663,7 @@ export function RepairHistoryTool({ toolId }: RepairHistoryToolProps) {
           <ExportPdfIconButton
             title="Export repair history to PDF"
             onClick={() => {
-              const fallback = [...headers].sort((a, b) => a.name.localeCompare(b.name))[0]?.id || '';
-              if (!exportAllCategories) {
-                setExportHeaderId(selectedHeaderId || exportHeaderId || fallback);
-              } else if (!exportHeaderId) {
-                setExportHeaderId(selectedHeaderId || fallback);
-              }
+              setExportHeaderId(categoryIdOnScreen(headers, selectedHeaderId));
               setShowExportPopup(true);
             }}
           />
@@ -3086,10 +3088,7 @@ export function RepairHistoryTool({ toolId }: RepairHistoryToolProps) {
                     checked={!exportAllCategories}
                     onChange={() => {
                       setExportAllCategories(false);
-                      if (!exportHeaderId) {
-                        const fallback = [...headers].sort((a, b) => a.name.localeCompare(b.name))[0]?.id || '';
-                        setExportHeaderId(selectedHeaderId || fallback);
-                      }
+                      setExportHeaderId(categoryIdOnScreen(headers, selectedHeaderId));
                     }}
                     className={isLight
                       ? 'mt-0.5 h-4 w-4 border-slate-400 text-emerald-600 focus:ring-emerald-500'

@@ -128,9 +128,13 @@ export async function GET(request: NextRequest) {
       });
     }
 
-    // Transform documents to include tags
+    // A document owns a file only when a stored URL is present. A leftover filename
+    // without that URL is not an attachment.
     const documentsWithTags = documents?.map(doc => ({
       ...doc,
+      file_name: doc.file_url ? doc.file_name : null,
+      file_size: doc.file_url ? doc.file_size : null,
+      file_type: doc.file_url ? doc.file_type : null,
       tags: documentTagsMap[doc.id] || []
     })) || [];
 

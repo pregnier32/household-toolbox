@@ -164,6 +164,13 @@ function formatReportDate(date: Date): string {
   return date.toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' });
 }
 
+function localCalendarDayIso(date = new Date()): string {
+  const y = date.getFullYear();
+  const m = String(date.getMonth() + 1).padStart(2, '0');
+  const day = String(date.getDate()).padStart(2, '0');
+  return `${y}-${m}-${day}`;
+}
+
 function filledText(value: string | null | undefined): string {
   return (value || '').trim();
 }
@@ -2352,7 +2359,7 @@ export function TravelLogTool({ toolId }: TravelLogToolProps) {
         attachmentRefs.forEach((line) => addText(line, 9, false, 8));
       }
 
-      pdf.save(`Travel_Log_Report_${new Date().toISOString().split('T')[0]}.pdf`);
+      pdf.save(`Travel_Log_Report_${localCalendarDayIso()}.pdf`);
       setShowExportPopup(false);
     } catch (error) {
       console.error('Error exporting travel log PDF:', error);
@@ -2375,10 +2382,11 @@ export function TravelLogTool({ toolId }: TravelLogToolProps) {
         <ExportPdfIconButton
           title="Export travel log to PDF"
           onClick={() => {
-            if (!exportAllTrips) {
-              setExportTripId(pickDefaultTripId(trips, editingId));
-            } else if (!exportTripId) {
-              setExportTripId(pickDefaultTripId(trips, editingId));
+            const openEditId = editingId && trips.some((trip) => trip.id === editingId) ? editingId : '';
+            if (openEditId) {
+              setExportTripId(openEditId);
+            } else if (!exportAllTrips || !exportTripId) {
+              setExportTripId(pickDefaultTripId(trips, null));
             }
             setShowExportPopup(true);
           }}
@@ -2488,7 +2496,12 @@ export function TravelLogTool({ toolId }: TravelLogToolProps) {
                     checked={!exportAllTrips}
                     onChange={() => {
                       setExportAllTrips(false);
-                      if (!exportTripId) setExportTripId(pickDefaultTripId(trips, editingId));
+                      const openEditId = editingId && trips.some((trip) => trip.id === editingId) ? editingId : '';
+                      if (openEditId) {
+                        setExportTripId(openEditId);
+                      } else if (!exportTripId) {
+                        setExportTripId(pickDefaultTripId(trips, null));
+                      }
                     }}
                     className={isLight
                       ? 'mt-0.5 h-4 w-4 border-slate-400 text-emerald-600 focus:ring-emerald-500'

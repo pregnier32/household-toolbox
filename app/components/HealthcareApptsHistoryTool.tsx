@@ -142,6 +142,13 @@ function formatReportDate(date: Date): string {
   return date.toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' });
 }
 
+function localCalendarDayIso(date = new Date()): string {
+  const y = date.getFullYear();
+  const m = String(date.getMonth() + 1).padStart(2, '0');
+  const day = String(date.getDate()).padStart(2, '0');
+  return `${y}-${m}-${day}`;
+}
+
 function compareUpcomingForExport(a: AppointmentRecord, b: AppointmentRecord): number {
   return (a.appointmentDate || '').localeCompare(b.appointmentDate || '');
 }
@@ -1236,7 +1243,7 @@ export function HealthcareApptsHistoryTool({ toolId }: HealthcareApptsHistoryToo
         attachmentRefs.forEach((line) => addText(line, 9, false, 8));
       }
 
-      pdf.save(`Healthcare_Appts_Report_${new Date().toISOString().split('T')[0]}.pdf`);
+      pdf.save(`Healthcare_Appts_Report_${localCalendarDayIso()}.pdf`);
       setShowExportPopup(false);
     } catch (error) {
       console.error('Error exporting healthcare appointments PDF:', error);

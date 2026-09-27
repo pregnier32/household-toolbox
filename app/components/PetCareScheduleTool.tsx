@@ -342,7 +342,7 @@ function mapPetReport(pet: {
       id: String(item.id || ''),
       content: String(item.content || ''),
       date: String(item.date || ''),
-      isCurrent: item.is_current !== false,
+      isCurrent: item.is_current === true,
     })),
   };
 }
@@ -1525,44 +1525,45 @@ export function PetCareScheduleTool({ toolId }: PetCareScheduleToolProps) {
   };
 
   const addCurrentFood = async () => {
-    if (currentFood.name.trim()) {
-      const newFood: FoodEntry = {
-        id: Date.now().toString(),
-        name: currentFood.name,
-        rating: currentFood.rating,
-        startDate: localToday(),
-        endDate: null,
-        isCurrent: true,
-        notes: currentFood.notes || ''
-      };
-      // Mark all other foods as not current
-      setFoods(prev => prev.map(f => ({ ...f, isCurrent: false })));
-      setFoods(prev => [...prev, newFood]);
-      setCurrentFood({ name: '', rating: null, notes: '' });
-      setAddingSection(null);
-      // Save to database immediately
-      setTimeout(() => savePetData(), 100);
-    }
+    const name = currentFood.name.trim();
+    if (!name) return;
+    const newFood: FoodEntry = {
+      id: Date.now().toString(),
+      name,
+      rating: currentFood.rating,
+      startDate: localToday(),
+      endDate: null,
+      isCurrent: true,
+      notes: currentFood.notes || ''
+    };
+    const updatedFoods = [
+      ...foods.map((food) => ({ ...food, isCurrent: false })),
+      newFood,
+    ];
+    setFoods(updatedFoods);
+    setCurrentFood({ name: '', rating: null, notes: '' });
+    setAddingSection(null);
+    await savePetData(undefined, updatedFoods);
   };
 
   const moveFoodToHistory = (foodId: string) => {
-    setFoods(prev => prev.map(f => 
-      f.id === foodId 
-        ? { ...f, isCurrent: false, endDate: localToday() }
-        : f
-    ));
-    // Save to database immediately
-    setTimeout(() => savePetData(), 100);
+    const updatedFoods = foods.map((food) =>
+      food.id === foodId
+        ? { ...food, isCurrent: false, endDate: localToday() }
+        : food
+    );
+    setFoods(updatedFoods);
+    void savePetData(undefined, updatedFoods);
   };
 
   const returnFoodToActive = (foodId: string) => {
-    setFoods(prev => prev.map(f =>
-      f.id === foodId
-        ? { ...f, isCurrent: true, endDate: '' }
-        : f
-    ));
-    // Save to database immediately
-    setTimeout(() => savePetData(), 100);
+    const updatedFoods = foods.map((food) =>
+      food.id === foodId
+        ? { ...food, isCurrent: true, endDate: '' }
+        : food
+    );
+    setFoods(updatedFoods);
+    void savePetData(undefined, updatedFoods);
   };
 
   const startEditingFood = (food: FoodEntry) => {
@@ -2042,15 +2043,19 @@ export function PetCareScheduleTool({ toolId }: PetCareScheduleToolProps) {
   };
 
   const archiveNote = (noteId: string) => {
-    setNotes(prev => prev.map(n => 
-      n.id === noteId ? { ...n, isCurrent: false } : n
-    ));
+    const updatedNotes = notes.map((note) =>
+      note.id === noteId ? { ...note, isCurrent: false } : note
+    );
+    setNotes(updatedNotes);
+    void savePetData(undefined, undefined, undefined, undefined, undefined, undefined, updatedNotes);
   };
 
   const reactivateNote = (noteId: string) => {
-    setNotes(prev => prev.map(n =>
-      n.id === noteId ? { ...n, isCurrent: true } : n
-    ));
+    const updatedNotes = notes.map((note) =>
+      note.id === noteId ? { ...note, isCurrent: true } : note
+    );
+    setNotes(updatedNotes);
+    void savePetData(undefined, undefined, undefined, undefined, undefined, undefined, updatedNotes);
   };
 
   const startEditingNote = (note: Note) => {

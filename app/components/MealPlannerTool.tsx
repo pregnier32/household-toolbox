@@ -1895,9 +1895,9 @@ export function MealPlannerTool({ toolId }: MealPlannerToolProps) {
         <ExportPdfIconButton
           title="Export meal planner to PDF"
           onClick={() => {
-            if (!exportPlanId) {
-              setExportPlanId(pickDefaultMealPlanId(mealPlans, includeHistory) || editingPlanId || '');
-            }
+            setExportAllPlans(false);
+            setIncludeHistory(false);
+            setExportPlanId(pickDefaultMealPlanId(mealPlans, false));
             setShowExportPopup(true);
           }}
         />
