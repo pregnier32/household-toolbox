@@ -2159,7 +2159,12 @@ export function PetCareScheduleTool({ toolId }: PetCareScheduleToolProps) {
       const pageHeight = pdf.internal.pageSize.getHeight();
       const margin = 15;
       const contentWidth = pageWidth - margin * 2;
+      const footerY = pageHeight - 10;
+      const contentBottom = footerY - 4;
       let yPos = margin;
+      let repeatingPet: string | null = null;
+      let repeatingSection: string | null = null;
+      let repeatingSubsection: string | null = null;
       const todayKey = localToday();
 
       const colors = {
@@ -2175,41 +2180,92 @@ export function PetCareScheduleTool({ toolId }: PetCareScheduleToolProps) {
         pdf.rect(0, 0, pageWidth, pageHeight, 'F');
       };
 
-      const checkNewPage = (requiredHeight: number) => {
-        if (yPos + requiredHeight > pageHeight - margin) {
-          pdf.addPage();
-          fillPage();
-          yPos = margin;
-          return true;
-        }
-        return false;
-      };
-
-      const addSectionHeader = (title: string) => {
-        checkNewPage(15);
+      const paintPetHeader = (name: string) => {
         pdf.setFillColor(colors.header[0], colors.header[1], colors.header[2]);
         pdf.rect(margin, yPos, contentWidth, 10, 'F');
         pdf.setFontSize(13);
         pdf.setFont('helvetica', 'bold');
         pdf.setTextColor(colors.title[0], colors.title[1], colors.title[2]);
-        pdf.text(title, margin + 5, yPos + 7);
+        pdf.text(name, margin + 5, yPos + 7);
         yPos += 15;
       };
 
-      const addText = (text: string, fontSize = 10, isBold = false, indent = 0, muted = false) => {
+      const paintFlowTitle = (title: string, fontSize: number, indent: number) => {
         pdf.setFontSize(fontSize);
-        pdf.setFont('helvetica', isBold ? 'bold' : 'normal');
-        const color = muted ? colors.muted : colors.text;
-        pdf.setTextColor(color[0], color[1], color[2]);
+        pdf.setFont('helvetica', 'bold');
+        pdf.setTextColor(colors.text[0], colors.text[1], colors.text[2]);
         const maxWidth = contentWidth - indent - 5;
-        const lines = pdf.splitTextToSize(text, maxWidth) as string[];
+        const lines = pdf.splitTextToSize(title, maxWidth) as string[];
         const lineHeight = fontSize * 0.42;
-        checkNewPage(lines.length * lineHeight + 2);
         lines.forEach((line) => {
           pdf.text(line, margin + indent, yPos);
           yPos += lineHeight;
         });
         yPos += 2;
+      };
+
+      const continuationTop = () => {
+        let top = margin;
+        if (repeatingPet) top += 15;
+        if (repeatingSection) top += 11 * 0.42 + 2;
+        if (repeatingSubsection) top += 10 * 0.42 + 2;
+        return top;
+      };
+
+      const startNewPage = () => {
+        pdf.addPage();
+        fillPage();
+        yPos = margin;
+        if (repeatingPet) {
+          paintPetHeader(repeatingPet);
+          if (repeatingSection) paintFlowTitle(repeatingSection, 11, 5);
+          if (repeatingSubsection) paintFlowTitle(repeatingSubsection, 10, 8);
+        }
+      };
+
+      const checkNewPage = (requiredHeight: number) => {
+        if (yPos + requiredHeight <= contentBottom) return false;
+        if (yPos <= continuationTop() + 0.5) return false;
+        startNewPage();
+        return true;
+      };
+
+      const addSectionHeader = (title: string) => {
+        checkNewPage(15);
+        paintPetHeader(title);
+      };
+
+      const addText = (text: string, fontSize = 10, isBold = false, indent = 0, muted = false) => {
+        const applyStyle = () => {
+          pdf.setFontSize(fontSize);
+          pdf.setFont('helvetica', isBold ? 'bold' : 'normal');
+          const color = muted ? colors.muted : colors.text;
+          pdf.setTextColor(color[0], color[1], color[2]);
+        };
+        applyStyle();
+        const maxWidth = contentWidth - indent - 5;
+        const lines = pdf.splitTextToSize(text, maxWidth) as string[];
+        const lineHeight = fontSize * 0.42;
+        checkNewPage(lines.length * lineHeight + 2);
+        applyStyle();
+        lines.forEach((line) => {
+          pdf.text(line, margin + indent, yPos);
+          yPos += lineHeight;
+        });
+        yPos += 2;
+      };
+
+      const beginSection = (title: string) => {
+        repeatingSection = null;
+        repeatingSubsection = null;
+        addText(title, 11, true, 5);
+        repeatingSection = title;
+      };
+
+      const beginSubsection = (title: string) => {
+        repeatingSubsection = null;
+        addText(title, 10, true, 8);
+        repeatingSubsection = title;
       };
 
       const fileLines = (files: StoredAttachment[] | undefined) =>
@@ -2240,9 +2296,13 @@ export function PetCareScheduleTool({ toolId }: PetCareScheduleToolProps) {
       const attachmentRefs: string[] = [];
 
       reports.forEach((report) => {
+        repeatingPet = null;
+        repeatingSection = null;
+        repeatingSubsection = null;
         addSectionHeader(report.name);
+        repeatingPet = report.name;
 
-        addText('Pet information', 11, true, 5);
+        beginSection('Pet information');
         if (report.petTypeLabel) addText(`Type: ${report.petTypeLabel}`, 9, false, 8);
         if (report.birthdate) addText(`Birthdate: ${formatLocalDate(report.birthdate)}`, 9, false, 8);
         if (report.breed) addText(`Breed: ${report.breed}`, 9, false, 8);
@@ -2261,7 +2321,7 @@ export function PetCareScheduleTool({ toolId }: PetCareScheduleToolProps) {
           .sort((a, b) => (b.startDate || '').localeCompare(a.startDate || '') || a.name.localeCompare(b.name));
         const foodRows = includeHistory ? [...currentFood, ...historyFood] : currentFood;
         if (foodRows.length > 0) {
-          addText('Food', 11, true, 5);
+          beginSection('Food');
           const writeFood = (food: FoodEntry) => {
             addText(food.name || 'Food', 10, true, 8);
             if (food.startDate) addText(`Started: ${formatLocalDate(food.startDate)}`, 9, false, 10);
@@ -2272,7 +2332,7 @@ export function PetCareScheduleTool({ toolId }: PetCareScheduleToolProps) {
           };
           currentFood.forEach(writeFood);
           if (includeHistory && historyFood.length > 0) {
-            addText('History', 10, true, 8);
+            beginSubsection('History');
             historyFood.forEach(writeFood);
           }
           yPos += 2;
@@ -2286,7 +2346,7 @@ export function PetCareScheduleTool({ toolId }: PetCareScheduleToolProps) {
           .sort((a, b) => (a.veterinarianName || a.clinicName).localeCompare(b.veterinarianName || b.clinicName));
         const vetRows = includeHistory ? [...activeVets, ...historyVets] : activeVets;
         if (vetRows.length > 0) {
-          addText('Veterinary contacts', 11, true, 5);
+          beginSection('Veterinary contacts');
           const writeVet = (record: VeterinaryRecord) => {
             const label = record.veterinarianName || record.clinicName || 'Veterinary contact';
             addText(label, 10, true, 8);
@@ -2304,7 +2364,7 @@ export function PetCareScheduleTool({ toolId }: PetCareScheduleToolProps) {
           };
           activeVets.forEach(writeVet);
           if (includeHistory && historyVets.length > 0) {
-            addText('History', 10, true, 8);
+            beginSubsection('History');
             historyVets.forEach(writeVet);
           }
           yPos += 2;
@@ -2318,7 +2378,7 @@ export function PetCareScheduleTool({ toolId }: PetCareScheduleToolProps) {
           .sort((a, b) => a.name.localeCompare(b.name));
         const careRows = includeHistory ? [...activeCare, ...historyCare] : activeCare;
         if (careRows.length > 0) {
-          addText('Care plan', 11, true, 5);
+          beginSection('Care plan');
           const writeCare = (item: CarePlanItem) => {
             addText(item.name || 'Care item', 10, true, 8);
             if (item.frequency) addText(`Frequency: ${item.frequency}`, 9, false, 10);
@@ -2330,7 +2390,7 @@ export function PetCareScheduleTool({ toolId }: PetCareScheduleToolProps) {
           };
           activeCare.forEach(writeCare);
           if (includeHistory && historyCare.length > 0) {
-            addText('History', 10, true, 8);
+            beginSubsection('History');
             historyCare.forEach(writeCare);
           }
           yPos += 2;
@@ -2340,7 +2400,7 @@ export function PetCareScheduleTool({ toolId }: PetCareScheduleToolProps) {
           (a, b) => b.date.localeCompare(a.date) || a.name.localeCompare(b.name)
         );
         if (vaccinationRows.length > 0) {
-          addText('Vaccinations', 11, true, 5);
+          beginSection('Vaccinations');
           vaccinationRows.forEach((item) => {
             const label = item.name || 'Vaccination';
             addText(label, 10, true, 8);
@@ -2365,7 +2425,7 @@ export function PetCareScheduleTool({ toolId }: PetCareScheduleToolProps) {
           ? [...upcomingAppointments, ...pastAppointments]
           : upcomingAppointments;
         if (appointmentRows.length > 0) {
-          addText('Appointments', 11, true, 5);
+          beginSection('Appointments');
           const writeAppointment = (item: Appointment) => {
             const label = item.type || 'Appointment';
             addText(label, 10, true, 8);
@@ -2380,7 +2440,7 @@ export function PetCareScheduleTool({ toolId }: PetCareScheduleToolProps) {
           };
           upcomingAppointments.forEach(writeAppointment);
           if (includeHistory && pastAppointments.length > 0) {
-            addText('History', 10, true, 8);
+            beginSubsection('History');
             pastAppointments.forEach(writeAppointment);
           }
           yPos += 2;
@@ -2390,7 +2450,7 @@ export function PetCareScheduleTool({ toolId }: PetCareScheduleToolProps) {
           (a, b) => b.date.localeCompare(a.date) || a.name.localeCompare(b.name)
         );
         if (documentRows.length > 0) {
-          addText('Documents', 11, true, 5);
+          beginSection('Documents');
           documentRows.forEach((doc) => {
             const label = doc.name || 'Document';
             addText(label, 10, true, 8);
@@ -2412,7 +2472,7 @@ export function PetCareScheduleTool({ toolId }: PetCareScheduleToolProps) {
           .sort((a, b) => b.date.localeCompare(a.date));
         const noteRows = includeHistory ? [...currentNotes, ...historyNotes] : currentNotes;
         if (noteRows.length > 0) {
-          addText('Notes', 11, true, 5);
+          beginSection('Notes');
           const writeNote = (note: Note) => {
             if (note.date) addText(formatLocalDate(note.date), 10, true, 8);
             if (note.content.trim()) addText(note.content.trim(), 9, false, 10);
@@ -2420,7 +2480,7 @@ export function PetCareScheduleTool({ toolId }: PetCareScheduleToolProps) {
           };
           currentNotes.forEach(writeNote);
           if (includeHistory && historyNotes.length > 0) {
-            addText('History', 10, true, 8);
+            beginSubsection('History');
             historyNotes.forEach(writeNote);
           }
           yPos += 2;
@@ -2429,10 +2489,25 @@ export function PetCareScheduleTool({ toolId }: PetCareScheduleToolProps) {
         yPos += 3;
       });
 
+      repeatingPet = null;
+      repeatingSection = null;
+      repeatingSubsection = null;
+
       if (attachmentRefs.length > 0) {
         addSectionHeader('Attachments');
         addText('File names only. Files themselves are not included in this report.', 8, false, 5, true);
         attachmentRefs.forEach((line) => addText(line, 9, false, 8));
+      }
+
+      const pageCount = pdf.getNumberOfPages();
+      for (let page = 1; page <= pageCount; page += 1) {
+        pdf.setPage(page);
+        pdf.setFontSize(8);
+        pdf.setFont('helvetica', 'normal');
+        pdf.setTextColor(colors.muted[0], colors.muted[1], colors.muted[2]);
+        pdf.text('Household Toolbox', margin, footerY);
+        pdf.setFontSize(9);
+        pdf.text(`Page ${page} of ${pageCount}`, pageWidth / 2, footerY, { align: 'center' });
       }
 
       pdf.save(`Pet_Care_Schedule_Report_${new Date().toISOString().split('T')[0]}.pdf`);

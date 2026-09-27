@@ -907,6 +907,11 @@ export function ToDoListTool({ toolId }: ToDoListToolProps) {
       const pageHeight = pdf.internal.pageSize.getHeight();
       const margin = 15;
       const contentWidth = pageWidth - margin * 2;
+      const footerY = pageHeight - 10;
+      const contentBottom = footerY - 4;
+      const checkboxSize = 3.2;
+      const titleIndent = 5;
+      const titleTextIndent = titleIndent + checkboxSize + 1.4;
       let yPos = margin;
 
       const colors = {
@@ -923,7 +928,7 @@ export function ToDoListTool({ toolId }: ToDoListToolProps) {
       };
 
       const checkNewPage = (requiredHeight: number) => {
-        if (yPos + requiredHeight > pageHeight - margin) {
+        if (yPos + requiredHeight > contentBottom) {
           pdf.addPage();
           fillPage();
           yPos = margin;
@@ -963,6 +968,43 @@ export function ToDoListTool({ toolId }: ToDoListToolProps) {
         yPos += 2;
       };
 
+      const textBlockHeight = (text: string, fontSize: number, isBold: boolean, indent: number) => {
+        pdf.setFontSize(fontSize);
+        pdf.setFont('helvetica', isBold ? 'bold' : 'normal');
+        const maxWidth = contentWidth - indent - 5;
+        const lines = pdf.splitTextToSize(text, maxWidth) as string[];
+        return lines.length * fontSize * 0.42 + 2;
+      };
+
+      const paintTaskTitle = (name: string, completed: boolean) => {
+        const fontSize = 11;
+        pdf.setFontSize(fontSize);
+        pdf.setFont('helvetica', 'bold');
+        pdf.setTextColor(colors.text[0], colors.text[1], colors.text[2]);
+        const maxWidth = contentWidth - titleTextIndent - 5;
+        const lines = pdf.splitTextToSize(name, maxWidth) as string[];
+        const lineHeight = fontSize * 0.42;
+        checkNewPage(lines.length * lineHeight + 2);
+        const boxX = margin + titleIndent;
+        const boxY = yPos - checkboxSize + 0.8;
+        pdf.setDrawColor(colors.text[0], colors.text[1], colors.text[2]);
+        pdf.setLineWidth(0.35);
+        pdf.rect(boxX, boxY, checkboxSize, checkboxSize);
+        if (completed) {
+          pdf.setLineWidth(0.45);
+          pdf.line(boxX + 0.55, boxY + 1.7, boxX + 1.25, boxY + 2.55);
+          pdf.line(boxX + 1.25, boxY + 2.55, boxX + 2.65, boxY + 0.65);
+        }
+        pdf.setFontSize(fontSize);
+        pdf.setFont('helvetica', 'bold');
+        pdf.setTextColor(colors.text[0], colors.text[1], colors.text[2]);
+        lines.forEach((line) => {
+          pdf.text(line, margin + titleTextIndent, yPos);
+          yPos += lineHeight;
+        });
+        yPos += 2;
+      };
+
       fillPage();
       pdf.setFontSize(20);
       pdf.setFont('helvetica', 'bold');
@@ -994,11 +1036,34 @@ export function ToDoListTool({ toolId }: ToDoListToolProps) {
       const attachmentRefs: string[] = [];
       const printTask = (category: Category, task: Task) => {
         const taskLabel = task.taskName.trim() || 'Task';
-        addText(taskLabel, 11, true, 5);
-        addText(`Status: ${task.status}`, 9, false, 8);
-        addText(`Priority: ${task.priority}`, 9, false, 8);
-        if (task.dueDate) addText(`Due date: ${formatDateForDisplay(task.dueDate)}`, 9, false, 8);
-        if (task.notes.trim()) addText(`Notes: ${task.notes.trim()}`, 9, false, 8);
+        const taskLines: { text: string; fontSize: number; isBold: boolean; indent: number }[] = [
+          { text: `Status: ${task.status}`, fontSize: 9, isBold: false, indent: 8 },
+          { text: `Priority: ${task.priority}`, fontSize: 9, isBold: false, indent: 8 },
+        ];
+        if (task.dueDate) {
+          taskLines.push({
+            text: `Due date: ${formatDateForDisplay(task.dueDate)}`,
+            fontSize: 9,
+            isBold: false,
+            indent: 8,
+          });
+        }
+        if (task.notes.trim()) {
+          taskLines.push({ text: `Notes: ${task.notes.trim()}`, fontSize: 9, isBold: false, indent: 8 });
+        }
+        const blockHeight =
+          textBlockHeight(taskLabel, 11, true, titleTextIndent) +
+          taskLines.reduce(
+            (sum, line) => sum + textBlockHeight(line.text, line.fontSize, line.isBold, line.indent),
+            2,
+          );
+        if (yPos > margin && yPos + blockHeight > contentBottom) {
+          pdf.addPage();
+          fillPage();
+          yPos = margin;
+        }
+        paintTaskTitle(taskLabel, task.status === 'Completed');
+        taskLines.forEach((line) => addText(line.text, line.fontSize, line.isBold, line.indent));
         (task.attachments || []).forEach((file) => {
           const fileName = file.name?.trim();
           if (!fileName) return;
@@ -1044,6 +1109,15 @@ export function ToDoListTool({ toolId }: ToDoListToolProps) {
         addSectionHeader('Attachments');
         addText('File names only. Files themselves are not included in this report.', 8, false, 5, true);
         attachmentRefs.forEach((line) => addText(line, 9, false, 8));
+      }
+
+      const pageCount = pdf.getNumberOfPages();
+      for (let page = 1; page <= pageCount; page += 1) {
+        pdf.setPage(page);
+        pdf.setFontSize(8);
+        pdf.setFont('helvetica', 'normal');
+        pdf.setTextColor(colors.muted[0], colors.muted[1], colors.muted[2]);
+        pdf.text('Household Toolbox', pageWidth / 2, footerY, { align: 'center' });
       }
 
       pdf.save(`To_Do_List_Report_${new Date().toISOString().split('T')[0]}.pdf`);

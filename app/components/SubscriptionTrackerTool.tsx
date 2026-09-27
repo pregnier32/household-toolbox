@@ -1019,6 +1019,8 @@ export function SubscriptionTrackerTool({ toolId }: SubscriptionTrackerToolProps
       const pageHeight = pdf.internal.pageSize.getHeight();
       const margin = 15;
       const contentWidth = pageWidth - margin * 2;
+      const footerY = pageHeight - 10;
+      const contentBottom = footerY - 4;
       let yPos = margin;
 
       const colors = {
@@ -1035,7 +1037,7 @@ export function SubscriptionTrackerTool({ toolId }: SubscriptionTrackerToolProps
       };
 
       const checkNewPage = (requiredHeight: number) => {
-        if (yPos + requiredHeight > pageHeight - margin) {
+        if (yPos + requiredHeight > contentBottom) {
           pdf.addPage();
           fillPage();
           yPos = margin;
@@ -1170,6 +1172,15 @@ export function SubscriptionTrackerTool({ toolId }: SubscriptionTrackerToolProps
         addSectionHeader('Attachments');
         addText('File names only. Files themselves are not included in this report.', 8, false, 5, true);
         attachmentRefs.forEach((line) => addText(line, 9, false, 8));
+      }
+
+      const pageCount = pdf.getNumberOfPages();
+      for (let page = 1; page <= pageCount; page += 1) {
+        pdf.setPage(page);
+        pdf.setFontSize(8);
+        pdf.setFont('helvetica', 'normal');
+        pdf.setTextColor(colors.muted[0], colors.muted[1], colors.muted[2]);
+        pdf.text('Household Toolbox', pageWidth / 2, footerY, { align: 'center' });
       }
 
       pdf.save(`Subscription_Tracker_Report_${localCalendarDayIso()}.pdf`);

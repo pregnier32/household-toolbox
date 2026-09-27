@@ -1588,6 +1588,15 @@ export function NotesTool({ toolId }: NotesToolProps) {
         exportedRecords = includeHistory ? [...activeRecords, ...inactiveRecords] : activeRecords;
       }
 
+      const lockedCount = exportedRecords.filter((note) => note.requiresPasswordForView).length;
+      if (lockedCount > 0) {
+        const lockedLabel = lockedCount === 1 ? '1 password-protected note' : `${lockedCount} password-protected notes`;
+        const proceed = window.confirm(
+          `This export includes ${lockedLabel}. Locked note bodies will be omitted. Continue?`,
+        );
+        if (!proceed) return;
+      }
+
       const selectedTagNames = exportTagIds
         .map((tagId) => getTagName(tagId))
         .filter((name) => name && name !== 'Unknown');
@@ -1622,7 +1631,10 @@ export function NotesTool({ toolId }: NotesToolProps) {
       const pageHeight = pdf.internal.pageSize.getHeight();
       const margin = 15;
       const contentWidth = pageWidth - margin * 2;
+      const footerY = pageHeight - 10;
+      const contentBottom = footerY - 4;
       let yPos = margin;
+      let repeatingNotesHeader = false;
 
       const colors = {
         background: [255, 255, 255] as const,
@@ -1637,14 +1649,29 @@ export function NotesTool({ toolId }: NotesToolProps) {
         pdf.rect(0, 0, pageWidth, pageHeight, 'F');
       };
 
+      const paintNotesHeader = () => {
+        pdf.setFillColor(colors.header[0], colors.header[1], colors.header[2]);
+        pdf.rect(margin, yPos, contentWidth, 10, 'F');
+        pdf.setFontSize(13);
+        pdf.setFont('helvetica', 'bold');
+        pdf.setTextColor(colors.title[0], colors.title[1], colors.title[2]);
+        pdf.text('Notes', margin + 5, yPos + 7);
+        yPos += 15;
+      };
+
+      const startNewPage = () => {
+        pdf.addPage();
+        fillPage();
+        yPos = margin;
+        if (repeatingNotesHeader) paintNotesHeader();
+      };
+
       const checkNewPage = (requiredHeight: number) => {
-        if (yPos + requiredHeight > pageHeight - margin) {
-          pdf.addPage();
-          fillPage();
-          yPos = margin;
-          return true;
-        }
-        return false;
+        if (yPos + requiredHeight <= contentBottom) return false;
+        const continuationTop = margin + (repeatingNotesHeader ? 15 : 0);
+        if (yPos <= continuationTop + 0.5) return false;
+        startNewPage();
+        return true;
       };
 
       const addSectionHeader = (title: string) => {
@@ -1659,14 +1686,18 @@ export function NotesTool({ toolId }: NotesToolProps) {
       };
 
       const addText = (text: string, fontSize = 10, isBold = false, indent = 0, muted = false) => {
-        pdf.setFontSize(fontSize);
-        pdf.setFont('helvetica', isBold ? 'bold' : 'normal');
-        const color = muted ? colors.muted : colors.text;
-        pdf.setTextColor(color[0], color[1], color[2]);
+        const applyStyle = () => {
+          pdf.setFontSize(fontSize);
+          pdf.setFont('helvetica', isBold ? 'bold' : 'normal');
+          const color = muted ? colors.muted : colors.text;
+          pdf.setTextColor(color[0], color[1], color[2]);
+        };
+        applyStyle();
         const maxWidth = contentWidth - indent - 5;
         const lines = pdf.splitTextToSize(text, maxWidth) as string[];
         const lineHeight = fontSize * 0.42;
         checkNewPage(lines.length * lineHeight + 2);
+        applyStyle();
         lines.forEach((line) => {
           pdf.text(line, margin + indent, yPos);
           yPos += lineHeight;
@@ -1686,11 +1717,10 @@ export function NotesTool({ toolId }: NotesToolProps) {
         if (note.createdDate) {
           addText(`Created: ${formatLocalCalendarDate(note.createdDate)}`, 9, false, 8);
         }
-        if (note.note.trim()) {
-          addText(note.note.trim(), 9, false, 8);
-        }
         if (note.requiresPasswordForView) {
           addText('Password protected: Yes', 9, false, 8);
+        } else if (note.note.trim()) {
+          addText(note.note.trim(), 9, false, 8);
         }
         if (!note.isActive && note.dateInactivated) {
           addText(`Date inactivated: ${formatLocalCalendarDate(note.dateInactivated)}`, 9, false, 8);
@@ -1745,9 +1775,11 @@ export function NotesTool({ toolId }: NotesToolProps) {
         addText('No notes match the selected options.', 10, false, 5, true);
       } else if (!exportAllNotes) {
         addSectionHeader('Notes');
+        repeatingNotesHeader = true;
         exportedRecords.forEach(writeNote);
       } else {
         addSectionHeader('Notes');
+        repeatingNotesHeader = true;
         if (activeRecords.length > 0) {
           activeRecords.forEach(writeNote);
         } else {
@@ -1768,10 +1800,23 @@ export function NotesTool({ toolId }: NotesToolProps) {
           .map((fileName) => `${note.noteName.trim() || 'Note'} — ${fileName}`)
       );
 
+      repeatingNotesHeader = false;
+
       if (attachmentRefs.length > 0) {
         addSectionHeader('Attachments');
         addText('File names only. Files themselves are not included in this report.', 8, false, 5, true);
         attachmentRefs.forEach((line) => addText(line, 9, false, 8));
+      }
+
+      const pageCount = pdf.getNumberOfPages();
+      for (let page = 1; page <= pageCount; page += 1) {
+        pdf.setPage(page);
+        pdf.setFontSize(8);
+        pdf.setFont('helvetica', 'normal');
+        pdf.setTextColor(colors.muted[0], colors.muted[1], colors.muted[2]);
+        pdf.text('Household Toolbox', margin, footerY);
+        pdf.setFontSize(9);
+        pdf.text(`Page ${page} of ${pageCount}`, pageWidth / 2, footerY, { align: 'center' });
       }
 
       pdf.save(`Notes_Report_${new Date().toISOString().split('T')[0]}.pdf`);

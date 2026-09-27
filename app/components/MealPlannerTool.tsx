@@ -1557,7 +1557,11 @@ export function MealPlannerTool({ toolId }: MealPlannerToolProps) {
       const pageHeight = pdf.internal.pageSize.getHeight();
       const margin = 15;
       const contentWidth = pageWidth - margin * 2;
+      const footerY = pageHeight - 10;
+      const contentBottom = footerY - 4;
       let yPos = margin;
+      let repeatingRecipeTitle: string | null = null;
+      let repeatingRecipeTitleHeight = 0;
 
       const colors = {
         background: [255, 255, 255] as const,
@@ -1572,14 +1576,30 @@ export function MealPlannerTool({ toolId }: MealPlannerToolProps) {
         pdf.rect(0, 0, pageWidth, pageHeight, 'F');
       };
 
+      const paintRecipeTitle = (name: string) => {
+        pdf.setFontSize(11);
+        pdf.setFont('helvetica', 'bold');
+        pdf.setTextColor(colors.text[0], colors.text[1], colors.text[2]);
+        const maxWidth = contentWidth - 8 - 5;
+        const lines = pdf.splitTextToSize(name, maxWidth) as string[];
+        const lineHeight = 11 * 0.42;
+        lines.forEach((line) => {
+          pdf.text(line, margin + 8, yPos);
+          yPos += lineHeight;
+        });
+        yPos += 2;
+        return lines.length * lineHeight + 2;
+      };
+
       const checkNewPage = (requiredHeight: number) => {
-        if (yPos + requiredHeight > pageHeight - margin) {
-          pdf.addPage();
-          fillPage();
-          yPos = margin;
-          return true;
-        }
-        return false;
+        if (yPos + requiredHeight <= contentBottom) return false;
+        const continuationTop = margin + (repeatingRecipeTitle ? repeatingRecipeTitleHeight : 0);
+        if (yPos <= continuationTop + 0.5) return false;
+        pdf.addPage();
+        fillPage();
+        yPos = margin;
+        if (repeatingRecipeTitle) paintRecipeTitle(repeatingRecipeTitle);
+        return true;
       };
 
       const addSectionHeader = (title: string) => {
@@ -1594,19 +1614,31 @@ export function MealPlannerTool({ toolId }: MealPlannerToolProps) {
       };
 
       const addText = (text: string, fontSize = 10, isBold = false, indent = 0, muted = false) => {
-        pdf.setFontSize(fontSize);
-        pdf.setFont('helvetica', isBold ? 'bold' : 'normal');
-        const color = muted ? colors.muted : colors.text;
-        pdf.setTextColor(color[0], color[1], color[2]);
+        const applyStyle = () => {
+          pdf.setFontSize(fontSize);
+          pdf.setFont('helvetica', isBold ? 'bold' : 'normal');
+          const color = muted ? colors.muted : colors.text;
+          pdf.setTextColor(color[0], color[1], color[2]);
+        };
+        applyStyle();
         const maxWidth = contentWidth - indent - 5;
         const lines = pdf.splitTextToSize(text, maxWidth) as string[];
         const lineHeight = fontSize * 0.42;
         checkNewPage(lines.length * lineHeight + 2);
+        applyStyle();
         lines.forEach((line) => {
           pdf.text(line, margin + indent, yPos);
           yPos += lineHeight;
         });
         yPos += 2;
+      };
+
+      const textBlockHeight = (text: string, fontSize: number, isBold: boolean, indent: number) => {
+        pdf.setFontSize(fontSize);
+        pdf.setFont('helvetica', isBold ? 'bold' : 'normal');
+        const maxWidth = contentWidth - indent - 5;
+        const lines = pdf.splitTextToSize(text, maxWidth) as string[];
+        return lines.length * fontSize * 0.42 + 2;
       };
 
       const groceryForPlan = (plan: MealPlanRecord) => {
@@ -1757,25 +1789,61 @@ export function MealPlannerTool({ toolId }: MealPlannerToolProps) {
           addText('No meals assigned.', 9, false, 8, true);
         } else {
           usedMeals.forEach((meal) => {
-            checkNewPage(28);
-            addText(meal.name, 11, true, 8);
             const typeName = mealTypes.find((type) => type.id === meal.mealTypeId)?.name;
-            if (typeName) addText(`Type: ${typeName}`, 9, false, 10);
-            if (meal.prepTimeMinutes != null) addText(`Prep time: ${meal.prepTimeMinutes} min`, 9, false, 10);
-            addText(`Scale: ${mealScale(meal)}`, 9, false, 10);
-            if (meal.difficulty) {
-              addText(`Difficulty: ${meal.difficulty.charAt(0).toUpperCase()}${meal.difficulty.slice(1)}`, 9, false, 10);
-            }
-            if (meal.rating > 0) addText(`Rating: ${meal.rating} of 5`, 9, false, 10);
-            if (meal.description.trim()) addText(`Description: ${meal.description.trim()}`, 9, false, 10);
             const ingredientNames = meal.ingredientIds
               .map((itemId) => masterItems.find((item) => item.id === itemId)?.name)
               .filter((name): name is string => Boolean(name))
               .sort((a, b) => a.localeCompare(b));
-            if (ingredientNames.length > 0) {
-              addText(`Ingredients: ${ingredientNames.join(', ')}`, 9, false, 10);
+            const recipeLines: { text: string; fontSize: number; isBold: boolean; indent: number }[] = [
+              { text: meal.name, fontSize: 11, isBold: true, indent: 8 },
+            ];
+            if (typeName) recipeLines.push({ text: `Type: ${typeName}`, fontSize: 9, isBold: false, indent: 10 });
+            if (meal.prepTimeMinutes != null) {
+              recipeLines.push({ text: `Prep time: ${meal.prepTimeMinutes} min`, fontSize: 9, isBold: false, indent: 10 });
             }
-            if (meal.instructions.trim()) addText(`Instructions: ${meal.instructions.trim()}`, 9, false, 10);
+            recipeLines.push({ text: `Scale: ${mealScale(meal)}`, fontSize: 9, isBold: false, indent: 10 });
+            if (meal.difficulty) {
+              recipeLines.push({
+                text: `Difficulty: ${meal.difficulty.charAt(0).toUpperCase()}${meal.difficulty.slice(1)}`,
+                fontSize: 9,
+                isBold: false,
+                indent: 10,
+              });
+            }
+            if (meal.rating > 0) {
+              recipeLines.push({ text: `Rating: ${meal.rating} of 5`, fontSize: 9, isBold: false, indent: 10 });
+            }
+            if (meal.description.trim()) {
+              recipeLines.push({ text: `Description: ${meal.description.trim()}`, fontSize: 9, isBold: false, indent: 10 });
+            }
+            if (ingredientNames.length > 0) {
+              recipeLines.push({ text: `Ingredients: ${ingredientNames.join(', ')}`, fontSize: 9, isBold: false, indent: 10 });
+            }
+            if (meal.instructions.trim()) {
+              recipeLines.push({ text: `Instructions: ${meal.instructions.trim()}`, fontSize: 9, isBold: false, indent: 10 });
+            }
+
+            const blockHeight = recipeLines.reduce(
+              (sum, line) => sum + textBlockHeight(line.text, line.fontSize, line.isBold, line.indent),
+              2,
+            );
+            const pageBottom = contentBottom;
+            const pageRoom = pageBottom - margin;
+            repeatingRecipeTitle = null;
+            repeatingRecipeTitleHeight = 0;
+            if (yPos > margin && yPos + blockHeight > pageBottom) {
+              pdf.addPage();
+              fillPage();
+              yPos = margin;
+            }
+            addText(recipeLines[0].text, recipeLines[0].fontSize, recipeLines[0].isBold, recipeLines[0].indent);
+            if (blockHeight > pageRoom) {
+              repeatingRecipeTitle = meal.name;
+              repeatingRecipeTitleHeight = textBlockHeight(meal.name, 11, true, 8);
+            }
+            recipeLines.slice(1).forEach((line) => addText(line.text, line.fontSize, line.isBold, line.indent));
+            repeatingRecipeTitle = null;
+            repeatingRecipeTitleHeight = 0;
             yPos += 2;
           });
         }
@@ -1797,6 +1865,17 @@ export function MealPlannerTool({ toolId }: MealPlannerToolProps) {
         addSectionHeader('Attachments');
         addText('File names only. Files themselves are not included in this report.', 8, false, 5, true);
         attachmentRefs.forEach((line) => addText(line, 9, false, 8));
+      }
+
+      const pageCount = pdf.getNumberOfPages();
+      for (let page = 1; page <= pageCount; page += 1) {
+        pdf.setPage(page);
+        pdf.setFontSize(8);
+        pdf.setFont('helvetica', 'normal');
+        pdf.setTextColor(colors.muted[0], colors.muted[1], colors.muted[2]);
+        pdf.text('Household Toolbox', margin, footerY);
+        pdf.setFontSize(9);
+        pdf.text(`Page ${page} of ${pageCount}`, pageWidth / 2, footerY, { align: 'center' });
       }
 
       pdf.save(`Meal_Planner_Report_${new Date().toISOString().split('T')[0]}.pdf`);

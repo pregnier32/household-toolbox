@@ -1503,7 +1503,10 @@ export function RepairHistoryTool({ toolId }: RepairHistoryToolProps) {
       const pageHeight = pdf.internal.pageSize.getHeight();
       const margin = 15;
       const contentWidth = pageWidth - margin * 2;
+      const footerY = pageHeight - 10;
+      const contentBottom = footerY - 4;
       let yPos = margin;
+      let repeatingCategoryHeader: string | null = null;
 
       const colors = {
         background: [255, 255, 255] as const,
@@ -1518,18 +1521,7 @@ export function RepairHistoryTool({ toolId }: RepairHistoryToolProps) {
         pdf.rect(0, 0, pageWidth, pageHeight, 'F');
       };
 
-      const checkNewPage = (requiredHeight: number) => {
-        if (yPos + requiredHeight > pageHeight - margin) {
-          pdf.addPage();
-          fillPage();
-          yPos = margin;
-          return true;
-        }
-        return false;
-      };
-
-      const addSectionHeader = (title: string) => {
-        checkNewPage(15);
+      const paintCategoryHeader = (title: string) => {
         pdf.setFillColor(colors.header[0], colors.header[1], colors.header[2]);
         pdf.rect(margin, yPos, contentWidth, 10, 'F');
         pdf.setFontSize(13);
@@ -1539,20 +1531,62 @@ export function RepairHistoryTool({ toolId }: RepairHistoryToolProps) {
         yPos += 15;
       };
 
-      const addText = (text: string, fontSize = 10, isBold = false, indent = 0, muted = false) => {
+      const startNewPage = () => {
+        pdf.addPage();
+        fillPage();
+        yPos = margin;
+        if (repeatingCategoryHeader) paintCategoryHeader(repeatingCategoryHeader);
+      };
+
+      const checkNewPage = (requiredHeight: number) => {
+        if (yPos + requiredHeight > contentBottom) {
+          startNewPage();
+          return true;
+        }
+        return false;
+      };
+
+      const addSectionHeader = (title: string) => {
+        checkNewPage(15);
+        paintCategoryHeader(title);
+      };
+
+      const textBlockHeight = (text: string, fontSize: number, isBold: boolean, indent: number) => {
         pdf.setFontSize(fontSize);
         pdf.setFont('helvetica', isBold ? 'bold' : 'normal');
-        const color = muted ? colors.muted : colors.text;
-        pdf.setTextColor(color[0], color[1], color[2]);
+        const maxWidth = contentWidth - indent - 5;
+        const lines = pdf.splitTextToSize(text, maxWidth) as string[];
+        return lines.length * fontSize * 0.42 + 2;
+      };
+
+      const addText = (text: string, fontSize = 10, isBold = false, indent = 0, muted = false) => {
+        const applyStyle = () => {
+          pdf.setFontSize(fontSize);
+          pdf.setFont('helvetica', isBold ? 'bold' : 'normal');
+          const color = muted ? colors.muted : colors.text;
+          pdf.setTextColor(color[0], color[1], color[2]);
+        };
+        applyStyle();
         const maxWidth = contentWidth - indent - 5;
         const lines = pdf.splitTextToSize(text, maxWidth) as string[];
         const lineHeight = fontSize * 0.42;
         checkNewPage(lines.length * lineHeight + 2);
+        applyStyle();
         lines.forEach((line) => {
           pdf.text(line, margin + indent, yPos);
           yPos += lineHeight;
         });
         yPos += 2;
+      };
+
+      const keepRepairEntryTogether = (parts: { text: string; fontSize: number; isBold: boolean; indent: number }[]) => {
+        const blockHeight = parts.reduce(
+          (sum, part) => sum + textBlockHeight(part.text, part.fontSize, part.isBold, part.indent),
+          2,
+        );
+        if (yPos > margin && yPos + blockHeight > contentBottom) {
+          startNewPage();
+        }
       };
 
       fillPage();
@@ -1586,32 +1620,47 @@ export function RepairHistoryTool({ toolId }: RepairHistoryToolProps) {
         if (categoryRecords.length === 0) return;
 
         printedCategories += 1;
-        addSectionHeader(`${category.name} (${category.categoryType})`);
+        const categoryTitle = `${category.name} (${category.categoryType})`;
+        repeatingCategoryHeader = null;
+        addSectionHeader(categoryTitle);
+        repeatingCategoryHeader = categoryTitle;
 
         categoryRecords.forEach((record) => {
           const itemLabel = record.itemName.trim() || 'Repair';
           const typeLabel = record.type === 'replace' ? 'Replace' : 'Repair';
-          addText(`${itemLabel}  ·  ${typeLabel}`, 11, true, 5);
-          if (record.date) addText(`Date: ${formatLocalCalendarDate(record.date)}`, 9, false, 8);
-          if (record.description.trim()) addText(`Description: ${record.description.trim()}`, 9, false, 8);
-          if (record.cost.trim()) addText(`Cost: ${record.cost.trim()}`, 9, false, 8);
-          if (record.serviceProvider.trim()) addText(`Service provider: ${record.serviceProvider.trim()}`, 9, false, 8);
-          if (record.warrantyEndDate) addText(`Warranty end: ${formatLocalCalendarDate(record.warrantyEndDate)}`, 9, false, 8);
+          const entryLines: { text: string; fontSize: number; isBold: boolean; indent: number }[] = [
+            { text: `${itemLabel}  ·  ${typeLabel}`, fontSize: 11, isBold: true, indent: 5 },
+          ];
+          if (record.date) entryLines.push({ text: `Date: ${formatLocalCalendarDate(record.date)}`, fontSize: 9, isBold: false, indent: 8 });
+          if (record.description.trim()) entryLines.push({ text: `Description: ${record.description.trim()}`, fontSize: 9, isBold: false, indent: 8 });
+          if (record.cost.trim()) {
+            const formattedCost = formatCurrencyDisplay(record.cost.trim());
+            entryLines.push({
+              text: `Cost: ${formattedCost || record.cost.trim()}`,
+              fontSize: 9,
+              isBold: false,
+              indent: 8,
+            });
+          }
+          if (record.serviceProvider.trim()) entryLines.push({ text: `Service provider: ${record.serviceProvider.trim()}`, fontSize: 9, isBold: false, indent: 8 });
+          if (record.warrantyEndDate) entryLines.push({ text: `Warranty end: ${formatLocalCalendarDate(record.warrantyEndDate)}`, fontSize: 9, isBold: false, indent: 8 });
           if (record.submittedToInsurance) {
-            addText('Submitted to insurance: Yes', 9, false, 8);
-            if (record.insuranceCarrier.trim()) addText(`Carrier: ${record.insuranceCarrier.trim()}`, 9, false, 10);
-            if (record.claimNumber.trim()) addText(`Claim number: ${record.claimNumber.trim()}`, 9, false, 10);
-            if (record.amountInsurancePaid.trim()) addText(`Amount paid: ${record.amountInsurancePaid.trim()}`, 9, false, 10);
-            if (record.agentContactInfo.trim()) addText(`Agent: ${record.agentContactInfo.trim()}`, 9, false, 10);
-            if (record.claimNotes.trim()) addText(`Claim notes: ${record.claimNotes.trim()}`, 9, false, 10);
+            entryLines.push({ text: 'Submitted to insurance: Yes', fontSize: 9, isBold: false, indent: 8 });
+            if (record.insuranceCarrier.trim()) entryLines.push({ text: `Carrier: ${record.insuranceCarrier.trim()}`, fontSize: 9, isBold: false, indent: 10 });
+            if (record.claimNumber.trim()) entryLines.push({ text: `Claim number: ${record.claimNumber.trim()}`, fontSize: 9, isBold: false, indent: 10 });
+            if (record.amountInsurancePaid.trim()) entryLines.push({ text: `Amount paid: ${record.amountInsurancePaid.trim()}`, fontSize: 9, isBold: false, indent: 10 });
+            if (record.agentContactInfo.trim()) entryLines.push({ text: `Agent: ${record.agentContactInfo.trim()}`, fontSize: 9, isBold: false, indent: 10 });
+            if (record.claimNotes.trim()) entryLines.push({ text: `Claim notes: ${record.claimNotes.trim()}`, fontSize: 9, isBold: false, indent: 10 });
           }
           if (category.categoryType === 'Auto' && record.odometerReading.trim()) {
-            addText(`Odometer: ${record.odometerReading.trim()}`, 9, false, 8);
+            entryLines.push({ text: `Odometer: ${record.odometerReading.trim()}`, fontSize: 9, isBold: false, indent: 8 });
           }
           if (category.categoryType === 'Home' && record.manualLink.trim()) {
-            addText(`Manual: ${record.manualLink.trim()}`, 9, false, 8);
+            entryLines.push({ text: `Manual: ${record.manualLink.trim()}`, fontSize: 9, isBold: false, indent: 8 });
           }
-          if (record.notes.trim()) addText(`Notes: ${record.notes.trim()}`, 9, false, 8);
+          if (record.notes.trim()) entryLines.push({ text: `Notes: ${record.notes.trim()}`, fontSize: 9, isBold: false, indent: 8 });
+          keepRepairEntryTogether(entryLines);
+          entryLines.forEach((line) => addText(line.text, line.fontSize, line.isBold, line.indent));
           (record.attachments || []).forEach((file) => {
             const fileName = file.name?.trim();
             if (!fileName) return;
@@ -1622,6 +1671,8 @@ export function RepairHistoryTool({ toolId }: RepairHistoryToolProps) {
         });
       });
 
+      repeatingCategoryHeader = null;
+
       if (printedCategories === 0) {
         addText('No repairs match the selected options.', 10, false, 5, true);
       }
@@ -1630,6 +1681,15 @@ export function RepairHistoryTool({ toolId }: RepairHistoryToolProps) {
         addSectionHeader('Attachments');
         addText('File names only. Files themselves are not included in this report.', 8, false, 5, true);
         attachmentRefs.forEach((line) => addText(line, 9, false, 8));
+      }
+
+      const pageCount = pdf.getNumberOfPages();
+      for (let page = 1; page <= pageCount; page += 1) {
+        pdf.setPage(page);
+        pdf.setFontSize(9);
+        pdf.setFont('helvetica', 'normal');
+        pdf.setTextColor(colors.muted[0], colors.muted[1], colors.muted[2]);
+        pdf.text(`Page ${page} of ${pageCount}`, pageWidth / 2, footerY, { align: 'center' });
       }
 
       pdf.save(`Repair_History_Report_${new Date().toISOString().split('T')[0]}.pdf`);

@@ -95,13 +95,42 @@ function formatLocalDate(isoDate: string): string {
   return d ? d.toLocaleDateString() : isoDate;
 }
 
+function formatUploadedDate(isoDate: string): string {
+  const d = new Date(isoDate);
+  return Number.isNaN(d.getTime()) ? isoDate : d.toLocaleDateString();
+}
+
 function formatLocalDateLong(isoDate: string): string {
   const d = parseLocalDate(isoDate);
   return d ? d.toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' }) : isoDate;
 }
 
-function formatReportDate(date: Date): string {
-  return date.toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' });
+function formatReportGeneratedAt(date: Date): string {
+  const datePart = date.toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' });
+  const timePart = date.toLocaleTimeString('en-US', {
+    hour: 'numeric',
+    minute: '2-digit',
+    timeZoneName: 'short',
+  });
+  return `${datePart}, ${timePart}`;
+}
+
+function documentsForExport<T extends { tags: string[]; isActive: boolean; documentName: string }>(
+  docs: T[],
+  allTags: boolean,
+  tagIds: string[],
+  includeHistory: boolean,
+): { active: T[]; inactive: T[]; exported: T[] } {
+  const matches = (doc: T) => allTags || tagIds.some((tagId) => doc.tags.includes(tagId));
+  const sortByName = (a: T, b: T) => a.documentName.localeCompare(b.documentName);
+  const scoped = docs.filter(matches);
+  const active = scoped.filter((doc) => doc.isActive).sort(sortByName);
+  const inactive = scoped.filter((doc) => !doc.isActive).sort(sortByName);
+  return {
+    active,
+    inactive,
+    exported: includeHistory ? [...active, ...inactive] : active,
+  };
 }
 
 function ownedAttachmentFileName(doc: Pick<Document, 'fileName' | 'fileUrl'>): string | null {
@@ -452,6 +481,7 @@ export function ImportantDocumentsTool({ toolId }: ImportantDocumentsToolProps) 
   const isDocumentFilterActive = searchQuery.trim() !== '' || selectedTagFilter !== 'all';
   const activeTags = tags.filter(tag => tag.isActive).sort((a, b) => a.name.localeCompare(b.name));
   const inactiveTags = tags.filter(tag => !tag.isActive).sort((a, b) => a.name.localeCompare(b.name));
+  const exportPreviewCount = documentsForExport(documents, exportAllTags, exportTagIds, includeHistory).exported.length;
 
   const addDocument = async () => {
     if (!newDocument.documentName.trim() || !newDocument.uploadedDate) {
@@ -1637,11 +1667,6 @@ export function ImportantDocumentsTool({ toolId }: ImportantDocumentsToolProps) 
     setIsExportingPdf(true);
 
     try {
-      const matchesExportTags = (doc: Document) =>
-        exportAllTags || exportTagIds.some((tagId) => doc.tags.includes(tagId));
-
-      const sortByName = (a: Document, b: Document) => a.documentName.localeCompare(b.documentName);
-
       let sourceDocuments = documents;
       if (toolId) {
         const loadResponse = await fetch(`/api/tools/important-documents?toolId=${toolId}`, { cache: 'no-store' });
@@ -1669,10 +1694,8 @@ export function ImportantDocumentsTool({ toolId }: ImportantDocumentsToolProps) 
         }
       }
 
-      const scoped = sourceDocuments.filter(matchesExportTags);
-      const activeRecords = scoped.filter((doc) => doc.isActive).sort(sortByName);
-      const inactiveRecords = scoped.filter((doc) => !doc.isActive).sort(sortByName);
-      const exportedRecords = includeHistory ? [...activeRecords, ...inactiveRecords] : activeRecords;
+      const { active: activeRecords, inactive: inactiveRecords, exported: exportedRecords } =
+        documentsForExport(sourceDocuments, exportAllTags, exportTagIds, includeHistory);
 
       const selectedTagNames = exportTagIds
         .map((tagId) => getTagName(tagId))
@@ -1718,16 +1741,39 @@ export function ImportantDocumentsTool({ toolId }: ImportantDocumentsToolProps) 
         muted: [71, 85, 105] as const,
       };
 
+      const historyLabel = includeHistory ? 'Active and inactive documents' : 'Active documents only';
+      const tagScopeLabel = exportAllTags
+        ? 'All tags'
+        : selectedTagNames.length > 0
+          ? selectedTagNames.join(', ')
+          : 'Selected tags';
+      const scopeLine = `${historyLabel}  ·  ${tagScopeLabel}`;
+      const reportTitle = 'Important Documents Report';
+      const footerY = pageHeight - 10;
+      const contentBottom = footerY - 4;
+
       const fillPage = () => {
         pdf.setFillColor(colors.background[0], colors.background[1], colors.background[2]);
         pdf.rect(0, 0, pageWidth, pageHeight, 'F');
       };
 
+      const paintContinuationHeader = () => {
+        pdf.setFontSize(14);
+        pdf.setFont('helvetica', 'bold');
+        pdf.setTextColor(colors.title[0], colors.title[1], colors.title[2]);
+        pdf.text(reportTitle, (pageWidth - pdf.getTextWidth(reportTitle)) / 2, margin + 4);
+        pdf.setFontSize(10);
+        pdf.setFont('helvetica', 'normal');
+        pdf.setTextColor(colors.muted[0], colors.muted[1], colors.muted[2]);
+        pdf.text(scopeLine, margin, margin + 12);
+        yPos = margin + 18;
+      };
+
       const checkNewPage = (requiredHeight: number) => {
-        if (yPos + requiredHeight > pageHeight - margin) {
+        if (yPos + requiredHeight > contentBottom) {
           pdf.addPage();
           fillPage();
-          yPos = margin;
+          paintContinuationHeader();
           return true;
         }
         return false;
@@ -1745,15 +1791,19 @@ export function ImportantDocumentsTool({ toolId }: ImportantDocumentsToolProps) 
       };
 
       const addText = (text: string, fontSize = 10, isBold = false, indent = 0, muted = false) => {
-        pdf.setFontSize(fontSize);
-        pdf.setFont('helvetica', isBold ? 'bold' : 'normal');
-        const color = muted ? colors.muted : colors.text;
-        pdf.setTextColor(color[0], color[1], color[2]);
+        const applyStyle = () => {
+          pdf.setFontSize(fontSize);
+          pdf.setFont('helvetica', isBold ? 'bold' : 'normal');
+          const color = muted ? colors.muted : colors.text;
+          pdf.setTextColor(color[0], color[1], color[2]);
+        };
+        applyStyle();
         const maxWidth = contentWidth - indent - 5;
         const lines = pdf.splitTextToSize(text, maxWidth) as string[];
         const lineHeight = fontSize * 0.42;
-        checkNewPage(lines.length * lineHeight + 2);
         lines.forEach((line) => {
+          checkNewPage(lineHeight);
+          applyStyle();
           pdf.text(line, margin + indent, yPos);
           yPos += lineHeight;
         });
@@ -1770,7 +1820,7 @@ export function ImportantDocumentsTool({ toolId }: ImportantDocumentsToolProps) 
           addText(`Tags: ${tagNames.join(', ')}`, 9, false, 8);
         }
         if (doc.uploadedDate) {
-          addText(`Uploaded: ${formatLocalDate(doc.uploadedDate)}`, 9, false, 8);
+          addText(`Uploaded: ${formatUploadedDate(doc.uploadedDate)}`, 9, false, 8);
         }
         if (doc.effectiveDate) {
           addText(`Effective: ${formatLocalDate(doc.effectiveDate)}`, 9, false, 8);
@@ -1792,23 +1842,16 @@ export function ImportantDocumentsTool({ toolId }: ImportantDocumentsToolProps) 
       pdf.setFontSize(20);
       pdf.setFont('helvetica', 'bold');
       pdf.setTextColor(colors.title[0], colors.title[1], colors.title[2]);
-      const title = 'Important Documents Report';
-      pdf.text(title, (pageWidth - pdf.getTextWidth(title)) / 2, yPos);
+      pdf.text(reportTitle, (pageWidth - pdf.getTextWidth(reportTitle)) / 2, yPos);
       yPos += 10;
 
       pdf.setFontSize(10);
       pdf.setFont('helvetica', 'normal');
       pdf.setTextColor(colors.muted[0], colors.muted[1], colors.muted[2]);
-      pdf.text(`Generated on: ${formatReportDate(new Date())}`, margin, yPos);
+      pdf.text(`Generated on: ${formatReportGeneratedAt(new Date())}`, margin, yPos);
       yPos += 6;
 
-      const historyLabel = includeHistory ? 'Active and inactive documents' : 'Active documents only';
-      const tagScopeLabel = exportAllTags
-        ? 'All tags'
-        : selectedTagNames.length > 0
-          ? selectedTagNames.join(', ')
-          : 'Selected tags';
-      pdf.text(`${historyLabel}  ·  ${tagScopeLabel}`, margin, yPos);
+      pdf.text(scopeLine, margin, yPos);
       yPos += 10;
 
       addSectionHeader('Summary');
@@ -1851,6 +1894,15 @@ export function ImportantDocumentsTool({ toolId }: ImportantDocumentsToolProps) 
         addSectionHeader('Attachments');
         addText('File names only. Files themselves are not included in this report.', 8, false, 5, true);
         attachmentRefs.forEach((line) => addText(line, 9, false, 8));
+      }
+
+      const pageCount = pdf.getNumberOfPages();
+      for (let page = 1; page <= pageCount; page += 1) {
+        pdf.setPage(page);
+        pdf.setFontSize(9);
+        pdf.setFont('helvetica', 'normal');
+        pdf.setTextColor(colors.muted[0], colors.muted[1], colors.muted[2]);
+        pdf.text(`Page ${page} of ${pageCount}`, pageWidth / 2, footerY, { align: 'center' });
       }
 
       pdf.save(`Important_Documents_Report_${new Date().toISOString().split('T')[0]}.pdf`);
@@ -2518,7 +2570,7 @@ export function ImportantDocumentsTool({ toolId }: ImportantDocumentsToolProps) 
                           </div>
                           <div className="flex flex-wrap gap-x-4 gap-y-1 text-xs text-slate-300">
                             <span>
-                              <span className="text-slate-400">Uploaded:</span> {new Date(document.uploadedDate).toLocaleDateString()}
+                              <span className="text-slate-400">Uploaded:</span> {formatUploadedDate(document.uploadedDate)}
                             </span>
                             {document.effectiveDate && (
                               <span>
@@ -2632,7 +2684,7 @@ export function ImportantDocumentsTool({ toolId }: ImportantDocumentsToolProps) 
                           </div>
                           <div className="flex flex-wrap gap-x-4 gap-y-1 text-xs text-slate-400">
                             <span>
-                              <span className="text-slate-500">Uploaded:</span> {new Date(document.uploadedDate).toLocaleDateString()}
+                              <span className="text-slate-500">Uploaded:</span> {formatUploadedDate(document.uploadedDate)}
                             </span>
                             <span>
                               <span className="text-slate-500">Added:</span> {new Date(document.dateAdded).toLocaleDateString()}
@@ -2988,6 +3040,12 @@ export function ImportantDocumentsTool({ toolId }: ImportantDocumentsToolProps) 
                   </div>
                 )}
               </fieldset>
+
+              <p className={descClass}>
+                {exportAllTags || exportTagIds.length > 0
+                  ? `${exportPreviewCount} ${exportPreviewCount === 1 ? 'document' : 'documents'} will be included.`
+                  : 'Select at least one tag to see how many documents will be included.'}
+              </p>
 
               <div className="flex gap-3 pt-2">
                 <button

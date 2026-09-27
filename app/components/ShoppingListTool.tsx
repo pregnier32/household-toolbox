@@ -912,7 +912,10 @@ export function ShoppingListTool({ toolId }: ShoppingListToolProps) {
       const pageHeight = pdf.internal.pageSize.getHeight();
       const margin = 15;
       const contentWidth = pageWidth - margin * 2;
+      const footerY = pageHeight - 10;
+      const contentBottom = footerY - 4;
       let yPos = margin;
+      let repeatingListHeader: string | null = null;
 
       const colors = {
         background: [255, 255, 255] as const,
@@ -927,11 +930,26 @@ export function ShoppingListTool({ toolId }: ShoppingListToolProps) {
         pdf.rect(0, 0, pageWidth, pageHeight, 'F');
       };
 
+      const paintListHeader = (title: string) => {
+        pdf.setFontSize(13);
+        pdf.setFont('helvetica', 'bold');
+        const lines = pdf.splitTextToSize(title, contentWidth - 10) as string[];
+        const barHeight = Math.max(10, lines.length * 6 + 4);
+        pdf.setFillColor(colors.header[0], colors.header[1], colors.header[2]);
+        pdf.rect(margin, yPos, contentWidth, barHeight, 'F');
+        pdf.setTextColor(colors.title[0], colors.title[1], colors.title[2]);
+        lines.forEach((line, index) => {
+          pdf.text(line, margin + 5, yPos + 7 + index * 6);
+        });
+        yPos += barHeight + 5;
+      };
+
       const checkNewPage = (requiredHeight: number) => {
-        if (yPos + requiredHeight > pageHeight - margin) {
+        if (yPos + requiredHeight > contentBottom) {
           pdf.addPage();
           fillPage();
           yPos = margin;
+          if (repeatingListHeader) paintListHeader(repeatingListHeader);
           return true;
         }
         return false;
@@ -943,25 +961,23 @@ export function ShoppingListTool({ toolId }: ShoppingListToolProps) {
         const lines = pdf.splitTextToSize(title, contentWidth - 10) as string[];
         const barHeight = Math.max(10, lines.length * 6 + 4);
         checkNewPage(barHeight + 5);
-        pdf.setFillColor(colors.header[0], colors.header[1], colors.header[2]);
-        pdf.rect(margin, yPos, contentWidth, barHeight, 'F');
-        pdf.setTextColor(colors.title[0], colors.title[1], colors.title[2]);
-        lines.forEach((line, index) => {
-          pdf.text(line, margin + 5, yPos + 7 + index * 6);
-        });
-        yPos += barHeight + 5;
+        paintListHeader(title);
       };
 
       const addText = (text: string, fontSize = 10, isBold = false, indent = 0, muted = false) => {
-        pdf.setFontSize(fontSize);
-        pdf.setFont('helvetica', isBold ? 'bold' : 'normal');
-        const color = muted ? colors.muted : colors.text;
-        pdf.setTextColor(color[0], color[1], color[2]);
+        const applyStyle = () => {
+          pdf.setFontSize(fontSize);
+          pdf.setFont('helvetica', isBold ? 'bold' : 'normal');
+          const color = muted ? colors.muted : colors.text;
+          pdf.setTextColor(color[0], color[1], color[2]);
+        };
+        applyStyle();
         const maxWidth = contentWidth - indent - 5;
         const lines = pdf.splitTextToSize(text, maxWidth) as string[];
         const lineHeight = fontSize * 0.42;
-        checkNewPage(lines.length * lineHeight + 2);
         lines.forEach((line) => {
+          checkNewPage(lineHeight);
+          applyStyle();
           pdf.text(line, margin + indent, yPos);
           yPos += lineHeight;
         });
@@ -999,7 +1015,10 @@ export function ShoppingListTool({ toolId }: ShoppingListToolProps) {
       const attachmentRefs: string[] = [];
       const printList = (list: ShoppingListRecord) => {
         const dateLabel = list.date ? formatLocalCalendarDate(list.date) : '';
-        addSectionHeader(dateLabel ? `${list.name} — ${dateLabel}` : list.name || 'Shopping list');
+        const listHeader = dateLabel ? `${list.name} — ${dateLabel}` : list.name || 'Shopping list';
+        repeatingListHeader = null;
+        addSectionHeader(listHeader);
+        repeatingListHeader = listHeader;
         const groups = groupListItemsByCategory(list.items);
         if (groups.length === 0) {
           addText('No items.', 10, false, 5, true);
@@ -1012,6 +1031,7 @@ export function ShoppingListTool({ toolId }: ShoppingListToolProps) {
             });
           });
         }
+        repeatingListHeader = null;
         (list.attachments || []).forEach((file) => {
           const fileName = file.name?.trim();
           if (!fileName) return;
@@ -1035,6 +1055,15 @@ export function ShoppingListTool({ toolId }: ShoppingListToolProps) {
         addSectionHeader('Attachments');
         addText('File names only. Files themselves are not included in this report.', 8, false, 5, true);
         attachmentRefs.forEach((line) => addText(line, 9, false, 8));
+      }
+
+      const pageCount = pdf.getNumberOfPages();
+      for (let page = 1; page <= pageCount; page += 1) {
+        pdf.setPage(page);
+        pdf.setFontSize(8);
+        pdf.setFont('helvetica', 'normal');
+        pdf.setTextColor(colors.muted[0], colors.muted[1], colors.muted[2]);
+        pdf.text('Household Toolbox', pageWidth / 2, footerY, { align: 'center' });
       }
 
       pdf.save(`Shopping_List_Report_${new Date().toISOString().split('T')[0]}.pdf`);
