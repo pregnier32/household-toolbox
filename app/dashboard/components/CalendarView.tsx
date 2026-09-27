@@ -142,18 +142,18 @@ export function CalendarView({
     const titleWidth = pdf.getTextWidth(title);
     pdf.text(title, (pageWidth - titleWidth) / 2, 20);
 
-    // Calendar grid settings
+    // Calendar grid settings. Stop the grid above the footer so branding stays clear.
     const margin = 20;
     const gridWidth = pageWidth - (margin * 2);
     const pageHeight = pdf.internal.pageSize.getHeight();
-    const availableHeight = pageHeight - 50; // Leave space for title and margins
-    const gridHeight = availableHeight;
+    const footerY = pageHeight - 10;
+    const contentBottom = footerY - 4;
     const cellWidth = gridWidth / 7;
-    
-    // Calculate number of rows needed first
     const numRows = Math.ceil((startingDayOfWeek + daysInMonth) / 7);
-    const cellHeight = gridHeight / numRows; // Use actual number of rows
     const startY = 35;
+    const gridTop = startY + 12;
+    const gridHeight = contentBottom - gridTop;
+    const cellHeight = gridHeight / numRows;
 
     // Draw day headers
     pdf.setFontSize(12);
@@ -263,7 +263,84 @@ export function CalendarView({
       }
     }
 
-    // Save PDF
+    const monthEvents: { day: number; event: any }[] = [];
+    for (let day = 1; day <= daysInMonth; day += 1) {
+      getEventsForDay(day).forEach((event) => {
+        monthEvents.push({ day, event });
+      });
+    }
+
+    let yPos = margin;
+    const contentWidth = pageWidth - margin * 2;
+    const openDetailPage = () => {
+      pdf.addPage();
+      pdf.setFillColor(...colors.background);
+      pdf.rect(0, 0, pageWidth, pageHeight, 'F');
+      yPos = margin;
+    };
+
+    if (monthEvents.length > 0) {
+      openDetailPage();
+      pdf.setFontSize(14);
+      pdf.setFont('helvetica', 'bold');
+      pdf.setTextColor(...colors.title);
+      pdf.text('Events', margin, yPos);
+      yPos += 8;
+
+      monthEvents.forEach(({ day, event }) => {
+        const title = typeof event.title === 'string' && event.title.trim() ? event.title.trim() : 'Event';
+        const heading = `${monthNames[month]} ${day}, ${year}  ·  ${title}`;
+        const scheduledDate = event.scheduled_date ? new Date(event.scheduled_date) : null;
+        const timeLabel = scheduledDate
+          ? scheduledDate.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+          : '';
+        const directLocation = typeof event.location === 'string' ? event.location.trim() : '';
+        const metadataLocation =
+          typeof event.metadata?.location === 'string' ? event.metadata.location.trim() : '';
+        const locationLabel = directLocation || metadataLocation;
+        const rows: { text: string; fontSize: number; isBold: boolean }[] = [
+          { text: heading, fontSize: 11, isBold: true },
+        ];
+        if (timeLabel) rows.push({ text: `Time: ${timeLabel}`, fontSize: 9, isBold: false });
+        if (locationLabel) rows.push({ text: `Location: ${locationLabel}`, fontSize: 9, isBold: false });
+
+        const rowHeight = (row: { text: string; fontSize: number; isBold: boolean }) => {
+          pdf.setFontSize(row.fontSize);
+          pdf.setFont('helvetica', row.isBold ? 'bold' : 'normal');
+          const wrapped = pdf.splitTextToSize(row.text, contentWidth) as string[];
+          return wrapped.length * row.fontSize * 0.42 + 2;
+        };
+        const blockHeight = rows.reduce((sum, row) => sum + rowHeight(row), 2);
+        if (yPos > margin && yPos + blockHeight > contentBottom) {
+          openDetailPage();
+        }
+
+        rows.forEach((row) => {
+          pdf.setFontSize(row.fontSize);
+          pdf.setFont('helvetica', row.isBold ? 'bold' : 'normal');
+          pdf.setTextColor(...(row.isBold ? colors.title : colors.dayText));
+          const wrapped = pdf.splitTextToSize(row.text, contentWidth) as string[];
+          const lineHeight = row.fontSize * 0.42;
+          wrapped.forEach((line: string) => {
+            if (yPos + lineHeight > contentBottom) openDetailPage();
+            pdf.text(line, margin, yPos);
+            yPos += lineHeight;
+          });
+          yPos += 2;
+        });
+        yPos += 2;
+      });
+    }
+
+    const pageCount = pdf.getNumberOfPages();
+    for (let page = 1; page <= pageCount; page += 1) {
+      pdf.setPage(page);
+      pdf.setFontSize(8);
+      pdf.setFont('helvetica', 'normal');
+      pdf.setTextColor(71, 85, 105);
+      pdf.text('Household Toolbox', pageWidth / 2, footerY, { align: 'center' });
+    }
+
     const fileName = `${monthNames[month]}_${year}_Calendar_Light.pdf`;
     pdf.save(fileName);
   };

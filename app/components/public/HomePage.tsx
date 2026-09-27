@@ -5,6 +5,7 @@ import Link from 'next/link'
 import { signUp, signIn } from '../../actions/auth'
 import { HelpMenu } from '../HelpMenu'
 import { SideLogo } from '../SideLogo'
+import { PasswordField } from '../PasswordField'
 import { PublicFooter } from './PublicFooter'
 
 export function HomePage({ explore }: { explore?: ReactNode }) {
@@ -213,7 +214,7 @@ export function HomePage({ explore }: { explore?: ReactNode }) {
                       localStorage.removeItem('rememberedEmail');
                     }
                     // Redirect to dashboard
-                    window.location.assign('/dashboard');
+                    window.location.assign(result.needsMfa ? '/auth/mfa' : '/dashboard');
                   } else {
                     setError(result.error || 'Failed to sign in');
                   }
@@ -272,11 +273,11 @@ export function HomePage({ explore }: { explore?: ReactNode }) {
                 <label htmlFor="password" className="block text-xs font-medium text-slate-300 mb-1.5">
                   Password <span className="text-red-400">*</span>
                 </label>
-                <input
-                  type="password"
+                <PasswordField
                   id="password"
                   name="password"
                   minLength={isSignUp ? 8 : undefined}
+                  autoComplete={isSignUp ? 'new-password' : 'current-password'}
                   className="auth-field w-full rounded-lg border border-slate-700 bg-slate-900/70 px-3 py-2 text-sm text-slate-100 placeholder-slate-500 focus:border-emerald-500/50 focus:outline-none focus:ring-1 focus:ring-emerald-500/50"
                   placeholder="••••••••"
                   required

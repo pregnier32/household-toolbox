@@ -1,8 +1,10 @@
 'use server';
 
+import { cache } from 'react';
 import { cookies } from 'next/headers';
 import { supabaseServer } from './supabaseServer';
 import { createSupabaseAuthServerClient } from './supabaseAuthServer';
+import { readMfaAccess } from './mfa-gate';
 
 /** Stale browsers may still hold this cookie from before Supabase Auth. It is not read for sign-in. */
 const LEGACY_SESSION_COOKIE_NAME = 'household-toolbox-session';
@@ -68,31 +70,49 @@ async function signOutSupabaseAuth() {
   }
 }
 
-export async function getSession(): Promise<AppSession | null> {
+export type SessionGate =
+  | { status: 'anonymous' }
+  | { status: 'mfa_required'; user: AppSession }
+  | { status: 'mfa_unknown'; user: AppSession }
+  | { status: 'ok'; user: AppSession };
+
+async function resolveSession(): Promise<SessionGate> {
   const userId = await readSupabaseUserId();
-  if (!userId) return null;
+  if (!userId) return { status: 'anonymous' };
 
   try {
     const { data: user, error } = await loadProfile(userId);
     if (error) {
       console.error('Application profile lookup failed for Supabase Auth user', userId);
-      return null;
+      return { status: 'anonymous' };
     }
     if (!user) {
       console.error('Supabase Auth user has no public.users row', userId);
       await signOutSupabaseAuth();
-      return null;
+      return { status: 'anonymous' };
     }
     if (user.active !== 'Y') {
       console.error('Supabase Auth user is inactive in public.users', userId);
       await signOutSupabaseAuth();
-      return null;
+      return { status: 'anonymous' };
     }
-    return toAppSession(user);
+    const appUser = toAppSession(user);
+    const mfa = await readMfaAccess();
+    if (mfa === 'required') return { status: 'mfa_required', user: appUser };
+    if (mfa === 'unknown') return { status: 'mfa_unknown', user: appUser };
+    return { status: 'ok', user: appUser };
   } catch {
     console.error('Application profile lookup failed for Supabase Auth user', userId);
-    return null;
+    return { status: 'anonymous' };
   }
+}
+
+export const getSessionGate = cache(resolveSession);
+
+export async function getSession(): Promise<AppSession | null> {
+  const gate = await getSessionGate();
+  if (gate.status !== 'ok') return null;
+  return gate.user;
 }
 
 /** Expires a leftover pre-Auth cookie. Sign-in does not read it. */

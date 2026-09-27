@@ -37,6 +37,13 @@ import {
 } from '@/lib/end-of-life-planner';
 
 const HIDDEN_SECRET = 'Saved in the app (not included in this report)';
+
+function redactEmbeddedAccessCodes(value: string): string {
+  return value.replace(
+    /\b(pass\s*codes?|passcodes?|passwords?|pins?|access\s*codes?)\b(\s*(?:is\s+)?[:#-]?\s*)(\d{3,}(?:\s*[-/]\s*\d{2,})*|[A-Za-z]*\d[A-Za-z0-9._-]*)/gi,
+    (_match, label: string, sep: string) => `${label}${sep}${HIDDEN_SECRET}`
+  );
+}
 const HANDWRITE = '________________ (hand write on this form)';
 const NEXT_STEPS_INTRO = 'If something happened to me today, start here.';
 
@@ -254,6 +261,12 @@ class ReportDoc {
     this.field(label, includeSecrets ? secretText(field).trim() : HIDDEN_SECRET);
   }
 
+  gatedField(label: string, value: string | null | undefined, includeSecrets: boolean) {
+    const next = text(value);
+    if (!next) return;
+    this.field(label, includeSecrets ? next : redactEmbeddedAccessCodes(next));
+  }
+
   handwrite(label: string) {
     this.line(`${label}: ${HANDWRITE}`);
   }
@@ -352,8 +365,8 @@ function printDevices(doc: ReportDoc, devices: EolDevice[], includeSecrets: bool
       doc.secret('Password or password reference', device.password, includeSecrets);
       doc.secret('Encryption/recovery key location', device.recoveryKey, includeSecrets);
       doc.field('Apple ID / Google account associated with device', device.associatedAccount);
-      doc.field('Instructions for accessing device', device.accessInstructions);
-      doc.field('What important information is stored on it', device.storedInformation);
+      doc.gatedField('Instructions for accessing device', device.accessInstructions, includeSecrets);
+      doc.gatedField('What important information is stored on it', device.storedInformation, includeSecrets);
     });
   }
 }
@@ -373,9 +386,9 @@ function printOnline(doc: ReportDoc, accounts: EolOnlineAccount[], includeSecret
       doc.secret('Recovery phone', account.recoveryPhone, includeSecrets);
       doc.field('Account number/reference', account.accountReference);
       doc.field('What should happen to account', account.disposition);
-      doc.field('Special instructions', account.specialInstructions);
-      doc.field('Password stored elsewhere', account.passwordStoredElsewhere);
-      doc.field('Password manager detail', account.passwordStoredElsewhereDetail);
+      doc.gatedField('Special instructions', account.specialInstructions, includeSecrets);
+      doc.gatedField('Password stored elsewhere', account.passwordStoredElsewhere, includeSecrets);
+      doc.gatedField('Password manager detail', account.passwordStoredElsewhereDetail, includeSecrets);
     });
   }
 }
@@ -776,7 +789,7 @@ function printPlanSections(
       }
       if (on(data, 'devices-notes')) {
         doc.beginSub(labelOf(data, 'devices-notes', 'Notes'));
-        doc.field('Notes', data.devicesNotes);
+        doc.gatedField('Notes', data.devicesNotes, includeSecrets);
         doc.endSub();
       }
       doc.finishSection();
@@ -791,7 +804,7 @@ function printPlanSections(
       }
       if (on(data, 'online-notes')) {
         doc.beginSub(labelOf(data, 'online-notes', 'Notes'));
-        doc.field('Notes', data.onlineNotes);
+        doc.gatedField('Notes', data.onlineNotes, includeSecrets);
         doc.endSub();
       }
       doc.finishSection();
@@ -1083,7 +1096,7 @@ function printCustomSection(
   if (section.modeledAfter === 'insurance') printInsurance(doc, planName, title, section.insurance);
   if (section.modeledAfter === 'letters') printLetters(doc, planName, title, section.letters, includePrivateLetters);
   if (section.modeledAfter === 'other') printOther(doc, planName, title, section.otherRecords);
-  doc.field('Notes', section.notes);
+  doc.gatedField('Notes', section.notes, includeSecrets);
   doc.finishSection();
 }
 
@@ -1128,7 +1141,13 @@ function renderPdf(pdf: jsPDF, chunks: Chunk[], attachments: string[], subtitle:
   const pageHeight = pdf.internal.pageSize.getHeight();
   const margin = 15;
   const contentWidth = pageWidth - margin * 2;
+  const footerY = pageHeight - 10;
+  const contentBottom = footerY - 4;
   let yPos = margin;
+  let repeatingSection: string | null = null;
+  let repeatingSectionHeight = 0;
+  let repeatingSub: string | null = null;
+  let repeatingSubHeight = 0;
   const colors = {
     background: [255, 255, 255] as const,
     text: [15, 23, 42] as const,
@@ -1142,22 +1161,20 @@ function renderPdf(pdf: jsPDF, chunks: Chunk[], attachments: string[], subtitle:
     pdf.rect(0, 0, pageWidth, pageHeight, 'F');
   };
 
-  const checkNewPage = (requiredHeight: number) => {
-    if (yPos + requiredHeight > pageHeight - margin) {
-      pdf.addPage();
-      fillPage();
-      yPos = margin;
-    }
-  };
-
-  const addSectionHeader = (title: string) => {
+  const sectionHeaderMetrics = (title: string) => {
     pdf.setFontSize(13);
     pdf.setFont('helvetica', 'bold');
     const lines = pdf.splitTextToSize(title, contentWidth - 10) as string[];
     const barHeight = Math.max(10, lines.length * 6 + 4);
-    checkNewPage(barHeight + 5);
+    return { lines, barHeight, height: barHeight + 5 };
+  };
+
+  const paintSectionHeader = (title: string) => {
+    const { lines, barHeight } = sectionHeaderMetrics(title);
     pdf.setFillColor(colors.header[0], colors.header[1], colors.header[2]);
     pdf.rect(margin, yPos, contentWidth, barHeight, 'F');
+    pdf.setFontSize(13);
+    pdf.setFont('helvetica', 'bold');
     pdf.setTextColor(colors.title[0], colors.title[1], colors.title[2]);
     lines.forEach((line, index) => {
       pdf.text(line, margin + 5, yPos + 7 + index * 6);
@@ -1165,19 +1182,86 @@ function renderPdf(pdf: jsPDF, chunks: Chunk[], attachments: string[], subtitle:
     yPos += barHeight + 5;
   };
 
+  const paintSub = (title: string) => {
+    pdf.setFontSize(11);
+    pdf.setFont('helvetica', 'bold');
+    pdf.setTextColor(colors.text[0], colors.text[1], colors.text[2]);
+    const lines = pdf.splitTextToSize(title, contentWidth - 5 - 5) as string[];
+    const lineHeight = 11 * 0.42;
+    lines.forEach((line) => {
+      pdf.text(line, margin + 5, yPos);
+      yPos += lineHeight;
+    });
+    yPos += 2;
+  };
+
+  const checkNewPage = (requiredHeight: number) => {
+    if (yPos + requiredHeight <= contentBottom) return false;
+    const continuationTop =
+      margin + (repeatingSection ? repeatingSectionHeight : 0) + (repeatingSub ? repeatingSubHeight : 0);
+    if (yPos <= continuationTop + 0.5) return false;
+    pdf.addPage();
+    fillPage();
+    yPos = margin;
+    if (repeatingSection) paintSectionHeader(repeatingSection);
+    if (repeatingSub) paintSub(repeatingSub);
+    return true;
+  };
+
+  const addSectionHeader = (title: string) => {
+    checkNewPage(sectionHeaderMetrics(title).height);
+    paintSectionHeader(title);
+  };
+
   const addText = (value: string, fontSize = 10, isBold = false, indent = 0, muted = false) => {
-    pdf.setFontSize(fontSize);
-    pdf.setFont('helvetica', isBold ? 'bold' : 'normal');
-    const color = muted ? colors.muted : colors.text;
-    pdf.setTextColor(color[0], color[1], color[2]);
+    const applyStyle = () => {
+      pdf.setFontSize(fontSize);
+      pdf.setFont('helvetica', isBold ? 'bold' : 'normal');
+      const color = muted ? colors.muted : colors.text;
+      pdf.setTextColor(color[0], color[1], color[2]);
+    };
+    applyStyle();
     const lines = pdf.splitTextToSize(value, contentWidth - indent - 5) as string[];
     const lineHeight = fontSize * 0.42;
     checkNewPage(lines.length * lineHeight + 2);
+    applyStyle();
     lines.forEach((line) => {
       pdf.text(line, margin + indent, yPos);
       yPos += lineHeight;
     });
     yPos += 2;
+  };
+
+  const textBlockHeight = (value: string, fontSize: number, isBold: boolean, indent: number) => {
+    pdf.setFontSize(fontSize);
+    pdf.setFont('helvetica', isBold ? 'bold' : 'normal');
+    const lines = pdf.splitTextToSize(value, contentWidth - indent - 5) as string[];
+    return lines.length * fontSize * 0.42 + 2;
+  };
+
+  const chunkHeight = (chunk: Chunk) => {
+    if (chunk.t === 'section') return sectionHeaderMetrics(chunk.text).height;
+    if (chunk.t === 'sub') return textBlockHeight(chunk.text, 11, true, 5);
+    if (chunk.t === 'item') return textBlockHeight(chunk.text, 10, true, 8);
+    return textBlockHeight(chunk.text, 9, false, chunk.notice ? 5 : 10);
+  };
+
+  const followingStartHeight = (index: number) => {
+    const next = chunks[index + 1];
+    if (!next || next.t === 'section') return 0;
+    let height = chunkHeight(next);
+    if (next.t === 'sub') {
+      const body = chunks[index + 2];
+      if (body && body.t !== 'section' && body.t !== 'sub') height += chunkHeight(body);
+    }
+    return height;
+  };
+
+  const openPage = (reprintSection: boolean) => {
+    pdf.addPage();
+    fillPage();
+    yPos = margin;
+    if (reprintSection && repeatingSection) paintSectionHeader(repeatingSection);
   };
 
   fillPage();
@@ -1203,17 +1287,54 @@ function renderPdf(pdf: jsPDF, chunks: Chunk[], attachments: string[], subtitle:
     addText('No plans match the selected options.', 10, false, 5, true);
   }
 
-  for (const chunk of chunks) {
-    if (chunk.t === 'section') addSectionHeader(chunk.text);
-    else if (chunk.t === 'sub') addText(chunk.text, 11, true, 5);
-    else if (chunk.t === 'item') addText(chunk.text, 10, true, 8);
+  for (let index = 0; index < chunks.length; index += 1) {
+    const chunk = chunks[index];
+    if (chunk.t === 'section') {
+      repeatingSection = null;
+      repeatingSub = null;
+      repeatingSectionHeight = 0;
+      repeatingSubHeight = 0;
+      const together = chunkHeight(chunk) + followingStartHeight(index);
+      if (yPos > margin && yPos + together > contentBottom) openPage(false);
+      addSectionHeader(chunk.text);
+      repeatingSection = chunk.text;
+      repeatingSectionHeight = sectionHeaderMetrics(chunk.text).height;
+      continue;
+    }
+    if (chunk.t === 'sub') {
+      repeatingSub = null;
+      repeatingSubHeight = 0;
+      const subHeight = chunkHeight(chunk);
+      const body = chunks[index + 1];
+      const bodyHeight = body && body.t !== 'section' && body.t !== 'sub' ? chunkHeight(body) : 0;
+      if (yPos > margin && yPos + subHeight + bodyHeight > contentBottom) openPage(true);
+      addText(chunk.text, 11, true, 5);
+      repeatingSub = chunk.text;
+      repeatingSubHeight = subHeight;
+      continue;
+    }
+    if (chunk.t === 'item') addText(chunk.text, 10, true, 8);
     else addText(chunk.text, 9, false, chunk.notice ? 5 : 10, Boolean(chunk.muted));
   }
+
+  repeatingSection = null;
+  repeatingSub = null;
+  repeatingSectionHeight = 0;
+  repeatingSubHeight = 0;
 
   if (attachments.length > 0) {
     addSectionHeader('Attachments');
     addText('File names only. Files themselves are not included in this report.', 8, false, 5, true);
     attachments.forEach((line) => addText(line, 9, false, 8));
+  }
+
+  const pageCount = pdf.getNumberOfPages();
+  for (let page = 1; page <= pageCount; page += 1) {
+    pdf.setPage(page);
+    pdf.setFontSize(8);
+    pdf.setFont('helvetica', 'normal');
+    pdf.setTextColor(colors.muted[0], colors.muted[1], colors.muted[2]);
+    pdf.text('Household Toolbox', pageWidth / 2, footerY, { align: 'center' });
   }
 }
 

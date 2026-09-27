@@ -1,8 +1,9 @@
 'use server';
 
+import { createClient } from '@supabase/supabase-js';
 import { supabaseServer } from '@/lib/supabaseServer';
 import { TablesInsert } from '@/src/types/supabase';
-import { getSession } from '@/lib/session';
+import { getSession, getSessionGate } from '@/lib/session';
 import { createSupabaseAuthServerClient } from '@/lib/supabaseAuthServer';
 import { authCallbackUrl } from '@/lib/auth-app-origin';
 import { sendWelcomeEmail } from '@/lib/email';
@@ -29,6 +30,7 @@ type SignUpResult = {
 type SignInResult = {
   success: boolean;
   error?: string;
+  needsMfa?: boolean;
   user?: {
     id: string;
     email: string;
@@ -118,8 +120,10 @@ export async function signIn(data: SignInData): Promise<SignInResult> {
       };
     }
 
+    const gate = await getSessionGate();
     return {
       success: true,
+      needsMfa: gate.status === 'mfa_required' || gate.status === 'mfa_unknown',
       user: {
         id: profile.id,
         email: profile.email,
@@ -346,7 +350,26 @@ export async function changePassword(data: ChangePasswordData): Promise<ChangePa
     }
 
     const supabase = await createSupabaseAuthServerClient();
-    const reauthenticated = await supabase.auth.signInWithPassword({
+    const assurance = await supabase.auth.mfa.getAuthenticatorAssuranceLevel();
+    const factors = await supabase.auth.mfa.listFactors();
+    if (assurance.error || factors.error) {
+      console.error('Password change MFA check failed', assurance.error?.code ?? factors.error?.code ?? 'no_code');
+      return { success: false, error: 'An unexpected error occurred. Please try again.' };
+    }
+    const hasVerifiedFactor = (factors.data?.totp.length ?? 0) > 0;
+    if (hasVerifiedFactor && assurance.data?.currentLevel !== 'aal2') {
+      return { success: false, error: 'Confirm your authenticator code before changing your password' };
+    }
+
+    const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
+    const anonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
+    if (!url || !anonKey) {
+      return { success: false, error: 'An unexpected error occurred. Please try again.' };
+    }
+    const passwordCheck = createClient(url, anonKey, {
+      auth: { persistSession: false, autoRefreshToken: false, detectSessionInUrl: false },
+    });
+    const reauthenticated = await passwordCheck.auth.signInWithPassword({
       email: session.email,
       password: data.currentPassword,
     });
@@ -356,6 +379,10 @@ export async function changePassword(data: ChangePasswordData): Promise<ChangePa
       }
       console.error('Password reauthentication failed', reauthenticated.error.code);
       return { success: false, error: 'An unexpected error occurred. Please try again.' };
+    }
+    const signedOutCheck = await passwordCheck.auth.signOut({ scope: 'local' });
+    if (signedOutCheck.error) {
+      console.error('Password check session cleanup failed', signedOutCheck.error.code);
     }
 
     const updated = await supabase.auth.updateUser({ password: data.newPassword });

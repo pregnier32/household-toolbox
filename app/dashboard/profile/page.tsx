@@ -7,6 +7,8 @@ import { SideLogo } from '../../components/SideLogo';
 import { useTheme } from '../../components/AppThemeProvider';
 import { updateProfile, changePassword } from '../../actions/auth';
 import { completeSignOut } from '@/lib/client-sign-out';
+import { TwoFactorSection } from './TwoFactorSection';
+import { PasswordField } from '../../components/PasswordField';
 
 type User = {
   id: string;
@@ -485,6 +487,8 @@ export default function Profile() {
             </div>
           </form>
 
+          {!isEditing && <TwoFactorSection />}
+
           {/* Account Actions Section - Outside of profile form */}
           {!isEditing && (
             <div className="border-t border-slate-800 pt-6 mt-6">
@@ -518,10 +522,10 @@ export default function Profile() {
                     <label htmlFor="currentPassword" className="block text-xs font-medium text-slate-300 mb-1.5">
                       Current Password <span className="text-red-400">*</span>
                     </label>
-                    <input
-                      type="password"
+                    <PasswordField
                       id="currentPassword"
                       name="currentPassword"
+                      autoComplete="current-password"
                       value={passwordData.currentPassword}
                       onChange={(e) => setPasswordData({ ...passwordData, currentPassword: e.target.value })}
                       className="w-full rounded-lg border border-slate-700 bg-slate-900/70 px-3 py-2 text-sm text-slate-100 placeholder-slate-500 focus:border-emerald-500/50 focus:outline-none focus:ring-1 focus:ring-emerald-500/50"
@@ -534,10 +538,10 @@ export default function Profile() {
                     <label htmlFor="newPassword" className="block text-xs font-medium text-slate-300 mb-1.5">
                       New Password <span className="text-red-400">*</span>
                     </label>
-                    <input
-                      type="password"
+                    <PasswordField
                       id="newPassword"
                       name="newPassword"
+                      autoComplete="new-password"
                       value={passwordData.newPassword}
                       onChange={(e) => setPasswordData({ ...passwordData, newPassword: e.target.value })}
                       className="w-full rounded-lg border border-slate-700 bg-slate-900/70 px-3 py-2 text-sm text-slate-100 placeholder-slate-500 focus:border-emerald-500/50 focus:outline-none focus:ring-1 focus:ring-emerald-500/50"
@@ -554,10 +558,10 @@ export default function Profile() {
                     <label htmlFor="confirmPassword" className="block text-xs font-medium text-slate-300 mb-1.5">
                       Confirm New Password <span className="text-red-400">*</span>
                     </label>
-                    <input
-                      type="password"
+                    <PasswordField
                       id="confirmPassword"
                       name="confirmPassword"
+                      autoComplete="new-password"
                       value={passwordData.confirmPassword}
                       onChange={(e) => setPasswordData({ ...passwordData, confirmPassword: e.target.value })}
                       className="w-full rounded-lg border border-slate-700 bg-slate-900/70 px-3 py-2 text-sm text-slate-100 placeholder-slate-500 focus:border-emerald-500/50 focus:outline-none focus:ring-1 focus:ring-emerald-500/50"

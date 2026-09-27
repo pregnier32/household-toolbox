@@ -1228,6 +1228,8 @@ export function HSATrackerTool({ toolId }: HSATrackerToolProps) {
       const pageHeight = pdf.internal.pageSize.getHeight();
       const margin = 15;
       const contentWidth = pageWidth - margin * 2;
+      const footerY = pageHeight - 10;
+      const contentBottom = footerY - 4;
       let yPos = margin;
 
       const colors = {
@@ -1244,7 +1246,7 @@ export function HSATrackerTool({ toolId }: HSATrackerToolProps) {
       };
 
       const checkNewPage = (requiredHeight: number) => {
-        if (yPos + requiredHeight > pageHeight - margin) {
+        if (yPos + requiredHeight > contentBottom) {
           pdf.addPage();
           fillPage();
           yPos = margin;
@@ -1278,6 +1280,13 @@ export function HSATrackerTool({ toolId }: HSATrackerToolProps) {
           yPos += lineHeight;
         });
         yPos += 2;
+      };
+
+      const textBlockHeight = (value: string, fontSize: number, isBold: boolean, indent: number) => {
+        pdf.setFontSize(fontSize);
+        pdf.setFont('helvetica', isBold ? 'bold' : 'normal');
+        const wrapped = pdf.splitTextToSize(value, contentWidth - indent - 5) as string[];
+        return wrapped.length * fontSize * 0.42 + 2;
       };
 
       fillPage();
@@ -1322,8 +1331,8 @@ export function HSATrackerTool({ toolId }: HSATrackerToolProps) {
         } else {
           let running = block.starting;
           block.lines.forEach((line) => {
-            checkNewPage(28);
             if (line.kind === 'deposit') {
+              checkNewPage(28);
               const deposit = line.deposit;
               running += deposit.amount;
               addText(
@@ -1346,30 +1355,69 @@ export function HSATrackerTool({ toolId }: HSATrackerToolProps) {
             } else {
               const expense = line.expense;
               running -= expense.amount;
-              addText(
-                `${formatDateForDisplay(expense.date)}  ·  Expense — ${expense.name}`,
-                11,
-                true,
-                5
-              );
-              addText(`Amount: ${formatMoney(-expense.amount)}`, 9, false, 8);
-              addText(`Category: ${expense.category}`, 9, false, 8);
+              const expenseLines: { text: string; fontSize: number; isBold: boolean; indent: number }[] = [
+                {
+                  text: `${formatDateForDisplay(expense.date)}  ·  Expense — ${expense.name}`,
+                  fontSize: 11,
+                  isBold: true,
+                  indent: 5,
+                },
+                { text: `Amount: ${formatMoney(-expense.amount)}`, fontSize: 9, isBold: false, indent: 8 },
+                { text: `Category: ${expense.category}`, fontSize: 9, isBold: false, indent: 8 },
+              ];
               if (expense.providerOrStore.trim()) {
-                addText(`Provider: ${expense.providerOrStore.trim()}`, 9, false, 8);
+                expenseLines.push({
+                  text: `Provider: ${expense.providerOrStore.trim()}`,
+                  fontSize: 9,
+                  isBold: false,
+                  indent: 8,
+                });
               }
-              addText(`Payment method: ${expense.paymentMethod}`, 9, false, 8);
-              addText(
-                expense.reimbursementDate
+              expenseLines.push({
+                text: `Payment method: ${expense.paymentMethod}`,
+                fontSize: 9,
+                isBold: false,
+                indent: 8,
+              });
+              expenseLines.push({
+                text: expense.reimbursementDate
                   ? `Reimbursed: ${expense.reimbursedYet} (${formatDateForDisplay(expense.reimbursementDate)})`
                   : `Reimbursed: ${expense.reimbursedYet}`,
-                9,
-                false,
-                8
-              );
+                fontSize: 9,
+                isBold: false,
+                indent: 8,
+              });
               if (expense.notes.trim()) {
-                addText(`Notes: ${expense.notes.trim()}`, 9, false, 8);
+                expenseLines.push({ text: `Notes: ${expense.notes.trim()}`, fontSize: 9, isBold: false, indent: 8 });
               }
-              addText(`Running balance: ${formatMoney(running)}`, 9, false, 8);
+              const receiptNames = (expense.attachments || [])
+                .map((file) => file.name?.trim())
+                .filter((name): name is string => Boolean(name));
+              if (receiptNames.length > 0) {
+                expenseLines.push({
+                  text: `Receipts: ${receiptNames.join(', ')}`,
+                  fontSize: 9,
+                  isBold: false,
+                  indent: 8,
+                });
+              }
+              expenseLines.push({
+                text: `Running balance: ${formatMoney(running)}`,
+                fontSize: 9,
+                isBold: false,
+                indent: 8,
+              });
+              const blockHeight = expenseLines.reduce(
+                (sum, row) => sum + textBlockHeight(row.text, row.fontSize, row.isBold, row.indent),
+                3,
+              );
+              const pageBottom = contentBottom;
+              if (yPos > margin && yPos + blockHeight > pageBottom) {
+                pdf.addPage();
+                fillPage();
+                yPos = margin;
+              }
+              expenseLines.forEach((row) => addText(row.text, row.fontSize, row.isBold, row.indent));
             }
             yPos += 3;
           });
@@ -1392,6 +1440,15 @@ export function HSATrackerTool({ toolId }: HSATrackerToolProps) {
         addSectionHeader('Attachments');
         addText('File names only. Files themselves are not included in this report.', 8, false, 5, true);
         attachmentRefs.forEach((line) => addText(line, 9, false, 8));
+      }
+
+      const pageCount = pdf.getNumberOfPages();
+      for (let page = 1; page <= pageCount; page += 1) {
+        pdf.setPage(page);
+        pdf.setFontSize(8);
+        pdf.setFont('helvetica', 'normal');
+        pdf.setTextColor(colors.muted[0], colors.muted[1], colors.muted[2]);
+        pdf.text('Household Toolbox', pageWidth / 2, footerY, { align: 'center' });
       }
 
       pdf.save(`HSA_Report_${hsaReportFileSlug(accountLabel)}_${year}.pdf`);

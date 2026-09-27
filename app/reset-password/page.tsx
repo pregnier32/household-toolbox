@@ -5,6 +5,7 @@ import { useRouter, useSearchParams } from 'next/navigation';
 import Link from 'next/link';
 import { resetPassword, hasPasswordRecoverySession } from '../actions/auth';
 import { SideLogo } from '../components/SideLogo';
+import { PasswordField } from '../components/PasswordField';
 
 function ResetPasswordForm() {
   const [isLoading, setIsLoading] = useState(false);
@@ -157,10 +158,10 @@ function ResetPasswordForm() {
                     <label htmlFor="newPassword" className="block text-xs font-medium text-slate-300 mb-1.5">
                       New Password <span className="text-red-400">*</span>
                     </label>
-                    <input
-                      type="password"
+                    <PasswordField
                       id="newPassword"
                       name="newPassword"
+                      autoComplete="new-password"
                       className="w-full rounded-lg border border-slate-700 bg-slate-900/70 px-3 py-2 text-sm text-slate-100 placeholder-slate-500 focus:border-emerald-500/50 focus:outline-none focus:ring-1 focus:ring-emerald-500/50"
                       placeholder="••••••••"
                       required
@@ -176,10 +177,10 @@ function ResetPasswordForm() {
                     <label htmlFor="confirmPassword" className="block text-xs font-medium text-slate-300 mb-1.5">
                       Confirm Password <span className="text-red-400">*</span>
                     </label>
-                    <input
-                      type="password"
+                    <PasswordField
                       id="confirmPassword"
                       name="confirmPassword"
+                      autoComplete="new-password"
                       className="w-full rounded-lg border border-slate-700 bg-slate-900/70 px-3 py-2 text-sm text-slate-100 placeholder-slate-500 focus:border-emerald-500/50 focus:outline-none focus:ring-1 focus:ring-emerald-500/50"
                       placeholder="••••••••"
                       required

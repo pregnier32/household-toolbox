@@ -1022,6 +1022,8 @@ export function SubscriptionTrackerTool({ toolId }: SubscriptionTrackerToolProps
       const footerY = pageHeight - 10;
       const contentBottom = footerY - 4;
       let yPos = margin;
+      let repeatingSubscriptionTitle: string | null = null;
+      let repeatingSubscriptionHeaderHeight = 0;
 
       const colors = {
         background: [255, 255, 255] as const,
@@ -1036,24 +1038,20 @@ export function SubscriptionTrackerTool({ toolId }: SubscriptionTrackerToolProps
         pdf.rect(0, 0, pageWidth, pageHeight, 'F');
       };
 
-      const checkNewPage = (requiredHeight: number) => {
-        if (yPos + requiredHeight > contentBottom) {
-          pdf.addPage();
-          fillPage();
-          yPos = margin;
-          return true;
-        }
-        return false;
-      };
-
-      const addSectionHeader = (title: string) => {
+      const sectionHeaderMetrics = (title: string) => {
         pdf.setFontSize(13);
         pdf.setFont('helvetica', 'bold');
         const lines = pdf.splitTextToSize(title, contentWidth - 10) as string[];
         const barHeight = Math.max(10, lines.length * 6 + 4);
-        checkNewPage(barHeight + 5);
+        return { lines, barHeight, height: barHeight + 5 };
+      };
+
+      const paintSectionHeader = (title: string) => {
+        const { lines, barHeight } = sectionHeaderMetrics(title);
         pdf.setFillColor(colors.header[0], colors.header[1], colors.header[2]);
         pdf.rect(margin, yPos, contentWidth, barHeight, 'F');
+        pdf.setFontSize(13);
+        pdf.setFont('helvetica', 'bold');
         pdf.setTextColor(colors.title[0], colors.title[1], colors.title[2]);
         lines.forEach((line, index) => {
           pdf.text(line, margin + 5, yPos + 7 + index * 6);
@@ -1061,20 +1059,48 @@ export function SubscriptionTrackerTool({ toolId }: SubscriptionTrackerToolProps
         yPos += barHeight + 5;
       };
 
+      const checkNewPage = (requiredHeight: number) => {
+        if (yPos + requiredHeight <= contentBottom) return false;
+        const continuationTop = margin + (repeatingSubscriptionTitle ? repeatingSubscriptionHeaderHeight : 0);
+        if (yPos <= continuationTop + 0.5) return false;
+        pdf.addPage();
+        fillPage();
+        yPos = margin;
+        if (repeatingSubscriptionTitle) paintSectionHeader(repeatingSubscriptionTitle);
+        return true;
+      };
+
+      const addSectionHeader = (title: string) => {
+        checkNewPage(sectionHeaderMetrics(title).height);
+        paintSectionHeader(title);
+      };
+
       const addText = (text: string, fontSize = 10, isBold = false, indent = 0, muted = false) => {
-        pdf.setFontSize(fontSize);
-        pdf.setFont('helvetica', isBold ? 'bold' : 'normal');
-        const color = muted ? colors.muted : colors.text;
-        pdf.setTextColor(color[0], color[1], color[2]);
+        const applyStyle = () => {
+          pdf.setFontSize(fontSize);
+          pdf.setFont('helvetica', isBold ? 'bold' : 'normal');
+          const color = muted ? colors.muted : colors.text;
+          pdf.setTextColor(color[0], color[1], color[2]);
+        };
+        applyStyle();
         const maxWidth = contentWidth - indent - 5;
         const lines = pdf.splitTextToSize(text, maxWidth) as string[];
         const lineHeight = fontSize * 0.42;
         checkNewPage(lines.length * lineHeight + 2);
+        applyStyle();
         lines.forEach((line) => {
           pdf.text(line, margin + indent, yPos);
           yPos += lineHeight;
         });
         yPos += 2;
+      };
+
+      const textBlockHeight = (text: string, fontSize: number, isBold: boolean, indent: number) => {
+        pdf.setFontSize(fontSize);
+        pdf.setFont('helvetica', isBold ? 'bold' : 'normal');
+        const maxWidth = contentWidth - indent - 5;
+        const lines = pdf.splitTextToSize(text, maxWidth) as string[];
+        return lines.length * fontSize * 0.42 + 2;
       };
 
       fillPage();
@@ -1107,28 +1133,49 @@ export function SubscriptionTrackerTool({ toolId }: SubscriptionTrackerToolProps
 
       const attachmentRefs: string[] = [];
       const printSubscription = (subscription: Subscription) => {
-        addSectionHeader(subscription.name.trim() || 'Subscription');
-        if ((subscription.category || '').trim()) addText(`Category: ${subscription.category.trim()}`, 9, false, 5);
-        addText(`Frequency: ${frequencyLabel(subscription.frequency)}`, 9, false, 5);
+        const subscriptionName = subscription.name.trim() || 'Subscription';
+        const detailLines: string[] = [];
+        if ((subscription.category || '').trim()) detailLines.push(`Category: ${subscription.category.trim()}`);
+        detailLines.push(`Frequency: ${frequencyLabel(subscription.frequency)}`);
         if (Number.isFinite(subscription.amount)) {
-          addText(`Amount: ${formatMoney(subscription.amount)}`, 9, false, 5);
-          addText(`Monthly equivalent: ${formatMoney(monthlyEquivalent(subscription))}`, 9, false, 5);
+          detailLines.push(`Amount: ${formatMoney(subscription.amount)}`);
+          detailLines.push(`Monthly equivalent: ${formatMoney(monthlyEquivalent(subscription))}`);
         }
         if (subscription.frequency === 'annual') {
-          if (subscription.billedDate) addText(`Billed date: ${formatLocalDate(subscription.billedDate)}`, 9, false, 5);
-          if (subscription.renewalDate) addText(`Renewal date: ${formatLocalDate(subscription.renewalDate)}`, 9, false, 5);
+          if (subscription.billedDate) detailLines.push(`Billed date: ${formatLocalDate(subscription.billedDate)}`);
+          if (subscription.renewalDate) detailLines.push(`Renewal date: ${formatLocalDate(subscription.renewalDate)}`);
         } else if (subscription.dayOfMonth) {
-          addText(`Day of month: ${subscription.dayOfMonth}`, 9, false, 5);
+          detailLines.push(`Day of month: ${subscription.dayOfMonth}`);
           if (subscription.frequency === 'quarterly') {
             const months = billingMonthsLabel(subscription.billedDate, subscription.dateAdded);
-            if (months) addText(`Billing months: ${months}`, 9, false, 5);
+            if (months) detailLines.push(`Billing months: ${months}`);
           }
         }
-        if (subscription.dateAdded) addText(`Date added: ${formatLocalDate(subscription.dateAdded)}`, 9, false, 5);
+        if (subscription.dateAdded) detailLines.push(`Date added: ${formatLocalDate(subscription.dateAdded)}`);
         if (!subscription.isActive && subscription.dateInactivated) {
-          addText(`Date inactivated: ${formatLocalDate(subscription.dateInactivated)}`, 9, false, 5);
+          detailLines.push(`Date inactivated: ${formatLocalDate(subscription.dateInactivated)}`);
         }
-        if (subscription.notes.trim()) addText(`Notes: ${subscription.notes.trim()}`, 9, false, 5);
+        if (subscription.notes.trim()) detailLines.push(`Notes: ${subscription.notes.trim()}`);
+
+        const headerHeight = sectionHeaderMetrics(subscriptionName).height;
+        const blockHeight =
+          headerHeight +
+          detailLines.reduce((sum, line) => sum + textBlockHeight(line, 9, false, 5), 2);
+        repeatingSubscriptionTitle = null;
+        repeatingSubscriptionHeaderHeight = 0;
+        if (yPos > margin && yPos + blockHeight > contentBottom) {
+          pdf.addPage();
+          fillPage();
+          yPos = margin;
+        }
+        addSectionHeader(subscriptionName);
+        if (blockHeight > contentBottom - margin) {
+          repeatingSubscriptionTitle = subscriptionName;
+          repeatingSubscriptionHeaderHeight = headerHeight;
+        }
+        detailLines.forEach((line) => addText(line, 9, false, 5));
+        repeatingSubscriptionTitle = null;
+        repeatingSubscriptionHeaderHeight = 0;
         (subscription.attachments || []).forEach((file) => {
           const fileName = file.name?.trim();
           if (!fileName) return;
@@ -1168,10 +1215,17 @@ export function SubscriptionTrackerTool({ toolId }: SubscriptionTrackerToolProps
         }
       }
 
+      repeatingSubscriptionTitle = null;
+      repeatingSubscriptionHeaderHeight = 0;
+
       if (attachmentRefs.length > 0) {
         addSectionHeader('Attachments');
         addText('File names only. Files themselves are not included in this report.', 8, false, 5, true);
         attachmentRefs.forEach((line) => addText(line, 9, false, 8));
+      }
+
+      if (pdf.getNumberOfPages() > 1 && yPos <= margin + 0.5) {
+        pdf.deletePage(pdf.getNumberOfPages());
       }
 
       const pageCount = pdf.getNumberOfPages();

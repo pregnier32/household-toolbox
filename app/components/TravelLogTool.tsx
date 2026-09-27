@@ -2194,7 +2194,11 @@ export function TravelLogTool({ toolId }: TravelLogToolProps) {
       const pageHeight = pdf.internal.pageSize.getHeight();
       const margin = 15;
       const contentWidth = pageWidth - margin * 2;
+      const footerY = pageHeight - 10;
+      const contentBottom = footerY - 4;
       let yPos = margin;
+      let repeatingTripTitle: string | null = null;
+      let repeatingTripHeaderHeight = 0;
 
       const colors = {
         background: [255, 255, 255] as const,
@@ -2209,24 +2213,20 @@ export function TravelLogTool({ toolId }: TravelLogToolProps) {
         pdf.rect(0, 0, pageWidth, pageHeight, 'F');
       };
 
-      const checkNewPage = (requiredHeight: number) => {
-        if (yPos + requiredHeight > pageHeight - margin) {
-          pdf.addPage();
-          fillPage();
-          yPos = margin;
-          return true;
-        }
-        return false;
-      };
-
-      const addSectionHeader = (title: string) => {
+      const sectionHeaderMetrics = (title: string) => {
         pdf.setFontSize(13);
         pdf.setFont('helvetica', 'bold');
         const lines = pdf.splitTextToSize(title, contentWidth - 10) as string[];
         const barHeight = Math.max(10, lines.length * 6 + 4);
-        checkNewPage(barHeight + 5);
+        return { lines, barHeight, height: barHeight + 5 };
+      };
+
+      const paintSectionHeader = (title: string) => {
+        const { lines, barHeight } = sectionHeaderMetrics(title);
         pdf.setFillColor(colors.header[0], colors.header[1], colors.header[2]);
         pdf.rect(margin, yPos, contentWidth, barHeight, 'F');
+        pdf.setFontSize(13);
+        pdf.setFont('helvetica', 'bold');
         pdf.setTextColor(colors.title[0], colors.title[1], colors.title[2]);
         lines.forEach((line, index) => {
           pdf.text(line, margin + 5, yPos + 7 + index * 6);
@@ -2234,15 +2234,35 @@ export function TravelLogTool({ toolId }: TravelLogToolProps) {
         yPos += barHeight + 5;
       };
 
+      const checkNewPage = (requiredHeight: number) => {
+        if (yPos + requiredHeight <= contentBottom) return false;
+        const continuationTop = margin + (repeatingTripTitle ? repeatingTripHeaderHeight : 0);
+        if (yPos <= continuationTop + 0.5) return false;
+        pdf.addPage();
+        fillPage();
+        yPos = margin;
+        if (repeatingTripTitle) paintSectionHeader(repeatingTripTitle);
+        return true;
+      };
+
+      const addSectionHeader = (title: string) => {
+        checkNewPage(sectionHeaderMetrics(title).height);
+        paintSectionHeader(title);
+      };
+
       const addText = (text: string, fontSize = 10, isBold = false, indent = 0, muted = false) => {
-        pdf.setFontSize(fontSize);
-        pdf.setFont('helvetica', isBold ? 'bold' : 'normal');
-        const color = muted ? colors.muted : colors.text;
-        pdf.setTextColor(color[0], color[1], color[2]);
+        const applyStyle = () => {
+          pdf.setFontSize(fontSize);
+          pdf.setFont('helvetica', isBold ? 'bold' : 'normal');
+          const color = muted ? colors.muted : colors.text;
+          pdf.setTextColor(color[0], color[1], color[2]);
+        };
+        applyStyle();
         const maxWidth = contentWidth - indent - 5;
         const lines = pdf.splitTextToSize(text, maxWidth) as string[];
         const lineHeight = fontSize * 0.42;
         checkNewPage(lines.length * lineHeight + 2);
+        applyStyle();
         lines.forEach((line) => {
           pdf.text(line, margin + indent, yPos);
           yPos += lineHeight;
@@ -2279,7 +2299,11 @@ export function TravelLogTool({ toolId }: TravelLogToolProps) {
 
       const printTrip = (trip: TripRecord) => {
         const tripName = filledText(trip.tripName) || 'Trip';
+        repeatingTripTitle = null;
+        repeatingTripHeaderHeight = 0;
         addSectionHeader(tripName);
+        repeatingTripTitle = tripName;
+        repeatingTripHeaderHeight = sectionHeaderMetrics(tripName).height;
         const destination = filledText(trip.destination) || filledText(trip.primaryDestination);
         const departure = filledText(trip.departureLocation);
         const primary = filledText(trip.primaryDestination);
@@ -2344,6 +2368,8 @@ export function TravelLogTool({ toolId }: TravelLogToolProps) {
           const dateLabel = trip.startDate ? formatDateDisplay(trip.startDate) : '';
           attachmentRefs.push(dateLabel ? `${tripName} — ${dateLabel} — ${fileName}` : `${tripName} — ${fileName}`);
         });
+        repeatingTripTitle = null;
+        repeatingTripHeaderHeight = 0;
         yPos += 2;
       };
 
@@ -2353,10 +2379,22 @@ export function TravelLogTool({ toolId }: TravelLogToolProps) {
         tripsToPrint.forEach(printTrip);
       }
 
+      repeatingTripTitle = null;
+      repeatingTripHeaderHeight = 0;
+
       if (attachmentRefs.length > 0) {
         addSectionHeader('Attachments');
         addText('File names only. Files themselves are not included in this report.', 8, false, 5, true);
         attachmentRefs.forEach((line) => addText(line, 9, false, 8));
+      }
+
+      const pageCount = pdf.getNumberOfPages();
+      for (let page = 1; page <= pageCount; page += 1) {
+        pdf.setPage(page);
+        pdf.setFontSize(8);
+        pdf.setFont('helvetica', 'normal');
+        pdf.setTextColor(colors.muted[0], colors.muted[1], colors.muted[2]);
+        pdf.text('Household Toolbox', pageWidth / 2, footerY, { align: 'center' });
       }
 
       pdf.save(`Travel_Log_Report_${localCalendarDayIso()}.pdf`);

@@ -381,6 +381,7 @@ export function HealthcareApptsHistoryTool({ toolId }: HealthcareApptsHistoryToo
   const [exportAllMembers, setExportAllMembers] = useState(true);
   const [exportIncludeUpcoming, setExportIncludeUpcoming] = useState(true);
   const [exportHistoryScope, setExportHistoryScope] = useState<string>('all');
+  const [exportRedactPhi, setExportRedactPhi] = useState(false);
   const [isExportingPdf, setIsExportingPdf] = useState(false);
 
   const [isLoadingHeaders, setIsLoadingHeaders] = useState(false);
@@ -1073,6 +1074,15 @@ export function HealthcareApptsHistoryTool({ toolId }: HealthcareApptsHistoryToo
       const pageHeight = pdf.internal.pageSize.getHeight();
       const margin = 15;
       const contentWidth = pageWidth - margin * 2;
+      const footerY = pageHeight - 10;
+      const contentBottom = footerY - 4;
+      const reportTitle = 'Healthcare Appointments Report';
+      const memberLabel = useAllMembers ? 'All members' : selectedMemberName || 'Selected member';
+      const upcomingLabel = exportIncludeUpcoming ? 'Upcoming and history' : 'History only';
+      const yearLabel = exportHistoryScope === 'all' ? 'All years' : exportHistoryScope;
+      const scopeLine = `${upcomingLabel}  ·  ${yearLabel}  ·  ${memberLabel}`;
+      const continuationTop = margin + 18;
+      const redactedNote = 'Saved in the app (not included in this report)';
       let yPos = margin;
 
       const colors = {
@@ -1088,14 +1098,25 @@ export function HealthcareApptsHistoryTool({ toolId }: HealthcareApptsHistoryToo
         pdf.rect(0, 0, pageWidth, pageHeight, 'F');
       };
 
+      const paintContinuationHeader = () => {
+        pdf.setFontSize(14);
+        pdf.setFont('helvetica', 'bold');
+        pdf.setTextColor(colors.title[0], colors.title[1], colors.title[2]);
+        pdf.text(reportTitle, (pageWidth - pdf.getTextWidth(reportTitle)) / 2, margin + 4);
+        pdf.setFontSize(10);
+        pdf.setFont('helvetica', 'normal');
+        pdf.setTextColor(colors.muted[0], colors.muted[1], colors.muted[2]);
+        pdf.text(scopeLine, margin, margin + 12);
+        yPos = continuationTop;
+      };
+
       const checkNewPage = (requiredHeight: number) => {
-        if (yPos + requiredHeight > pageHeight - margin) {
-          pdf.addPage();
-          fillPage();
-          yPos = margin;
-          return true;
-        }
-        return false;
+        if (yPos + requiredHeight <= contentBottom) return false;
+        if (yPos <= continuationTop + 0.5 && yPos > margin) return false;
+        pdf.addPage();
+        fillPage();
+        paintContinuationHeader();
+        return true;
       };
 
       const addSectionHeader = (title: string) => {
@@ -1110,14 +1131,18 @@ export function HealthcareApptsHistoryTool({ toolId }: HealthcareApptsHistoryToo
       };
 
       const addText = (text: string, fontSize = 10, isBold = false, indent = 0, muted = false) => {
-        pdf.setFontSize(fontSize);
-        pdf.setFont('helvetica', isBold ? 'bold' : 'normal');
-        const color = muted ? colors.muted : colors.text;
-        pdf.setTextColor(color[0], color[1], color[2]);
+        const applyStyle = () => {
+          pdf.setFontSize(fontSize);
+          pdf.setFont('helvetica', isBold ? 'bold' : 'normal');
+          const color = muted ? colors.muted : colors.text;
+          pdf.setTextColor(color[0], color[1], color[2]);
+        };
+        applyStyle();
         const maxWidth = contentWidth - indent - 5;
         const lines = pdf.splitTextToSize(text, maxWidth) as string[];
         const lineHeight = fontSize * 0.42;
         checkNewPage(lines.length * lineHeight + 2);
+        applyStyle();
         lines.forEach((line) => {
           pdf.text(line, margin + indent, yPos);
           yPos += lineHeight;
@@ -1125,41 +1150,70 @@ export function HealthcareApptsHistoryTool({ toolId }: HealthcareApptsHistoryToo
         yPos += 2;
       };
 
+      const textBlockHeight = (value: string, fontSize: number, isBold: boolean, indent: number) => {
+        pdf.setFontSize(fontSize);
+        pdf.setFont('helvetica', isBold ? 'bold' : 'normal');
+        const lines = pdf.splitTextToSize(value, contentWidth - indent - 5) as string[];
+        return lines.length * fontSize * 0.42 + 2;
+      };
+
       const writeVisit = (record: AppointmentRecord) => {
-        checkNewPage(28);
         const kind = record.isUpcoming ? 'Upcoming' : 'History';
-        addText(`${formatDateDisplay(record.appointmentDate) || 'No date'}  ·  ${kind}`, 11, true, 5);
+        const visitLines: { text: string; fontSize: number; isBold: boolean; indent: number }[] = [
+          {
+            text: `${formatDateDisplay(record.appointmentDate) || 'No date'}  ·  ${kind}`,
+            fontSize: 11,
+            isBold: true,
+            indent: 5,
+          },
+        ];
         if (record.careFacility.trim()) {
-          addText(`Facility: ${record.careFacility.trim()}`, 9, false, 8);
+          visitLines.push({ text: `Facility: ${record.careFacility.trim()}`, fontSize: 9, isBold: false, indent: 8 });
         }
         if (record.providerInfo.trim()) {
-          addText(`Provider: ${record.providerInfo.trim()}`, 9, false, 8);
+          visitLines.push({ text: `Provider: ${record.providerInfo.trim()}`, fontSize: 9, isBold: false, indent: 8 });
         }
         if (record.reasonForVisit.trim()) {
-          addText(`Reason: ${record.reasonForVisit.trim()}`, 9, false, 8);
+          visitLines.push({ text: `Reason: ${record.reasonForVisit.trim()}`, fontSize: 9, isBold: false, indent: 8 });
         }
         if (record.preVisitNotes.trim()) {
-          addText(`Pre-visit notes: ${record.preVisitNotes.trim()}`, 9, false, 8);
+          visitLines.push({
+            text: `Pre-visit notes: ${exportRedactPhi ? redactedNote : record.preVisitNotes.trim()}`,
+            fontSize: 9,
+            isBold: false,
+            indent: 8,
+          });
         }
         if (record.postVisitNotes.trim()) {
-          addText(`Post-visit notes: ${record.postVisitNotes.trim()}`, 9, false, 8);
+          visitLines.push({
+            text: `Post-visit notes: ${exportRedactPhi ? redactedNote : record.postVisitNotes.trim()}`,
+            fontSize: 9,
+            isBold: false,
+            indent: 8,
+          });
         }
         if (record.totalBilled || record.insurancePaid || record.currentAmountDue) {
-          addText(
-            `Billed: ${formatCurrencyDisplay(record.totalBilled) || '—'}  ·  Insurance: ${formatCurrencyDisplay(record.insurancePaid) || '—'}  ·  Due: ${formatCurrencyDisplay(record.currentAmountDue) || '—'}`,
-            9,
-            false,
-            8
-          );
+          visitLines.push({
+            text: `Billed: ${formatCurrencyDisplay(record.totalBilled) || '—'}  ·  Insurance: ${formatCurrencyDisplay(record.insurancePaid) || '—'}  ·  Due: ${formatCurrencyDisplay(record.currentAmountDue) || '—'}`,
+            fontSize: 9,
+            isBold: false,
+            indent: 8,
+          });
           if (record.totalBilled || record.insurancePaid) {
-            addText(
-              `Patient responsibility: ${getPatientResponsibilityDisplay(record.totalBilled, record.insurancePaid) || '—'}`,
-              9,
-              false,
-              8
-            );
+            visitLines.push({
+              text: `Patient responsibility: ${getPatientResponsibilityDisplay(record.totalBilled, record.insurancePaid) || '—'}`,
+              fontSize: 9,
+              isBold: false,
+              indent: 8,
+            });
           }
         }
+        const blockHeight = visitLines.reduce(
+          (sum, line) => sum + textBlockHeight(line.text, line.fontSize, line.isBold, line.indent),
+          3,
+        );
+        checkNewPage(blockHeight);
+        visitLines.forEach((line) => addText(line.text, line.fontSize, line.isBold, line.indent));
         yPos += 3;
       };
 
@@ -1168,8 +1222,7 @@ export function HealthcareApptsHistoryTool({ toolId }: HealthcareApptsHistoryToo
       pdf.setFontSize(20);
       pdf.setFont('helvetica', 'bold');
       pdf.setTextColor(colors.title[0], colors.title[1], colors.title[2]);
-      const title = 'Healthcare Appointments Report';
-      pdf.text(title, (pageWidth - pdf.getTextWidth(title)) / 2, yPos);
+      pdf.text(reportTitle, (pageWidth - pdf.getTextWidth(reportTitle)) / 2, yPos);
       yPos += 10;
 
       pdf.setFontSize(10);
@@ -1178,10 +1231,7 @@ export function HealthcareApptsHistoryTool({ toolId }: HealthcareApptsHistoryToo
       pdf.text(`Generated on: ${formatReportDate(new Date())}`, margin, yPos);
       yPos += 6;
 
-      const memberLabel = useAllMembers ? 'All members' : selectedMemberName || 'Selected member';
-      const upcomingLabel = exportIncludeUpcoming ? 'Upcoming and history' : 'History only';
-      const yearLabel = exportHistoryScope === 'all' ? 'All years' : exportHistoryScope;
-      pdf.text(`${upcomingLabel}  ·  ${yearLabel}  ·  ${memberLabel}`, margin, yPos);
+      pdf.text(scopeLine, margin, yPos);
       yPos += 10;
 
       addSectionHeader('Summary');
@@ -1241,6 +1291,15 @@ export function HealthcareApptsHistoryTool({ toolId }: HealthcareApptsHistoryToo
         addSectionHeader('Attachments');
         addText('File names only. Files themselves are not included in this report.', 8, false, 5, true);
         attachmentRefs.forEach((line) => addText(line, 9, false, 8));
+      }
+
+      const pageCount = pdf.getNumberOfPages();
+      for (let page = 1; page <= pageCount; page += 1) {
+        pdf.setPage(page);
+        pdf.setFontSize(9);
+        pdf.setFont('helvetica', 'normal');
+        pdf.setTextColor(colors.muted[0], colors.muted[1], colors.muted[2]);
+        pdf.text(`Page ${page} of ${pageCount}`, pageWidth / 2, footerY, { align: 'center' });
       }
 
       pdf.save(`Healthcare_Appts_Report_${localCalendarDayIso()}.pdf`);
@@ -2257,6 +2316,19 @@ export function HealthcareApptsHistoryTool({ toolId }: HealthcareApptsHistoryToo
                       </div>
                     )}
                   </fieldset>
+
+                  <label className={`flex items-start gap-3 ${isLight ? 'text-slate-700' : 'text-slate-300'} cursor-pointer`}>
+                    <input
+                      type="checkbox"
+                      checked={exportRedactPhi}
+                      onChange={(event) => setExportRedactPhi(event.target.checked)}
+                      disabled={isExportingPdf}
+                      className={isLight
+                        ? 'mt-0.5 h-4 w-4 rounded border-slate-400 text-emerald-600 focus:ring-emerald-500'
+                        : 'mt-0.5 h-4 w-4 rounded border-slate-600 bg-slate-700 text-emerald-500 focus:ring-emerald-500'}
+                    />
+                    <span>Redact sensitive / PHI fields</span>
+                  </label>
 
                   <div className="flex gap-3 pt-2">
                     <button

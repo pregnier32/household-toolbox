@@ -1,11 +1,14 @@
 import { redirect } from 'next/navigation';
-import { getSession } from '@/lib/session';
+import { getSessionGate } from '@/lib/session';
 
-/** Same signed-in gate Dashboard uses: no valid session → `/` auth page. */
+/** Signed-in gate. Users who turned on an authenticator must finish that step first. */
 export async function requirePageSession() {
-  const user = await getSession();
-  if (!user) {
+  const gate = await getSessionGate();
+  if (gate.status === 'anonymous') {
     redirect('/');
   }
-  return user;
+  if (gate.status === 'mfa_required' || gate.status === 'mfa_unknown') {
+    redirect('/auth/mfa');
+  }
+  return gate.user;
 }
