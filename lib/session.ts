@@ -4,8 +4,8 @@ import { cookies } from 'next/headers';
 import { supabaseServer } from './supabaseServer';
 import { createSupabaseAuthServerClient } from './supabaseAuthServer';
 
-const SESSION_COOKIE_NAME = 'household-toolbox-session';
-const SESSION_MAX_AGE = 60 * 60 * 24 * 7; // 7 days
+/** Stale browsers may still hold this cookie from before Supabase Auth. It is not read for sign-in. */
+const LEGACY_SESSION_COOKIE_NAME = 'household-toolbox-session';
 
 export type AppSession = {
   id: string;
@@ -14,37 +14,21 @@ export type AppSession = {
   lastName?: string;
   userStatus?: string;
   themePreference?: 'light' | 'dark';
-  /** Which identity check produced this session. Callers must not authorize from this field. */
-  authSource?: 'supabase' | 'legacy';
 };
-
-export async function createSession(userId: string) {
-  const cookieStore = await cookies();
-  cookieStore.set(SESSION_COOKIE_NAME, userId, {
-    httpOnly: true,
-    secure: process.env.NODE_ENV === 'production',
-    sameSite: 'lax',
-    maxAge: SESSION_MAX_AGE,
-    path: '/',
-  });
-}
 
 function themePreference(value: string | null | undefined): 'light' | 'dark' | undefined {
   if (value === 'light' || value === 'dark') return value;
   return undefined;
 }
 
-function toAppSession(
-  user: {
-    id: string;
-    email: string;
-    first_name: string;
-    last_name: string | null;
-    user_status: string | null;
-    theme_preference: string | null;
-  },
-  authSource: 'supabase' | 'legacy',
-): AppSession {
+function toAppSession(user: {
+  id: string;
+  email: string;
+  first_name: string;
+  last_name: string | null;
+  user_status: string | null;
+  theme_preference: string | null;
+}): AppSession {
   return {
     id: user.id,
     email: user.email,
@@ -52,7 +36,6 @@ function toAppSession(
     lastName: user.last_name || undefined,
     userStatus: user.user_status || undefined,
     themePreference: themePreference(user.theme_preference),
-    authSource,
   };
 }
 
@@ -76,9 +59,18 @@ async function readSupabaseUserId(): Promise<string | null> {
   }
 }
 
-async function sessionFromSupabase(): Promise<AppSession | null | 'fallback'> {
+async function signOutSupabaseAuth() {
+  try {
+    const supabase = await createSupabaseAuthServerClient();
+    await supabase.auth.signOut();
+  } catch {
+    console.error('Supabase Auth sign-out failed for an invalid application account');
+  }
+}
+
+export async function getSession(): Promise<AppSession | null> {
   const userId = await readSupabaseUserId();
-  if (!userId) return 'fallback';
+  if (!userId) return null;
 
   try {
     const { data: user, error } = await loadProfile(userId);
@@ -96,51 +88,21 @@ async function sessionFromSupabase(): Promise<AppSession | null | 'fallback'> {
       await signOutSupabaseAuth();
       return null;
     }
-    return toAppSession(user, 'supabase');
+    return toAppSession(user);
   } catch {
     console.error('Application profile lookup failed for Supabase Auth user', userId);
     return null;
   }
 }
 
-async function signOutSupabaseAuth() {
-  try {
-    const supabase = await createSupabaseAuthServerClient();
-    await supabase.auth.signOut();
-  } catch {
-    console.error('Supabase Auth sign-out failed for an invalid application account');
-  }
-}
-
-async function sessionFromLegacyCookie(): Promise<AppSession | null> {
+/** Expires a leftover pre-Auth cookie. Sign-in does not read it. */
+export async function clearStaleLegacySessionCookie() {
   const cookieStore = await cookies();
-  const sessionId = cookieStore.get(SESSION_COOKIE_NAME)?.value;
-  if (!sessionId) return null;
-
-  try {
-    const { data: user, error } = await loadProfile(sessionId);
-    if (error || !user || user.active !== 'Y') return null;
-    return toAppSession(user, 'legacy');
-  } catch {
-    console.error('Legacy session lookup failed');
-    return null;
-  }
-}
-
-export async function getSession(): Promise<AppSession | null> {
-  const supabaseSession = await sessionFromSupabase();
-  if (supabaseSession !== 'fallback') return supabaseSession;
-  return sessionFromLegacyCookie();
-}
-
-export async function deleteSession() {
-  const cookieStore = await cookies();
-  // Path must match createSession or the browser keeps the cookie after Sign Out.
   cookieStore.delete({
-    name: SESSION_COOKIE_NAME,
+    name: LEGACY_SESSION_COOKIE_NAME,
     path: '/',
   });
-  cookieStore.set(SESSION_COOKIE_NAME, '', {
+  cookieStore.set(LEGACY_SESSION_COOKIE_NAME, '', {
     httpOnly: true,
     secure: process.env.NODE_ENV === 'production',
     sameSite: 'lax',
@@ -149,4 +111,3 @@ export async function deleteSession() {
     path: '/',
   });
 }
-

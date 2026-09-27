@@ -594,6 +594,27 @@ export async function deleteUserAndAssociatedData(userId: string): Promise<void>
     .eq('id', userId);
 
   if (deleteUserError) throw deleteUserError;
+
+  await deleteAuthIdentity(userId);
+}
+
+function isMissingAuthUser(error: { status?: number; code?: string; message?: string }): boolean {
+  if (error.status === 404) return true;
+  const code = (error.code || '').toLowerCase();
+  if (code === 'user_not_found') return true;
+  return (error.message || '').toLowerCase().includes('user not found');
+}
+
+/**
+ * Hard-delete the Supabase Auth identity so the email can be used again.
+ * Application data is already removed with public.users. A missing Auth user
+ * is treated as already deleted.
+ */
+async function deleteAuthIdentity(userId: string): Promise<void> {
+  const { error } = await supabaseServer.auth.admin.deleteUser(userId, false);
+  if (!error || isMissingAuthUser(error)) return;
+  console.error('Auth identity delete failed', userId);
+  throw error;
 }
 
 export type DeletedUserTool = {

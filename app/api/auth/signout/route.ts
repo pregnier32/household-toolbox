@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server';
-import { deleteSession } from '@/lib/session';
+import { clearStaleLegacySessionCookie } from '@/lib/session';
 import { createSupabaseAuthServerClient } from '@/lib/supabaseAuthServer';
 
 const SESSION_COOKIE_NAME = 'household-toolbox-session';
@@ -15,9 +15,9 @@ export async function POST() {
   }
 
   try {
-    await deleteSession();
+    await clearStaleLegacySessionCookie();
   } catch {
-    console.error('Legacy session sign-out failed');
+    console.error('Stale legacy cookie cleanup failed');
   }
 
   const response = NextResponse.json(

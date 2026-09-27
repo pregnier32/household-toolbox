@@ -59,41 +59,6 @@ export type Database = {
           },
         ]
       }
-      password_reset_tokens: {
-        Row: {
-          created_at: string | null
-          expires_at: string
-          id: string
-          token: string
-          used: boolean | null
-          user_id: string
-        }
-        Insert: {
-          created_at?: string | null
-          expires_at: string
-          id?: string
-          token: string
-          used?: boolean | null
-          user_id: string
-        }
-        Update: {
-          created_at?: string | null
-          expires_at?: string
-          id?: string
-          token?: string
-          used?: boolean | null
-          user_id?: string
-        }
-        Relationships: [
-          {
-            foreignKeyName: "password_reset_tokens_user_id_fkey"
-            columns: ["user_id"]
-            isOneToOne: false
-            referencedRelation: "users"
-            referencedColumns: ["id"]
-          },
-        ]
-      }
       release_notes: {
         Row: {
           category: string
@@ -8062,63 +8027,6 @@ export type Database = {
           },
         ]
       }
-      users: {
-        Row: {
-          active: string
-          created_at: string
-          email: string
-          first_name: string
-          guest_admin_id: number | null
-          id: string
-          last_name: string
-          password: string
-          storage_addon_gb: number
-          storage_plan: string
-          storage_usage_updated_at: string | null
-          storage_used_bytes: number
-          theme_preference: string | null
-          updated_at: string | null
-          user_id: string
-          user_status: string
-        }
-        Insert: {
-          active: string
-          created_at?: string
-          email: string
-          first_name: string
-          guest_admin_id?: number | null
-          id?: string
-          last_name: string
-          password: string
-          storage_addon_gb?: number
-          storage_plan?: string
-          storage_usage_updated_at?: string | null
-          storage_used_bytes?: number
-          theme_preference?: string | null
-          updated_at?: string | null
-          user_id?: string
-          user_status: string
-        }
-        Update: {
-          active?: string
-          created_at?: string
-          email?: string
-          first_name?: string
-          guest_admin_id?: number | null
-          id?: string
-          last_name?: string
-          password?: string
-          storage_addon_gb?: number
-          storage_plan?: string
-          storage_usage_updated_at?: string | null
-          storage_used_bytes?: number
-          theme_preference?: string | null
-          updated_at?: string | null
-          user_id?: string
-          user_status?: string
-        }
-        Relationships: []
-      }
       user_release_note_reads: {
         Row: {
           last_viewed_id: string | null
@@ -8203,6 +8111,60 @@ export type Database = {
           },
         ]
       }
+      users: {
+        Row: {
+          active: string
+          created_at: string
+          email: string
+          first_name: string
+          guest_admin_id: number | null
+          id: string
+          last_name: string
+          storage_addon_gb: number
+          storage_plan: string
+          storage_usage_updated_at: string | null
+          storage_used_bytes: number
+          theme_preference: string | null
+          updated_at: string | null
+          user_id: string
+          user_status: string
+        }
+        Insert: {
+          active: string
+          created_at?: string
+          email: string
+          first_name: string
+          guest_admin_id?: number | null
+          id?: string
+          last_name: string
+          storage_addon_gb?: number
+          storage_plan?: string
+          storage_usage_updated_at?: string | null
+          storage_used_bytes?: number
+          theme_preference?: string | null
+          updated_at?: string | null
+          user_id?: string
+          user_status: string
+        }
+        Update: {
+          active?: string
+          created_at?: string
+          email?: string
+          first_name?: string
+          guest_admin_id?: number | null
+          id?: string
+          last_name?: string
+          storage_addon_gb?: number
+          storage_plan?: string
+          storage_usage_updated_at?: string | null
+          storage_used_bytes?: number
+          theme_preference?: string | null
+          updated_at?: string | null
+          user_id?: string
+          user_status?: string
+        }
+        Relationships: []
+      }
       users_tools: {
         Row: {
           created_at: string | null
@@ -8258,7 +8220,7 @@ export type Database = {
         Returns: undefined
       }
       get_site_storage_stats: {
-        Args: Record<PropertyKey, never>
+        Args: never
         Returns: {
           document_count: number
           used_bytes: number

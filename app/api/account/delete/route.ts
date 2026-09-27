@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
-import { getSession, deleteSession } from '@/lib/session';
+import { getSession, clearStaleLegacySessionCookie } from '@/lib/session';
 import { supabaseServer } from '@/lib/supabaseServer';
+import { createSupabaseAuthServerClient } from '@/lib/supabaseAuthServer';
 import { deleteUserAndAssociatedData } from '@/lib/user-data-deletion';
 
 export async function DELETE() {
@@ -39,7 +40,13 @@ export async function DELETE() {
     }
 
     await deleteUserAndAssociatedData(user.id);
-    await deleteSession();
+    try {
+      const supabase = await createSupabaseAuthServerClient();
+      await supabase.auth.signOut({ scope: 'local' });
+    } catch {
+      console.error('Supabase Auth sign-out failed after account delete');
+    }
+    await clearStaleLegacySessionCookie();
     return NextResponse.json({ success: true, message: 'Account and all associated data deleted successfully' });
   } catch (error) {
     console.error('Error deleting own account:', error);

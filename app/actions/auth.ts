@@ -5,9 +5,7 @@ import { TablesInsert } from '@/src/types/supabase';
 import { getSession } from '@/lib/session';
 import { createSupabaseAuthServerClient } from '@/lib/supabaseAuthServer';
 import { authCallbackUrl } from '@/lib/auth-app-origin';
-import { syncLegacyPasswordHash } from '@/lib/legacy-password-sync';
 import { sendWelcomeEmail } from '@/lib/email';
-import bcrypt from 'bcryptjs';
 
 type SignUpData = {
   email: string;
@@ -205,12 +203,10 @@ export async function signUp(data: SignUpData): Promise<SignUpResult> {
     }
 
     const userId = created.data.user.id;
-    const passwordHash = await bcrypt.hash(data.password, 10);
 
     const userData: TablesInsert<'users'> = {
       id: userId,
       email,
-      password: passwordHash,
       first_name: firstName,
       last_name: lastName,
       active: 'Y',
@@ -368,11 +364,6 @@ export async function changePassword(data: ChangePasswordData): Promise<ChangePa
       return { success: false, error: 'Failed to change password' };
     }
 
-    const synced = await syncLegacyPasswordHash(session.id, data.newPassword);
-    if (!synced) {
-      console.error('Legacy password sync failed after Auth password change', session.id);
-    }
-
     return { success: true };
   } catch {
     console.error('Change password error');
@@ -461,11 +452,6 @@ export async function resetPassword(data: ResetPasswordData): Promise<ResetPassw
     if (updated.error) {
       console.error('Recovery password update failed', updated.error.code);
       return { success: false, error: 'This reset link is invalid or has expired. Request a new one.' };
-    }
-
-    const synced = await syncLegacyPasswordHash(userId, data.newPassword);
-    if (!synced) {
-      console.error('Legacy password sync failed after recovery', userId);
     }
 
     await supabase.auth.signOut();

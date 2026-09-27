@@ -3,7 +3,7 @@
  * Served by the public pages and /api/legal.
  */
 
-export const LEGAL_LAST_UPDATED = '2026-09-26';
+export const LEGAL_LAST_UPDATED = '2026-09-27';
 
 const h2 = (text: string) =>
   `<h2 class="text-2xl font-semibold text-slate-100 mt-8 mb-4">${text}</h2>`;
@@ -17,7 +17,7 @@ const supportEmail = '<strong class="text-emerald-400">support@householdtoolbox.
 
 export function formatLegalDate(value: string | null | undefined): string {
   const match = /^(\d{4})-(\d{2})-(\d{2})/.exec(value || '');
-  if (!match) return 'September 26, 2026';
+  if (!match) return 'September 27, 2026';
   const date = new Date(Number(match[1]), Number(match[2]) - 1, Number(match[3]));
   return date.toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' });
 }
@@ -266,9 +266,9 @@ export const PRIVACY_POLICY_HTML = [
 
   h2('7. Cookies'),
   p(
-    'We use one first-party cookie, <strong>household-toolbox-session</strong>, to keep you signed in. It is httpOnly, lasts about 7 days, and is sent only to our site. We do not use analytics cookies or advertising cookies.'
+    'Sign-in uses Supabase Auth session cookies. They are httpOnly, sent only to our site, and are not used for analytics or advertising.'
   ),
-  p('If you block that cookie, you will need to sign in again, and parts of the Service will not stay signed in.'),
+  p('If you block those cookies, you will need to sign in again, and parts of the Service will not stay signed in.'),
 
   h2('8. Children&rsquo;s Privacy'),
   p(
