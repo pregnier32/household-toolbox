@@ -15,7 +15,7 @@ import {
 } from '@/lib/end-of-life-planner-storage';
 
 function missingTableMessage() {
-  return 'End of Life Planner attachments table is missing. Run supabase/ADD_end_of_life_planner_attachments.sql.';
+  return 'End of Life Planner attachments table is missing. Run supabase/archive/tools/end-of-life-planner.sql.';
 }
 
 function ownerFromForm(formData: FormData): { store: EolAttachmentStore; ownerId: string } | null {

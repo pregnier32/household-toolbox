@@ -12,7 +12,7 @@ import {
 } from '@/lib/subscription-tracker-storage';
 
 function missingTableMessage() {
-  return 'Subscription Tracker attachments table is missing. Run supabase/ADD_subscription_tracker_attachments.sql.';
+  return 'Subscription Tracker attachments table is missing. Run supabase/archive/tools/subscription-tracker.sql.';
 }
 
 export async function POST(request: NextRequest) {

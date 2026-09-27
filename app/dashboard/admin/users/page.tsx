@@ -97,6 +97,10 @@ export default function UsersPage() {
   const deleteCancelClass = isLight
     ? 'rounded border border-slate-300 bg-white px-4 py-2 text-sm font-medium text-slate-700 transition-colors hover:bg-slate-100 disabled:cursor-not-allowed disabled:opacity-50'
     : 'rounded border border-slate-700 bg-slate-800 px-4 py-2 text-sm font-medium text-slate-300 transition-colors hover:bg-slate-700 disabled:cursor-not-allowed disabled:opacity-50';
+  const deleteConfirmInputClass = isLight
+    ? 'mb-4 w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900 placeholder-slate-500 focus:border-red-500/50 focus:outline-none focus:ring-1 focus:ring-red-500/50'
+    : 'mb-4 w-full rounded-lg border border-slate-600 bg-slate-900 px-3 py-2 text-sm text-slate-100 placeholder-slate-500 focus:border-red-500/50 focus:outline-none focus:ring-1 focus:ring-red-500/50';
+  const deleteKeywordClass = isLight ? 'font-semibold text-slate-900' : 'font-semibold text-slate-100';
 
   const [users, setUsers] = useState<User[]>([]);
   const [filteredUsers, setFilteredUsers] = useState<User[]>([]);
@@ -114,11 +118,19 @@ export default function UsersPage() {
     active: 'Y',
     userStatus: '',
   });
-  const [deleteConfirm, setDeleteConfirm] = useState<{ isOpen: boolean; userId: string | null; userEmail: string }>({
+  const [deleteConfirm, setDeleteConfirm] = useState<{
+    isOpen: boolean;
+    step: 'delete' | 'yes';
+    userId: string | null;
+    userEmail: string;
+  }>({
     isOpen: false,
+    step: 'delete',
     userId: null,
     userEmail: '',
   });
+  const [deletePhrase, setDeletePhrase] = useState('');
+  const [yesPhrase, setYesPhrase] = useState('');
   const [isDeleting, setIsDeleting] = useState(false);
   const [toolsModal, setToolsModal] = useState<{ isOpen: boolean; userId: string | null; userName: string }>({
     isOpen: false,
@@ -263,26 +275,49 @@ export default function UsersPage() {
     }
   };
 
+  const resetDeleteConfirm = () => {
+    setDeleteConfirm({
+      isOpen: false,
+      step: 'delete',
+      userId: null,
+      userEmail: '',
+    });
+    setDeletePhrase('');
+    setYesPhrase('');
+  };
+
   const handleDeleteClick = (userToDelete: User) => {
     setDeleteConfirm({
       isOpen: true,
+      step: 'delete',
       userId: userToDelete.id,
       userEmail: userToDelete.email,
     });
+    setDeletePhrase('');
+    setYesPhrase('');
     setError(null);
     setSuccess(null);
   };
 
   const handleDeleteCancel = () => {
-    setDeleteConfirm({
-      isOpen: false,
-      userId: null,
-      userEmail: '',
-    });
+    if (isDeleting) return;
+    resetDeleteConfirm();
+  };
+
+  const handleDeleteContinue = () => {
+    if (deletePhrase.trim().toLowerCase() !== 'delete') return;
+    setYesPhrase('');
+    setDeleteConfirm((current) => ({ ...current, step: 'yes' }));
+  };
+
+  const handleDeleteBack = () => {
+    if (isDeleting) return;
+    setYesPhrase('');
+    setDeleteConfirm((current) => ({ ...current, step: 'delete' }));
   };
 
   const handleDeleteConfirm = async () => {
-    if (!deleteConfirm.userId) return;
+    if (!deleteConfirm.userId || yesPhrase.trim().toLowerCase() !== 'yes') return;
 
     setIsDeleting(true);
     setError(null);
@@ -300,11 +335,7 @@ export default function UsersPage() {
       }
 
       setSuccess('User and all related records deleted successfully');
-      setDeleteConfirm({
-        isOpen: false,
-        userId: null,
-        userEmail: '',
-      });
+      resetDeleteConfirm();
       
       // Reload users after a short delay to show success message
       setTimeout(() => {
@@ -931,36 +962,109 @@ export default function UsersPage() {
       )}
 
       {/* Delete Confirmation Modal */}
-      {deleteConfirm.isOpen && (
+      {deleteConfirm.isOpen && deleteConfirm.step === 'delete' && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
-          <div className={deleteModalCardClass}>
-            <h2 className={modalTitleClass + ' mb-2'}>Delete User</h2>
+          <div
+            className={deleteModalCardClass}
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="admin-delete-user-title"
+          >
+            <h2 id="admin-delete-user-title" className={modalTitleClass + ' mb-2'}>Delete User</h2>
             <p className={deleteModalTextClass}>
-              Are you sure you want to delete <span className={deleteEmailClass}>{deleteConfirm.userEmail}</span>?
+              Permanently delete <span className={deleteEmailClass}>{deleteConfirm.userEmail}</span> and every tool they own.
             </p>
             <div className={deleteWarningBoxClass}>
-              <p className={isLight ? 'text-sm text-red-900 font-medium mb-1' : 'text-sm text-red-300 font-medium mb-1'}>⚠️ This action cannot be undone</p>
+              <p className={isLight ? 'text-sm text-red-900 font-medium mb-1' : 'text-sm text-red-300 font-medium mb-1'}>This action cannot be undone</p>
               <p className={isLight ? 'text-xs text-red-800/90' : 'text-xs text-red-300/80'}>
-                This will permanently delete the user account and all related records including:
+                This removes the user account, all of their tools, and the records and files stored in those tools.
               </p>
-              <ul className={isLight ? 'text-xs text-red-800/90 mt-2 ml-4 list-disc' : 'text-xs text-red-300/80 mt-2 ml-4 list-disc'}>
-                <li>User account</li>
-                <li>All user tools and subscriptions</li>
-                <li>Password reset tokens</li>
-                <li>All associated data</li>
-              </ul>
             </div>
+            <p className={deleteModalTextClass}>
+              Type <span className={deleteKeywordClass}>delete</span> to continue:
+            </p>
+            <input
+              type="text"
+              value={deletePhrase}
+              onChange={(event) => setDeletePhrase(event.target.value)}
+              placeholder="Type delete"
+              autoFocus
+              onKeyDown={(event) => {
+                if (event.key === 'Escape') handleDeleteCancel();
+                if (event.key === 'Enter') handleDeleteContinue();
+              }}
+              className={deleteConfirmInputClass}
+            />
             <div className="flex gap-3 justify-end">
               <button
+                type="button"
                 onClick={handleDeleteCancel}
-                disabled={isDeleting}
                 className={deleteCancelClass}
               >
                 Cancel
               </button>
               <button
-                onClick={handleDeleteConfirm}
+                type="button"
+                onClick={handleDeleteContinue}
+                disabled={deletePhrase.trim().toLowerCase() !== 'delete'}
+                className="rounded bg-red-500 px-4 py-2 text-sm font-medium text-slate-950 transition-colors hover:bg-red-400 disabled:cursor-not-allowed disabled:opacity-50"
+              >
+                Continue
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {deleteConfirm.isOpen && deleteConfirm.step === 'yes' && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
+          <div
+            className={deleteModalCardClass}
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="admin-delete-user-yes-title"
+          >
+            <h2 id="admin-delete-user-yes-title" className={modalTitleClass + ' mb-2'}>Confirm deletion</h2>
+            <p className={deleteModalTextClass}>
+              Last chance to keep <span className={deleteEmailClass}>{deleteConfirm.userEmail}</span>. Their account and tool data will be permanently removed.
+            </p>
+            <div className={deleteWarningBoxClass}>
+              <p className={isLight ? 'text-sm text-red-900 font-medium' : 'text-sm text-red-300 font-medium'}>
+                Type yes only if you want this user deleted.
+              </p>
+            </div>
+            {error && (
+              <p className={isLight ? 'mb-3 text-sm text-red-800' : 'mb-3 text-sm text-red-300'}>{error}</p>
+            )}
+            <p className={deleteModalTextClass}>
+              Type <span className={deleteKeywordClass}>yes</span> to delete this user:
+            </p>
+            <input
+              type="text"
+              value={yesPhrase}
+              onChange={(event) => setYesPhrase(event.target.value)}
+              placeholder="Type yes"
+              autoFocus
+              disabled={isDeleting}
+              onKeyDown={(event) => {
+                if (event.key === 'Escape' && !isDeleting) handleDeleteBack();
+                if (event.key === 'Enter') void handleDeleteConfirm();
+              }}
+              className={deleteConfirmInputClass}
+            />
+            <div className="flex gap-3 justify-end">
+              <button
+                type="button"
+                onClick={handleDeleteBack}
                 disabled={isDeleting}
+                className={deleteCancelClass}
+              >
+                Back
+              </button>
+              <button
+                type="button"
+                onClick={() => void handleDeleteConfirm()}
+                disabled={isDeleting || yesPhrase.trim().toLowerCase() !== 'yes'}
                 className="rounded bg-red-500 px-4 py-2 text-sm font-medium text-slate-950 transition-colors hover:bg-red-400 disabled:cursor-not-allowed disabled:opacity-50"
               >
                 {isDeleting ? 'Deleting...' : 'Delete User'}

@@ -12,7 +12,7 @@ import {
 } from '@/lib/calendar-events-storage';
 
 function missingTableMessage() {
-  return 'Calendar Events attachments table is missing. Run supabase/ADD_calendar_events_attachments.sql.';
+  return 'Calendar Events attachments table is missing. Run supabase/archive/tools/calendar-events.sql.';
 }
 
 export async function POST(request: NextRequest) {

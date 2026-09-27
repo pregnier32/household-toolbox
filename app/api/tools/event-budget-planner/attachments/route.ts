@@ -13,7 +13,7 @@ import {
 } from '@/lib/ebp-storage';
 
 function missingTableMessage() {
-  return 'Event Budget Planner attachments table is missing. Run supabase/ADD_event_budget_planner_attachments.sql.';
+  return 'Event Budget Planner attachments table is missing. Run supabase/archive/tools/event-budget-planner.sql.';
 }
 
 export async function POST(request: NextRequest) {

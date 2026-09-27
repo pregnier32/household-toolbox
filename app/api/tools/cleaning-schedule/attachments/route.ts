@@ -13,7 +13,7 @@ import {
 } from '@/lib/cleaning-storage';
 
 function missingTableMessage() {
-  return 'Cleaning Schedule attachments table is missing. Run supabase/ADD_cleaning_schedule_attachments.sql.';
+  return 'Cleaning Schedule attachments table is missing. Run supabase/archive/tools/cleaning-schedule.sql.';
 }
 
 export async function POST(request: NextRequest) {

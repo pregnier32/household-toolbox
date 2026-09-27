@@ -12,7 +12,7 @@ import {
 } from '@/lib/shopping-list-storage';
 
 function missingTableMessage() {
-  return 'Shopping List attachments table is missing. Run supabase/ADD_shopping_list_attachments.sql.';
+  return 'Shopping List attachments table is missing. Run supabase/archive/tools/shopping-list.sql.';
 }
 
 export async function POST(request: NextRequest) {

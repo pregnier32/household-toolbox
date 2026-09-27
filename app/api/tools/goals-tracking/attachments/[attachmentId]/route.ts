@@ -55,7 +55,7 @@ export async function GET(
       if (updateError) {
         if (isMissingRelationError(goalError) && isMissingRelationError(updateError)) {
           return NextResponse.json(
-            { error: 'Goals Tracking attachments table is missing. Run supabase/ADD_goals_tracking_attachments.sql.' },
+            { error: 'Goals Tracking attachments table is missing. Run supabase/archive/tools/goals-tracking.sql.' },
             { status: 500 }
           );
         }

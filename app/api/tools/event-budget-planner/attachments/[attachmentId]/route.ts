@@ -55,7 +55,7 @@ export async function GET(
       if (expenseError) {
         if (isMissingRelationError(eventError) && isMissingRelationError(expenseError)) {
           return NextResponse.json(
-            { error: 'Event Budget Planner attachments table is missing. Run supabase/ADD_event_budget_planner_attachments.sql.' },
+            { error: 'Event Budget Planner attachments table is missing. Run supabase/archive/tools/event-budget-planner.sql.' },
             { status: 500 }
           );
         }

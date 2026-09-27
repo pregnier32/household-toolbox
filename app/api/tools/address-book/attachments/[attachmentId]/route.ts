@@ -29,7 +29,7 @@ export async function GET(
     if (error || !attachment) {
       if (isMissingRelationError(error)) {
         return NextResponse.json(
-          { error: 'Address Book attachments table is missing. Run supabase/ADD_address_book_attachments.sql.' },
+          { error: 'Address Book attachments table is missing. Run supabase/archive/tools/address-book.sql.' },
           { status: 500 }
         );
       }

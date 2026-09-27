@@ -22,7 +22,7 @@ export async function GET(
     const found = await lookupAttachmentById(attachmentId, user.id);
     if ('error' in found && found.error === 'missing-table') {
       return NextResponse.json(
-        { error: 'Pet Care attachments table is missing. Run supabase/ADD_pet_care_attachments.sql.' },
+        { error: 'Pet Care attachments table is missing. Run supabase/archive/tools/pet-care-schedule.sql.' },
         { status: 500 }
       );
     }

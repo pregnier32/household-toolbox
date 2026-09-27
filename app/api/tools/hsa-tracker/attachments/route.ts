@@ -6,7 +6,7 @@ import { assertCanStoreBytes, isStorageLimitError, refreshUserStorageUsage } fro
 import { HSA_BUCKET, isMissingRelationError, loadOwnedExpense, mapHsaAttachment, removeHsaStorageFiles } from '@/lib/hsa-storage';
 
 function missingTableMessage() {
-  return 'HSA receipts table is missing. Run supabase/ADD_hsa_attachments.sql.';
+  return 'HSA receipts table is missing. Run supabase/archive/tools/hsa-tracker.sql.';
 }
 
 export async function POST(request: NextRequest) {

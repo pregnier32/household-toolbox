@@ -70,7 +70,7 @@ export async function POST(request: NextRequest) {
       await supabaseServer.storage.from(TODO_BUCKET).remove([storagePath]);
       if (isMissingRelationError(insertError)) {
         return NextResponse.json(
-          { error: 'To-Do attachments table is missing. Run supabase/ADD_todo_attachments.sql.' },
+          { error: 'To-Do attachments table is missing. Run supabase/archive/tools/to-do-list.sql.' },
           { status: 500 }
         );
       }

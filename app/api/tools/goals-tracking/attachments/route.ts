@@ -13,7 +13,7 @@ import {
 } from '@/lib/goals-tracking-storage';
 
 function missingTableMessage() {
-  return 'Goals Tracking attachments table is missing. Run supabase/ADD_goals_tracking_attachments.sql.';
+  return 'Goals Tracking attachments table is missing. Run supabase/archive/tools/goals-tracking.sql.';
 }
 
 export async function POST(request: NextRequest) {

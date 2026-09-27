@@ -139,7 +139,7 @@ async function patchLineItemQtyUnit(rows: ListItemInsert[]): Promise<void> {
     if (!error) continue;
     if (isMissingColumnError(error)) {
       console.error(
-        'SMS-198: tools_sl_list_items.quantity/unit missing or not in schema cache — apply supabase/ADD_sl_list_items_quantity_unit.sql and reload PostgREST schema'
+        'SMS-198: tools_sl_list_items.quantity/unit missing or not in schema cache — apply supabase/archive/tools/shopping-list.sql and reload PostgREST schema'
       );
       return;
     }

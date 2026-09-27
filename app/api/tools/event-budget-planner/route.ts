@@ -147,7 +147,7 @@ function normalizeVendorSplits(
 async function assertSplitsTableAvailable() {
   const { error } = await supabaseServer.from('tools_ebp_expense_splits').select('id').limit(1);
   if (error && isMissingRelationError(error)) {
-    throw new Error('Expense splits table is missing. Run supabase/UPDATE_ebp_expense_splits.sql.');
+    throw new Error('Expense splits table is missing. Run supabase/archive/tools/event-budget-planner.sql.');
   }
   if (error) throw error;
 }
@@ -209,7 +209,7 @@ async function replaceExpenseSplits(expenseId: string, parts: VendorSplitPart[])
 
   if (insertError) {
     if (isMissingRelationError(insertError)) {
-      throw new Error('Expense splits table is missing. Run supabase/UPDATE_ebp_expense_splits.sql.');
+      throw new Error('Expense splits table is missing. Run supabase/archive/tools/event-budget-planner.sql.');
     }
     throw insertError;
   }

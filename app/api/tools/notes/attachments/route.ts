@@ -116,7 +116,7 @@ export async function POST(request: NextRequest) {
       await supabaseServer.storage.from(NOTES_BUCKET).remove([storagePath]);
       if (isMissingRelationError(insertError)) {
         return NextResponse.json(
-          { error: 'Notes attachments table is missing. Run supabase/ADD_notes_attachments.sql.' },
+          { error: 'Notes attachments table is missing. Run supabase/archive/tools/notes.sql.' },
           { status: 500 }
         );
       }

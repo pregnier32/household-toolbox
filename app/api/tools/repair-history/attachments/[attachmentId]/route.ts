@@ -29,7 +29,7 @@ export async function GET(
     if (error || !attachment) {
       if (isMissingRelationError(error)) {
         return NextResponse.json(
-          { error: 'Repair History attachments table is missing. Run supabase/ADD_repair_history_attachments.sql.' },
+          { error: 'Repair History attachments table is missing. Run supabase/archive/tools/repair-history.sql.' },
           { status: 500 }
         );
       }

@@ -55,7 +55,7 @@ export async function GET(
       if (completionError) {
         if (isMissingRelationError(itemError) && isMissingRelationError(completionError)) {
           return NextResponse.json(
-            { error: 'Home Maintenance Schedule attachments table is missing. Run supabase/ADD_home_maintenance_schedule_attachments.sql.' },
+            { error: 'Home Maintenance Schedule attachments table is missing. Run supabase/archive/tools/home-maintenance-schedule.sql.' },
             { status: 500 }
           );
         }

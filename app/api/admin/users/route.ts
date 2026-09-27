@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getSession } from '@/lib/session';
 import { supabaseServer } from '@/lib/supabaseServer';
-import { deleteUserAndAssociatedData } from '@/lib/user-data-deletion';
+import { delete_user, delete_user_tools } from '@/lib/user-data-deletion';
 
 // GET - Fetch all users
 export async function GET(request: NextRequest) {
@@ -195,7 +195,8 @@ export async function DELETE(request: NextRequest) {
     }
 
     try {
-      await deleteUserAndAssociatedData(id);
+      await delete_user_tools(id);
+      await delete_user(id);
     } catch (deleteError) {
       console.error('Error deleting user and associated data:', deleteError);
       return NextResponse.json({ error: 'Failed to delete user' }, { status: 500 });

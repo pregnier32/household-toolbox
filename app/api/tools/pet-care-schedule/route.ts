@@ -94,7 +94,7 @@ export async function GET(request: NextRequest) {
             petError.code === '42P01' ||
             petError.code === 'PGRST116') {
           return NextResponse.json({ 
-            error: 'Database tables not set up. Please run the migration SQL file (create-pet-care-schedule-tables.sql) in your Supabase SQL Editor to create the required tables.'
+            error: 'Database tables not set up. Please run the migration SQL file (supabase/archive/tools/pet-care-schedule.sql) in your Supabase SQL Editor to create the required tables.'
           }, { status: 500 });
         }
         return NextResponse.json({ error: petError.message || 'Failed to fetch pet' }, { status: 500 });
@@ -173,7 +173,7 @@ export async function GET(request: NextRequest) {
           petsError.code === '42P01' ||
           petsError.code === 'PGRST116') {
         return NextResponse.json({ 
-          error: 'Database tables not set up. Please run the migration SQL file (create-pet-care-schedule-tables.sql) in your Supabase SQL Editor to create the required tables.',
+          error: 'Database tables not set up. Please run the migration SQL file (supabase/archive/tools/pet-care-schedule.sql) in your Supabase SQL Editor to create the required tables.',
           pets: [] 
         }, { status: 500 });
       }

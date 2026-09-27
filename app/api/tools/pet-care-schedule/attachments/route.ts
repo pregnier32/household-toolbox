@@ -15,7 +15,7 @@ import {
 } from '@/lib/pet-care-storage';
 
 function missingTableMessage() {
-  return 'Pet Care attachments table is missing. Run supabase/ADD_pet_care_attachments.sql.';
+  return 'Pet Care attachments table is missing. Run supabase/archive/tools/pet-care-schedule.sql.';
 }
 
 function ownerFromForm(formData: FormData): { store: PetCareStore; ownerId: string } | null {

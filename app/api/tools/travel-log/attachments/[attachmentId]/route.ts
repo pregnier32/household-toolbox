@@ -29,7 +29,7 @@ export async function GET(
     if (error || !attachment) {
       if (isMissingRelationError(error)) {
         return NextResponse.json(
-          { error: 'Travel Log attachments table is missing. Run supabase/ADD_travel_log_attachments.sql.' },
+          { error: 'Travel Log attachments table is missing. Run supabase/archive/tools/travel-log.sql.' },
           { status: 500 }
         );
       }

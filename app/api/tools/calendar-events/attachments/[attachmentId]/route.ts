@@ -29,7 +29,7 @@ export async function GET(
     if (error || !attachment) {
       if (isMissingRelationError(error)) {
         return NextResponse.json(
-          { error: 'Calendar Events attachments table is missing. Run supabase/ADD_calendar_events_attachments.sql.' },
+          { error: 'Calendar Events attachments table is missing. Run supabase/archive/tools/calendar-events.sql.' },
           { status: 500 }
         );
       }

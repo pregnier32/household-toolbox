@@ -690,7 +690,7 @@ For dropdowns that need to display items organized by categories or areas (e.g.,
 
 ### Add to Dashboard Calendar
 
-Standard for tools that let a user create a record and optionally show it on the Dashboard Calendar. **Reference:** Calendar Events (`app/components/CalendarEventsTool.tsx`), pin helpers in `lib/calendarPins.ts` and `lib/calendarPinsServer.ts`, table `calendar_pins` (`supabase/create-calendar-pins-table.sql`).
+Standard for tools that let a user create a record and optionally show it on the Dashboard Calendar. **Reference:** Calendar Events (`app/components/CalendarEventsTool.tsx`), pin helpers in `lib/calendarPins.ts` and `lib/calendarPinsServer.ts`, table `calendar_pins` (`supabase/archive/platform/calendar-pins.sql`).
 
 Future tools that can appear on the Dashboard Calendar must follow this flow. Do not add a `show_on_dashboard` / `add_to_dashboard` column on the source table, and do not copy dates or titles into a calendar table.
 
@@ -1715,7 +1715,7 @@ Address files only (`tools_ab_address_attachments`, bucket `address-book`, path 
 #### Foreign Key Indexes
 All foreign key columns must have covering indexes to ensure optimal query performance, especially for JOIN operations and DELETE CASCADE operations.
 
-**Migration File**: `supabase/add-performance-indexes.sql`
+**Migration File**: `supabase/archive/platform/performance-indexes.sql`
 
 **Standard Pattern**:
 - For foreign keys that can be NULL: Use partial indexes with `WHERE column IS NOT NULL`
@@ -1752,7 +1752,7 @@ CREATE INDEX IF NOT EXISTS idx_table_name_fkey_column
 #### RLS Policy Performance
 All Row Level Security (RLS) policies must use optimized `auth.uid()` calls to prevent re-evaluation for each row.
 
-**Migration File**: `supabase/optimize-rls-policies.sql`
+**Migration File**: each current tool script in `supabase/archive/tools`
 
 **Standard Pattern**:
 - ❌ **Incorrect**: `auth.uid() = user_id`
@@ -1876,14 +1876,14 @@ USING (
 4. Run the SQL script in Supabase SQL Editor to apply policies
 
 **Current Storage Buckets**:
-- `repair-history` - Stores receipts, warranties, and repair pictures (`supabase/archive/create-repair-history-storage-bucket.sql`)
-- `pet-care-schedule` - Stores pet documents (`supabase/archive/create-pet-care-schedule-storage-bucket.sql`)
-- `important-documents` - Stores important documents (warranties, policies, records) (`supabase/archive/create-important-documents-storage-bucket.sql`)
-- `healthcare-appt-history` - Healthcare appointment documents (`supabase/archive/create-healthcare-appts-history-storage-bucket.sql`, `supabase/ADD_healthcare_attachments.sql`)
-- `hsa-tracker` - HSA expense receipts (`supabase/ADD_hsa_attachments.sql`)
-- `event-budget-planner` - Event and expense files (`supabase/ADD_event_budget_planner_attachments.sql`)
-- `meal-planner` - Meal recipe files (`supabase/ADD_meal_planner_attachments.sql`)
-- `shopping-list` - Shopping list files (`supabase/ADD_shopping_list_attachments.sql`)
+- `repair-history` - Stores receipts, warranties, and repair pictures (`supabase/archive/tools/repair-history.sql`)
+- `pet-care-schedule` - Stores pet documents (`supabase/archive/tools/pet-care-schedule.sql`)
+- `important-documents` - Stores important documents (warranties, policies, records) (`supabase/archive/tools/important-documents.sql`)
+- `healthcare-appt-history` - Healthcare appointment documents (`supabase/archive/tools/healthcare-appts-history.sql`, `supabase/archive/tools/healthcare-appts-history.sql`)
+- `hsa-tracker` - HSA expense receipts (`supabase/archive/tools/hsa-tracker.sql`)
+- `event-budget-planner` - Event and expense files (`supabase/archive/tools/event-budget-planner.sql`)
+- `meal-planner` - Meal recipe files (`supabase/archive/tools/meal-planner.sql`)
+- `shopping-list` - Shopping list files (`supabase/archive/tools/shopping-list.sql`)
 
 **Why These Policies Matter**:
 - **Security**: Ensures users can only access files in their own folder (`{userId}/...`)
@@ -1899,7 +1899,7 @@ All tool attachments share one per-user limit. See **Attachments** for the produ
 - Cache usage on `users` (`storage_used_bytes`, `storage_plan`, `storage_addon_gb`, `storage_usage_updated_at`).
 - Check remaining quota before each upload; recount after upload or storage delete, and when the user opens `/dashboard/storage`.
 - Surface percent used in the user menu (`GET /api/account/storage`) and a per-tool breakdown on the Storage page.
-- Helper: `lib/user-storage.ts`. SQL: `supabase/ADD_users_storage_quota.sql`.
+- Helper: `lib/user-storage.ts`. SQL: `supabase/archive/platform/storage.sql`.
 
 #### Account Data Deletion Architecture
 
@@ -1924,7 +1924,7 @@ The application uses a shared server-side deletion service to remove a user acco
 4. Database rows tied to the user are removed by foreign keys with `ON DELETE CASCADE`.
 
 **Important Design Rule (Future Tools)**:
-- DB records: If new tool tables are correctly related to `users` with cascade chains, no extra DB deletion code is required (e.g. Address Book in `supabase/create-tools-ab-tables.sql`, Travel Log in `supabase/create-tools-tl-tables.sql`, HSA `tools_hsa_accounts` / `tools_hsa_deposits` / `tools_hsa_expenses` in `supabase/create-tools-hsa-tables.sql`, Event Budget Planner in `supabase/create-tools-ebp-tables.sql`). Tools with `ON DELETE RESTRICT` between child tables (e.g. EBP expenses → categories/vendors) may need an explicit parent-row delete in `lib/user-data-deletion.ts` before the `users` row is removed.
+- DB records: If new tool tables are correctly related to `users` with cascade chains, no extra DB deletion code is required (e.g. Address Book in `supabase/archive/tools/address-book.sql`, Travel Log in `supabase/archive/tools/travel-log.sql`, HSA `tools_hsa_accounts` / `tools_hsa_deposits` / `tools_hsa_expenses` in `supabase/archive/tools/hsa-tracker.sql`, Event Budget Planner in `supabase/archive/tools/event-budget-planner.sql`). Tools with `ON DELETE RESTRICT` between child tables (e.g. EBP expenses → categories/vendors) may need an explicit parent-row delete in `lib/user-data-deletion.ts` before the `users` row is removed.
 - Storage files: If a new tool uploads files, update `deleteUserAndAssociatedData()` so those bucket objects are removed during account erasure.
 
 **Implementation Guidance for New File-Based Tools**:
@@ -1956,7 +1956,7 @@ The application uses a shared server-side deletion service to remove a user acco
 #### Function Search Path
 All database functions must have an explicit `search_path` set to prevent search path injection attacks.
 
-**Migration File**: `supabase/fix-function-search-path.sql`
+**Migration File**: `supabase/archive/platform/users.sql` and each current tool script in `supabase/archive/tools`
 
 **Standard Pattern**:
 ```sql
@@ -2289,7 +2289,7 @@ Based on codebase analysis, here are the most common query patterns:
 
 ## How to Apply
 
-Run the SQL script: `supabase/archive/users-table-improvements.sql` (same script content is also merged into `supabase/DB_Build_ASOF_4_26_26.sql`). If the path moves, search the repo for `users-table-improvements`.
+Run `supabase/archive/platform/users.sql`.
 
 This script is idempotent (safe to run multiple times) and includes:
 - All necessary indexes
@@ -2427,7 +2427,7 @@ CREATE POLICY "Allow public user registration" ON users
   WITH CHECK (true);
 ```
 
-Alternative: apply `supabase/users-rls-policy.sql`.
+Alternative: apply `supabase/archive/platform/users.sql`.
 
 ### Local Run Commands
 
@@ -2440,5 +2440,5 @@ npm run dev
 
 - If `env.NEXT_PUBLIC_SUPABASE_URL` is missing, verify `.env.local` exists and restart dev server.
 - For RLS insert failures on `users`, prioritize server-side writes using `SUPABASE_SERVICE_ROLE_KEY`.
-- If needed, apply `supabase/users-rls-policy-fix.sql` and verify policies in Supabase.
+- If needed, apply `supabase/archive/platform/users.sql` and verify policies in Supabase.
 - Validate waitlist flow by confirming table existence and anon insert policy.

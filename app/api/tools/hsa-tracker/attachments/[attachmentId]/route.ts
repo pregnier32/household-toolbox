@@ -23,7 +23,7 @@ export async function GET(
 
     if (error || !attachment) {
       if (isMissingRelationError(error)) {
-        return NextResponse.json({ error: 'HSA receipts table is missing. Run supabase/ADD_hsa_attachments.sql.' }, { status: 500 });
+        return NextResponse.json({ error: 'HSA receipts table is missing. Run supabase/archive/tools/hsa-tracker.sql.' }, { status: 500 });
       }
       return NextResponse.json({ error: 'Attachment not found' }, { status: 404 });
     }

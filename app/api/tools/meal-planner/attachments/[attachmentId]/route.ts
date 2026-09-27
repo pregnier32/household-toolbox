@@ -29,7 +29,7 @@ export async function GET(
     if (error || !attachment) {
       if (isMissingRelationError(error)) {
         return NextResponse.json(
-          { error: 'Meal Planner attachments table is missing. Run supabase/ADD_meal_planner_attachments.sql.' },
+          { error: 'Meal Planner attachments table is missing. Run supabase/archive/tools/meal-planner.sql.' },
           { status: 500 }
         );
       }

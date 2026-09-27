@@ -55,7 +55,7 @@ export async function GET(
       if (completionError) {
         if (isMissingRelationError(itemError) && isMissingRelationError(completionError)) {
           return NextResponse.json(
-            { error: 'Cleaning Schedule attachments table is missing. Run supabase/ADD_cleaning_schedule_attachments.sql.' },
+            { error: 'Cleaning Schedule attachments table is missing. Run supabase/archive/tools/cleaning-schedule.sql.' },
             { status: 500 }
           );
         }

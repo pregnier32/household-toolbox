@@ -12,7 +12,7 @@ import {
 } from '@/lib/repair-history-storage';
 
 function missingTableMessage() {
-  return 'Repair History attachments table is missing. Run supabase/ADD_repair_history_attachments.sql.';
+  return 'Repair History attachments table is missing. Run supabase/archive/tools/repair-history.sql.';
 }
 
 export async function POST(request: NextRequest) {

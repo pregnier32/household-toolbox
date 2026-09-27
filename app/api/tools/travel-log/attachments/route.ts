@@ -12,7 +12,7 @@ import {
 } from '@/lib/travel-log-storage';
 
 function missingTableMessage() {
-  return 'Travel Log attachments table is missing. Run supabase/ADD_travel_log_attachments.sql.';
+  return 'Travel Log attachments table is missing. Run supabase/archive/tools/travel-log.sql.';
 }
 
 export async function POST(request: NextRequest) {

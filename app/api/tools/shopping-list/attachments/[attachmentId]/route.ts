@@ -29,7 +29,7 @@ export async function GET(
     if (error || !attachment) {
       if (isMissingRelationError(error)) {
         return NextResponse.json(
-          { error: 'Shopping List attachments table is missing. Run supabase/ADD_shopping_list_attachments.sql.' },
+          { error: 'Shopping List attachments table is missing. Run supabase/archive/tools/shopping-list.sql.' },
           { status: 500 }
         );
       }

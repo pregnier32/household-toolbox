@@ -465,7 +465,7 @@ function hasLeftoverWithoutCook(assignments: DayAssignments): boolean {
 }
 
 const LEFTOVER_COLUMN_REQUIRED =
-  'Leftover mark could not be saved. Apply supabase/ADD_mp_plan_assignments_is_leftover.sql on the live database.';
+  'Leftover mark could not be saved. Apply supabase/archive/tools/meal-planner.sql on the live database.';
 
 async function insertAssignmentRows(rows: ReturnType<typeof assignmentsToRows>) {
   if (rows.length === 0) return { error: null };

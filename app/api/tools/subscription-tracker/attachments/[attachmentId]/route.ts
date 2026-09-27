@@ -29,7 +29,7 @@ export async function GET(
     if (error || !attachment) {
       if (isMissingRelationError(error)) {
         return NextResponse.json(
-          { error: 'Subscription Tracker attachments table is missing. Run supabase/ADD_subscription_tracker_attachments.sql.' },
+          { error: 'Subscription Tracker attachments table is missing. Run supabase/archive/tools/subscription-tracker.sql.' },
           { status: 500 }
         );
       }

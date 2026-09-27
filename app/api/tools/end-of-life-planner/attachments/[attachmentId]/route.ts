@@ -23,7 +23,7 @@ export async function GET(
     if ('error' in found && found.error) {
       if (isMissingRelationError(found.error)) {
         return NextResponse.json(
-          { error: 'End of Life Planner attachments table is missing. Run supabase/ADD_end_of_life_planner_attachments.sql.' },
+          { error: 'End of Life Planner attachments table is missing. Run supabase/archive/tools/end-of-life-planner.sql.' },
           { status: 500 }
         );
       }

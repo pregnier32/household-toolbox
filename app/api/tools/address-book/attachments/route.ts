@@ -12,7 +12,7 @@ import {
 } from '@/lib/address-book-storage';
 
 function missingTableMessage() {
-  return 'Address Book attachments table is missing. Run supabase/ADD_address_book_attachments.sql.';
+  return 'Address Book attachments table is missing. Run supabase/archive/tools/address-book.sql.';
 }
 
 export async function POST(request: NextRequest) {

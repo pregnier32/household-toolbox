@@ -332,7 +332,7 @@ export async function POST(request: NextRequest) {
 
         if (error && contributionLimits !== undefined && /contribution_limits/i.test(error.message ?? '')) {
           console.error(
-            'HSA contribution_limits persist failed — run supabase/create-tools-hsa-tables.sql ALTER for tools_hsa_accounts.contribution_limits:',
+            'HSA contribution_limits persist failed — run supabase/archive/tools/hsa-tracker.sql ALTER for tools_hsa_accounts.contribution_limits:',
             error
           );
           const withoutLimits = { ...updates };

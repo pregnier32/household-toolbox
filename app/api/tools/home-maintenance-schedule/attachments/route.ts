@@ -13,7 +13,7 @@ import {
 } from '@/lib/home-maintenance-storage';
 
 function missingTableMessage() {
-  return 'Home Maintenance Schedule attachments table is missing. Run supabase/ADD_home_maintenance_schedule_attachments.sql.';
+  return 'Home Maintenance Schedule attachments table is missing. Run supabase/archive/tools/home-maintenance-schedule.sql.';
 }
 
 export async function POST(request: NextRequest) {

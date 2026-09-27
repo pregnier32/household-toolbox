@@ -88,11 +88,12 @@ async function deleteUserToolRows(table: string, userId: string, toolId: string)
 
 /**
  * Shared account erasure used by:
- * - `app/api/admin/users/route.ts` (DELETE)
+ * - `app/api/admin/users/route.ts` (DELETE) as `delete_user`, after `delete_user_tools`
  * - `app/api/account/delete/route.ts` (DELETE)
  *
  * Per-tool counterpart: `deleteUserTool` / `delete_user_tool` (same storage + row
  * coverage, scoped to one catalog tool; does not delete the user).
+ * All of a user's tools: `deleteUserTools` / `delete_user_tools`.
  *
  * Flow: remove storage objects referenced by the user, then delete `users` (FK CASCADE).
  * `user_tool_entitlements` is removed with the user, not with per-tool Remove.
@@ -100,49 +101,48 @@ async function deleteUserToolRows(table: string, userId: string, toolId: string)
  * Storage cleanup (this file) — query tables for file URLs, then remove from bucket:
  * | Tool                    | Tables (file columns)                                              | Bucket                 | Schema / storage script |
  * |-------------------------|--------------------------------------------------------------------|------------------------|-------------------------|
- * | Important Documents     | tools_id_documents (file_url)                                      | important-documents    | supabase/archive/create-important-documents-tables.sql, create-important-documents-storage-bucket.sql |
- * | Notes                   | tools_note_attachments (file_url)                                  | notes                  | supabase/ADD_notes_attachments.sql |
- * | To-Do List              | tools_tdl_attachments (file_url)                                   | to-do-list             | supabase/ADD_todo_attachments.sql |
- * | Cleaning Schedule       | tools_cs_item_attachments, tools_cs_completion_attachments (file_url) | cleaning-schedule   | supabase/ADD_cleaning_schedule_attachments.sql |
- * | Repair History          | tools_rh_record_attachments, tools_rh_records (receipt_file_url, warranty_file_url), tools_rh_repair_pictures (file_url) | repair-history | supabase/ADD_repair_history_attachments.sql, supabase/archive/create-repair-history-tables.sql |
- * | Healthcare Appts        | tools_hcah_documents (file_url) via headers → records              | healthcare-appt-history | supabase/archive/create-healthcare-appts-history-tables.sql, create-healthcare-appts-history-storage-bucket.sql, supabase/ADD_healthcare_attachments.sql |
- * | Pet Care Schedule       | tools_pcs_pet_attachments, tools_pcs_document_attachments, tools_pcs_veterinary_attachments, tools_pcs_vaccination_attachments, tools_pcs_appointment_attachments, tools_pcs_documents.file_url | pet-care-schedule | supabase/archive/create-pet-care-schedule-tables.sql, supabase/ADD_pet_care_attachments.sql |
- * | HSA Tracker (receipts)  | tools_hsa_expense_receipts (file_url) via expenses                  | hsa-tracker            | supabase/ADD_hsa_attachments.sql |
- * | Travel Log              | tools_tl_trip_attachments (file_url)                               | travel-log             | supabase/ADD_travel_log_attachments.sql |
- * | Event Budget Planner    | tools_ebp_event_attachments, tools_ebp_expense_attachments (file_url) | event-budget-planner | supabase/ADD_event_budget_planner_attachments.sql |
- * | Meal Planner            | tools_mp_meal_attachments (file_url)                               | meal-planner           | supabase/ADD_meal_planner_attachments.sql |
- * | Shopping List           | tools_sl_list_attachments (file_url)                               | shopping-list          | supabase/ADD_shopping_list_attachments.sql |
- * | Goals Tracking          | tools_gt_goal_attachments, tools_gt_update_attachments (file_url)  | goals-tracking         | supabase/ADD_goals_tracking_attachments.sql |
- * | Calendar Events         | tools_ce_event_attachments (file_url)                              | calendar-events        | supabase/ADD_calendar_events_attachments.sql |
- * | Subscription Tracker    | tools_st_subscription_attachments (file_url)                       | subscription-tracker   | supabase/ADD_subscription_tracker_attachments.sql |
- * | Address Book            | tools_ab_address_attachments (file_url)                            | address-book           | supabase/ADD_address_book_attachments.sql |
- * | Home Maintenance        | tools_hms_item_attachments, tools_hms_completion_attachments (file_url) | home-maintenance-schedule | supabase/ADD_home_maintenance_schedule_attachments.sql |
- * | End of Life Planner     | tools_eolp_document_attachments, tools_eolp_insurance_attachments, tools_eolp_letter_attachments, tools_eolp_personal_item_attachments, tools_eolp_other_record_attachments (file_url) | end-of-life-planner | supabase/ADD_end_of_life_planner_attachments.sql |
+ * | Important Documents     | tools_id_documents (file_url)                                      | important-documents    | supabase/archive/tools/important-documents.sql |
+ * | Notes                   | tools_note_attachments (file_url)                                  | notes                  | supabase/archive/tools/notes.sql |
+ * | To-Do List              | tools_tdl_attachments (file_url)                                   | to-do-list             | supabase/archive/tools/to-do-list.sql |
+ * | Cleaning Schedule       | tools_cs_item_attachments, tools_cs_completion_attachments (file_url) | cleaning-schedule   | supabase/archive/tools/cleaning-schedule.sql |
+ * | Repair History          | tools_rh_record_attachments, tools_rh_records (receipt_file_url, warranty_file_url), tools_rh_repair_pictures (file_url) | repair-history | supabase/archive/tools/repair-history.sql |
+ * | Healthcare Appts        | tools_hcah_documents (file_url) via headers → records              | healthcare-appt-history | supabase/archive/tools/healthcare-appts-history.sql |
+ * | Pet Care Schedule       | tools_pcs_pet_attachments, tools_pcs_document_attachments, tools_pcs_veterinary_attachments, tools_pcs_vaccination_attachments, tools_pcs_appointment_attachments, tools_pcs_documents.file_url | pet-care-schedule | supabase/archive/tools/pet-care-schedule.sql |
+ * | HSA Tracker (receipts)  | tools_hsa_expense_receipts (file_url) via expenses                  | hsa-tracker            | supabase/archive/tools/hsa-tracker.sql |
+ * | Travel Log              | tools_tl_trip_attachments (file_url)                               | travel-log             | supabase/archive/tools/travel-log.sql |
+ * | Event Budget Planner    | tools_ebp_event_attachments, tools_ebp_expense_attachments (file_url) | event-budget-planner | supabase/archive/tools/event-budget-planner.sql |
+ * | Meal Planner            | tools_mp_meal_attachments (file_url)                               | meal-planner           | supabase/archive/tools/meal-planner.sql |
+ * | Shopping List           | tools_sl_list_attachments (file_url)                               | shopping-list          | supabase/archive/tools/shopping-list.sql |
+ * | Goals Tracking          | tools_gt_goal_attachments, tools_gt_update_attachments (file_url)  | goals-tracking         | supabase/archive/tools/goals-tracking.sql |
+ * | Calendar Events         | tools_ce_event_attachments (file_url)                              | calendar-events        | supabase/archive/tools/calendar-events.sql |
+ * | Subscription Tracker    | tools_st_subscription_attachments (file_url)                       | subscription-tracker   | supabase/archive/tools/subscription-tracker.sql |
+ * | Address Book            | tools_ab_address_attachments (file_url)                            | address-book           | supabase/archive/tools/address-book.sql |
+ * | Home Maintenance        | tools_hms_item_attachments, tools_hms_completion_attachments (file_url) | home-maintenance-schedule | supabase/archive/tools/home-maintenance-schedule.sql |
+ * | End of Life Planner     | tools_eolp_document_attachments, tools_eolp_insurance_attachments, tools_eolp_letter_attachments, tools_eolp_personal_item_attachments, tools_eolp_other_record_attachments (file_url) | end-of-life-planner | supabase/archive/tools/end-of-life-planner.sql |
  *
  * DB-only cascade (user_id → users ON DELETE CASCADE; no storage block required here):
  * | Tool                 | Tables                                                                 | Schema script |
  * |----------------------|------------------------------------------------------------------------|---------------|
- * | Address Book         | tools_ab_addresses, tools_ab_tags, tools_ab_address_tags, tools_ab_address_attachments | supabase/create-tools-ab-tables.sql, supabase/ADD_address_book_attachments.sql |
- * | Travel Log           | tools_tl_trips → tools_tl_lodging, tools_tl_journal_notes, tools_tl_trip_attachments | supabase/create-tools-tl-tables.sql, supabase/ADD_travel_log_attachments.sql |
- * | HSA Tracker          | tools_hsa_accounts, tools_hsa_deposits, tools_hsa_expenses             | supabase/create-tools-hsa-tables.sql |
- * | Event Budget Planner | tools_ebp_categories, tools_ebp_types, tools_ebp_vendors, tools_ebp_events → tools_ebp_event_category_budgets, tools_ebp_expenses → tools_ebp_expense_splits, tools_ebp_event_attachments, tools_ebp_expense_attachments | supabase/create-tools-ebp-tables.sql, supabase/ADD_event_budget_planner_attachments.sql |
- * | Cleaning Schedule    | tools_cs_categories, tools_cs_items → tools_cs_tasks → tools_cs_completions, tools_cs_item_attachments, tools_cs_completion_attachments | supabase/create-tools-cs-tables.sql, supabase/ADD_cleaning_schedule_attachments.sql |
- * | Home Maintenance     | tools_hms_categories, tools_hms_items → tools_hms_tasks → tools_hms_completions, tools_hms_item_attachments, tools_hms_completion_attachments | supabase/create-tools-hms-tables.sql, supabase/ADD_home_maintenance_schedule_attachments.sql |
- * | End of Life Planner  | tools_eolp_plans → sections, subsections, personal/home/wishes 1:1 rows, list tables, tools_eolp_other_custom_fields, document/insurance/letter/personal-item/other attachment tables | supabase/create-tools-eolp-tables.sql, supabase/ADD_end_of_life_planner_attachments.sql |
- * | Notes                | tools_note_notes, tools_note_tags, tools_note_note_tags, tools_note_security_questions, tools_note_attachments | supabase/archive/create-notes-tables.sql, supabase/ADD_notes_attachments.sql |
- * | Goals Tracking       | tools_gt_categories, tools_gt_goals, tools_gt_phases, tools_gt_tasks, tools_gt_update_notes, tools_gt_goal_attachments, tools_gt_update_attachments | supabase/archive/create-tools-gt-tables.sql, supabase/ADD_goals_tracking_attachments.sql |
- * | Meal Planner         | tools_mp_items, tools_mp_meal_types, tools_mp_meals, tools_mp_meal_ingredients, tools_mp_meal_attachments, tools_mp_plans, tools_mp_plan_assignments | supabase/archive/create-tools-mp-tables.sql, supabase/ADD_meal_planner_attachments.sql |
- * | Shopping List        | tools_sl_lists, tools_sl_items, tools_sl_list_items, tools_sl_list_attachments | supabase/archive/create-tools-sl-tables.sql, supabase/ADD_shopping_list_attachments.sql |
- * | To-Do List           | tools_tdl_categories, tools_tdl_tasks, tools_tdl_attachments           | supabase/archive/create-tools-tdl-tables.sql, supabase/ADD_todo_attachments.sql |
- * | Subscription Tracker | tools_st_subscriptions, tools_st_subscription_attachments              | supabase/archive/create-subscription-tracker-tables.sql, supabase/ADD_subscription_tracker_attachments.sql |
- * | Calendar Events      | tools_ce_categories, tools_ce_events, tools_ce_event_attachments      | supabase/archive/create-calendar-events-tables.sql, supabase/ADD_calendar_events_attachments.sql |
- * | Calendar Pins        | calendar_pins                                                          | supabase/create-calendar-pins-table.sql |
- * | Repair History (DB)  | tools_rh_headers, tools_rh_records, tools_rh_items, tools_rh_record_attachments | supabase/archive/create-repair-history-tables.sql, supabase/ADD_repair_history_attachments.sql |
- * | Healthcare (DB)      | tools_hcah_headers, tools_hcah_records (+ document rows cascade)     | supabase/archive/create-healthcare-appts-history-tables.sql |
- * | Pet Care (DB)        | tools_pcs_pets and related child tables + attachment tables            | supabase/archive/create-pet-care-schedule-tables.sql, supabase/ADD_pet_care_attachments.sql |
- * | Important Docs (DB)  | tools_id_documents, tools_id_tags, tools_id_document_tags, tools_id_security_questions | supabase/archive/create-important-documents-tables.sql |
+ * | Address Book         | tools_ab_addresses, tools_ab_tags, tools_ab_address_tags, tools_ab_address_attachments | supabase/archive/tools/address-book.sql |
+ * | Travel Log           | tools_tl_trips → tools_tl_lodging, tools_tl_journal_notes, tools_tl_trip_attachments | supabase/archive/tools/travel-log.sql |
+ * | HSA Tracker          | tools_hsa_accounts, tools_hsa_deposits, tools_hsa_expenses             | supabase/archive/tools/hsa-tracker.sql |
+ * | Event Budget Planner | tools_ebp_categories, tools_ebp_types, tools_ebp_vendors, tools_ebp_events → tools_ebp_event_category_budgets, tools_ebp_expenses → tools_ebp_expense_splits, tools_ebp_event_attachments, tools_ebp_expense_attachments | supabase/archive/tools/event-budget-planner.sql |
+ * | Cleaning Schedule    | tools_cs_categories, tools_cs_items → tools_cs_tasks → tools_cs_completions, tools_cs_item_attachments, tools_cs_completion_attachments | supabase/archive/tools/cleaning-schedule.sql |
+ * | Home Maintenance     | tools_hms_categories, tools_hms_items → tools_hms_tasks → tools_hms_completions, tools_hms_item_attachments, tools_hms_completion_attachments | supabase/archive/tools/home-maintenance-schedule.sql |
+ * | End of Life Planner  | tools_eolp_plans → sections, subsections, personal/home/wishes 1:1 rows, list tables, tools_eolp_other_custom_fields, document/insurance/letter/personal-item/other attachment tables | supabase/archive/tools/end-of-life-planner.sql |
+ * | Notes                | tools_note_notes, tools_note_tags, tools_note_note_tags, tools_note_security_questions, tools_note_attachments | supabase/archive/tools/notes.sql |
+ * | Goals Tracking       | tools_gt_categories, tools_gt_goals, tools_gt_phases, tools_gt_tasks, tools_gt_update_notes, tools_gt_goal_attachments, tools_gt_update_attachments | supabase/archive/tools/goals-tracking.sql |
+ * | Meal Planner         | tools_mp_items, tools_mp_meal_types, tools_mp_meals, tools_mp_meal_ingredients, tools_mp_meal_attachments, tools_mp_plans, tools_mp_plan_assignments | supabase/archive/tools/meal-planner.sql |
+ * | Shopping List        | tools_sl_lists, tools_sl_items, tools_sl_list_items, tools_sl_list_attachments | supabase/archive/tools/shopping-list.sql |
+ * | To-Do List           | tools_tdl_categories, tools_tdl_tasks, tools_tdl_attachments           | supabase/archive/tools/to-do-list.sql |
+ * | Subscription Tracker | tools_st_subscriptions, tools_st_subscription_attachments              | supabase/archive/tools/subscription-tracker.sql |
+ * | Calendar Events      | tools_ce_categories, tools_ce_events, tools_ce_event_attachments      | supabase/archive/tools/calendar-events.sql |
+ * | Calendar Pins        | calendar_pins                                                          | supabase/archive/platform/calendar-pins.sql |
+ * | Repair History (DB)  | tools_rh_headers, tools_rh_records, tools_rh_items, tools_rh_record_attachments | supabase/archive/tools/repair-history.sql |
+ * | Healthcare (DB)      | tools_hcah_headers, tools_hcah_records (+ document rows cascade)     | supabase/archive/tools/healthcare-appts-history.sql |
+ * | Pet Care (DB)        | tools_pcs_pets and related child tables + attachment tables            | supabase/archive/tools/pet-care-schedule.sql |
+ * | Important Docs (DB)  | tools_id_documents, tools_id_tags, tools_id_document_tags, tools_id_security_questions | supabase/archive/tools/important-documents.sql |
  *
- * Monolithic reference (may duplicate archive scripts): supabase/DB_Build_ASOF_4_26_26.sql
  * Global seed data (not per-user, not deleted): tools_hsa_default_accounts, tools_gt_default_categories,
  *   tools_ebp_default_categories, tools_ebp_default_types, tools_cs_default_categories,
  *   tools_cs_default_items, tools_hms_default_categories, tools_hms_default_items,
@@ -174,7 +174,7 @@ export async function deleteUserAndAssociatedData(userId: string): Promise<void>
     if (path) storageDeletes.push({ bucket: 'important-documents', path });
   });
 
-  // Repair History — supabase/archive/create-repair-history-*.sql + ADD_repair_history_attachments.sql
+  // Repair History — supabase/archive/create-repair-history-*.sql + supabase/archive/tools/repair-history.sql
   const { data: rhRecords, error: rhError } = await supabaseServer
     .from('tools_rh_records')
     .select('id, receipt_file_url, warranty_file_url')
@@ -240,7 +240,7 @@ export async function deleteUserAndAssociatedData(userId: string): Promise<void>
     }
   }
 
-  // Pet Care Schedule — supabase/archive/create-pet-care-schedule-*.sql + ADD_pet_care_attachments.sql
+  // Pet Care Schedule — supabase/archive/create-pet-care-schedule-*.sql + supabase/archive/tools/pet-care-schedule.sql
   const pcsAttachmentTables = [
     'tools_pcs_pet_attachments',
     'tools_pcs_document_attachments',
@@ -279,7 +279,7 @@ export async function deleteUserAndAssociatedData(userId: string): Promise<void>
     });
   }
 
-  // HSA Tracker receipts — supabase/ADD_hsa_attachments.sql
+  // HSA Tracker receipts — supabase/archive/tools/hsa-tracker.sql
   const { data: hsaExpenses, error: hsaExpensesError } = await supabaseServer
     .from('tools_hsa_expenses')
     .select('id')
@@ -298,10 +298,10 @@ export async function deleteUserAndAssociatedData(userId: string): Promise<void>
       if (path) storageDeletes.push({ bucket: 'hsa-tracker', path });
     });
   }
-  // HSA Tracker DB rows — supabase/create-tools-hsa-tables.sql (receipt files handled above)
+  // HSA Tracker DB rows — supabase/archive/tools/hsa-tracker.sql (receipt files handled above)
   // tools_hsa_accounts, tools_hsa_deposits, tools_hsa_expenses: removed via users ON DELETE CASCADE
 
-  // To-Do List attachments — supabase/ADD_todo_attachments.sql
+  // To-Do List attachments — supabase/archive/tools/to-do-list.sql
   const { data: todoFiles, error: todoFilesError } = await supabaseServer
     .from('tools_tdl_attachments')
     .select('file_url')
@@ -312,7 +312,7 @@ export async function deleteUserAndAssociatedData(userId: string): Promise<void>
     if (path) storageDeletes.push({ bucket: 'to-do-list', path });
   });
 
-  // Notes attachments — supabase/ADD_notes_attachments.sql
+  // Notes attachments — supabase/archive/tools/notes.sql
   const { data: noteFiles, error: noteFilesError } = await supabaseServer
     .from('tools_note_attachments')
     .select('file_url')
@@ -323,7 +323,7 @@ export async function deleteUserAndAssociatedData(userId: string): Promise<void>
     if (path) storageDeletes.push({ bucket: 'notes', path });
   });
 
-  // Address Book attachments — supabase/ADD_address_book_attachments.sql
+  // Address Book attachments — supabase/archive/tools/address-book.sql
   const { data: addressBookFiles, error: addressBookFilesError } = await supabaseServer
     .from('tools_ab_address_attachments')
     .select('file_url')
@@ -335,7 +335,7 @@ export async function deleteUserAndAssociatedData(userId: string): Promise<void>
   });
   // tools_ab_addresses / tags / address_tags: removed via users ON DELETE CASCADE
 
-  // Travel Log attachments — supabase/ADD_travel_log_attachments.sql
+  // Travel Log attachments — supabase/archive/tools/travel-log.sql
   const { data: travelFiles, error: travelFilesError } = await supabaseServer
     .from('tools_tl_trip_attachments')
     .select('file_url')
@@ -347,7 +347,7 @@ export async function deleteUserAndAssociatedData(userId: string): Promise<void>
   });
   // tools_tl_trips (user_id) → tools_tl_lodging, tools_tl_journal_notes: removed via users + trip CASCADE
 
-  // Event Budget Planner attachments — supabase/ADD_event_budget_planner_attachments.sql
+  // Event Budget Planner attachments — supabase/archive/tools/event-budget-planner.sql
   const { data: ebpEventFiles, error: ebpEventFilesError } = await supabaseServer
     .from('tools_ebp_event_attachments')
     .select('file_url')
@@ -368,7 +368,7 @@ export async function deleteUserAndAssociatedData(userId: string): Promise<void>
     if (path) storageDeletes.push({ bucket: 'event-budget-planner', path });
   });
 
-  // Meal Planner attachments — supabase/ADD_meal_planner_attachments.sql
+  // Meal Planner attachments — supabase/archive/tools/meal-planner.sql
   const { data: mealPlannerFiles, error: mealPlannerFilesError } = await supabaseServer
     .from('tools_mp_meal_attachments')
     .select('file_url')
@@ -380,7 +380,7 @@ export async function deleteUserAndAssociatedData(userId: string): Promise<void>
   });
   // tools_mp_meals / plans / items: removed via users ON DELETE CASCADE
 
-  // Shopping List attachments — supabase/ADD_shopping_list_attachments.sql
+  // Shopping List attachments — supabase/archive/tools/shopping-list.sql
   const { data: shoppingListFiles, error: shoppingListFilesError } = await supabaseServer
     .from('tools_sl_list_attachments')
     .select('file_url')
@@ -392,7 +392,7 @@ export async function deleteUserAndAssociatedData(userId: string): Promise<void>
   });
   // tools_sl_lists / items / list_items: removed via users ON DELETE CASCADE
 
-  // Goals Tracking attachments — supabase/ADD_goals_tracking_attachments.sql
+  // Goals Tracking attachments — supabase/archive/tools/goals-tracking.sql
   const { data: gtGoalFiles, error: gtGoalFilesError } = await supabaseServer
     .from('tools_gt_goal_attachments')
     .select('file_url')
@@ -414,7 +414,7 @@ export async function deleteUserAndAssociatedData(userId: string): Promise<void>
   });
   // tools_gt_categories / goals / phases / tasks / update_notes: removed via users + goal CASCADE
 
-  // Calendar Events attachments — supabase/ADD_calendar_events_attachments.sql
+  // Calendar Events attachments — supabase/archive/tools/calendar-events.sql
   const { data: calendarEventFiles, error: calendarEventFilesError } = await supabaseServer
     .from('tools_ce_event_attachments')
     .select('file_url')
@@ -426,7 +426,7 @@ export async function deleteUserAndAssociatedData(userId: string): Promise<void>
   });
   // tools_ce_categories / events: removed via users ON DELETE CASCADE
 
-  // Subscription Tracker attachments — supabase/ADD_subscription_tracker_attachments.sql
+  // Subscription Tracker attachments — supabase/archive/tools/subscription-tracker.sql
   const { data: subscriptionFiles, error: subscriptionFilesError } = await supabaseServer
     .from('tools_st_subscription_attachments')
     .select('file_url')
@@ -438,7 +438,7 @@ export async function deleteUserAndAssociatedData(userId: string): Promise<void>
   });
   // tools_st_subscriptions: removed via users ON DELETE CASCADE
 
-  // Event Budget Planner — supabase/create-tools-ebp-tables.sql
+  // Event Budget Planner — supabase/archive/tools/event-budget-planner.sql
   // Delete events first (CASCADE → budgets/expenses/attachments → splits); categories/types/vendors then cascade from users.
   const { error: ebpEventsDeleteError } = await supabaseServer
     .from('tools_ebp_events')
@@ -447,7 +447,7 @@ export async function deleteUserAndAssociatedData(userId: string): Promise<void>
   if (ebpEventsDeleteError && !isMissingRelationError(ebpEventsDeleteError)) throw ebpEventsDeleteError;
   // tools_ebp_categories, tools_ebp_types, tools_ebp_vendors: removed via users ON DELETE CASCADE
 
-  // Cleaning Schedule attachments — supabase/ADD_cleaning_schedule_attachments.sql
+  // Cleaning Schedule attachments — supabase/archive/tools/cleaning-schedule.sql
   const { data: csItemFiles, error: csItemFilesError } = await supabaseServer
     .from('tools_cs_item_attachments')
     .select('file_url')
@@ -468,7 +468,7 @@ export async function deleteUserAndAssociatedData(userId: string): Promise<void>
     if (path) storageDeletes.push({ bucket: 'cleaning-schedule', path });
   });
 
-  // Cleaning Schedule — supabase/create-tools-cs-tables.sql
+  // Cleaning Schedule — supabase/archive/tools/cleaning-schedule.sql
   // Items restrict category deletes; a trigger also blocks DELETE of is_default rows.
   // Clear the default flag, then delete items (CASCADE → tasks → completions) before categories.
   const { error: csItemsUnflagError } = await supabaseServer
@@ -496,7 +496,7 @@ export async function deleteUserAndAssociatedData(userId: string): Promise<void>
   if (csCategoriesDeleteError && !isMissingRelationError(csCategoriesDeleteError)) throw csCategoriesDeleteError;
   // tools_cs_default_categories / tools_cs_default_items are global seed rows and are left in place.
 
-  // Home Maintenance Schedule attachments — supabase/ADD_home_maintenance_schedule_attachments.sql
+  // Home Maintenance Schedule attachments — supabase/archive/tools/home-maintenance-schedule.sql
   const { data: hmsItemFiles, error: hmsItemFilesError } = await supabaseServer
     .from('tools_hms_item_attachments')
     .select('file_url')
@@ -517,7 +517,7 @@ export async function deleteUserAndAssociatedData(userId: string): Promise<void>
     if (path) storageDeletes.push({ bucket: 'home-maintenance-schedule', path });
   });
 
-  // Home Maintenance Schedule — supabase/create-tools-hms-tables.sql
+  // Home Maintenance Schedule — supabase/archive/tools/home-maintenance-schedule.sql
   // API: app/api/tools/home-maintenance-schedule/route.ts
   // UI: app/components/HomeMaintenanceScheduleTool.tsx
   // Helpers: lib/home-maintenance-schedule.ts
@@ -548,7 +548,7 @@ export async function deleteUserAndAssociatedData(userId: string): Promise<void>
   if (hmsCategoriesDeleteError && !isMissingRelationError(hmsCategoriesDeleteError)) throw hmsCategoriesDeleteError;
   // tools_hms_default_categories / tools_hms_default_items are global seed rows and are left in place.
 
-  // End of Life Planner attachments — supabase/ADD_end_of_life_planner_attachments.sql
+  // End of Life Planner attachments — supabase/archive/tools/end-of-life-planner.sql
   for (const table of [
     'tools_eolp_document_attachments',
     'tools_eolp_insurance_attachments',
@@ -567,7 +567,7 @@ export async function deleteUserAndAssociatedData(userId: string): Promise<void>
     });
   }
 
-  // End of Life Planner — supabase/create-tools-eolp-tables.sql
+  // End of Life Planner — supabase/archive/tools/end-of-life-planner.sql
   // API: app/api/tools/end-of-life-planner/route.ts
   // UI: app/components/EndOfLifePlannerTool.tsx
   // Helpers: lib/end-of-life-planner.ts, lib/end-of-life-planner-db.ts
@@ -888,4 +888,48 @@ export async function deleteUserTool(userId: string, toolId: string): Promise<De
   return { userId, toolId, toolName };
 }
 
+/**
+ * Wipe every catalog tool this user currently owns.
+ *
+ * Used as `delete_user_tools(userId)`. Calls `delete_user_tool` once per
+ * distinct `users_tools.tool_id`. Does not delete the user, `users_tools`,
+ * or `user_tool_entitlements`. Tools with no wipe mapping are left for
+ * `delete_user`, which still removes the account and cascaded rows.
+ */
+export async function deleteUserTools(userId: string): Promise<DeletedUserTool[]> {
+  if (!userId) throw new Error('userId is required');
+
+  const { data: rows, error } = await supabaseServer
+    .from('users_tools')
+    .select('tool_id')
+    .eq('user_id', userId);
+
+  if (error && !isMissingRelationError(error)) throw error;
+
+  const toolIds = Array.from(
+    new Set(
+      (rows || [])
+        .map((row: { tool_id: string | null }) => row.tool_id)
+        .filter((id): id is string => Boolean(id))
+    )
+  );
+
+  const deleted: DeletedUserTool[] = [];
+  for (const toolId of toolIds) {
+    try {
+      deleted.push(await deleteUserTool(userId, toolId));
+    } catch (toolError) {
+      if (toolError instanceof Error && toolError.message.includes('no wipe mapping')) {
+        console.warn(toolError.message);
+        continue;
+      }
+      throw toolError;
+    }
+  }
+
+  return deleted;
+}
+
 export const delete_user_tool = deleteUserTool;
+export const delete_user_tools = deleteUserTools;
+export const delete_user = deleteUserAndAssociatedData;

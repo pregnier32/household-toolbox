@@ -12,7 +12,7 @@ import {
 } from '@/lib/meal-planner-storage';
 
 function missingTableMessage() {
-  return 'Meal Planner attachments table is missing. Run supabase/ADD_meal_planner_attachments.sql.';
+  return 'Meal Planner attachments table is missing. Run supabase/archive/tools/meal-planner.sql.';
 }
 
 export async function POST(request: NextRequest) {
