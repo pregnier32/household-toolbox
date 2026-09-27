@@ -80,7 +80,10 @@ function sortListsNewestFirst(lists: ShoppingListRecord[]): ShoppingListRecord[]
   );
 }
 
+// Latest shopping date matches the lists screen. Created time, then updated time, then id break ties.
 function compareListRecency(a: ShoppingListRecord, b: ShoppingListRecord): number {
+  const byShoppingDate = (a.date || '').localeCompare(b.date || '');
+  if (byShoppingDate !== 0) return byShoppingDate;
   const created = (a.createdAt || '').localeCompare(b.createdAt || '');
   if (created !== 0) return created;
   const updated = (a.updatedAt || '').localeCompare(b.updatedAt || '');
@@ -249,7 +252,7 @@ export function ShoppingListTool({ toolId }: ShoppingListToolProps) {
     if (!toolId) return;
     if (!opts?.silent) setListsLoading(true);
     try {
-      const res = await fetch(`/api/tools/shopping-list?toolId=${encodeURIComponent(toolId)}&resource=lists`);
+      const res = await fetch(`/api/tools/shopping-list?toolId=${encodeURIComponent(toolId)}&resource=lists`, { cache: 'no-store' });
       if (!res.ok) throw new Error('Failed to fetch lists');
       const data = await res.json();
       const lists = (data.lists ?? []).map(
@@ -2378,9 +2381,7 @@ export function ShoppingListTool({ toolId }: ShoppingListToolProps) {
                     checked={!exportAllLists}
                     onChange={() => {
                       setExportAllLists(false);
-                      if (!exportListId || !exportListChoices.some((list) => list.id === exportListId)) {
-                        setExportListId(pickDefaultShoppingListId(shoppingLists, includeHistory));
-                      }
+                      setExportListId(pickDefaultShoppingListId(shoppingLists, includeHistory));
                     }}
                     className={isLight
                       ? 'mt-0.5 h-4 w-4 border-slate-400 text-emerald-600 focus:ring-emerald-500'

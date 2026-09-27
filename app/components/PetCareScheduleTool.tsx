@@ -495,6 +495,7 @@ export function PetCareScheduleTool({ toolId }: PetCareScheduleToolProps) {
   const [deleteEntryConfirmText, setDeleteEntryConfirmText] = useState('');
   const [isSaving, setIsSaving] = useState(false);
   const isSavingRef = useRef(false);
+  const saveChainRef = useRef<Promise<void>>(Promise.resolve());
   const [saveMessage, setSaveMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
   const [lastSavedData, setLastSavedData] = useState<string>('');
   const [pendingPetAttachments, setPendingPetAttachments] = useState<AttachmentItem[]>([]);
@@ -573,6 +574,8 @@ export function PetCareScheduleTool({ toolId }: PetCareScheduleToolProps) {
   
   // Notes
   const [notes, setNotes] = useState<Note[]>([]);
+  const notesRef = useRef(notes);
+  notesRef.current = notes;
   const [currentNote, setCurrentNote] = useState('');
   const [editingNoteId, setEditingNoteId] = useState<string | null>(null);
   const [editingNote, setEditingNote] = useState({ content: '' });
@@ -689,7 +692,7 @@ export function PetCareScheduleTool({ toolId }: PetCareScheduleToolProps) {
     
     setIsLoading(true);
     try {
-      const response = await fetch(`/api/tools/pet-care-schedule?toolId=${toolId}`);
+      const response = await fetch(`/api/tools/pet-care-schedule?toolId=${toolId}`, { cache: 'no-store' });
       const data = await response.json();
       
       if (!response.ok) {
@@ -717,7 +720,7 @@ export function PetCareScheduleTool({ toolId }: PetCareScheduleToolProps) {
     if (!toolId) return;
     
     try {
-      const response = await fetch(`/api/tools/pet-care-schedule?toolId=${toolId}&petId=${petId}`);
+      const response = await fetch(`/api/tools/pet-care-schedule?toolId=${toolId}&petId=${petId}`, { cache: 'no-store' });
       const data = await response.json();
       
       if (!response.ok) {
@@ -796,12 +799,14 @@ export function PetCareScheduleTool({ toolId }: PetCareScheduleToolProps) {
           attachments: d.attachments || [],
         })));
         
-        setNotes((pet.notes || []).map((n: any) => ({
+        const loadedNotes = (pet.notes || []).map((n: any) => ({
           id: n.id,
           content: n.content,
           date: n.date,
-          isCurrent: n.is_current,
-        })));
+          isCurrent: n.is_current === true,
+        }));
+        notesRef.current = loadedNotes;
+        setNotes(loadedNotes);
         
         // Set last saved data snapshot after loading - wait for state to update first
         // Use setTimeout to ensure all state updates have completed
@@ -816,7 +821,7 @@ export function PetCareScheduleTool({ toolId }: PetCareScheduleToolProps) {
     }
   };
 
-  const savePetData = async (
+  const writePetData = async (
     carePlanItemsToSave?: typeof carePlanItems,
     foodsToSave?: typeof foods,
     veterinaryRecordsToSave?: typeof veterinaryRecords,
@@ -827,12 +832,6 @@ export function PetCareScheduleTool({ toolId }: PetCareScheduleToolProps) {
   ) => {
     if (!selectedPetId || !toolId) {
       setSaveMessage({ type: 'error', text: 'Please select a pet first' });
-      return;
-    }
-
-    // Prevent multiple simultaneous saves using ref (synchronous check)
-    if (isSavingRef.current) {
-      console.log('Save already in progress, skipping...');
       return;
     }
 
@@ -847,7 +846,8 @@ export function PetCareScheduleTool({ toolId }: PetCareScheduleToolProps) {
     const vaccinationsToUse = vaccinationsToSave || vaccinations;
     const appointmentsToUse = appointmentsToSave || appointments;
     const documentsToUse = documentsToSave || documents;
-    const notesToUse = notesToSave || notes;
+    const notesToUse = notesToSave ?? notesRef.current;
+    notesRef.current = notesToUse;
     
     console.log(`[savePetData] Starting save for pet ${selectedPetId}, care plan items count: ${itemsToUse.length}`);
     console.log(`[savePetData] Care plan items:`, itemsToUse.map(c => ({ name: c.name, notes: c.notes })));
@@ -876,6 +876,7 @@ export function PetCareScheduleTool({ toolId }: PetCareScheduleToolProps) {
           toolId: toolId,
           petData,
           foods: foodsToUse.map(f => ({
+            id: f.id,
             name: f.name,
             rating: f.rating,
             startDate: f.startDate,
@@ -968,6 +969,23 @@ export function PetCareScheduleTool({ toolId }: PetCareScheduleToolProps) {
       isSavingRef.current = false;
       setIsSaving(false);
     }
+  };
+
+  const savePetData = (
+    carePlanItemsToSave?: typeof carePlanItems,
+    foodsToSave?: typeof foods,
+    veterinaryRecordsToSave?: typeof veterinaryRecords,
+    vaccinationsToSave?: typeof vaccinations,
+    appointmentsToSave?: typeof appointments,
+    documentsToSave?: typeof documents,
+    notesToSave?: typeof notes
+  ) => {
+    const queued = saveChainRef.current.then(
+      () => writePetData(carePlanItemsToSave, foodsToSave, veterinaryRecordsToSave, vaccinationsToSave, appointmentsToSave, documentsToSave, notesToSave),
+      () => writePetData(carePlanItemsToSave, foodsToSave, veterinaryRecordsToSave, vaccinationsToSave, appointmentsToSave, documentsToSave, notesToSave)
+    );
+    saveChainRef.current = queued.then(() => undefined, () => undefined);
+    return queued;
   };
 
   const revokePending = (items: AttachmentItem[]) => {
@@ -1222,7 +1240,7 @@ export function PetCareScheduleTool({ toolId }: PetCareScheduleToolProps) {
     setIsSaving(true);
     try {
       // First, fetch current pet data to preserve it
-      const fetchResponse = await fetch(`/api/tools/pet-care-schedule?petId=${editingPetId}&toolId=${toolId}`);
+      const fetchResponse = await fetch(`/api/tools/pet-care-schedule?petId=${editingPetId}&toolId=${toolId}`, { cache: 'no-store' });
       const fetchData = await fetchResponse.json();
       
       if (!fetchResponse.ok || !fetchData.pet) {
@@ -1253,11 +1271,12 @@ export function PetCareScheduleTool({ toolId }: PetCareScheduleToolProps) {
             card_color: editingPetColor,
           },
           foods: (currentPet.foods || []).map((f: any) => ({
+            id: f.id,
             name: f.name,
             rating: f.rating,
             startDate: f.start_date,
             endDate: f.end_date,
-            isCurrent: f.is_current,
+            isCurrent: f.is_current === true,
             notes: f.notes || '',
           })),
           veterinaryRecords: (currentPet.veterinaryRecords || []).map((v: any) => ({
@@ -1296,7 +1315,7 @@ export function PetCareScheduleTool({ toolId }: PetCareScheduleToolProps) {
           notes: (currentPet.notes || []).map((n: any) => ({
             content: n.content,
             date: n.date,
-            isCurrent: n.is_current,
+            isCurrent: n.is_current === true,
           })),
         }),
       });
@@ -1338,7 +1357,7 @@ export function PetCareScheduleTool({ toolId }: PetCareScheduleToolProps) {
     setIsSaving(true);
     try {
       // First, fetch current pet data to preserve it
-      const fetchResponse = await fetch(`/api/tools/pet-care-schedule?petId=${editingPetId}&toolId=${toolId}`);
+      const fetchResponse = await fetch(`/api/tools/pet-care-schedule?petId=${editingPetId}&toolId=${toolId}`, { cache: 'no-store' });
       const fetchData = await fetchResponse.json();
       
       if (!fetchResponse.ok || !fetchData.pet) {
@@ -1369,11 +1388,12 @@ export function PetCareScheduleTool({ toolId }: PetCareScheduleToolProps) {
             card_color: editingPetColor,
           },
           foods: (currentPet.foods || []).map((f: any) => ({
+            id: f.id,
             name: f.name,
             rating: f.rating,
             startDate: f.start_date,
             endDate: f.end_date,
-            isCurrent: f.is_current,
+            isCurrent: f.is_current === true,
             notes: f.notes || '',
           })),
           veterinaryRecords: (currentPet.veterinaryRecords || []).map((v: any) => ({
@@ -1412,7 +1432,7 @@ export function PetCareScheduleTool({ toolId }: PetCareScheduleToolProps) {
           notes: (currentPet.notes || []).map((n: any) => ({
             content: n.content,
             date: n.date,
-            isCurrent: n.is_current,
+            isCurrent: n.is_current === true,
           })),
         }),
       });
@@ -1500,6 +1520,7 @@ export function PetCareScheduleTool({ toolId }: PetCareScheduleToolProps) {
     setVaccinations([]);
     setAppointments([]);
     setDocuments([]);
+    notesRef.current = [];
     setNotes([]);
     setCurrentNote('');
     setAddingSection(null);
@@ -2035,7 +2056,8 @@ export function PetCareScheduleTool({ toolId }: PetCareScheduleToolProps) {
       date: localToday(),
       isCurrent: true,
     };
-    const updatedNotes = [...notes, note];
+    const updatedNotes = [...notesRef.current, note];
+    notesRef.current = updatedNotes;
     setNotes(updatedNotes);
     setCurrentNote('');
     setAddingSection(null);
@@ -2043,17 +2065,19 @@ export function PetCareScheduleTool({ toolId }: PetCareScheduleToolProps) {
   };
 
   const archiveNote = (noteId: string) => {
-    const updatedNotes = notes.map((note) =>
+    const updatedNotes = notesRef.current.map((note) =>
       note.id === noteId ? { ...note, isCurrent: false } : note
     );
+    notesRef.current = updatedNotes;
     setNotes(updatedNotes);
     void savePetData(undefined, undefined, undefined, undefined, undefined, undefined, updatedNotes);
   };
 
   const reactivateNote = (noteId: string) => {
-    const updatedNotes = notes.map((note) =>
+    const updatedNotes = notesRef.current.map((note) =>
       note.id === noteId ? { ...note, isCurrent: true } : note
     );
+    notesRef.current = updatedNotes;
     setNotes(updatedNotes);
     void savePetData(undefined, undefined, undefined, undefined, undefined, undefined, updatedNotes);
   };
@@ -2072,7 +2096,7 @@ export function PetCareScheduleTool({ toolId }: PetCareScheduleToolProps) {
     if (!editingNoteId || !editingNote.content.trim()) return;
     
     // Calculate updated items first (outside of setState)
-    const updatedNotes = notes.map(note =>
+    const updatedNotes = notesRef.current.map(note =>
       note.id === editingNoteId
         ? {
             ...note,
@@ -2081,7 +2105,7 @@ export function PetCareScheduleTool({ toolId }: PetCareScheduleToolProps) {
         : note
     );
     
-    // Update state
+    notesRef.current = updatedNotes;
     setNotes(updatedNotes);
     
     setEditingNoteId(null);
@@ -2096,7 +2120,7 @@ export function PetCareScheduleTool({ toolId }: PetCareScheduleToolProps) {
 
   const fetchPetReport = async (petId: string): Promise<PetReportSnapshot> => {
     if (!toolId) throw new Error('Tool ID is missing.');
-    const response = await fetch(`${API_BASE}?toolId=${toolId}&petId=${petId}`);
+    const response = await fetch(`${API_BASE}?toolId=${toolId}&petId=${petId}`, { cache: 'no-store' });
     const data = await response.json();
     if (!response.ok || !data.pet) {
       throw new Error(data.error || 'Failed to load pet data');
@@ -2381,10 +2405,10 @@ export function PetCareScheduleTool({ toolId }: PetCareScheduleToolProps) {
         }
 
         const currentNotes = report.notes
-          .filter((note) => note.isCurrent)
+          .filter((note) => note.isCurrent === true)
           .sort((a, b) => b.date.localeCompare(a.date));
         const historyNotes = report.notes
-          .filter((note) => !note.isCurrent)
+          .filter((note) => note.isCurrent !== true)
           .sort((a, b) => b.date.localeCompare(a.date));
         const noteRows = includeHistory ? [...currentNotes, ...historyNotes] : currentNotes;
         if (noteRows.length > 0) {

@@ -116,6 +116,10 @@ export async function GET(request: NextRequest) {
       ]);
 
       // Extract data from results, defaulting to empty array on error
+      if (foodsResult.error) {
+        console.error('Error loading pet food:', foodsResult.error);
+        return NextResponse.json({ error: 'Failed to load food' }, { status: 500 });
+      }
       const foods = foodsResult.data || [];
       const vetRecords = vetRecordsResult.data || [];
       const careItems = careItemsResult.data || [];
@@ -154,7 +158,7 @@ export async function GET(request: NextRequest) {
           documents: documents.map((row) => ({ ...row, attachments: documentFiles[row.id] || [] })),
           notes: notes
         }
-      });
+      }, { headers: { 'Cache-Control': 'no-store' } });
     }
 
     // Otherwise, fetch all pets for the user
@@ -187,7 +191,7 @@ export async function GET(request: NextRequest) {
     const petFiles = await attachmentsByPetIds(list.map((row) => row.id), user.id);
     return NextResponse.json({
       pets: list.map((row) => ({ ...row, attachments: petFiles[row.id] || [] })),
-    });
+    }, { headers: { 'Cache-Control': 'no-store' } });
   } catch (error) {
     console.error('Error in pet care schedule API:', error);
     return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
@@ -295,42 +299,27 @@ export async function POST(request: NextRequest) {
     // Save related data (foods, vet records, etc.)
     // Note: This is a simplified version - you may want to handle updates/deletes more granularly
     if (foods && Array.isArray(foods)) {
-      const foodRows = foods
-        .filter((f: { name?: string }) => String(f.name || '').trim())
-        .map((f: { name?: string; rating?: number | null; startDate?: string; endDate?: string | null; isCurrent?: boolean; notes?: string }) => ({
-          pet_id: finalPetId,
-          name: String(f.name).trim(),
-          rating: f.rating == null || !Number.isFinite(Number(f.rating)) ? null : Number(f.rating),
-          start_date: f.startDate || new Date().toISOString().split('T')[0],
-          end_date: f.endDate || null,
-          is_current: f.isCurrent === true,
-          notes: f.notes || null,
-        }));
-      const { data: existingFoods, error: existingFoodsError } = await supabaseServer
-        .from('tools_pcs_food_entries')
-        .select('id')
-        .eq('pet_id', finalPetId);
-      if (existingFoodsError) {
-        console.error('Error loading pet food before save:', existingFoodsError);
+      try {
+        await upsertPetChildren(
+          'tools_pcs_food_entries',
+          finalPetId,
+          foods
+            .filter((f: { name?: string }) => String(f.name || '').trim())
+            .map((f: { id?: string; name?: string; rating?: number | null; startDate?: string; endDate?: string | null; isCurrent?: boolean; notes?: string }) => ({
+              id: f.id,
+              payload: {
+                name: String(f.name).trim(),
+                rating: f.rating == null || !Number.isFinite(Number(f.rating)) ? null : Number(f.rating),
+                start_date: f.startDate || new Date().toISOString().split('T')[0],
+                end_date: f.endDate || null,
+                is_current: f.isCurrent === true,
+                notes: f.notes?.trim() ? String(f.notes).trim() : null,
+              },
+            }))
+        );
+      } catch (foodError) {
+        console.error('Error saving pet food:', foodError);
         return NextResponse.json({ error: 'Failed to save food' }, { status: 500 });
-      }
-      if (foodRows.length > 0) {
-        const { error: insertFoodsError } = await supabaseServer.from('tools_pcs_food_entries').insert(foodRows);
-        if (insertFoodsError) {
-          console.error('Error saving pet food:', insertFoodsError);
-          return NextResponse.json({ error: 'Failed to save food' }, { status: 500 });
-        }
-      }
-      const existingIds = (existingFoods || []).map((row) => row.id);
-      if (existingIds.length > 0) {
-        const { error: deleteFoodsError } = await supabaseServer
-          .from('tools_pcs_food_entries')
-          .delete()
-          .in('id', existingIds);
-        if (deleteFoodsError) {
-          console.error('Error replacing pet food:', deleteFoodsError);
-          return NextResponse.json({ error: 'Failed to save food' }, { status: 500 });
-        }
       }
     }
 
@@ -517,7 +506,7 @@ export async function POST(request: NextRequest) {
             pet_id: finalPetId,
             content: n.content,
             date: n.date || new Date().toISOString().split('T')[0],
-            is_current: n.isCurrent !== undefined ? n.isCurrent : true,
+            is_current: n.isCurrent === true,
           }))
         );
         if (insertNotesError) {

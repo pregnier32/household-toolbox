@@ -332,6 +332,8 @@ export function ImportantDocumentsTool({ toolId }: ImportantDocumentsToolProps) 
   useEffect(() => {
     const onKeyDown = (e: KeyboardEvent) => {
       if (e.key === 'Escape' && showExportPopup && !isExportingPdf) {
+        setExportAllTags(true);
+        setExportTagIds([]);
         setShowExportPopup(false);
       }
     };
@@ -1620,6 +1622,11 @@ export function ImportantDocumentsTool({ toolId }: ImportantDocumentsToolProps) 
     setShowExportPopup(false);
   };
 
+  const openExportOptions = () => {
+    resetExportTagSelection();
+    setShowExportPopup(true);
+  };
+
   const exportToPDF = async () => {
     if (isExportingPdf) return;
     if (!exportAllTags && exportTagIds.length === 0) {
@@ -1896,7 +1903,7 @@ export function ImportantDocumentsTool({ toolId }: ImportantDocumentsToolProps) 
           )}
           <ExportPdfIconButton
             title="Export important documents to PDF"
-            onClick={() => setShowExportPopup(true)}
+            onClick={openExportOptions}
           />
         </div>
       </div>
@@ -2894,7 +2901,7 @@ export function ImportantDocumentsTool({ toolId }: ImportantDocumentsToolProps) 
               </h3>
               <button
                 type="button"
-                onClick={() => !isExportingPdf && setShowExportPopup(false)}
+                onClick={cancelExportOptions}
                 disabled={isExportingPdf}
                 className={isLight ? 'text-slate-600 hover:text-slate-900 transition-colors disabled:opacity-50' : 'text-slate-400 hover:text-slate-200 transition-colors disabled:opacity-50'}
                 title="Close"
