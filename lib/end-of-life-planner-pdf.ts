@@ -1136,14 +1136,46 @@ function localCalendarDayStamp(date: Date): string {
   return `${year}-${month}-${day}`;
 }
 
-function renderPdf(pdf: jsPDF, chunks: Chunk[], attachments: string[], subtitle: string, generatedAt: Date) {
+const FOOTER_LOGO_SRC = '/images/logo/Logo_Side_Black.png';
+const FOOTER_LOGO_WIDTH = 699;
+const FOOTER_LOGO_HEIGHT = 306;
+
+async function loadFooterLogo(): Promise<string | null> {
+  try {
+    const response = await fetch(FOOTER_LOGO_SRC);
+    if (!response.ok) return null;
+    const blob = await response.blob();
+    const dataUrl = await new Promise<string>((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onload = () => resolve(String(reader.result || ''));
+      reader.onerror = () => reject(reader.error);
+      reader.readAsDataURL(blob);
+    });
+    return dataUrl.startsWith('data:image/') ? dataUrl : null;
+  } catch {
+    return null;
+  }
+}
+
+function renderPdf(
+  pdf: jsPDF,
+  chunks: Chunk[],
+  attachments: string[],
+  subtitle: string,
+  generatedAt: Date,
+  logoDataUrl: string | null,
+) {
   const pageWidth = pdf.internal.pageSize.getWidth();
   const pageHeight = pdf.internal.pageSize.getHeight();
   const margin = 15;
   const contentWidth = pageWidth - margin * 2;
   const footerY = pageHeight - 10;
-  const contentBottom = footerY - 4;
+  const logoHeight = 8;
+  const logoWidth = logoHeight * (FOOTER_LOGO_WIDTH / FOOTER_LOGO_HEIGHT);
+  const logoY = footerY - logoHeight + 1.5;
+  const contentBottom = (logoDataUrl ? logoY : footerY) - 4;
   let yPos = margin;
+  let holdBodyLines = 0;
   let repeatingSection: string | null = null;
   let repeatingSectionHeight = 0;
   let repeatingSub: string | null = null;
@@ -1196,6 +1228,7 @@ function renderPdf(pdf: jsPDF, chunks: Chunk[], attachments: string[], subtitle:
   };
 
   const checkNewPage = (requiredHeight: number) => {
+    if (holdBodyLines > 0) return false;
     if (yPos + requiredHeight <= contentBottom) return false;
     const continuationTop =
       margin + (repeatingSection ? repeatingSectionHeight : 0) + (repeatingSub ? repeatingSubHeight : 0);
@@ -1246,15 +1279,44 @@ function renderPdf(pdf: jsPDF, chunks: Chunk[], attachments: string[], subtitle:
     return textBlockHeight(chunk.text, 9, false, chunk.notice ? 5 : 10);
   };
 
+  const headerAllowance = () =>
+    (repeatingSection ? repeatingSectionHeight : 0) + (repeatingSub ? repeatingSubHeight : 0);
+
+  const linesAfter = (index: number) => {
+    let height = 0;
+    let first = 0;
+    let count = 0;
+    for (let cursor = index + 1; cursor < chunks.length && chunks[cursor].t === 'line'; cursor += 1) {
+      const lineHeight = chunkHeight(chunks[cursor]);
+      if (count === 0) first = lineHeight;
+      height += lineHeight;
+      count += 1;
+    }
+    return { height, first, count };
+  };
+
+  const itemKeepHeight = (index: number, pendingHeader = 0) => {
+    if (chunks[index]?.t !== 'item') return 0;
+    const title = chunkHeight(chunks[index]);
+    const lines = linesAfter(index);
+    if (lines.first === 0) return title;
+    const room = contentBottom - margin - headerAllowance() - pendingHeader;
+    if (room > 0 && title + lines.height <= room) return title + lines.height;
+    return title + lines.first;
+  };
+
   const followingStartHeight = (index: number) => {
     const next = chunks[index + 1];
     if (!next || next.t === 'section') return 0;
-    let height = chunkHeight(next);
     if (next.t === 'sub') {
-      const body = chunks[index + 2];
-      if (body && body.t !== 'section' && body.t !== 'sub') height += chunkHeight(body);
+      const afterSub = chunks[index + 2];
+      const subHeight = chunkHeight(next);
+      if (afterSub?.t === 'item') return subHeight + itemKeepHeight(index + 2, chunkHeight(chunks[index]) + subHeight);
+      if (afterSub && afterSub.t !== 'section' && afterSub.t !== 'sub') return subHeight + chunkHeight(afterSub);
+      return subHeight;
     }
-    return height;
+    if (next.t === 'item') return itemKeepHeight(index + 1, chunkHeight(chunks[index]));
+    return chunkHeight(next);
   };
 
   const openPage = (reprintSection: boolean) => {
@@ -1306,15 +1368,29 @@ function renderPdf(pdf: jsPDF, chunks: Chunk[], attachments: string[], subtitle:
       repeatingSubHeight = 0;
       const subHeight = chunkHeight(chunk);
       const body = chunks[index + 1];
-      const bodyHeight = body && body.t !== 'section' && body.t !== 'sub' ? chunkHeight(body) : 0;
+      const bodyHeight = body?.t === 'item'
+        ? itemKeepHeight(index + 1, subHeight)
+        : body && body.t !== 'section' && body.t !== 'sub'
+          ? chunkHeight(body)
+          : 0;
       if (yPos > margin && yPos + subHeight + bodyHeight > contentBottom) openPage(true);
       addText(chunk.text, 11, true, 5);
       repeatingSub = chunk.text;
       repeatingSubHeight = subHeight;
       continue;
     }
-    if (chunk.t === 'item') addText(chunk.text, 10, true, 8);
-    else addText(chunk.text, 9, false, chunk.notice ? 5 : 10, Boolean(chunk.muted));
+    if (chunk.t === 'item') {
+      const lines = linesAfter(index);
+      const titleHeight = chunkHeight(chunk);
+      const room = contentBottom - margin - headerAllowance();
+      const fitsOnOnePage = lines.count === 0 || titleHeight + lines.height <= room;
+      checkNewPage(itemKeepHeight(index));
+      addText(chunk.text, 10, true, 8);
+      holdBodyLines = fitsOnOnePage ? lines.count : 0;
+      continue;
+    }
+    addText(chunk.text, 9, false, chunk.notice ? 5 : 10, Boolean(chunk.muted));
+    if (holdBodyLines > 0) holdBodyLines -= 1;
   }
 
   repeatingSection = null;
@@ -1334,6 +1410,7 @@ function renderPdf(pdf: jsPDF, chunks: Chunk[], attachments: string[], subtitle:
     pdf.setFontSize(8);
     pdf.setFont('helvetica', 'normal');
     pdf.setTextColor(colors.muted[0], colors.muted[1], colors.muted[2]);
+    if (logoDataUrl) pdf.addImage(logoDataUrl, 'PNG', margin, logoY, logoWidth, logoHeight);
     pdf.text('Household Toolbox', pageWidth / 2, footerY, { align: 'center' });
   }
 }
@@ -1351,6 +1428,14 @@ export async function downloadEolPlannerPdf(plans: EolPlan[], options: EolPdfExp
   const generatedAt = new Date();
   const { jsPDF } = await import('jspdf');
   const pdf = new jsPDF({ orientation: 'portrait', unit: 'mm', format: 'a4' });
-  renderPdf(pdf, doc.chunks, doc.attachments, eolExportSubtitle(chosen, options.exportAll, options.includeArchived), generatedAt);
+  const logoDataUrl = await loadFooterLogo();
+  renderPdf(
+    pdf,
+    doc.chunks,
+    doc.attachments,
+    eolExportSubtitle(chosen, options.exportAll, options.includeArchived),
+    generatedAt,
+    logoDataUrl,
+  );
   pdf.save(`End_of_Life_Planner_Report_${localCalendarDayStamp(generatedAt)}.pdf`);
 }

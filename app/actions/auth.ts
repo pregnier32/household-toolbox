@@ -6,7 +6,7 @@ import { TablesInsert } from '@/src/types/supabase';
 import { getSession, getSessionGate } from '@/lib/session';
 import { createSupabaseAuthServerClient } from '@/lib/supabaseAuthServer';
 import { authCallbackUrl } from '@/lib/auth-app-origin';
-import { sendWelcomeEmail } from '@/lib/email';
+import { sendWelcomeEmailForNewUser } from '@/lib/email';
 
 type SignUpData = {
   email: string;
@@ -234,13 +234,11 @@ export async function signUp(data: SignUpData): Promise<SignUpResult> {
       await supabase.auth.signOut();
     }
 
-    try {
-      await sendWelcomeEmail({ to: email, firstName });
-    } catch {
-      console.error('Failed to send welcome email', userId);
+    const needsEmailConfirmation = !created.data.user.email_confirmed_at;
+    if (!needsEmailConfirmation) {
+      await sendWelcomeEmailForNewUser({ userId, to: email, firstName });
     }
 
-    const needsEmailConfirmation = !created.data.user.email_confirmed_at;
     return { success: true, userId, needsEmailConfirmation };
   } catch {
     console.error('Sign up error');

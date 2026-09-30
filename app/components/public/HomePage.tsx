@@ -69,9 +69,6 @@ export function HomePage({ explore }: { explore?: ReactNode }) {
             <a href="#features" className="rounded-sm hover:text-emerald-300 focus:outline-none focus-visible:ring-2 focus-visible:ring-emerald-400">
               Features
             </a>
-            <a href="#how-it-works" className="rounded-sm hover:text-emerald-300 focus:outline-none focus-visible:ring-2 focus-visible:ring-emerald-400">
-              How it works
-            </a>
             <Link href="/pricing" className="rounded-sm hover:text-emerald-300 focus:outline-none focus-visible:ring-2 focus-visible:ring-emerald-400">
               Pricing
             </Link>

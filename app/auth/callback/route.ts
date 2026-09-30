@@ -1,4 +1,5 @@
 import { NextResponse } from 'next/server';
+import { sendWelcomeEmailAfterConfirmation } from '@/lib/email';
 import { createSupabaseAuthServerClient } from '@/lib/supabaseAuthServer';
 
 export const dynamic = 'force-dynamic';
@@ -20,13 +21,21 @@ export async function GET(request: Request) {
   }
 
   const supabase = await createSupabaseAuthServerClient();
-  const { error } = await supabase.auth.exchangeCodeForSession(code);
+  const { data, error } = await supabase.auth.exchangeCodeForSession(code);
   if (error) {
     console.error('Auth callback exchange failed', error.code);
     const failed = nextPath.startsWith('/reset-password')
       ? '/reset-password?error=expired'
       : '/?auth=expired';
     return NextResponse.redirect(new URL(failed, url.origin));
+  }
+
+  if (!nextPath.startsWith('/reset-password') && data.user) {
+    try {
+      await sendWelcomeEmailAfterConfirmation(data.user.id);
+    } catch {
+      console.error('Failed to send welcome email after confirmation');
+    }
   }
 
   return NextResponse.redirect(new URL(nextPath, url.origin));

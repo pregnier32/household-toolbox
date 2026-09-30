@@ -1507,6 +1507,7 @@ export function RepairHistoryTool({ toolId }: RepairHistoryToolProps) {
       const contentBottom = footerY - 4;
       let yPos = margin;
       let repeatingCategoryHeader: string | null = null;
+      let holdPageBreak = false;
 
       const colors = {
         background: [255, 255, 255] as const,
@@ -1539,6 +1540,7 @@ export function RepairHistoryTool({ toolId }: RepairHistoryToolProps) {
       };
 
       const checkNewPage = (requiredHeight: number) => {
+        if (holdPageBreak) return false;
         if (yPos + requiredHeight > contentBottom) {
           startNewPage();
           return true;
@@ -1584,9 +1586,13 @@ export function RepairHistoryTool({ toolId }: RepairHistoryToolProps) {
           (sum, part) => sum + textBlockHeight(part.text, part.fontSize, part.isBold, part.indent),
           2,
         );
+        const headerAllowance = repeatingCategoryHeader ? 15 : 0;
+        const onePageRoom = contentBottom - margin - headerAllowance;
+        const fitsOnOnePage = blockHeight <= onePageRoom;
         if (yPos > margin && yPos + blockHeight > contentBottom) {
           startNewPage();
         }
+        return fitsOnOnePage;
       };
 
       fillPage();
@@ -1635,12 +1641,14 @@ export function RepairHistoryTool({ toolId }: RepairHistoryToolProps) {
           if (record.description.trim()) entryLines.push({ text: `Description: ${record.description.trim()}`, fontSize: 9, isBold: false, indent: 8 });
           if (record.cost.trim()) {
             const formattedCost = formatCurrencyDisplay(record.cost.trim());
-            entryLines.push({
-              text: `Cost: ${formattedCost || record.cost.trim()}`,
-              fontSize: 9,
-              isBold: false,
-              indent: 8,
-            });
+            if (formattedCost) {
+              entryLines.push({
+                text: `Cost: ${formattedCost}`,
+                fontSize: 9,
+                isBold: false,
+                indent: 8,
+              });
+            }
           }
           if (record.serviceProvider.trim()) entryLines.push({ text: `Service provider: ${record.serviceProvider.trim()}`, fontSize: 9, isBold: false, indent: 8 });
           if (record.warrantyEndDate) entryLines.push({ text: `Warranty end: ${formatLocalCalendarDate(record.warrantyEndDate)}`, fontSize: 9, isBold: false, indent: 8 });
@@ -1648,7 +1656,12 @@ export function RepairHistoryTool({ toolId }: RepairHistoryToolProps) {
             entryLines.push({ text: 'Submitted to insurance: Yes', fontSize: 9, isBold: false, indent: 8 });
             if (record.insuranceCarrier.trim()) entryLines.push({ text: `Carrier: ${record.insuranceCarrier.trim()}`, fontSize: 9, isBold: false, indent: 10 });
             if (record.claimNumber.trim()) entryLines.push({ text: `Claim number: ${record.claimNumber.trim()}`, fontSize: 9, isBold: false, indent: 10 });
-            if (record.amountInsurancePaid.trim()) entryLines.push({ text: `Amount paid: ${record.amountInsurancePaid.trim()}`, fontSize: 9, isBold: false, indent: 10 });
+            if (record.amountInsurancePaid.trim()) {
+              const formattedPaid = formatCurrencyDisplay(record.amountInsurancePaid.trim());
+              if (formattedPaid) {
+                entryLines.push({ text: `Amount paid: ${formattedPaid}`, fontSize: 9, isBold: false, indent: 10 });
+              }
+            }
             if (record.agentContactInfo.trim()) entryLines.push({ text: `Agent: ${record.agentContactInfo.trim()}`, fontSize: 9, isBold: false, indent: 10 });
             if (record.claimNotes.trim()) entryLines.push({ text: `Claim notes: ${record.claimNotes.trim()}`, fontSize: 9, isBold: false, indent: 10 });
           }
@@ -1659,8 +1672,10 @@ export function RepairHistoryTool({ toolId }: RepairHistoryToolProps) {
             entryLines.push({ text: `Manual: ${record.manualLink.trim()}`, fontSize: 9, isBold: false, indent: 8 });
           }
           if (record.notes.trim()) entryLines.push({ text: `Notes: ${record.notes.trim()}`, fontSize: 9, isBold: false, indent: 8 });
-          keepRepairEntryTogether(entryLines);
+          const fitsOnOnePage = keepRepairEntryTogether(entryLines);
+          holdPageBreak = fitsOnOnePage;
           entryLines.forEach((line) => addText(line.text, line.fontSize, line.isBold, line.indent));
+          holdPageBreak = false;
           (record.attachments || []).forEach((file) => {
             const fileName = file.name?.trim();
             if (!fileName) return;
