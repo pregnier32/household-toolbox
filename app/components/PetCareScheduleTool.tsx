@@ -194,6 +194,27 @@ function formatReportDate(date: Date): string {
   return date.toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' });
 }
 
+const FOOTER_LOGO_SRC = '/images/logo/Logo_Side_Black.png';
+const FOOTER_LOGO_WIDTH = 699;
+const FOOTER_LOGO_HEIGHT = 306;
+
+async function loadFooterLogo(): Promise<string | null> {
+  try {
+    const response = await fetch(FOOTER_LOGO_SRC);
+    if (!response.ok) return null;
+    const blob = await response.blob();
+    const dataUrl = await new Promise<string>((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onload = () => resolve(String(reader.result || ''));
+      reader.onerror = () => reject(reader.error);
+      reader.readAsDataURL(blob);
+    });
+    return dataUrl.startsWith('data:image/') ? dataUrl : null;
+  } catch {
+    return null;
+  }
+}
+
 function formatClockTime(value: string): string {
   const match = /^(\d{2}):(\d{2})/.exec(value);
   return match ? `${match[1]}:${match[2]}` : value;
@@ -2148,6 +2169,7 @@ export function PetCareScheduleTool({ toolId }: PetCareScheduleToolProps) {
         .sort((a, b) => a.name.localeCompare(b.name));
 
       const { jsPDF } = await import('jspdf');
+      const logoDataUrl = await loadFooterLogo();
 
       const pdf = new jsPDF({
         orientation: 'portrait',
@@ -2160,7 +2182,10 @@ export function PetCareScheduleTool({ toolId }: PetCareScheduleToolProps) {
       const margin = 15;
       const contentWidth = pageWidth - margin * 2;
       const footerY = pageHeight - 10;
-      const contentBottom = footerY - 4;
+      const logoHeight = 8;
+      const logoWidth = logoHeight * (FOOTER_LOGO_WIDTH / FOOTER_LOGO_HEIGHT);
+      const logoY = footerY - logoHeight + 1.5;
+      const contentBottom = (logoDataUrl ? logoY : footerY) - 4;
       let yPos = margin;
       let repeatingPet: string | null = null;
       let repeatingSection: string | null = null;
@@ -2505,7 +2530,8 @@ export function PetCareScheduleTool({ toolId }: PetCareScheduleToolProps) {
         pdf.setFontSize(8);
         pdf.setFont('helvetica', 'normal');
         pdf.setTextColor(colors.muted[0], colors.muted[1], colors.muted[2]);
-        pdf.text('Household Toolbox', margin, footerY);
+        if (logoDataUrl) pdf.addImage(logoDataUrl, 'PNG', margin, logoY, logoWidth, logoHeight);
+        pdf.text('Household Toolbox', logoDataUrl ? margin + logoWidth + 2 : margin, footerY);
         pdf.setFontSize(9);
         pdf.text(`Page ${page} of ${pageCount}`, pageWidth / 2, footerY, { align: 'center' });
       }

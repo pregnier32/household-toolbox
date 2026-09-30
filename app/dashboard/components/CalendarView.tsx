@@ -3,6 +3,13 @@
 import { useState } from 'react';
 import { useTheme } from '../../components/AppThemeProvider';
 
+function eventLocationText(event: { location?: unknown; metadata?: { location?: unknown } }): string {
+  const direct = typeof event.location === 'string' ? event.location.trim() : '';
+  if (direct) return direct;
+  const fromMetadata = typeof event.metadata?.location === 'string' ? event.metadata.location.trim() : '';
+  return fromMetadata;
+}
+
 export function CalendarView({ 
   calendarEvents = [], 
   onMonthChange 
@@ -18,6 +25,7 @@ export function CalendarView({
 
   const [currentDate, setCurrentDate] = useState(new Date());
   const [showPdfPopup, setShowPdfPopup] = useState(false);
+  const [includeLocations, setIncludeLocations] = useState(true);
   const [selectedDay, setSelectedDay] = useState<{ day: number; events: any[] } | null>(null);
 
   const today = new Date();
@@ -224,35 +232,28 @@ export function CalendarView({
             pdf.setFontSize(7);
             pdf.setFont('helvetica', 'normal');
             pdf.setTextColor(...colors.eventText);
-            
-            // Show up to 5 events, truncate if needed
-            const eventsToShow = dayEvents.slice(0, 5);
+
+            const maxWidth = cellWidth - 6;
+            const lineHeight = 7 * 0.42;
             let eventY = y + 8;
-            
-            eventsToShow.forEach((event, idx) => {
-              if (eventY + 3 > y + cellHeight - 2) return; // Don't overflow cell
-              
-              // Truncate event title to fit in cell
-              let eventTitle = event.title || 'Event';
-              const maxWidth = cellWidth - 6;
-              const textWidth = pdf.getTextWidth(eventTitle);
-              
-              if (textWidth > maxWidth) {
-                // Truncate and add ellipsis
-                while (pdf.getTextWidth(eventTitle + '...') > maxWidth && eventTitle.length > 0) {
-                  eventTitle = eventTitle.slice(0, -1);
-                }
-                eventTitle = eventTitle + '...';
-              }
-              
-              pdf.text(eventTitle, x + 3, eventY);
-              eventY += 3.5;
+            let shown = 0;
+
+            dayEvents.forEach((event) => {
+              const eventTitle = typeof event.title === 'string' && event.title.trim() ? event.title.trim() : 'Event';
+              const wrapped = pdf.splitTextToSize(eventTitle, maxWidth) as string[];
+              if (eventY + lineHeight > y + cellHeight - 2) return;
+              wrapped.forEach((line: string) => {
+                if (eventY + lineHeight > y + cellHeight - 2) return;
+                pdf.text(line, x + 3, eventY);
+                eventY += lineHeight;
+              });
+              eventY += 0.6;
+              shown += 1;
             });
-            
-            // If there are more events, show indicator
-            if (dayEvents.length > 5) {
+
+            if (shown < dayEvents.length && eventY + 2.5 <= y + cellHeight - 1) {
               pdf.setFontSize(6);
-              pdf.text(`+${dayEvents.length - 5}`, x + 3, eventY);
+              pdf.text(`+${dayEvents.length - shown}`, x + 3, eventY);
             }
           }
         } else {
@@ -294,15 +295,14 @@ export function CalendarView({
         const timeLabel = scheduledDate
           ? scheduledDate.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
           : '';
-        const directLocation = typeof event.location === 'string' ? event.location.trim() : '';
-        const metadataLocation =
-          typeof event.metadata?.location === 'string' ? event.metadata.location.trim() : '';
-        const locationLabel = directLocation || metadataLocation;
+        const locationLabel = eventLocationText(event);
         const rows: { text: string; fontSize: number; isBold: boolean }[] = [
           { text: heading, fontSize: 11, isBold: true },
         ];
         if (timeLabel) rows.push({ text: `Time: ${timeLabel}`, fontSize: 9, isBold: false });
-        if (locationLabel) rows.push({ text: `Location: ${locationLabel}`, fontSize: 9, isBold: false });
+        if (includeLocations) {
+          rows.push({ text: locationLabel ? `Location: ${locationLabel}` : 'Location:', fontSize: 9, isBold: false });
+        }
 
         const rowHeight = (row: { text: string; fontSize: number; isBold: boolean }) => {
           pdf.setFontSize(row.fontSize);
@@ -397,8 +397,17 @@ export function CalendarView({
                   onClick={() => setShowPdfPopup(false)}
                 />
                 {/* Popup */}
-                <div className="absolute right-0 top-full mt-2 z-20 w-64 rounded-lg border border-slate-700 bg-slate-800 shadow-xl p-4">
+                <div className="absolute right-0 top-full mt-2 z-20 w-72 rounded-lg border border-slate-700 bg-slate-800 shadow-xl p-4">
                   <div className="space-y-4">
+                    <label className="flex items-start gap-2 text-sm text-slate-200">
+                      <input
+                        type="checkbox"
+                        checked={includeLocations}
+                        onChange={(e) => setIncludeLocations(e.target.checked)}
+                        className="mt-0.5 h-4 w-4 rounded border-slate-600 bg-slate-700 text-emerald-500 focus:ring-emerald-500"
+                      />
+                      <span>Include locations</span>
+                    </label>
                     <button
                       onClick={(e) => {
                         e.preventDefault();
