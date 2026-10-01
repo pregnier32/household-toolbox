@@ -229,32 +229,33 @@ export function CalendarView({
 
           // Add events if any
           if (dayEvents.length > 0) {
-            pdf.setFontSize(7);
             pdf.setFont('helvetica', 'normal');
             pdf.setTextColor(...colors.eventText);
 
             const maxWidth = cellWidth - 6;
-            const lineHeight = 7 * 0.42;
+            const cellBottom = y + cellHeight - 2;
             let eventY = y + 8;
-            let shown = 0;
 
             dayEvents.forEach((event) => {
               const eventTitle = typeof event.title === 'string' && event.title.trim() ? event.title.trim() : 'Event';
-              const wrapped = pdf.splitTextToSize(eventTitle, maxWidth) as string[];
-              if (eventY + lineHeight > y + cellHeight - 2) return;
+              let fontSize = 7;
+              let wrapped: string[] = [eventTitle];
+              let lineHeight = fontSize * 0.42;
+              const room = Math.max(cellBottom - eventY, lineHeight);
+              while (fontSize >= 4) {
+                pdf.setFontSize(fontSize);
+                wrapped = pdf.splitTextToSize(eventTitle, maxWidth) as string[];
+                lineHeight = fontSize * 0.42;
+                if (wrapped.length * lineHeight <= room) break;
+                fontSize -= 0.5;
+              }
+              pdf.setFontSize(fontSize);
               wrapped.forEach((line: string) => {
-                if (eventY + lineHeight > y + cellHeight - 2) return;
                 pdf.text(line, x + 3, eventY);
                 eventY += lineHeight;
               });
-              eventY += 0.6;
-              shown += 1;
+              eventY += 0.5;
             });
-
-            if (shown < dayEvents.length && eventY + 2.5 <= y + cellHeight - 1) {
-              pdf.setFontSize(6);
-              pdf.text(`+${dayEvents.length - shown}`, x + 3, eventY);
-            }
           }
         } else {
           // Empty cell after month ends
@@ -301,7 +302,11 @@ export function CalendarView({
         ];
         if (timeLabel) rows.push({ text: `Time: ${timeLabel}`, fontSize: 9, isBold: false });
         if (includeLocations) {
-          rows.push({ text: locationLabel ? `Location: ${locationLabel}` : 'Location:', fontSize: 9, isBold: false });
+          rows.push({
+            text: locationLabel ? `Location: ${locationLabel}` : 'Location:',
+            fontSize: 9,
+            isBold: false,
+          });
         }
 
         const rowHeight = (row: { text: string; fontSize: number; isBold: boolean }) => {
@@ -388,52 +393,60 @@ export function CalendarView({
               </svg>
             </button>
             
-            {/* PDF Export Popup */}
             {showPdfPopup && (
-              <>
-                {/* Backdrop */}
+              <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4">
                 <div
-                  className="fixed inset-0 z-10"
-                  onClick={() => setShowPdfPopup(false)}
-                />
-                {/* Popup */}
-                <div className="absolute right-0 top-full mt-2 z-20 w-72 rounded-lg border border-slate-700 bg-slate-800 shadow-xl p-4">
-                  <div className="space-y-4">
-                    <label className="flex items-start gap-2 text-sm text-slate-200">
-                      <input
-                        type="checkbox"
-                        checked={includeLocations}
-                        onChange={(e) => setIncludeLocations(e.target.checked)}
-                        className="mt-0.5 h-4 w-4 rounded border-slate-600 bg-slate-700 text-emerald-500 focus:ring-emerald-500"
-                      />
-                      <span>Include locations</span>
-                    </label>
+                  className={
+                    isLight
+                      ? 'w-full max-w-sm rounded-lg border border-slate-200 bg-white p-5 shadow-xl'
+                      : 'w-full max-w-sm rounded-lg border border-slate-700 bg-slate-800 p-5 shadow-xl'
+                  }
+                >
+                  <h3 className={isLight ? 'text-lg font-semibold text-slate-900' : 'text-lg font-semibold text-slate-50'}>
+                    Export
+                  </h3>
+                  <label
+                    htmlFor="calendar-include-locations"
+                    className={`mt-4 flex items-start gap-3 text-sm ${isLight ? 'text-slate-700' : 'text-slate-200'}`}
+                  >
+                    <input
+                      id="calendar-include-locations"
+                      type="checkbox"
+                      checked={includeLocations}
+                      onChange={(e) => setIncludeLocations(e.target.checked)}
+                      className={
+                        isLight
+                          ? 'mt-0.5 h-4 w-4 rounded border-slate-400 text-emerald-600 focus:ring-emerald-500'
+                          : 'mt-0.5 h-4 w-4 rounded border-slate-600 bg-slate-700 text-emerald-500 focus:ring-emerald-500'
+                      }
+                    />
+                    <span>Include locations</span>
+                  </label>
+                  <div className="mt-5 flex gap-3">
                     <button
-                      onClick={(e) => {
-                        e.preventDefault();
+                      type="button"
+                      onClick={() => {
                         exportToPDF();
                         setShowPdfPopup(false);
                       }}
-                      className="w-full px-4 py-2 text-sm font-medium text-slate-50 bg-emerald-500 hover:bg-emerald-600 transition-colors rounded-lg flex items-center justify-center gap-2"
+                      className="flex-1 rounded-lg bg-emerald-500 px-4 py-2 text-sm font-medium text-slate-50 hover:bg-emerald-600"
                     >
-                      <svg
-                        className="w-4 h-4"
-                        fill="none"
-                        stroke="currentColor"
-                        viewBox="0 0 24 24"
-                      >
-                        <path
-                          strokeLinecap="round"
-                          strokeLinejoin="round"
-                          strokeWidth={2}
-                          d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"
-                        />
-                      </svg>
                       Export to PDF
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setShowPdfPopup(false)}
+                      className={
+                        isLight
+                          ? 'rounded-lg border border-slate-300 px-4 py-2 text-sm text-slate-700 hover:bg-slate-100'
+                          : 'rounded-lg border border-slate-600 px-4 py-2 text-sm text-slate-200 hover:bg-slate-700'
+                      }
+                    >
+                      Cancel
                     </button>
                   </div>
                 </div>
-              </>
+              </div>
             )}
           </div>
           

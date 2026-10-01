@@ -5,6 +5,59 @@ import { attachmentsByListIds, deleteListStorageFiles } from '@/lib/shopping-lis
 
 type LineItemWrite = { itemId: string; quantity?: unknown; unit?: unknown };
 
+const UNIT_WORDS = ['bottles', 'bottle', 'boxes', 'box', 'bags', 'bag', 'rolls', 'roll', 'bars', 'bar', 'each'] as const;
+const UNIT_ALIAS: Record<string, string> = {
+  bag: 'bags',
+  box: 'boxes',
+  roll: 'rolls',
+  bar: 'bars',
+  bott: 'bottle',
+};
+
+function recoverQtyUnit(quantity: number | null, unit: string | null): { quantity: number | null; unit: string | null } {
+  let qty = quantity;
+  let raw = (unit || '').trim();
+  const leading = /^(\d+(?:\.\d+)?)([A-Za-z].*)$/.exec(raw);
+  if (qty == null && leading) {
+    const parsed = Number(leading[1]);
+    if (Number.isFinite(parsed)) qty = parsed;
+    raw = leading[2];
+  }
+  if (qty != null) raw = raw.replace(/^\d+/, '').replace(/\d+$/, '');
+
+  const tokens: string[] = [];
+  let rest = raw;
+  while (rest.length > 0) {
+    const word = UNIT_WORDS.find((item) => rest.toLowerCase().startsWith(item));
+    if (word) {
+      tokens.push(UNIT_ALIAS[word] || word);
+      rest = rest.slice(word.length);
+      continue;
+    }
+    const num = /^(\d+(?:\.\d+)?)/.exec(rest);
+    if (num) {
+      if (qty == null) {
+        const parsed = Number(num[1]);
+        if (Number.isFinite(parsed)) qty = parsed;
+      }
+      rest = rest.slice(num[1].length);
+      continue;
+    }
+    rest = rest.slice(1);
+  }
+
+  let unitOut = tokens.length > 0 ? tokens[tokens.length - 1] : '';
+  if (!unitOut && raw) {
+    const compact = raw.toLowerCase().replace(/[^a-z]/g, '');
+    if (compact === 'bott' || compact.startsWith('bott')) unitOut = 'bottle';
+    else if (compact.startsWith('bx')) unitOut = 'boxes';
+    else if (/e/.test(compact) && /a/.test(compact) && /c/.test(compact) && compact.length > 4) unitOut = 'each';
+    else unitOut = raw.replace(/(\d)([A-Za-z])/g, '$1 $2').replace(/([A-Za-z])(\d)/g, '$1 $2');
+  }
+
+  return { quantity: qty, unit: unitOut ? unitOut.slice(0, 32) : null };
+}
+
 function normalizeQuantity(value: unknown): number | null {
   if (value === null || value === undefined || value === '') return null;
   const n = typeof value === 'number' ? value : Number(String(value).trim());
@@ -16,6 +69,10 @@ function normalizeUnit(value: unknown): string | null {
   if (typeof value !== 'string') return null;
   const trimmed = value.trim();
   return trimmed ? trimmed.slice(0, 32) : null;
+}
+
+function normalizeLineQtyUnit(quantity: unknown, unit: unknown): { quantity: number | null; unit: string | null } {
+  return recoverQtyUnit(normalizeQuantity(quantity), normalizeUnit(unit));
 }
 
 function lineItemsFromBody(itemIds?: string[], items?: LineItemWrite[]): LineItemWrite[] {
@@ -539,14 +596,17 @@ export async function POST(request: NextRequest) {
 
       if (createItems.length) {
         const insertError = await insertListLineItems(
-          createItems.map((item, i: number) => ({
-            list_id: list.id,
-            item_id: item.itemId,
-            display_order: i,
-            is_checked: false,
-            quantity: normalizeQuantity(item.quantity),
-            unit: normalizeUnit(item.unit),
-          }))
+          createItems.map((item, i: number) => {
+            const recovered = normalizeLineQtyUnit(item.quantity, item.unit);
+            return {
+              list_id: list.id,
+              item_id: item.itemId,
+              display_order: i,
+              is_checked: false,
+              quantity: recovered.quantity,
+              unit: recovered.unit,
+            };
+          })
         );
         if (insertError) {
           return NextResponse.json({ error: insertError }, { status: 500 });
@@ -630,14 +690,17 @@ export async function POST(request: NextRequest) {
         await supabaseServer.from('tools_sl_list_items').delete().eq('list_id', listId);
         if (updateItems.length > 0) {
           const insertError = await insertListLineItems(
-            updateItems.map((item, i: number) => ({
-              list_id: listId,
-              item_id: item.itemId,
-              display_order: i,
-              is_checked: checkedByItem.get(item.itemId) ?? false,
-              quantity: normalizeQuantity(item.quantity),
-              unit: normalizeUnit(item.unit),
-            }))
+            updateItems.map((item, i: number) => {
+              const recovered = normalizeLineQtyUnit(item.quantity, item.unit);
+              return {
+                list_id: listId,
+                item_id: item.itemId,
+                display_order: i,
+                is_checked: checkedByItem.get(item.itemId) ?? false,
+                quantity: recovered.quantity,
+                unit: recovered.unit,
+              };
+            })
           );
           if (insertError) {
             return NextResponse.json({ error: insertError }, { status: 500 });

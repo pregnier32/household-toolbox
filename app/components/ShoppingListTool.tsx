@@ -56,11 +56,59 @@ function formatDateDisplay(isoDate: string): string {
   return `${m}/${day}/${y}`;
 }
 
+const UNIT_WORDS = ['bottles', 'bottle', 'boxes', 'box', 'bags', 'bag', 'rolls', 'roll', 'bars', 'bar', 'each'] as const;
+const UNIT_ALIAS: Record<string, string> = {
+  bag: 'bags',
+  box: 'boxes',
+  roll: 'rolls',
+  bar: 'bars',
+  bott: 'bottle',
+};
+
+function recoverQtyUnit(quantity: number | null | undefined, unit: string | null | undefined): { qty: string; unit: string } {
+  let qty = quantity != null && Number.isFinite(quantity) ? String(quantity) : '';
+  let raw = (unit || '').trim();
+  const leading = /^(\d+(?:\.\d+)?)([A-Za-z].*)$/.exec(raw);
+  if (!qty && leading) {
+    qty = leading[1];
+    raw = leading[2];
+  }
+  if (qty) raw = raw.replace(/^\d+/, '').replace(/\d+$/, '');
+
+  const tokens: string[] = [];
+  let rest = raw;
+  while (rest.length > 0) {
+    const word = UNIT_WORDS.find((item) => rest.toLowerCase().startsWith(item));
+    if (word) {
+      tokens.push(UNIT_ALIAS[word] || word);
+      rest = rest.slice(word.length);
+      continue;
+    }
+    const num = /^(\d+(?:\.\d+)?)/.exec(rest);
+    if (num) {
+      if (!qty) qty = num[1];
+      rest = rest.slice(num[1].length);
+      continue;
+    }
+    rest = rest.slice(1);
+  }
+
+  let unitOut = tokens.length > 0 ? tokens[tokens.length - 1] : '';
+  if (!unitOut && raw) {
+    const compact = raw.toLowerCase().replace(/[^a-z]/g, '');
+    if (compact === 'bott' || compact.startsWith('bott')) unitOut = 'bottle';
+    else if (compact.startsWith('bx')) unitOut = 'boxes';
+    else if (/e/.test(compact) && /a/.test(compact) && /c/.test(compact) && compact.length > 4) unitOut = 'each';
+    else unitOut = raw.replace(/(\d)([A-Za-z])/g, '$1 $2').replace(/([A-Za-z])(\d)/g, '$1 $2');
+  }
+
+  return { qty, unit: unitOut };
+}
+
 function formatLineItemLabel(ref: ShoppingListItemRef, fallbackName = ''): string {
   const name = ref.name || fallbackName;
-  const qty = ref.quantity != null && Number.isFinite(ref.quantity) ? String(ref.quantity) : '';
-  const unit = (ref.unit || '').trim();
-  const prefix = [qty, unit].filter(Boolean).join(' ');
+  const recovered = recoverQtyUnit(ref.quantity, ref.unit);
+  const prefix = [recovered.qty, recovered.unit].filter(Boolean).join(' ');
   return prefix ? `${prefix} ${name}` : name;
 }
 
