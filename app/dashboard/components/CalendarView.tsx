@@ -301,9 +301,9 @@ export function CalendarView({
           { text: heading, fontSize: 11, isBold: true },
         ];
         if (timeLabel) rows.push({ text: `Time: ${timeLabel}`, fontSize: 9, isBold: false });
-        if (includeLocations) {
+        if (includeLocations && locationLabel) {
           rows.push({
-            text: locationLabel ? `Location: ${locationLabel}` : 'Location:',
+            text: `Location: ${locationLabel}`,
             fontSize: 9,
             isBold: false,
           });
