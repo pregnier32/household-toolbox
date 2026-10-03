@@ -13,6 +13,7 @@ import {
   isPdfAttachment,
   type AttachmentItem,
 } from '@/lib/attachments';
+import { formatDisplayDate } from '@/lib/format-display-date';
 
 const API_BASE = '/api/tools/calendar-events';
 
@@ -358,6 +359,7 @@ export function CalendarEventsTool({ toolId }: CalendarEventsToolProps) {
   const [deleteConfirmText, setDeleteConfirmText] = useState('');
   const [deleteConfirmEventId, setDeleteConfirmEventId] = useState<string | null>(null);
   const [deleteConfirmEventText, setDeleteConfirmEventText] = useState('');
+  const [historyConfirmEventId, setHistoryConfirmEventId] = useState<string | null>(null);
   const [isSaving, setIsSaving] = useState(false);
   const isSavingRef = useRef(false);
   const [saveMessage, setSaveMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
@@ -1467,6 +1469,17 @@ export function CalendarEventsTool({ toolId }: CalendarEventsToolProps) {
     return () => window.removeEventListener('keydown', onKeyDown);
   }, [showAddEventModal, showHolidayModal, attachmentModal]);
 
+  useEffect(() => {
+    if (!historyConfirmEventId) return;
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') {
+        setHistoryConfirmEventId(null);
+      }
+    };
+    window.addEventListener('keydown', onKeyDown);
+    return () => window.removeEventListener('keydown', onKeyDown);
+  }, [historyConfirmEventId]);
+
   const selectedCategory = selectedCategoryId ? categories.find(c => c.id === selectedCategoryId) : null;
   const activeEvents = selectedCategoryId ? calendarEvents.filter(e => e.categoryId === selectedCategoryId && e.isActive) : [];
   const historyEvents = selectedCategoryId ? calendarEvents.filter(e => e.categoryId === selectedCategoryId && !e.isActive) : [];
@@ -1785,6 +1798,46 @@ export function CalendarEventsTool({ toolId }: CalendarEventsToolProps) {
         </div>
       )}
 
+      {historyConfirmEventId && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4 backdrop-blur-sm">
+          <div
+            className={isLight
+              ? 'w-full max-w-md rounded-2xl border border-slate-200 bg-white p-6 shadow-2xl'
+              : 'w-full max-w-md rounded-2xl border border-slate-800 bg-slate-900 p-6 shadow-2xl'}
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="ce-history-confirm-title"
+          >
+            <h3 id="ce-history-confirm-title" className={deleteModalTitleClass}>
+              Move to History
+            </h3>
+            <p className={isLight ? 'mb-4 text-slate-700' : 'mb-4 text-slate-300'}>
+              Move “{calendarEvents.find((event) => event.id === historyConfirmEventId)?.title || 'this event'}” to history?
+            </p>
+            <div className="flex gap-3">
+              <button
+                type="button"
+                onClick={() => {
+                  const eventId = historyConfirmEventId;
+                  setHistoryConfirmEventId(null);
+                  if (eventId) void inactivateEvent(eventId);
+                }}
+                className={`flex-1 ${primaryButtonClass}`}
+              >
+                Move to History
+              </button>
+              <button
+                type="button"
+                onClick={() => setHistoryConfirmEventId(null)}
+                className={secondaryButtonClass}
+              >
+                Cancel
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {deleteConfirmEventId && (
         <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
           <div className={deleteModalCardClass}>
@@ -2054,11 +2107,11 @@ export function CalendarEventsTool({ toolId }: CalendarEventsToolProps) {
                               {event.addToDashboard && <OnCalendarChip isLight={isLight} />}
                             </div>
                             <p className={`text-sm ${mutedTextClass} mt-1`}>
-                              Date: {parseLocalDate(event.date).toLocaleDateString()} | Frequency: {event.frequency}
+                              Date: {formatDisplayDate(event.date)} | Frequency: {event.frequency}
                             </p>
                             {event.endDate && (
                               <p className={`text-sm ${mutedTextClass} mt-1`}>
-                                End Date: {parseLocalDate(event.endDate).toLocaleDateString()}
+                                End Date: {formatDisplayDate(event.endDate)}
                               </p>
                             )}
                             {event.frequency === 'Weekly' && event.daysOfWeek && event.daysOfWeek.length > 0 && (
@@ -2101,7 +2154,7 @@ export function CalendarEventsTool({ toolId }: CalendarEventsToolProps) {
                             </button>
                             <button
                               type="button"
-                              onClick={() => inactivateEvent(event.id)}
+                              onClick={() => setHistoryConfirmEventId(event.id)}
                               className={eventActionIconSecondaryClass}
                               aria-label="Move to history"
                               title="Move to history"
@@ -2155,7 +2208,7 @@ export function CalendarEventsTool({ toolId }: CalendarEventsToolProps) {
                             <div className="grid grid-cols-1 md:grid-cols-3 gap-4 text-sm">
                               <div>
                                 <span className="text-slate-500">Date:</span>
-                                <span className="ml-2 text-slate-400">{parseLocalDate(event.date).toLocaleDateString()}</span>
+                                <span className="ml-2 text-slate-400">{formatDisplayDate(event.date)}</span>
                               </div>
                               <div>
                                 <span className="text-slate-500">Frequency:</span>
@@ -2164,14 +2217,14 @@ export function CalendarEventsTool({ toolId }: CalendarEventsToolProps) {
                               <div>
                                 <span className="text-slate-500">Inactivated:</span>
                                 <span className="ml-2 text-slate-400">
-                                  {event.dateInactivated ? parseLocalDate(event.dateInactivated).toLocaleDateString() : 'N/A'}
+                                  {event.dateInactivated ? formatDisplayDate(event.dateInactivated) : 'N/A'}
                                 </span>
                               </div>
                             </div>
                             {event.endDate && (
                               <div className="mt-2 text-sm">
                                 <span className="text-slate-500">End Date:</span>
-                                <span className="ml-2 text-slate-400">{parseLocalDate(event.endDate).toLocaleDateString()}</span>
+                                <span className="ml-2 text-slate-400">{formatDisplayDate(event.endDate)}</span>
                               </div>
                             )}
                             {event.frequency === 'Weekly' && event.daysOfWeek && event.daysOfWeek.length > 0 && (
@@ -2492,12 +2545,7 @@ export function CalendarEventsTool({ toolId }: CalendarEventsToolProps) {
                 holidayDateObj.setHours(0, 0, 0, 0);
                 const yearToUse = holidayDateObj < today ? currentYear + 1 : currentYear;
                 const finalDate = holiday.getDate(yearToUse);
-                const finalDateObj = parseLocalDate(finalDate);
-                const displayDate = finalDateObj.toLocaleDateString('en-US', { 
-                  month: 'long', 
-                  day: 'numeric',
-                  year: 'numeric'
-                });
+                const displayDate = formatDisplayDate(finalDate);
                 
                 return (
                   <button

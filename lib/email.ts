@@ -394,4 +394,91 @@ This email was sent from the Household Toolbox support form.
   }
 }
 
+type HouseholdInvitationEmailParams = {
+  to: string;
+  firstName: string;
+  adminFirstName: string;
+  acceptUrl: string;
+};
+
+export async function sendHouseholdInvitationEmail({
+  to,
+  firstName,
+  adminFirstName,
+  acceptUrl,
+}: HouseholdInvitationEmailParams): Promise<{ success: boolean; error?: string }> {
+  if (!process.env.RESEND_API_KEY) {
+    console.warn('RESEND_API_KEY not configured. Invitation email will not be sent.');
+    return { success: false, error: 'Email service not configured' };
+  }
+
+  try {
+    const fromEmail = process.env.RESEND_FROM_EMAIL || 'onboarding@resend.dev';
+    const safeFirstName = escapeHtml(firstName.trim() || 'there');
+    const safeAdmin = escapeHtml(adminFirstName.trim() || 'A household Admin');
+    const safeUrl = escapeHtml(acceptUrl);
+    const subject = `${adminFirstName.trim() || 'Someone'} invited you to Household Toolbox`;
+    const html = `<!DOCTYPE html>
+<html>
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Household Toolbox invitation</title>
+  </head>
+  <body style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif; line-height: 1.6; color: #334155; background-color: #f8fafc; margin: 0; padding: 0;">
+    <div style="max-width: 600px; margin: 0 auto; padding: 20px;">
+      <div style="background-color: #0f172a; padding: 30px 20px; text-align: center; border-radius: 8px 8px 0 0;">
+        <h1 style="color: #10b981; margin: 0; font-size: 24px; font-weight: 600;">Household Toolbox</h1>
+      </div>
+      <div style="background-color: #ffffff; padding: 40px 30px; border-radius: 0 0 8px 8px;">
+        <h2 style="color: #1e293b; margin-top: 0; font-size: 22px;">Hello, ${safeFirstName}.</h2>
+        <p style="color: #475569; font-size: 16px;">
+          ${safeAdmin} invited you to join their Household Toolbox account.
+          You will be able to use the household's tools and shared records.
+        </p>
+        <p style="color: #475569; font-size: 16px;">This invitation expires in 7 days.</p>
+        <div style="margin: 30px 0; text-align: center;">
+          <a href="${safeUrl}" style="display: inline-block; background-color: #10b981; color: #ffffff; text-decoration: none; padding: 12px 30px; border-radius: 6px; font-weight: 600; font-size: 16px;">
+            Accept Invitation
+          </a>
+        </div>
+        <p style="color: #64748b; font-size: 14px;">
+          If the button does not work, open this link:<br>
+          <a href="${safeUrl}" style="color: #059669;">${safeUrl}</a>
+        </p>
+      </div>
+    </div>
+  </body>
+</html>`;
+    const text = `Hello, ${firstName.trim() || 'there'}.
+
+${adminFirstName.trim() || 'A household Admin'} invited you to join their Household Toolbox account.
+You will be able to use the household's tools and shared records.
+
+This invitation expires in 7 days.
+
+Accept Invitation: ${acceptUrl}`;
+
+    const { error } = await resend.emails.send({
+      from: `Household Toolbox <${fromEmail}>`,
+      to: [to],
+      subject,
+      html,
+      text,
+    });
+
+    if (error) {
+      console.error('[Email] Error sending household invitation:', error);
+      return { success: false, error: error.message };
+    }
+    return { success: true };
+  } catch (error) {
+    console.error('Error sending household invitation:', error);
+    return {
+      success: false,
+      error: error instanceof Error ? error.message : 'Unknown error occurred',
+    };
+  }
+}
+
 

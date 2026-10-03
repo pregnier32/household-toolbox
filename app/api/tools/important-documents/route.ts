@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { getSession } from '@/lib/session';
+import { getHouseholdDataSession } from '@/lib/session';
 import { supabaseServer } from '@/lib/supabaseServer';
 import bcrypt from 'bcryptjs';
 import { assertCanStoreBytes, isStorageLimitError, refreshUserStorageUsage } from '@/lib/user-storage';
@@ -32,7 +32,7 @@ async function removeStoredDocumentFile(fileUrl: string | null | undefined, user
 
 // GET - Fetch all documents and tags for the current user
 export async function GET(request: NextRequest) {
-  const user = await getSession();
+  const user = await getHouseholdDataSession();
 
   if (!user) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
@@ -153,7 +153,7 @@ export async function GET(request: NextRequest) {
 
 // POST - Create or update a document
 export async function POST(request: NextRequest) {
-  const user = await getSession();
+  const user = await getHouseholdDataSession();
 
   if (!user) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
@@ -605,7 +605,7 @@ export async function POST(request: NextRequest) {
 
 // DELETE - Delete a document
 export async function DELETE(request: NextRequest) {
-  const user = await getSession();
+  const user = await getHouseholdDataSession();
 
   if (!user) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });

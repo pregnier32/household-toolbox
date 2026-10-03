@@ -19,6 +19,18 @@ export async function DELETE() {
   }
 
   try {
+    if (user.householdRole === 'user') {
+      await deleteUserAndAssociatedData(user.actorId);
+      try {
+        const supabase = await createSupabaseAuthServerClient();
+        await supabase.auth.signOut({ scope: 'local' });
+      } catch {
+        console.error('Supabase Auth sign-out failed after account delete');
+      }
+      await clearStaleLegacySessionCookie();
+      return NextResponse.json({ success: true, message: 'Your login was deleted. Household records were kept.' });
+    }
+
     const { count, error: toolsCountError } = await supabaseServer
       .from('users_tools')
       .select('id', { count: 'exact', head: true })

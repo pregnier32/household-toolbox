@@ -284,26 +284,26 @@ DROP POLICY IF EXISTS "Users can view their own pets" ON tools_PCS_pets;
 CREATE POLICY "Users can view their own pets" ON tools_PCS_pets
   FOR SELECT
   TO authenticated
-  USING ((select auth.uid()) = user_id);
+  USING (public.can_access_user_data(user_id));
 
 DROP POLICY IF EXISTS "Users can insert their own pets" ON tools_PCS_pets;
 CREATE POLICY "Users can insert their own pets" ON tools_PCS_pets
   FOR INSERT
   TO authenticated
-  WITH CHECK ((select auth.uid()) = user_id);
+  WITH CHECK (public.can_access_user_data(user_id));
 
 DROP POLICY IF EXISTS "Users can update their own pets" ON tools_PCS_pets;
 CREATE POLICY "Users can update their own pets" ON tools_PCS_pets
   FOR UPDATE
   TO authenticated
-  USING ((select auth.uid()) = user_id)
-  WITH CHECK ((select auth.uid()) = user_id);
+  USING (public.can_access_user_data(user_id))
+  WITH CHECK (public.can_access_user_data(user_id));
 
 DROP POLICY IF EXISTS "Users can delete their own pets" ON tools_PCS_pets;
 CREATE POLICY "Users can delete their own pets" ON tools_PCS_pets
   FOR DELETE
   TO authenticated
-  USING ((select auth.uid()) = user_id);
+  USING (public.can_access_user_data(user_id));
 
 -- Food entries table
 DROP POLICY IF EXISTS "Users can view their own food entries" ON tools_PCS_food_entries;
@@ -314,7 +314,7 @@ CREATE POLICY "Users can view their own food entries" ON tools_PCS_food_entries
     EXISTS (
       SELECT 1 FROM tools_PCS_pets
       WHERE tools_PCS_pets.id = tools_PCS_food_entries.pet_id
-      AND tools_PCS_pets.user_id = (select auth.uid())
+      AND public.can_access_user_data(tools_PCS_pets.user_id)
     )
   );
 
@@ -326,7 +326,7 @@ CREATE POLICY "Users can insert their own food entries" ON tools_PCS_food_entrie
     EXISTS (
       SELECT 1 FROM tools_PCS_pets
       WHERE tools_PCS_pets.id = tools_PCS_food_entries.pet_id
-      AND tools_PCS_pets.user_id = (select auth.uid())
+      AND public.can_access_user_data(tools_PCS_pets.user_id)
     )
   );
 
@@ -338,14 +338,14 @@ CREATE POLICY "Users can update their own food entries" ON tools_PCS_food_entrie
     EXISTS (
       SELECT 1 FROM tools_PCS_pets
       WHERE tools_PCS_pets.id = tools_PCS_food_entries.pet_id
-      AND tools_PCS_pets.user_id = (select auth.uid())
+      AND public.can_access_user_data(tools_PCS_pets.user_id)
     )
   )
   WITH CHECK (
     EXISTS (
       SELECT 1 FROM tools_PCS_pets
       WHERE tools_PCS_pets.id = tools_PCS_food_entries.pet_id
-      AND tools_PCS_pets.user_id = (select auth.uid())
+      AND public.can_access_user_data(tools_PCS_pets.user_id)
     )
   );
 
@@ -357,7 +357,7 @@ CREATE POLICY "Users can delete their own food entries" ON tools_PCS_food_entrie
     EXISTS (
       SELECT 1 FROM tools_PCS_pets
       WHERE tools_PCS_pets.id = tools_PCS_food_entries.pet_id
-      AND tools_PCS_pets.user_id = (select auth.uid())
+      AND public.can_access_user_data(tools_PCS_pets.user_id)
     )
   );
 
@@ -370,7 +370,7 @@ CREATE POLICY "Users can view their own veterinary records" ON tools_PCS_veterin
     EXISTS (
       SELECT 1 FROM tools_PCS_pets
       WHERE tools_PCS_pets.id = tools_PCS_veterinary_records.pet_id
-      AND tools_PCS_pets.user_id = (select auth.uid())
+      AND public.can_access_user_data(tools_PCS_pets.user_id)
     )
   );
 
@@ -382,7 +382,7 @@ CREATE POLICY "Users can insert their own veterinary records" ON tools_PCS_veter
     EXISTS (
       SELECT 1 FROM tools_PCS_pets
       WHERE tools_PCS_pets.id = tools_PCS_veterinary_records.pet_id
-      AND tools_PCS_pets.user_id = (select auth.uid())
+      AND public.can_access_user_data(tools_PCS_pets.user_id)
     )
   );
 
@@ -394,14 +394,14 @@ CREATE POLICY "Users can update their own veterinary records" ON tools_PCS_veter
     EXISTS (
       SELECT 1 FROM tools_PCS_pets
       WHERE tools_PCS_pets.id = tools_PCS_veterinary_records.pet_id
-      AND tools_PCS_pets.user_id = (select auth.uid())
+      AND public.can_access_user_data(tools_PCS_pets.user_id)
     )
   )
   WITH CHECK (
     EXISTS (
       SELECT 1 FROM tools_PCS_pets
       WHERE tools_PCS_pets.id = tools_PCS_veterinary_records.pet_id
-      AND tools_PCS_pets.user_id = (select auth.uid())
+      AND public.can_access_user_data(tools_PCS_pets.user_id)
     )
   );
 
@@ -413,7 +413,7 @@ CREATE POLICY "Users can delete their own veterinary records" ON tools_PCS_veter
     EXISTS (
       SELECT 1 FROM tools_PCS_pets
       WHERE tools_PCS_pets.id = tools_PCS_veterinary_records.pet_id
-      AND tools_PCS_pets.user_id = (select auth.uid())
+      AND public.can_access_user_data(tools_PCS_pets.user_id)
     )
   );
 
@@ -426,7 +426,7 @@ CREATE POLICY "Users can view their own care plan items" ON tools_PCS_care_plan_
     EXISTS (
       SELECT 1 FROM tools_PCS_pets
       WHERE tools_PCS_pets.id = tools_PCS_care_plan_items.pet_id
-      AND tools_PCS_pets.user_id = (select auth.uid())
+      AND public.can_access_user_data(tools_PCS_pets.user_id)
     )
   );
 
@@ -438,7 +438,7 @@ CREATE POLICY "Users can insert their own care plan items" ON tools_PCS_care_pla
     EXISTS (
       SELECT 1 FROM tools_PCS_pets
       WHERE tools_PCS_pets.id = tools_PCS_care_plan_items.pet_id
-      AND tools_PCS_pets.user_id = (select auth.uid())
+      AND public.can_access_user_data(tools_PCS_pets.user_id)
     )
   );
 
@@ -450,14 +450,14 @@ CREATE POLICY "Users can update their own care plan items" ON tools_PCS_care_pla
     EXISTS (
       SELECT 1 FROM tools_PCS_pets
       WHERE tools_PCS_pets.id = tools_PCS_care_plan_items.pet_id
-      AND tools_PCS_pets.user_id = (select auth.uid())
+      AND public.can_access_user_data(tools_PCS_pets.user_id)
     )
   )
   WITH CHECK (
     EXISTS (
       SELECT 1 FROM tools_PCS_pets
       WHERE tools_PCS_pets.id = tools_PCS_care_plan_items.pet_id
-      AND tools_PCS_pets.user_id = (select auth.uid())
+      AND public.can_access_user_data(tools_PCS_pets.user_id)
     )
   );
 
@@ -469,7 +469,7 @@ CREATE POLICY "Users can delete their own care plan items" ON tools_PCS_care_pla
     EXISTS (
       SELECT 1 FROM tools_PCS_pets
       WHERE tools_PCS_pets.id = tools_PCS_care_plan_items.pet_id
-      AND tools_PCS_pets.user_id = (select auth.uid())
+      AND public.can_access_user_data(tools_PCS_pets.user_id)
     )
   );
 
@@ -482,7 +482,7 @@ CREATE POLICY "Users can view their own vaccinations" ON tools_PCS_vaccinations
     EXISTS (
       SELECT 1 FROM tools_PCS_pets
       WHERE tools_PCS_pets.id = tools_PCS_vaccinations.pet_id
-      AND tools_PCS_pets.user_id = (select auth.uid())
+      AND public.can_access_user_data(tools_PCS_pets.user_id)
     )
   );
 
@@ -494,7 +494,7 @@ CREATE POLICY "Users can insert their own vaccinations" ON tools_PCS_vaccination
     EXISTS (
       SELECT 1 FROM tools_PCS_pets
       WHERE tools_PCS_pets.id = tools_PCS_vaccinations.pet_id
-      AND tools_PCS_pets.user_id = (select auth.uid())
+      AND public.can_access_user_data(tools_PCS_pets.user_id)
     )
   );
 
@@ -506,14 +506,14 @@ CREATE POLICY "Users can update their own vaccinations" ON tools_PCS_vaccination
     EXISTS (
       SELECT 1 FROM tools_PCS_pets
       WHERE tools_PCS_pets.id = tools_PCS_vaccinations.pet_id
-      AND tools_PCS_pets.user_id = (select auth.uid())
+      AND public.can_access_user_data(tools_PCS_pets.user_id)
     )
   )
   WITH CHECK (
     EXISTS (
       SELECT 1 FROM tools_PCS_pets
       WHERE tools_PCS_pets.id = tools_PCS_vaccinations.pet_id
-      AND tools_PCS_pets.user_id = (select auth.uid())
+      AND public.can_access_user_data(tools_PCS_pets.user_id)
     )
   );
 
@@ -525,7 +525,7 @@ CREATE POLICY "Users can delete their own vaccinations" ON tools_PCS_vaccination
     EXISTS (
       SELECT 1 FROM tools_PCS_pets
       WHERE tools_PCS_pets.id = tools_PCS_vaccinations.pet_id
-      AND tools_PCS_pets.user_id = (select auth.uid())
+      AND public.can_access_user_data(tools_PCS_pets.user_id)
     )
   );
 
@@ -538,7 +538,7 @@ CREATE POLICY "Users can view their own appointments" ON tools_PCS_appointments
     EXISTS (
       SELECT 1 FROM tools_PCS_pets
       WHERE tools_PCS_pets.id = tools_PCS_appointments.pet_id
-      AND tools_PCS_pets.user_id = (select auth.uid())
+      AND public.can_access_user_data(tools_PCS_pets.user_id)
     )
   );
 
@@ -550,7 +550,7 @@ CREATE POLICY "Users can insert their own appointments" ON tools_PCS_appointment
     EXISTS (
       SELECT 1 FROM tools_PCS_pets
       WHERE tools_PCS_pets.id = tools_PCS_appointments.pet_id
-      AND tools_PCS_pets.user_id = (select auth.uid())
+      AND public.can_access_user_data(tools_PCS_pets.user_id)
     )
   );
 
@@ -562,14 +562,14 @@ CREATE POLICY "Users can update their own appointments" ON tools_PCS_appointment
     EXISTS (
       SELECT 1 FROM tools_PCS_pets
       WHERE tools_PCS_pets.id = tools_PCS_appointments.pet_id
-      AND tools_PCS_pets.user_id = (select auth.uid())
+      AND public.can_access_user_data(tools_PCS_pets.user_id)
     )
   )
   WITH CHECK (
     EXISTS (
       SELECT 1 FROM tools_PCS_pets
       WHERE tools_PCS_pets.id = tools_PCS_appointments.pet_id
-      AND tools_PCS_pets.user_id = (select auth.uid())
+      AND public.can_access_user_data(tools_PCS_pets.user_id)
     )
   );
 
@@ -581,7 +581,7 @@ CREATE POLICY "Users can delete their own appointments" ON tools_PCS_appointment
     EXISTS (
       SELECT 1 FROM tools_PCS_pets
       WHERE tools_PCS_pets.id = tools_PCS_appointments.pet_id
-      AND tools_PCS_pets.user_id = (select auth.uid())
+      AND public.can_access_user_data(tools_PCS_pets.user_id)
     )
   );
 
@@ -594,7 +594,7 @@ CREATE POLICY "Users can view their own documents" ON tools_PCS_documents
     EXISTS (
       SELECT 1 FROM tools_PCS_pets
       WHERE tools_PCS_pets.id = tools_PCS_documents.pet_id
-      AND tools_PCS_pets.user_id = (select auth.uid())
+      AND public.can_access_user_data(tools_PCS_pets.user_id)
     )
   );
 
@@ -606,7 +606,7 @@ CREATE POLICY "Users can insert their own documents" ON tools_PCS_documents
     EXISTS (
       SELECT 1 FROM tools_PCS_pets
       WHERE tools_PCS_pets.id = tools_PCS_documents.pet_id
-      AND tools_PCS_pets.user_id = (select auth.uid())
+      AND public.can_access_user_data(tools_PCS_pets.user_id)
     )
   );
 
@@ -618,14 +618,14 @@ CREATE POLICY "Users can update their own documents" ON tools_PCS_documents
     EXISTS (
       SELECT 1 FROM tools_PCS_pets
       WHERE tools_PCS_pets.id = tools_PCS_documents.pet_id
-      AND tools_PCS_pets.user_id = (select auth.uid())
+      AND public.can_access_user_data(tools_PCS_pets.user_id)
     )
   )
   WITH CHECK (
     EXISTS (
       SELECT 1 FROM tools_PCS_pets
       WHERE tools_PCS_pets.id = tools_PCS_documents.pet_id
-      AND tools_PCS_pets.user_id = (select auth.uid())
+      AND public.can_access_user_data(tools_PCS_pets.user_id)
     )
   );
 
@@ -637,7 +637,7 @@ CREATE POLICY "Users can delete their own documents" ON tools_PCS_documents
     EXISTS (
       SELECT 1 FROM tools_PCS_pets
       WHERE tools_PCS_pets.id = tools_PCS_documents.pet_id
-      AND tools_PCS_pets.user_id = (select auth.uid())
+      AND public.can_access_user_data(tools_PCS_pets.user_id)
     )
   );
 
@@ -650,7 +650,7 @@ CREATE POLICY "Users can view their own notes" ON tools_PCS_notes
     EXISTS (
       SELECT 1 FROM tools_PCS_pets
       WHERE tools_PCS_pets.id = tools_PCS_notes.pet_id
-      AND tools_PCS_pets.user_id = (select auth.uid())
+      AND public.can_access_user_data(tools_PCS_pets.user_id)
     )
   );
 
@@ -662,7 +662,7 @@ CREATE POLICY "Users can insert their own notes" ON tools_PCS_notes
     EXISTS (
       SELECT 1 FROM tools_PCS_pets
       WHERE tools_PCS_pets.id = tools_PCS_notes.pet_id
-      AND tools_PCS_pets.user_id = (select auth.uid())
+      AND public.can_access_user_data(tools_PCS_pets.user_id)
     )
   );
 
@@ -674,14 +674,14 @@ CREATE POLICY "Users can update their own notes" ON tools_PCS_notes
     EXISTS (
       SELECT 1 FROM tools_PCS_pets
       WHERE tools_PCS_pets.id = tools_PCS_notes.pet_id
-      AND tools_PCS_pets.user_id = (select auth.uid())
+      AND public.can_access_user_data(tools_PCS_pets.user_id)
     )
   )
   WITH CHECK (
     EXISTS (
       SELECT 1 FROM tools_PCS_pets
       WHERE tools_PCS_pets.id = tools_PCS_notes.pet_id
-      AND tools_PCS_pets.user_id = (select auth.uid())
+      AND public.can_access_user_data(tools_PCS_pets.user_id)
     )
   );
 
@@ -693,7 +693,7 @@ CREATE POLICY "Users can delete their own notes" ON tools_PCS_notes
     EXISTS (
       SELECT 1 FROM tools_PCS_pets
       WHERE tools_PCS_pets.id = tools_PCS_notes.pet_id
-      AND tools_PCS_pets.user_id = (select auth.uid())
+      AND public.can_access_user_data(tools_PCS_pets.user_id)
     )
   );
 
@@ -755,16 +755,16 @@ ALTER TABLE tools_pcs_pet_attachments ENABLE ROW LEVEL SECURITY;
 
 DROP POLICY IF EXISTS "Users can view their own PCS pet attachments" ON tools_pcs_pet_attachments;
 CREATE POLICY "Users can view their own PCS pet attachments" ON tools_pcs_pet_attachments
-  FOR SELECT TO authenticated USING (user_id = (select auth.uid()));
+  FOR SELECT TO authenticated USING (public.can_access_user_data(user_id));
 DROP POLICY IF EXISTS "Users can insert their own PCS pet attachments" ON tools_pcs_pet_attachments;
 CREATE POLICY "Users can insert their own PCS pet attachments" ON tools_pcs_pet_attachments
-  FOR INSERT TO authenticated WITH CHECK (user_id = (select auth.uid()));
+  FOR INSERT TO authenticated WITH CHECK (public.can_access_user_data(user_id));
 DROP POLICY IF EXISTS "Users can update their own PCS pet attachments" ON tools_pcs_pet_attachments;
 CREATE POLICY "Users can update their own PCS pet attachments" ON tools_pcs_pet_attachments
-  FOR UPDATE TO authenticated USING (user_id = (select auth.uid())) WITH CHECK (user_id = (select auth.uid()));
+  FOR UPDATE TO authenticated USING (public.can_access_user_data(user_id)) WITH CHECK (public.can_access_user_data(user_id));
 DROP POLICY IF EXISTS "Users can delete their own PCS pet attachments" ON tools_pcs_pet_attachments;
 CREATE POLICY "Users can delete their own PCS pet attachments" ON tools_pcs_pet_attachments
-  FOR DELETE TO authenticated USING (user_id = (select auth.uid()));
+  FOR DELETE TO authenticated USING (public.can_access_user_data(user_id));
 
 CREATE TABLE IF NOT EXISTS tools_pcs_document_attachments (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
@@ -784,16 +784,16 @@ ALTER TABLE tools_pcs_document_attachments ENABLE ROW LEVEL SECURITY;
 
 DROP POLICY IF EXISTS "Users can view their own PCS document attachments" ON tools_pcs_document_attachments;
 CREATE POLICY "Users can view their own PCS document attachments" ON tools_pcs_document_attachments
-  FOR SELECT TO authenticated USING (user_id = (select auth.uid()));
+  FOR SELECT TO authenticated USING (public.can_access_user_data(user_id));
 DROP POLICY IF EXISTS "Users can insert their own PCS document attachments" ON tools_pcs_document_attachments;
 CREATE POLICY "Users can insert their own PCS document attachments" ON tools_pcs_document_attachments
-  FOR INSERT TO authenticated WITH CHECK (user_id = (select auth.uid()));
+  FOR INSERT TO authenticated WITH CHECK (public.can_access_user_data(user_id));
 DROP POLICY IF EXISTS "Users can update their own PCS document attachments" ON tools_pcs_document_attachments;
 CREATE POLICY "Users can update their own PCS document attachments" ON tools_pcs_document_attachments
-  FOR UPDATE TO authenticated USING (user_id = (select auth.uid())) WITH CHECK (user_id = (select auth.uid()));
+  FOR UPDATE TO authenticated USING (public.can_access_user_data(user_id)) WITH CHECK (public.can_access_user_data(user_id));
 DROP POLICY IF EXISTS "Users can delete their own PCS document attachments" ON tools_pcs_document_attachments;
 CREATE POLICY "Users can delete their own PCS document attachments" ON tools_pcs_document_attachments
-  FOR DELETE TO authenticated USING (user_id = (select auth.uid()));
+  FOR DELETE TO authenticated USING (public.can_access_user_data(user_id));
 
 CREATE TABLE IF NOT EXISTS tools_pcs_veterinary_attachments (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
@@ -813,16 +813,16 @@ ALTER TABLE tools_pcs_veterinary_attachments ENABLE ROW LEVEL SECURITY;
 
 DROP POLICY IF EXISTS "Users can view their own PCS veterinary attachments" ON tools_pcs_veterinary_attachments;
 CREATE POLICY "Users can view their own PCS veterinary attachments" ON tools_pcs_veterinary_attachments
-  FOR SELECT TO authenticated USING (user_id = (select auth.uid()));
+  FOR SELECT TO authenticated USING (public.can_access_user_data(user_id));
 DROP POLICY IF EXISTS "Users can insert their own PCS veterinary attachments" ON tools_pcs_veterinary_attachments;
 CREATE POLICY "Users can insert their own PCS veterinary attachments" ON tools_pcs_veterinary_attachments
-  FOR INSERT TO authenticated WITH CHECK (user_id = (select auth.uid()));
+  FOR INSERT TO authenticated WITH CHECK (public.can_access_user_data(user_id));
 DROP POLICY IF EXISTS "Users can update their own PCS veterinary attachments" ON tools_pcs_veterinary_attachments;
 CREATE POLICY "Users can update their own PCS veterinary attachments" ON tools_pcs_veterinary_attachments
-  FOR UPDATE TO authenticated USING (user_id = (select auth.uid())) WITH CHECK (user_id = (select auth.uid()));
+  FOR UPDATE TO authenticated USING (public.can_access_user_data(user_id)) WITH CHECK (public.can_access_user_data(user_id));
 DROP POLICY IF EXISTS "Users can delete their own PCS veterinary attachments" ON tools_pcs_veterinary_attachments;
 CREATE POLICY "Users can delete their own PCS veterinary attachments" ON tools_pcs_veterinary_attachments
-  FOR DELETE TO authenticated USING (user_id = (select auth.uid()));
+  FOR DELETE TO authenticated USING (public.can_access_user_data(user_id));
 
 CREATE TABLE IF NOT EXISTS tools_pcs_vaccination_attachments (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
@@ -842,16 +842,16 @@ ALTER TABLE tools_pcs_vaccination_attachments ENABLE ROW LEVEL SECURITY;
 
 DROP POLICY IF EXISTS "Users can view their own PCS vaccination attachments" ON tools_pcs_vaccination_attachments;
 CREATE POLICY "Users can view their own PCS vaccination attachments" ON tools_pcs_vaccination_attachments
-  FOR SELECT TO authenticated USING (user_id = (select auth.uid()));
+  FOR SELECT TO authenticated USING (public.can_access_user_data(user_id));
 DROP POLICY IF EXISTS "Users can insert their own PCS vaccination attachments" ON tools_pcs_vaccination_attachments;
 CREATE POLICY "Users can insert their own PCS vaccination attachments" ON tools_pcs_vaccination_attachments
-  FOR INSERT TO authenticated WITH CHECK (user_id = (select auth.uid()));
+  FOR INSERT TO authenticated WITH CHECK (public.can_access_user_data(user_id));
 DROP POLICY IF EXISTS "Users can update their own PCS vaccination attachments" ON tools_pcs_vaccination_attachments;
 CREATE POLICY "Users can update their own PCS vaccination attachments" ON tools_pcs_vaccination_attachments
-  FOR UPDATE TO authenticated USING (user_id = (select auth.uid())) WITH CHECK (user_id = (select auth.uid()));
+  FOR UPDATE TO authenticated USING (public.can_access_user_data(user_id)) WITH CHECK (public.can_access_user_data(user_id));
 DROP POLICY IF EXISTS "Users can delete their own PCS vaccination attachments" ON tools_pcs_vaccination_attachments;
 CREATE POLICY "Users can delete their own PCS vaccination attachments" ON tools_pcs_vaccination_attachments
-  FOR DELETE TO authenticated USING (user_id = (select auth.uid()));
+  FOR DELETE TO authenticated USING (public.can_access_user_data(user_id));
 
 CREATE TABLE IF NOT EXISTS tools_pcs_appointment_attachments (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
@@ -871,16 +871,16 @@ ALTER TABLE tools_pcs_appointment_attachments ENABLE ROW LEVEL SECURITY;
 
 DROP POLICY IF EXISTS "Users can view their own PCS appointment attachments" ON tools_pcs_appointment_attachments;
 CREATE POLICY "Users can view their own PCS appointment attachments" ON tools_pcs_appointment_attachments
-  FOR SELECT TO authenticated USING (user_id = (select auth.uid()));
+  FOR SELECT TO authenticated USING (public.can_access_user_data(user_id));
 DROP POLICY IF EXISTS "Users can insert their own PCS appointment attachments" ON tools_pcs_appointment_attachments;
 CREATE POLICY "Users can insert their own PCS appointment attachments" ON tools_pcs_appointment_attachments
-  FOR INSERT TO authenticated WITH CHECK (user_id = (select auth.uid()));
+  FOR INSERT TO authenticated WITH CHECK (public.can_access_user_data(user_id));
 DROP POLICY IF EXISTS "Users can update their own PCS appointment attachments" ON tools_pcs_appointment_attachments;
 CREATE POLICY "Users can update their own PCS appointment attachments" ON tools_pcs_appointment_attachments
-  FOR UPDATE TO authenticated USING (user_id = (select auth.uid())) WITH CHECK (user_id = (select auth.uid()));
+  FOR UPDATE TO authenticated USING (public.can_access_user_data(user_id)) WITH CHECK (public.can_access_user_data(user_id));
 DROP POLICY IF EXISTS "Users can delete their own PCS appointment attachments" ON tools_pcs_appointment_attachments;
 CREATE POLICY "Users can delete their own PCS appointment attachments" ON tools_pcs_appointment_attachments
-  FOR DELETE TO authenticated USING (user_id = (select auth.uid()));
+  FOR DELETE TO authenticated USING (public.can_access_user_data(user_id));
 
 INSERT INTO tools_pcs_document_attachments (document_id, user_id, file_url, file_name, file_size, file_type)
 SELECT
@@ -1003,32 +1003,32 @@ CREATE POLICY "pet-care-schedule: Users can upload to their own folder"
 ON storage.objects FOR INSERT TO authenticated
 WITH CHECK (
   bucket_id = 'pet-care-schedule' AND
-  (storage.foldername(name))[1] = (select auth.uid())::text
+  public.can_access_storage_owner((storage.foldername(name))[1])
 );
 
 CREATE POLICY "pet-care-schedule: Users can read their own files"
 ON storage.objects FOR SELECT TO authenticated
 USING (
   bucket_id = 'pet-care-schedule' AND
-  (storage.foldername(name))[1] = (select auth.uid())::text
+  public.can_access_storage_owner((storage.foldername(name))[1])
 );
 
 CREATE POLICY "pet-care-schedule: Users can update their own files"
 ON storage.objects FOR UPDATE TO authenticated
 USING (
   bucket_id = 'pet-care-schedule' AND
-  (storage.foldername(name))[1] = (select auth.uid())::text
+  public.can_access_storage_owner((storage.foldername(name))[1])
 )
 WITH CHECK (
   bucket_id = 'pet-care-schedule' AND
-  (storage.foldername(name))[1] = (select auth.uid())::text
+  public.can_access_storage_owner((storage.foldername(name))[1])
 );
 
 CREATE POLICY "pet-care-schedule: Users can delete their own files"
 ON storage.objects FOR DELETE TO authenticated
 USING (
   bucket_id = 'pet-care-schedule' AND
-  (storage.foldername(name))[1] = (select auth.uid())::text
+  public.can_access_storage_owner((storage.foldername(name))[1])
 );
 
 

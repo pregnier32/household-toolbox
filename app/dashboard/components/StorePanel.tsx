@@ -64,7 +64,6 @@ export function StorePanel({
   }
 
   const availableTools = tools.filter((t) => t.status === 'available' && !t.isOwned);
-  const comingSoonTools = tools.filter((t) => t.status === 'coming_soon');
   const customTools = tools.filter((t) => t.status === 'custom');
 
   return (
@@ -79,14 +78,6 @@ export function StorePanel({
             tools={availableTools}
             emptyText="No available tools at this time."
             iconPreference="available"
-            onToolClick={onToolClick}
-          />
-          <div className="my-6 border-t border-slate-800" />
-          <ToolSection
-            title="Coming Soon"
-            tools={comingSoonTools}
-            emptyText="No tools coming soon at this time."
-            iconPreference="coming_soon"
             onToolClick={onToolClick}
           />
           {isSuperAdmin && (

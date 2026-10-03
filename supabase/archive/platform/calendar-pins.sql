@@ -33,23 +33,23 @@ ALTER TABLE calendar_pins ENABLE ROW LEVEL SECURITY;
 DROP POLICY IF EXISTS "Users can view their own calendar pins" ON calendar_pins;
 CREATE POLICY "Users can view their own calendar pins" ON calendar_pins
   FOR SELECT TO authenticated
-  USING ((select auth.uid()) = user_id);
+  USING (public.can_access_user_data(user_id));
 
 DROP POLICY IF EXISTS "Users can insert their own calendar pins" ON calendar_pins;
 CREATE POLICY "Users can insert their own calendar pins" ON calendar_pins
   FOR INSERT TO authenticated
-  WITH CHECK ((select auth.uid()) = user_id);
+  WITH CHECK (public.can_access_user_data(user_id));
 
 DROP POLICY IF EXISTS "Users can update their own calendar pins" ON calendar_pins;
 CREATE POLICY "Users can update their own calendar pins" ON calendar_pins
   FOR UPDATE TO authenticated
-  USING ((select auth.uid()) = user_id)
-  WITH CHECK ((select auth.uid()) = user_id);
+  USING (public.can_access_user_data(user_id))
+  WITH CHECK (public.can_access_user_data(user_id));
 
 DROP POLICY IF EXISTS "Users can delete their own calendar pins" ON calendar_pins;
 CREATE POLICY "Users can delete their own calendar pins" ON calendar_pins
   FOR DELETE TO authenticated
-  USING ((select auth.uid()) = user_id);
+  USING (public.can_access_user_data(user_id));
 
 NOTIFY pgrst, 'reload schema';
 

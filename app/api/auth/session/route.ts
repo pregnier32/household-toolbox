@@ -16,6 +16,8 @@ export async function GET() {
       lastName: user.lastName,
       userStatus: user.userStatus,
       themePreference: user.themePreference,
+      householdRole: user.householdRole,
+      householdReady: user.householdReady,
     },
   });
 }

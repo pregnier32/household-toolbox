@@ -18,6 +18,7 @@ type UserMenuProps = {
 
 export function UserMenu({ userName, onSignOut }: UserMenuProps) {
   const [isOpen, setIsOpen] = useState(false);
+  const [householdRole, setHouseholdRole] = useState<'admin' | 'user' | null>(null);
   const [storage, setStorage] = useState<StorageSummary | null>(null);
   const [storageLoading, setStorageLoading] = useState(false);
   const menuRef = useRef<HTMLDivElement>(null);
@@ -73,6 +74,23 @@ export function UserMenu({ userName, onSignOut }: UserMenuProps) {
       document.removeEventListener('mousedown', handleClickOutside);
     };
   }, [isOpen]);
+
+  useEffect(() => {
+    let cancelled = false;
+    fetch('/api/auth/session')
+      .then((res) => (res.ok ? res.json() : null))
+      .then((data) => {
+        if (cancelled) return;
+        const role = data?.user?.householdRole;
+        setHouseholdRole(role === 'user' ? 'user' : role === 'admin' ? 'admin' : null);
+      })
+      .catch(() => {
+        if (!cancelled) setHouseholdRole(null);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
   useEffect(() => {
     if (!isOpen) return;
@@ -146,6 +164,25 @@ export function UserMenu({ userName, onSignOut }: UserMenuProps) {
               </svg>
               <span>My Profile</span>
             </button>
+            {householdRole === 'admin' && (
+              <button
+                onClick={() => {
+                  router.push('/dashboard/manage-users');
+                  setIsOpen(false);
+                }}
+                className={menuItemClass}
+              >
+                <svg className="h-4 w-4 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    strokeWidth={2}
+                    d="M17 20h5v-2a4 4 0 00-4-4h-1M9 20H4v-2a4 4 0 014-4h1m8-4a4 4 0 11-8 0 4 4 0 018 0zM7 8a3 3 0 116 0 3 3 0 01-6 0z"
+                  />
+                </svg>
+                <span>Manage Users</span>
+              </button>
+            )}
             <button
               onClick={() => {
                 router.push('/dashboard/my-tools');

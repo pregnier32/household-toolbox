@@ -397,21 +397,21 @@ ALTER TABLE tools_ebp_expense_splits ENABLE ROW LEVEL SECURITY;
 -- Categories
 DROP POLICY IF EXISTS "ebp: Users can view their own categories" ON tools_ebp_categories;
 CREATE POLICY "ebp: Users can view their own categories" ON tools_ebp_categories
-  FOR SELECT TO authenticated USING ((select auth.uid()) = user_id);
+  FOR SELECT TO authenticated USING (public.can_access_user_data(user_id));
 
 DROP POLICY IF EXISTS "ebp: Users can insert their own categories" ON tools_ebp_categories;
 CREATE POLICY "ebp: Users can insert their own categories" ON tools_ebp_categories
-  FOR INSERT TO authenticated WITH CHECK ((select auth.uid()) = user_id);
+  FOR INSERT TO authenticated WITH CHECK (public.can_access_user_data(user_id));
 
 DROP POLICY IF EXISTS "ebp: Users can update their own categories" ON tools_ebp_categories;
 CREATE POLICY "ebp: Users can update their own categories" ON tools_ebp_categories
   FOR UPDATE TO authenticated
-  USING ((select auth.uid()) = user_id)
-  WITH CHECK ((select auth.uid()) = user_id);
+  USING (public.can_access_user_data(user_id))
+  WITH CHECK (public.can_access_user_data(user_id));
 
 DROP POLICY IF EXISTS "ebp: Users can delete their own categories" ON tools_ebp_categories;
 CREATE POLICY "ebp: Users can delete their own categories" ON tools_ebp_categories
-  FOR DELETE TO authenticated USING ((select auth.uid()) = user_id);
+  FOR DELETE TO authenticated USING (public.can_access_user_data(user_id));
 
 -- Default categories (read-only; used to seed user categories)
 DROP POLICY IF EXISTS "ebp: Anyone can view default categories" ON tools_ebp_default_categories;
@@ -421,21 +421,21 @@ CREATE POLICY "ebp: Anyone can view default categories" ON tools_ebp_default_cat
 -- Types
 DROP POLICY IF EXISTS "ebp: Users can view their own types" ON tools_ebp_types;
 CREATE POLICY "ebp: Users can view their own types" ON tools_ebp_types
-  FOR SELECT TO authenticated USING ((select auth.uid()) = user_id);
+  FOR SELECT TO authenticated USING (public.can_access_user_data(user_id));
 
 DROP POLICY IF EXISTS "ebp: Users can insert their own types" ON tools_ebp_types;
 CREATE POLICY "ebp: Users can insert their own types" ON tools_ebp_types
-  FOR INSERT TO authenticated WITH CHECK ((select auth.uid()) = user_id);
+  FOR INSERT TO authenticated WITH CHECK (public.can_access_user_data(user_id));
 
 DROP POLICY IF EXISTS "ebp: Users can update their own types" ON tools_ebp_types;
 CREATE POLICY "ebp: Users can update their own types" ON tools_ebp_types
   FOR UPDATE TO authenticated
-  USING ((select auth.uid()) = user_id)
-  WITH CHECK ((select auth.uid()) = user_id);
+  USING (public.can_access_user_data(user_id))
+  WITH CHECK (public.can_access_user_data(user_id));
 
 DROP POLICY IF EXISTS "ebp: Users can delete their own types" ON tools_ebp_types;
 CREATE POLICY "ebp: Users can delete their own types" ON tools_ebp_types
-  FOR DELETE TO authenticated USING ((select auth.uid()) = user_id);
+  FOR DELETE TO authenticated USING (public.can_access_user_data(user_id));
 
 -- Default types (read-only; used to seed user types)
 DROP POLICY IF EXISTS "ebp: Anyone can view default types" ON tools_ebp_default_types;
@@ -445,40 +445,40 @@ CREATE POLICY "ebp: Anyone can view default types" ON tools_ebp_default_types
 -- Vendors
 DROP POLICY IF EXISTS "ebp: Users can view their own vendors" ON tools_ebp_vendors;
 CREATE POLICY "ebp: Users can view their own vendors" ON tools_ebp_vendors
-  FOR SELECT TO authenticated USING ((select auth.uid()) = user_id);
+  FOR SELECT TO authenticated USING (public.can_access_user_data(user_id));
 
 DROP POLICY IF EXISTS "ebp: Users can insert their own vendors" ON tools_ebp_vendors;
 CREATE POLICY "ebp: Users can insert their own vendors" ON tools_ebp_vendors
-  FOR INSERT TO authenticated WITH CHECK ((select auth.uid()) = user_id);
+  FOR INSERT TO authenticated WITH CHECK (public.can_access_user_data(user_id));
 
 DROP POLICY IF EXISTS "ebp: Users can update their own vendors" ON tools_ebp_vendors;
 CREATE POLICY "ebp: Users can update their own vendors" ON tools_ebp_vendors
   FOR UPDATE TO authenticated
-  USING ((select auth.uid()) = user_id)
-  WITH CHECK ((select auth.uid()) = user_id);
+  USING (public.can_access_user_data(user_id))
+  WITH CHECK (public.can_access_user_data(user_id));
 
 DROP POLICY IF EXISTS "ebp: Users can delete their own vendors" ON tools_ebp_vendors;
 CREATE POLICY "ebp: Users can delete their own vendors" ON tools_ebp_vendors
-  FOR DELETE TO authenticated USING ((select auth.uid()) = user_id);
+  FOR DELETE TO authenticated USING (public.can_access_user_data(user_id));
 
 -- Events
 DROP POLICY IF EXISTS "ebp: Users can view their own events" ON tools_ebp_events;
 CREATE POLICY "ebp: Users can view their own events" ON tools_ebp_events
-  FOR SELECT TO authenticated USING ((select auth.uid()) = user_id);
+  FOR SELECT TO authenticated USING (public.can_access_user_data(user_id));
 
 DROP POLICY IF EXISTS "ebp: Users can insert their own events" ON tools_ebp_events;
 CREATE POLICY "ebp: Users can insert their own events" ON tools_ebp_events
-  FOR INSERT TO authenticated WITH CHECK ((select auth.uid()) = user_id);
+  FOR INSERT TO authenticated WITH CHECK (public.can_access_user_data(user_id));
 
 DROP POLICY IF EXISTS "ebp: Users can update their own events" ON tools_ebp_events;
 CREATE POLICY "ebp: Users can update their own events" ON tools_ebp_events
   FOR UPDATE TO authenticated
-  USING ((select auth.uid()) = user_id)
-  WITH CHECK ((select auth.uid()) = user_id);
+  USING (public.can_access_user_data(user_id))
+  WITH CHECK (public.can_access_user_data(user_id));
 
 DROP POLICY IF EXISTS "ebp: Users can delete their own events" ON tools_ebp_events;
 CREATE POLICY "ebp: Users can delete their own events" ON tools_ebp_events
-  FOR DELETE TO authenticated USING ((select auth.uid()) = user_id);
+  FOR DELETE TO authenticated USING (public.can_access_user_data(user_id));
 
 -- Event category budgets (via parent event ownership)
 DROP POLICY IF EXISTS "ebp: Users can view their own event category budgets" ON tools_ebp_event_category_budgets;
@@ -488,7 +488,7 @@ CREATE POLICY "ebp: Users can view their own event category budgets" ON tools_eb
     EXISTS (
       SELECT 1 FROM tools_ebp_events e
       WHERE e.id = tools_ebp_event_category_budgets.event_id
-        AND e.user_id = (select auth.uid())
+        AND public.can_access_user_data(e.user_id)
     )
   );
 
@@ -499,7 +499,7 @@ CREATE POLICY "ebp: Users can insert their own event category budgets" ON tools_
     EXISTS (
       SELECT 1 FROM tools_ebp_events e
       WHERE e.id = tools_ebp_event_category_budgets.event_id
-        AND e.user_id = (select auth.uid())
+        AND public.can_access_user_data(e.user_id)
     )
   );
 
@@ -510,14 +510,14 @@ CREATE POLICY "ebp: Users can update their own event category budgets" ON tools_
     EXISTS (
       SELECT 1 FROM tools_ebp_events e
       WHERE e.id = tools_ebp_event_category_budgets.event_id
-        AND e.user_id = (select auth.uid())
+        AND public.can_access_user_data(e.user_id)
     )
   )
   WITH CHECK (
     EXISTS (
       SELECT 1 FROM tools_ebp_events e
       WHERE e.id = tools_ebp_event_category_budgets.event_id
-        AND e.user_id = (select auth.uid())
+        AND public.can_access_user_data(e.user_id)
     )
   );
 
@@ -528,7 +528,7 @@ CREATE POLICY "ebp: Users can delete their own event category budgets" ON tools_
     EXISTS (
       SELECT 1 FROM tools_ebp_events e
       WHERE e.id = tools_ebp_event_category_budgets.event_id
-        AND e.user_id = (select auth.uid())
+        AND public.can_access_user_data(e.user_id)
     )
   );
 
@@ -540,7 +540,7 @@ CREATE POLICY "ebp: Users can view their own expenses" ON tools_ebp_expenses
     EXISTS (
       SELECT 1 FROM tools_ebp_events e
       WHERE e.id = tools_ebp_expenses.event_id
-        AND e.user_id = (select auth.uid())
+        AND public.can_access_user_data(e.user_id)
     )
   );
 
@@ -551,7 +551,7 @@ CREATE POLICY "ebp: Users can insert their own expenses" ON tools_ebp_expenses
     EXISTS (
       SELECT 1 FROM tools_ebp_events e
       WHERE e.id = tools_ebp_expenses.event_id
-        AND e.user_id = (select auth.uid())
+        AND public.can_access_user_data(e.user_id)
     )
   );
 
@@ -562,14 +562,14 @@ CREATE POLICY "ebp: Users can update their own expenses" ON tools_ebp_expenses
     EXISTS (
       SELECT 1 FROM tools_ebp_events e
       WHERE e.id = tools_ebp_expenses.event_id
-        AND e.user_id = (select auth.uid())
+        AND public.can_access_user_data(e.user_id)
     )
   )
   WITH CHECK (
     EXISTS (
       SELECT 1 FROM tools_ebp_events e
       WHERE e.id = tools_ebp_expenses.event_id
-        AND e.user_id = (select auth.uid())
+        AND public.can_access_user_data(e.user_id)
     )
   );
 
@@ -580,7 +580,7 @@ CREATE POLICY "ebp: Users can delete their own expenses" ON tools_ebp_expenses
     EXISTS (
       SELECT 1 FROM tools_ebp_events e
       WHERE e.id = tools_ebp_expenses.event_id
-        AND e.user_id = (select auth.uid())
+        AND public.can_access_user_data(e.user_id)
     )
   );
 
@@ -593,7 +593,7 @@ CREATE POLICY "ebp: Users can view their own expense splits" ON tools_ebp_expens
       SELECT 1 FROM tools_ebp_expenses x
       JOIN tools_ebp_events e ON e.id = x.event_id
       WHERE x.id = tools_ebp_expense_splits.expense_id
-        AND e.user_id = (select auth.uid())
+        AND public.can_access_user_data(e.user_id)
     )
   );
 
@@ -605,7 +605,7 @@ CREATE POLICY "ebp: Users can insert their own expense splits" ON tools_ebp_expe
       SELECT 1 FROM tools_ebp_expenses x
       JOIN tools_ebp_events e ON e.id = x.event_id
       WHERE x.id = tools_ebp_expense_splits.expense_id
-        AND e.user_id = (select auth.uid())
+        AND public.can_access_user_data(e.user_id)
     )
   );
 
@@ -617,7 +617,7 @@ CREATE POLICY "ebp: Users can update their own expense splits" ON tools_ebp_expe
       SELECT 1 FROM tools_ebp_expenses x
       JOIN tools_ebp_events e ON e.id = x.event_id
       WHERE x.id = tools_ebp_expense_splits.expense_id
-        AND e.user_id = (select auth.uid())
+        AND public.can_access_user_data(e.user_id)
     )
   )
   WITH CHECK (
@@ -625,7 +625,7 @@ CREATE POLICY "ebp: Users can update their own expense splits" ON tools_ebp_expe
       SELECT 1 FROM tools_ebp_expenses x
       JOIN tools_ebp_events e ON e.id = x.event_id
       WHERE x.id = tools_ebp_expense_splits.expense_id
-        AND e.user_id = (select auth.uid())
+        AND public.can_access_user_data(e.user_id)
     )
   );
 
@@ -637,7 +637,7 @@ CREATE POLICY "ebp: Users can delete their own expense splits" ON tools_ebp_expe
       SELECT 1 FROM tools_ebp_expenses x
       JOIN tools_ebp_events e ON e.id = x.event_id
       WHERE x.id = tools_ebp_expense_splits.expense_id
-        AND e.user_id = (select auth.uid())
+        AND public.can_access_user_data(e.user_id)
     )
   );
 
@@ -701,26 +701,26 @@ DROP POLICY IF EXISTS "Users can view their own EBP event attachments" ON tools_
 CREATE POLICY "Users can view their own EBP event attachments" ON tools_ebp_event_attachments
   FOR SELECT
   TO authenticated
-  USING (user_id = (select auth.uid()));
+  USING (public.can_access_user_data(user_id));
 
 DROP POLICY IF EXISTS "Users can insert their own EBP event attachments" ON tools_ebp_event_attachments;
 CREATE POLICY "Users can insert their own EBP event attachments" ON tools_ebp_event_attachments
   FOR INSERT
   TO authenticated
-  WITH CHECK (user_id = (select auth.uid()));
+  WITH CHECK (public.can_access_user_data(user_id));
 
 DROP POLICY IF EXISTS "Users can update their own EBP event attachments" ON tools_ebp_event_attachments;
 CREATE POLICY "Users can update their own EBP event attachments" ON tools_ebp_event_attachments
   FOR UPDATE
   TO authenticated
-  USING (user_id = (select auth.uid()))
-  WITH CHECK (user_id = (select auth.uid()));
+  USING (public.can_access_user_data(user_id))
+  WITH CHECK (public.can_access_user_data(user_id));
 
 DROP POLICY IF EXISTS "Users can delete their own EBP event attachments" ON tools_ebp_event_attachments;
 CREATE POLICY "Users can delete their own EBP event attachments" ON tools_ebp_event_attachments
   FOR DELETE
   TO authenticated
-  USING (user_id = (select auth.uid()));
+  USING (public.can_access_user_data(user_id));
 
 CREATE TABLE IF NOT EXISTS tools_ebp_expense_attachments (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
@@ -742,26 +742,26 @@ DROP POLICY IF EXISTS "Users can view their own EBP expense attachments" ON tool
 CREATE POLICY "Users can view their own EBP expense attachments" ON tools_ebp_expense_attachments
   FOR SELECT
   TO authenticated
-  USING (user_id = (select auth.uid()));
+  USING (public.can_access_user_data(user_id));
 
 DROP POLICY IF EXISTS "Users can insert their own EBP expense attachments" ON tools_ebp_expense_attachments;
 CREATE POLICY "Users can insert their own EBP expense attachments" ON tools_ebp_expense_attachments
   FOR INSERT
   TO authenticated
-  WITH CHECK (user_id = (select auth.uid()));
+  WITH CHECK (public.can_access_user_data(user_id));
 
 DROP POLICY IF EXISTS "Users can update their own EBP expense attachments" ON tools_ebp_expense_attachments;
 CREATE POLICY "Users can update their own EBP expense attachments" ON tools_ebp_expense_attachments
   FOR UPDATE
   TO authenticated
-  USING (user_id = (select auth.uid()))
-  WITH CHECK (user_id = (select auth.uid()));
+  USING (public.can_access_user_data(user_id))
+  WITH CHECK (public.can_access_user_data(user_id));
 
 DROP POLICY IF EXISTS "Users can delete their own EBP expense attachments" ON tools_ebp_expense_attachments;
 CREATE POLICY "Users can delete their own EBP expense attachments" ON tools_ebp_expense_attachments
   FOR DELETE
   TO authenticated
-  USING (user_id = (select auth.uid()));
+  USING (public.can_access_user_data(user_id));
 
 
 -- Storage policies for bucket "event-budget-planner".
@@ -775,32 +775,32 @@ CREATE POLICY "event-budget-planner: Users can upload to their own folder"
 ON storage.objects FOR INSERT TO authenticated
 WITH CHECK (
   bucket_id = 'event-budget-planner' AND
-  (storage.foldername(name))[1] = (select auth.uid())::text
+  public.can_access_storage_owner((storage.foldername(name))[1])
 );
 
 CREATE POLICY "event-budget-planner: Users can read their own files"
 ON storage.objects FOR SELECT TO authenticated
 USING (
   bucket_id = 'event-budget-planner' AND
-  (storage.foldername(name))[1] = (select auth.uid())::text
+  public.can_access_storage_owner((storage.foldername(name))[1])
 );
 
 CREATE POLICY "event-budget-planner: Users can update their own files"
 ON storage.objects FOR UPDATE TO authenticated
 USING (
   bucket_id = 'event-budget-planner' AND
-  (storage.foldername(name))[1] = (select auth.uid())::text
+  public.can_access_storage_owner((storage.foldername(name))[1])
 )
 WITH CHECK (
   bucket_id = 'event-budget-planner' AND
-  (storage.foldername(name))[1] = (select auth.uid())::text
+  public.can_access_storage_owner((storage.foldername(name))[1])
 );
 
 CREATE POLICY "event-budget-planner: Users can delete their own files"
 ON storage.objects FOR DELETE TO authenticated
 USING (
   bucket_id = 'event-budget-planner' AND
-  (storage.foldername(name))[1] = (select auth.uid())::text
+  public.can_access_storage_owner((storage.foldername(name))[1])
 );
 
 

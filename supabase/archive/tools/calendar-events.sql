@@ -102,29 +102,29 @@ DROP POLICY IF EXISTS "Users can view their own categories" ON tools_ce_categori
 CREATE POLICY "Users can view their own categories" ON tools_ce_categories
   FOR SELECT
   TO authenticated
-  USING ((select auth.uid()) = user_id);
+  USING (public.can_access_user_data(user_id));
 
 -- INSERT policy
 DROP POLICY IF EXISTS "Users can insert their own categories" ON tools_ce_categories;
 CREATE POLICY "Users can insert their own categories" ON tools_ce_categories
   FOR INSERT
   TO authenticated
-  WITH CHECK ((select auth.uid()) = user_id);
+  WITH CHECK (public.can_access_user_data(user_id));
 
 -- UPDATE policy
 DROP POLICY IF EXISTS "Users can update their own categories" ON tools_ce_categories;
 CREATE POLICY "Users can update their own categories" ON tools_ce_categories
   FOR UPDATE
   TO authenticated
-  USING ((select auth.uid()) = user_id)
-  WITH CHECK ((select auth.uid()) = user_id);
+  USING (public.can_access_user_data(user_id))
+  WITH CHECK (public.can_access_user_data(user_id));
 
 -- DELETE policy
 DROP POLICY IF EXISTS "Users can delete their own categories" ON tools_ce_categories;
 CREATE POLICY "Users can delete their own categories" ON tools_ce_categories
   FOR DELETE
   TO authenticated
-  USING ((select auth.uid()) = user_id);
+  USING (public.can_access_user_data(user_id));
 
 -- ============================================================================
 -- Events RLS Policies
@@ -135,29 +135,29 @@ DROP POLICY IF EXISTS "Users can view their own events" ON tools_ce_events;
 CREATE POLICY "Users can view their own events" ON tools_ce_events
   FOR SELECT
   TO authenticated
-  USING ((select auth.uid()) = user_id);
+  USING (public.can_access_user_data(user_id));
 
 -- INSERT policy
 DROP POLICY IF EXISTS "Users can insert their own events" ON tools_ce_events;
 CREATE POLICY "Users can insert their own events" ON tools_ce_events
   FOR INSERT
   TO authenticated
-  WITH CHECK ((select auth.uid()) = user_id);
+  WITH CHECK (public.can_access_user_data(user_id));
 
 -- UPDATE policy
 DROP POLICY IF EXISTS "Users can update their own events" ON tools_ce_events;
 CREATE POLICY "Users can update their own events" ON tools_ce_events
   FOR UPDATE
   TO authenticated
-  USING ((select auth.uid()) = user_id)
-  WITH CHECK ((select auth.uid()) = user_id);
+  USING (public.can_access_user_data(user_id))
+  WITH CHECK (public.can_access_user_data(user_id));
 
 -- DELETE policy
 DROP POLICY IF EXISTS "Users can delete their own events" ON tools_ce_events;
 CREATE POLICY "Users can delete their own events" ON tools_ce_events
   FOR DELETE
   TO authenticated
-  USING ((select auth.uid()) = user_id);
+  USING (public.can_access_user_data(user_id));
 
 
 -- Add time column to tools_ce_events table
@@ -202,26 +202,26 @@ DROP POLICY IF EXISTS "Users can view their own calendar event attachments" ON t
 CREATE POLICY "Users can view their own calendar event attachments" ON tools_ce_event_attachments
   FOR SELECT
   TO authenticated
-  USING (user_id = (select auth.uid()));
+  USING (public.can_access_user_data(user_id));
 
 DROP POLICY IF EXISTS "Users can insert their own calendar event attachments" ON tools_ce_event_attachments;
 CREATE POLICY "Users can insert their own calendar event attachments" ON tools_ce_event_attachments
   FOR INSERT
   TO authenticated
-  WITH CHECK (user_id = (select auth.uid()));
+  WITH CHECK (public.can_access_user_data(user_id));
 
 DROP POLICY IF EXISTS "Users can update their own calendar event attachments" ON tools_ce_event_attachments;
 CREATE POLICY "Users can update their own calendar event attachments" ON tools_ce_event_attachments
   FOR UPDATE
   TO authenticated
-  USING (user_id = (select auth.uid()))
-  WITH CHECK (user_id = (select auth.uid()));
+  USING (public.can_access_user_data(user_id))
+  WITH CHECK (public.can_access_user_data(user_id));
 
 DROP POLICY IF EXISTS "Users can delete their own calendar event attachments" ON tools_ce_event_attachments;
 CREATE POLICY "Users can delete their own calendar event attachments" ON tools_ce_event_attachments
   FOR DELETE
   TO authenticated
-  USING (user_id = (select auth.uid()));
+  USING (public.can_access_user_data(user_id));
 
 
 -- Trigger functions with a fixed search_path.
@@ -259,32 +259,32 @@ CREATE POLICY "calendar-events: Users can upload to their own folder"
 ON storage.objects FOR INSERT TO authenticated
 WITH CHECK (
   bucket_id = 'calendar-events' AND
-  (storage.foldername(name))[1] = (select auth.uid())::text
+  public.can_access_storage_owner((storage.foldername(name))[1])
 );
 
 CREATE POLICY "calendar-events: Users can read their own files"
 ON storage.objects FOR SELECT TO authenticated
 USING (
   bucket_id = 'calendar-events' AND
-  (storage.foldername(name))[1] = (select auth.uid())::text
+  public.can_access_storage_owner((storage.foldername(name))[1])
 );
 
 CREATE POLICY "calendar-events: Users can update their own files"
 ON storage.objects FOR UPDATE TO authenticated
 USING (
   bucket_id = 'calendar-events' AND
-  (storage.foldername(name))[1] = (select auth.uid())::text
+  public.can_access_storage_owner((storage.foldername(name))[1])
 )
 WITH CHECK (
   bucket_id = 'calendar-events' AND
-  (storage.foldername(name))[1] = (select auth.uid())::text
+  public.can_access_storage_owner((storage.foldername(name))[1])
 );
 
 CREATE POLICY "calendar-events: Users can delete their own files"
 ON storage.objects FOR DELETE TO authenticated
 USING (
   bucket_id = 'calendar-events' AND
-  (storage.foldername(name))[1] = (select auth.uid())::text
+  public.can_access_storage_owner((storage.foldername(name))[1])
 );
 
 

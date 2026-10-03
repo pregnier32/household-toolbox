@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { getSession } from '@/lib/session';
+import { getHouseholdDataSession } from '@/lib/session';
 import { supabaseServer } from '@/lib/supabaseServer';
 import bcrypt from 'bcryptjs';
 import { isMissingRelationError, removeNotesStorageFiles } from '@/lib/notes-storage';
@@ -52,7 +52,7 @@ const SALT_ROUNDS = 10; // For password hashing
 
 // GET - Fetch all notes and tags for the current user
 export async function GET(request: NextRequest) {
-  const user = await getSession();
+  const user = await getHouseholdDataSession();
 
   if (!user) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
@@ -175,7 +175,7 @@ export async function GET(request: NextRequest) {
 
 // POST - Create or update a note
 export async function POST(request: NextRequest) {
-  const user = await getSession();
+  const user = await getHouseholdDataSession();
 
   if (!user) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
@@ -433,7 +433,7 @@ export async function POST(request: NextRequest) {
 
 // DELETE - Delete a note
 export async function DELETE(request: NextRequest) {
-  const user = await getSession();
+  const user = await getHouseholdDataSession();
 
   if (!user) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });

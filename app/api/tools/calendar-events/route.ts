@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { getSession } from '@/lib/session';
+import { getHouseholdDataSession } from '@/lib/session';
 import { supabaseServer } from '@/lib/supabaseServer';
 import { CALENDAR_SOURCE_CALENDAR_EVENT } from '@/lib/calendarPins';
 import {
@@ -19,7 +19,7 @@ function withDashboardFlag<T extends { id: string }>(event: T, pinned: boolean) 
 
 // GET - Fetch categories and events for the current user
 export async function GET(request: NextRequest) {
-  const user = await getSession();
+  const user = await getHouseholdDataSession();
 
   if (!user) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
@@ -103,7 +103,7 @@ export async function GET(request: NextRequest) {
 
 // POST - Create or update categories and events
 export async function POST(request: NextRequest) {
-  const user = await getSession();
+  const user = await getHouseholdDataSession();
 
   if (!user) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });

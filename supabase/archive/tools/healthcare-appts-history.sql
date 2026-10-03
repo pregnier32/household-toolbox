@@ -122,53 +122,53 @@ ALTER TABLE tools_hcah_documents ENABLE ROW LEVEL SECURITY;
 -- Headers
 DROP POLICY IF EXISTS "Users can view their own headers" ON tools_hcah_headers;
 CREATE POLICY "Users can view their own headers" ON tools_hcah_headers
-  FOR SELECT TO authenticated USING ((select auth.uid()) = user_id);
+  FOR SELECT TO authenticated USING (public.can_access_user_data(user_id));
 
 DROP POLICY IF EXISTS "Users can insert their own headers" ON tools_hcah_headers;
 CREATE POLICY "Users can insert their own headers" ON tools_hcah_headers
-  FOR INSERT TO authenticated WITH CHECK ((select auth.uid()) = user_id);
+  FOR INSERT TO authenticated WITH CHECK (public.can_access_user_data(user_id));
 
 DROP POLICY IF EXISTS "Users can update their own headers" ON tools_hcah_headers;
 CREATE POLICY "Users can update their own headers" ON tools_hcah_headers
   FOR UPDATE TO authenticated
-  USING ((select auth.uid()) = user_id)
-  WITH CHECK ((select auth.uid()) = user_id);
+  USING (public.can_access_user_data(user_id))
+  WITH CHECK (public.can_access_user_data(user_id));
 
 DROP POLICY IF EXISTS "Users can delete their own headers" ON tools_hcah_headers;
 CREATE POLICY "Users can delete their own headers" ON tools_hcah_headers
-  FOR DELETE TO authenticated USING ((select auth.uid()) = user_id);
+  FOR DELETE TO authenticated USING (public.can_access_user_data(user_id));
 
 -- Records
 DROP POLICY IF EXISTS "Users can view their own records" ON tools_hcah_records;
 CREATE POLICY "Users can view their own records" ON tools_hcah_records
-  FOR SELECT TO authenticated USING ((select auth.uid()) = user_id);
+  FOR SELECT TO authenticated USING (public.can_access_user_data(user_id));
 
 DROP POLICY IF EXISTS "Users can insert their own records" ON tools_hcah_records;
 CREATE POLICY "Users can insert their own records" ON tools_hcah_records
   FOR INSERT TO authenticated
   WITH CHECK (
-    (select auth.uid()) = user_id AND
+    public.can_access_user_data(user_id) AND
     EXISTS (
       SELECT 1 FROM tools_hcah_headers h
-      WHERE h.id = header_id AND h.user_id = (select auth.uid())
+      WHERE h.id = header_id AND public.can_access_user_data(h.user_id)
     )
   );
 
 DROP POLICY IF EXISTS "Users can update their own records" ON tools_hcah_records;
 CREATE POLICY "Users can update their own records" ON tools_hcah_records
   FOR UPDATE TO authenticated
-  USING ((select auth.uid()) = user_id)
+  USING (public.can_access_user_data(user_id))
   WITH CHECK (
-    (select auth.uid()) = user_id AND
+    public.can_access_user_data(user_id) AND
     EXISTS (
       SELECT 1 FROM tools_hcah_headers h
-      WHERE h.id = header_id AND h.user_id = (select auth.uid())
+      WHERE h.id = header_id AND public.can_access_user_data(h.user_id)
     )
   );
 
 DROP POLICY IF EXISTS "Users can delete their own records" ON tools_hcah_records;
 CREATE POLICY "Users can delete their own records" ON tools_hcah_records
-  FOR DELETE TO authenticated USING ((select auth.uid()) = user_id);
+  FOR DELETE TO authenticated USING (public.can_access_user_data(user_id));
 
 -- Documents (access via record -> header -> user)
 DROP POLICY IF EXISTS "Users can view their own documents" ON tools_hcah_documents;
@@ -178,7 +178,7 @@ CREATE POLICY "Users can view their own documents" ON tools_hcah_documents
     EXISTS (
       SELECT 1 FROM tools_hcah_records r
       JOIN tools_hcah_headers h ON h.id = r.header_id
-      WHERE r.id = tools_hcah_documents.record_id AND h.user_id = (select auth.uid())
+      WHERE r.id = tools_hcah_documents.record_id AND public.can_access_user_data(h.user_id)
     )
   );
 
@@ -189,7 +189,7 @@ CREATE POLICY "Users can insert their own documents" ON tools_hcah_documents
     EXISTS (
       SELECT 1 FROM tools_hcah_records r
       JOIN tools_hcah_headers h ON h.id = r.header_id
-      WHERE r.id = tools_hcah_documents.record_id AND h.user_id = (select auth.uid())
+      WHERE r.id = tools_hcah_documents.record_id AND public.can_access_user_data(h.user_id)
     )
   );
 
@@ -200,14 +200,14 @@ CREATE POLICY "Users can update their own documents" ON tools_hcah_documents
     EXISTS (
       SELECT 1 FROM tools_hcah_records r
       JOIN tools_hcah_headers h ON h.id = r.header_id
-      WHERE r.id = tools_hcah_documents.record_id AND h.user_id = (select auth.uid())
+      WHERE r.id = tools_hcah_documents.record_id AND public.can_access_user_data(h.user_id)
     )
   )
   WITH CHECK (
     EXISTS (
       SELECT 1 FROM tools_hcah_records r
       JOIN tools_hcah_headers h ON h.id = r.header_id
-      WHERE r.id = tools_hcah_documents.record_id AND h.user_id = (select auth.uid())
+      WHERE r.id = tools_hcah_documents.record_id AND public.can_access_user_data(h.user_id)
     )
   );
 
@@ -218,7 +218,7 @@ CREATE POLICY "Users can delete their own documents" ON tools_hcah_documents
     EXISTS (
       SELECT 1 FROM tools_hcah_records r
       JOIN tools_hcah_headers h ON h.id = r.header_id
-      WHERE r.id = tools_hcah_documents.record_id AND h.user_id = (select auth.uid())
+      WHERE r.id = tools_hcah_documents.record_id AND public.can_access_user_data(h.user_id)
     )
   );
 
@@ -269,32 +269,32 @@ CREATE POLICY "healthcare-appt-history: Users can upload to their own folder"
 ON storage.objects FOR INSERT TO authenticated
 WITH CHECK (
   bucket_id = 'healthcare-appt-history' AND
-  (storage.foldername(name))[1] = (select auth.uid())::text
+  public.can_access_storage_owner((storage.foldername(name))[1])
 );
 
 CREATE POLICY "healthcare-appt-history: Users can read their own files"
 ON storage.objects FOR SELECT TO authenticated
 USING (
   bucket_id = 'healthcare-appt-history' AND
-  (storage.foldername(name))[1] = (select auth.uid())::text
+  public.can_access_storage_owner((storage.foldername(name))[1])
 );
 
 CREATE POLICY "healthcare-appt-history: Users can update their own files"
 ON storage.objects FOR UPDATE TO authenticated
 USING (
   bucket_id = 'healthcare-appt-history' AND
-  (storage.foldername(name))[1] = (select auth.uid())::text
+  public.can_access_storage_owner((storage.foldername(name))[1])
 )
 WITH CHECK (
   bucket_id = 'healthcare-appt-history' AND
-  (storage.foldername(name))[1] = (select auth.uid())::text
+  public.can_access_storage_owner((storage.foldername(name))[1])
 );
 
 CREATE POLICY "healthcare-appt-history: Users can delete their own files"
 ON storage.objects FOR DELETE TO authenticated
 USING (
   bucket_id = 'healthcare-appt-history' AND
-  (storage.foldername(name))[1] = (select auth.uid())::text
+  public.can_access_storage_owner((storage.foldername(name))[1])
 );
 
 

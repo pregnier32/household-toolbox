@@ -140,11 +140,11 @@ export default function Pricing() {
                 </div>
                 <div>
                   <p className="text-sm font-medium text-slate-100">
-                    Up to 4 guests included at no extra charge
+                    Up to 4 Users included at no extra charge
                   </p>
                   <p className="text-xs text-slate-400 mt-1">
-                    Share your account with family members, roommates, or partners. 
-                    Invite up to 4 guests to collaborate on your household management—completely free.
+                    Share your account with family members, roommates, or partners.
+                    Invite up to 4 Users to use your household tools and records at no extra charge.
                   </p>
                 </div>
               </div>

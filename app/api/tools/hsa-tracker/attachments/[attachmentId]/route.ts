@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { getSession } from '@/lib/session';
+import { getHouseholdDataSession } from '@/lib/session';
 import { supabaseServer } from '@/lib/supabaseServer';
 import { extractHsaStoragePath, HSA_BUCKET, isMissingRelationError, loadOwnedExpense } from '@/lib/hsa-storage';
 
@@ -7,7 +7,7 @@ export async function GET(
   request: NextRequest,
   { params }: { params: Promise<{ attachmentId: string }> }
 ) {
-  const user = await getSession();
+  const user = await getHouseholdDataSession();
   if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
 
   try {

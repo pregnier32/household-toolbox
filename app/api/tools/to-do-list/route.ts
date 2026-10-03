@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { getSession } from '@/lib/session';
+import { getHouseholdDataSession } from '@/lib/session';
 import { supabaseServer } from '@/lib/supabaseServer';
 import { deleteCategoryTaskStorageFiles, deleteTaskStorageFiles, isMissingRelationError } from '@/lib/todo-storage';
 import { CALENDAR_SOURCE_TODO_TASK } from '@/lib/calendarPins';
@@ -128,7 +128,7 @@ async function copyDefaultsToUser(userId: string, toolId: string) {
 }
 
 export async function GET(request: NextRequest) {
-  const user = await getSession();
+  const user = await getHouseholdDataSession();
   if (!user) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   }
@@ -236,7 +236,7 @@ export async function GET(request: NextRequest) {
 }
 
 export async function POST(request: NextRequest) {
-  const user = await getSession();
+  const user = await getHouseholdDataSession();
   if (!user) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   }

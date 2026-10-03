@@ -42,6 +42,7 @@ export default function Dashboard() {
   const router = useRouter();
 
   const isSuperAdmin = user?.userStatus === 'superadmin';
+  const isHouseholdAdmin = user?.householdRole !== 'user';
 
   useEffect(() => {
     fetch('/api/auth/session')
@@ -231,17 +232,19 @@ export default function Dashboard() {
             >
               Calendar
             </button>
-            <button
-              onClick={() => {
-                setActiveTab('store');
-                setActiveToolId(null);
-              }}
-              className={`px-4 py-2 text-sm font-medium transition-colors ${
-                activeTab === 'store' ? tabActiveClass : tabInactiveClass
-              }`}
-            >
-              Store
-            </button>
+            {isHouseholdAdmin && (
+              <button
+                onClick={() => {
+                  setActiveTab('store');
+                  setActiveToolId(null);
+                }}
+                className={`px-4 py-2 text-sm font-medium transition-colors ${
+                  activeTab === 'store' ? tabActiveClass : tabInactiveClass
+                }`}
+              >
+                Store
+              </button>
+            )}
           </div>
         </div>
 
@@ -304,7 +307,7 @@ export default function Dashboard() {
             />
           )}
           {activeTab === 'calendar' && <CalendarPanel />}
-          {activeTab === 'store' && (
+          {activeTab === 'store' && isHouseholdAdmin && (
             <StorePanel
               tools={tools}
               isLoadingTools={isLoadingTools}

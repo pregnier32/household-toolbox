@@ -1,10 +1,10 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { getSession } from '@/lib/session';
+import { getHouseholdDataSession } from '@/lib/session';
 import { supabaseServer } from '@/lib/supabaseServer';
 
 // GET - Fetch all tags for the current user
 export async function GET(request: NextRequest) {
-  const user = await getSession();
+  const user = await getHouseholdDataSession();
 
   if (!user) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
@@ -39,7 +39,7 @@ export async function GET(request: NextRequest) {
 
 // POST - Create or update a tag, or inactivate/activate
 export async function POST(request: NextRequest) {
-  const user = await getSession();
+  const user = await getHouseholdDataSession();
 
   if (!user) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
@@ -165,7 +165,7 @@ export async function POST(request: NextRequest) {
 
 // DELETE - Delete a tag (only when unused)
 export async function DELETE(request: NextRequest) {
-  const user = await getSession();
+  const user = await getHouseholdDataSession();
 
   if (!user) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });

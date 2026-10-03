@@ -153,49 +153,49 @@ CREATE POLICY "Anyone can view default items" ON tools_sl_default_items
 -- Items: user CRUD on own rows
 DROP POLICY IF EXISTS "Users can view their own items" ON tools_sl_items;
 CREATE POLICY "Users can view their own items" ON tools_sl_items
-  FOR SELECT TO authenticated USING ((select auth.uid()) = user_id);
+  FOR SELECT TO authenticated USING (public.can_access_user_data(user_id));
 DROP POLICY IF EXISTS "Users can insert their own items" ON tools_sl_items;
 CREATE POLICY "Users can insert their own items" ON tools_sl_items
-  FOR INSERT TO authenticated WITH CHECK ((select auth.uid()) = user_id);
+  FOR INSERT TO authenticated WITH CHECK (public.can_access_user_data(user_id));
 DROP POLICY IF EXISTS "Users can update their own items" ON tools_sl_items;
 CREATE POLICY "Users can update their own items" ON tools_sl_items
-  FOR UPDATE TO authenticated USING ((select auth.uid()) = user_id) WITH CHECK ((select auth.uid()) = user_id);
+  FOR UPDATE TO authenticated USING (public.can_access_user_data(user_id)) WITH CHECK (public.can_access_user_data(user_id));
 DROP POLICY IF EXISTS "Users can delete their own items" ON tools_sl_items;
 CREATE POLICY "Users can delete their own items" ON tools_sl_items
-  FOR DELETE TO authenticated USING ((select auth.uid()) = user_id);
+  FOR DELETE TO authenticated USING (public.can_access_user_data(user_id));
 
 -- Lists: user CRUD on own rows
 DROP POLICY IF EXISTS "Users can view their own lists" ON tools_sl_lists;
 CREATE POLICY "Users can view their own lists" ON tools_sl_lists
-  FOR SELECT TO authenticated USING ((select auth.uid()) = user_id);
+  FOR SELECT TO authenticated USING (public.can_access_user_data(user_id));
 DROP POLICY IF EXISTS "Users can insert their own lists" ON tools_sl_lists;
 CREATE POLICY "Users can insert their own lists" ON tools_sl_lists
-  FOR INSERT TO authenticated WITH CHECK ((select auth.uid()) = user_id);
+  FOR INSERT TO authenticated WITH CHECK (public.can_access_user_data(user_id));
 DROP POLICY IF EXISTS "Users can update their own lists" ON tools_sl_lists;
 CREATE POLICY "Users can update their own lists" ON tools_sl_lists
-  FOR UPDATE TO authenticated USING ((select auth.uid()) = user_id) WITH CHECK ((select auth.uid()) = user_id);
+  FOR UPDATE TO authenticated USING (public.can_access_user_data(user_id)) WITH CHECK (public.can_access_user_data(user_id));
 DROP POLICY IF EXISTS "Users can delete their own lists" ON tools_sl_lists;
 CREATE POLICY "Users can delete their own lists" ON tools_sl_lists
-  FOR DELETE TO authenticated USING ((select auth.uid()) = user_id);
+  FOR DELETE TO authenticated USING (public.can_access_user_data(user_id));
 
 -- List items: access via list ownership
 DROP POLICY IF EXISTS "Users can view their own list items" ON tools_sl_list_items;
 CREATE POLICY "Users can view their own list items" ON tools_sl_list_items
   FOR SELECT TO authenticated
-  USING (EXISTS (SELECT 1 FROM tools_sl_lists l WHERE l.id = list_id AND l.user_id = (select auth.uid())));
+  USING (EXISTS (SELECT 1 FROM tools_sl_lists l WHERE l.id = list_id AND public.can_access_user_data(l.user_id)));
 DROP POLICY IF EXISTS "Users can insert their own list items" ON tools_sl_list_items;
 CREATE POLICY "Users can insert their own list items" ON tools_sl_list_items
   FOR INSERT TO authenticated
-  WITH CHECK (EXISTS (SELECT 1 FROM tools_sl_lists l WHERE l.id = list_id AND l.user_id = (select auth.uid())));
+  WITH CHECK (EXISTS (SELECT 1 FROM tools_sl_lists l WHERE l.id = list_id AND public.can_access_user_data(l.user_id)));
 DROP POLICY IF EXISTS "Users can update their own list items" ON tools_sl_list_items;
 CREATE POLICY "Users can update their own list items" ON tools_sl_list_items
   FOR UPDATE TO authenticated
-  USING (EXISTS (SELECT 1 FROM tools_sl_lists l WHERE l.id = list_id AND l.user_id = (select auth.uid())))
-  WITH CHECK (EXISTS (SELECT 1 FROM tools_sl_lists l WHERE l.id = list_id AND l.user_id = (select auth.uid())));
+  USING (EXISTS (SELECT 1 FROM tools_sl_lists l WHERE l.id = list_id AND public.can_access_user_data(l.user_id)))
+  WITH CHECK (EXISTS (SELECT 1 FROM tools_sl_lists l WHERE l.id = list_id AND public.can_access_user_data(l.user_id)));
 DROP POLICY IF EXISTS "Users can delete their own list items" ON tools_sl_list_items;
 CREATE POLICY "Users can delete their own list items" ON tools_sl_list_items
   FOR DELETE TO authenticated
-  USING (EXISTS (SELECT 1 FROM tools_sl_lists l WHERE l.id = list_id AND l.user_id = (select auth.uid())));
+  USING (EXISTS (SELECT 1 FROM tools_sl_lists l WHERE l.id = list_id AND public.can_access_user_data(l.user_id)));
 
 -- ============================================================================
 -- SEED: Standard starting list (from items_list JSON)
@@ -509,26 +509,26 @@ DROP POLICY IF EXISTS "Users can view their own shopping list attachments" ON to
 CREATE POLICY "Users can view their own shopping list attachments" ON tools_sl_list_attachments
   FOR SELECT
   TO authenticated
-  USING (user_id = (select auth.uid()));
+  USING (public.can_access_user_data(user_id));
 
 DROP POLICY IF EXISTS "Users can insert their own shopping list attachments" ON tools_sl_list_attachments;
 CREATE POLICY "Users can insert their own shopping list attachments" ON tools_sl_list_attachments
   FOR INSERT
   TO authenticated
-  WITH CHECK (user_id = (select auth.uid()));
+  WITH CHECK (public.can_access_user_data(user_id));
 
 DROP POLICY IF EXISTS "Users can update their own shopping list attachments" ON tools_sl_list_attachments;
 CREATE POLICY "Users can update their own shopping list attachments" ON tools_sl_list_attachments
   FOR UPDATE
   TO authenticated
-  USING (user_id = (select auth.uid()))
-  WITH CHECK (user_id = (select auth.uid()));
+  USING (public.can_access_user_data(user_id))
+  WITH CHECK (public.can_access_user_data(user_id));
 
 DROP POLICY IF EXISTS "Users can delete their own shopping list attachments" ON tools_sl_list_attachments;
 CREATE POLICY "Users can delete their own shopping list attachments" ON tools_sl_list_attachments
   FOR DELETE
   TO authenticated
-  USING (user_id = (select auth.uid()));
+  USING (public.can_access_user_data(user_id));
 
 
 -- Storage policies for bucket "shopping-list".
@@ -542,32 +542,32 @@ CREATE POLICY "shopping-list: Users can upload to their own folder"
 ON storage.objects FOR INSERT TO authenticated
 WITH CHECK (
   bucket_id = 'shopping-list' AND
-  (storage.foldername(name))[1] = (select auth.uid())::text
+  public.can_access_storage_owner((storage.foldername(name))[1])
 );
 
 CREATE POLICY "shopping-list: Users can read their own files"
 ON storage.objects FOR SELECT TO authenticated
 USING (
   bucket_id = 'shopping-list' AND
-  (storage.foldername(name))[1] = (select auth.uid())::text
+  public.can_access_storage_owner((storage.foldername(name))[1])
 );
 
 CREATE POLICY "shopping-list: Users can update their own files"
 ON storage.objects FOR UPDATE TO authenticated
 USING (
   bucket_id = 'shopping-list' AND
-  (storage.foldername(name))[1] = (select auth.uid())::text
+  public.can_access_storage_owner((storage.foldername(name))[1])
 )
 WITH CHECK (
   bucket_id = 'shopping-list' AND
-  (storage.foldername(name))[1] = (select auth.uid())::text
+  public.can_access_storage_owner((storage.foldername(name))[1])
 );
 
 CREATE POLICY "shopping-list: Users can delete their own files"
 ON storage.objects FOR DELETE TO authenticated
 USING (
   bucket_id = 'shopping-list' AND
-  (storage.foldername(name))[1] = (select auth.uid())::text
+  public.can_access_storage_owner((storage.foldername(name))[1])
 );
 
 

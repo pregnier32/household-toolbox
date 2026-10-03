@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { getSession } from '@/lib/session';
+import { getHouseholdDataSession } from '@/lib/session';
 import { supabaseServer } from '@/lib/supabaseServer';
 import {
   attachmentsByRecordIds,
@@ -253,7 +253,7 @@ async function withRecordAttachments<T extends { id: string }>(
 
 // GET - Fetch headers, records, and items
 export async function GET(request: NextRequest) {
-  const user = await getSession();
+  const user = await getHouseholdDataSession();
 
   if (!user) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
@@ -471,7 +471,7 @@ export async function GET(request: NextRequest) {
 
 // POST - Create or update headers, records, or items
 export async function POST(request: NextRequest) {
-  const user = await getSession();
+  const user = await getHouseholdDataSession();
 
   if (!user) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
@@ -783,7 +783,7 @@ export async function POST(request: NextRequest) {
 
 // DELETE - Delete headers, records, or items
 export async function DELETE(request: NextRequest) {
-  const user = await getSession();
+  const user = await getHouseholdDataSession();
 
   if (!user) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });

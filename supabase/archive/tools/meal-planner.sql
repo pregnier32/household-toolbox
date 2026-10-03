@@ -205,96 +205,96 @@ ALTER TABLE tools_mp_plan_assignments ENABLE ROW LEVEL SECURITY;
 -- Items: user CRUD on own rows
 DROP POLICY IF EXISTS "Users can view their own mp items" ON tools_mp_items;
 CREATE POLICY "Users can view their own mp items" ON tools_mp_items
-  FOR SELECT TO authenticated USING ((select auth.uid()) = user_id);
+  FOR SELECT TO authenticated USING (public.can_access_user_data(user_id));
 DROP POLICY IF EXISTS "Users can insert their own mp items" ON tools_mp_items;
 CREATE POLICY "Users can insert their own mp items" ON tools_mp_items
-  FOR INSERT TO authenticated WITH CHECK ((select auth.uid()) = user_id);
+  FOR INSERT TO authenticated WITH CHECK (public.can_access_user_data(user_id));
 DROP POLICY IF EXISTS "Users can update their own mp items" ON tools_mp_items;
 CREATE POLICY "Users can update their own mp items" ON tools_mp_items
-  FOR UPDATE TO authenticated USING ((select auth.uid()) = user_id) WITH CHECK ((select auth.uid()) = user_id);
+  FOR UPDATE TO authenticated USING (public.can_access_user_data(user_id)) WITH CHECK (public.can_access_user_data(user_id));
 DROP POLICY IF EXISTS "Users can delete their own mp items" ON tools_mp_items;
 CREATE POLICY "Users can delete their own mp items" ON tools_mp_items
-  FOR DELETE TO authenticated USING ((select auth.uid()) = user_id);
+  FOR DELETE TO authenticated USING (public.can_access_user_data(user_id));
 
 -- Meal types: user CRUD on own rows
 DROP POLICY IF EXISTS "Users can view their own mp meal types" ON tools_mp_meal_types;
 CREATE POLICY "Users can view their own mp meal types" ON tools_mp_meal_types
-  FOR SELECT TO authenticated USING ((select auth.uid()) = user_id);
+  FOR SELECT TO authenticated USING (public.can_access_user_data(user_id));
 DROP POLICY IF EXISTS "Users can insert their own mp meal types" ON tools_mp_meal_types;
 CREATE POLICY "Users can insert their own mp meal types" ON tools_mp_meal_types
-  FOR INSERT TO authenticated WITH CHECK ((select auth.uid()) = user_id);
+  FOR INSERT TO authenticated WITH CHECK (public.can_access_user_data(user_id));
 DROP POLICY IF EXISTS "Users can update their own mp meal types" ON tools_mp_meal_types;
 CREATE POLICY "Users can update their own mp meal types" ON tools_mp_meal_types
-  FOR UPDATE TO authenticated USING ((select auth.uid()) = user_id) WITH CHECK ((select auth.uid()) = user_id);
+  FOR UPDATE TO authenticated USING (public.can_access_user_data(user_id)) WITH CHECK (public.can_access_user_data(user_id));
 DROP POLICY IF EXISTS "Users can delete their own mp meal types" ON tools_mp_meal_types;
 CREATE POLICY "Users can delete their own mp meal types" ON tools_mp_meal_types
-  FOR DELETE TO authenticated USING ((select auth.uid()) = user_id);
+  FOR DELETE TO authenticated USING (public.can_access_user_data(user_id));
 
 -- Meals: user CRUD on own rows
 DROP POLICY IF EXISTS "Users can view their own mp meals" ON tools_mp_meals;
 CREATE POLICY "Users can view their own mp meals" ON tools_mp_meals
-  FOR SELECT TO authenticated USING ((select auth.uid()) = user_id);
+  FOR SELECT TO authenticated USING (public.can_access_user_data(user_id));
 DROP POLICY IF EXISTS "Users can insert their own mp meals" ON tools_mp_meals;
 CREATE POLICY "Users can insert their own mp meals" ON tools_mp_meals
-  FOR INSERT TO authenticated WITH CHECK ((select auth.uid()) = user_id);
+  FOR INSERT TO authenticated WITH CHECK (public.can_access_user_data(user_id));
 DROP POLICY IF EXISTS "Users can update their own mp meals" ON tools_mp_meals;
 CREATE POLICY "Users can update their own mp meals" ON tools_mp_meals
-  FOR UPDATE TO authenticated USING ((select auth.uid()) = user_id) WITH CHECK ((select auth.uid()) = user_id);
+  FOR UPDATE TO authenticated USING (public.can_access_user_data(user_id)) WITH CHECK (public.can_access_user_data(user_id));
 DROP POLICY IF EXISTS "Users can delete their own mp meals" ON tools_mp_meals;
 CREATE POLICY "Users can delete their own mp meals" ON tools_mp_meals
-  FOR DELETE TO authenticated USING ((select auth.uid()) = user_id);
+  FOR DELETE TO authenticated USING (public.can_access_user_data(user_id));
 
 -- Meal ingredients: access via meal ownership
 DROP POLICY IF EXISTS "Users can view their own mp meal ingredients" ON tools_mp_meal_ingredients;
 CREATE POLICY "Users can view their own mp meal ingredients" ON tools_mp_meal_ingredients
   FOR SELECT TO authenticated
-  USING (EXISTS (SELECT 1 FROM tools_mp_meals m WHERE m.id = meal_id AND m.user_id = (select auth.uid())));
+  USING (EXISTS (SELECT 1 FROM tools_mp_meals m WHERE m.id = meal_id AND public.can_access_user_data(m.user_id)));
 DROP POLICY IF EXISTS "Users can insert their own mp meal ingredients" ON tools_mp_meal_ingredients;
 CREATE POLICY "Users can insert their own mp meal ingredients" ON tools_mp_meal_ingredients
   FOR INSERT TO authenticated
-  WITH CHECK (EXISTS (SELECT 1 FROM tools_mp_meals m WHERE m.id = meal_id AND m.user_id = (select auth.uid())));
+  WITH CHECK (EXISTS (SELECT 1 FROM tools_mp_meals m WHERE m.id = meal_id AND public.can_access_user_data(m.user_id)));
 DROP POLICY IF EXISTS "Users can update their own mp meal ingredients" ON tools_mp_meal_ingredients;
 CREATE POLICY "Users can update their own mp meal ingredients" ON tools_mp_meal_ingredients
   FOR UPDATE TO authenticated
-  USING (EXISTS (SELECT 1 FROM tools_mp_meals m WHERE m.id = meal_id AND m.user_id = (select auth.uid())))
-  WITH CHECK (EXISTS (SELECT 1 FROM tools_mp_meals m WHERE m.id = meal_id AND m.user_id = (select auth.uid())));
+  USING (EXISTS (SELECT 1 FROM tools_mp_meals m WHERE m.id = meal_id AND public.can_access_user_data(m.user_id)))
+  WITH CHECK (EXISTS (SELECT 1 FROM tools_mp_meals m WHERE m.id = meal_id AND public.can_access_user_data(m.user_id)));
 DROP POLICY IF EXISTS "Users can delete their own mp meal ingredients" ON tools_mp_meal_ingredients;
 CREATE POLICY "Users can delete their own mp meal ingredients" ON tools_mp_meal_ingredients
   FOR DELETE TO authenticated
-  USING (EXISTS (SELECT 1 FROM tools_mp_meals m WHERE m.id = meal_id AND m.user_id = (select auth.uid())));
+  USING (EXISTS (SELECT 1 FROM tools_mp_meals m WHERE m.id = meal_id AND public.can_access_user_data(m.user_id)));
 
 -- Plans: user CRUD on own rows
 DROP POLICY IF EXISTS "Users can view their own mp plans" ON tools_mp_plans;
 CREATE POLICY "Users can view their own mp plans" ON tools_mp_plans
-  FOR SELECT TO authenticated USING ((select auth.uid()) = user_id);
+  FOR SELECT TO authenticated USING (public.can_access_user_data(user_id));
 DROP POLICY IF EXISTS "Users can insert their own mp plans" ON tools_mp_plans;
 CREATE POLICY "Users can insert their own mp plans" ON tools_mp_plans
-  FOR INSERT TO authenticated WITH CHECK ((select auth.uid()) = user_id);
+  FOR INSERT TO authenticated WITH CHECK (public.can_access_user_data(user_id));
 DROP POLICY IF EXISTS "Users can update their own mp plans" ON tools_mp_plans;
 CREATE POLICY "Users can update their own mp plans" ON tools_mp_plans
-  FOR UPDATE TO authenticated USING ((select auth.uid()) = user_id) WITH CHECK ((select auth.uid()) = user_id);
+  FOR UPDATE TO authenticated USING (public.can_access_user_data(user_id)) WITH CHECK (public.can_access_user_data(user_id));
 DROP POLICY IF EXISTS "Users can delete their own mp plans" ON tools_mp_plans;
 CREATE POLICY "Users can delete their own mp plans" ON tools_mp_plans
-  FOR DELETE TO authenticated USING ((select auth.uid()) = user_id);
+  FOR DELETE TO authenticated USING (public.can_access_user_data(user_id));
 
 -- Plan assignments: access via plan ownership
 DROP POLICY IF EXISTS "Users can view their own mp plan assignments" ON tools_mp_plan_assignments;
 CREATE POLICY "Users can view their own mp plan assignments" ON tools_mp_plan_assignments
   FOR SELECT TO authenticated
-  USING (EXISTS (SELECT 1 FROM tools_mp_plans p WHERE p.id = plan_id AND p.user_id = (select auth.uid())));
+  USING (EXISTS (SELECT 1 FROM tools_mp_plans p WHERE p.id = plan_id AND public.can_access_user_data(p.user_id)));
 DROP POLICY IF EXISTS "Users can insert their own mp plan assignments" ON tools_mp_plan_assignments;
 CREATE POLICY "Users can insert their own mp plan assignments" ON tools_mp_plan_assignments
   FOR INSERT TO authenticated
-  WITH CHECK (EXISTS (SELECT 1 FROM tools_mp_plans p WHERE p.id = plan_id AND p.user_id = (select auth.uid())));
+  WITH CHECK (EXISTS (SELECT 1 FROM tools_mp_plans p WHERE p.id = plan_id AND public.can_access_user_data(p.user_id)));
 DROP POLICY IF EXISTS "Users can update their own mp plan assignments" ON tools_mp_plan_assignments;
 CREATE POLICY "Users can update their own mp plan assignments" ON tools_mp_plan_assignments
   FOR UPDATE TO authenticated
-  USING (EXISTS (SELECT 1 FROM tools_mp_plans p WHERE p.id = plan_id AND p.user_id = (select auth.uid())))
-  WITH CHECK (EXISTS (SELECT 1 FROM tools_mp_plans p WHERE p.id = plan_id AND p.user_id = (select auth.uid())));
+  USING (EXISTS (SELECT 1 FROM tools_mp_plans p WHERE p.id = plan_id AND public.can_access_user_data(p.user_id)))
+  WITH CHECK (EXISTS (SELECT 1 FROM tools_mp_plans p WHERE p.id = plan_id AND public.can_access_user_data(p.user_id)));
 DROP POLICY IF EXISTS "Users can delete their own mp plan assignments" ON tools_mp_plan_assignments;
 CREATE POLICY "Users can delete their own mp plan assignments" ON tools_mp_plan_assignments
   FOR DELETE TO authenticated
-  USING (EXISTS (SELECT 1 FROM tools_mp_plans p WHERE p.id = plan_id AND p.user_id = (select auth.uid())));
+  USING (EXISTS (SELECT 1 FROM tools_mp_plans p WHERE p.id = plan_id AND public.can_access_user_data(p.user_id)));
 
 
 -- Add is_active to tools_mp_meals for existing databases (run if table already existed without this column)
@@ -372,26 +372,26 @@ DROP POLICY IF EXISTS "Users can view their own meal planner attachments" ON too
 CREATE POLICY "Users can view their own meal planner attachments" ON tools_mp_meal_attachments
   FOR SELECT
   TO authenticated
-  USING (user_id = (select auth.uid()));
+  USING (public.can_access_user_data(user_id));
 
 DROP POLICY IF EXISTS "Users can insert their own meal planner attachments" ON tools_mp_meal_attachments;
 CREATE POLICY "Users can insert their own meal planner attachments" ON tools_mp_meal_attachments
   FOR INSERT
   TO authenticated
-  WITH CHECK (user_id = (select auth.uid()));
+  WITH CHECK (public.can_access_user_data(user_id));
 
 DROP POLICY IF EXISTS "Users can update their own meal planner attachments" ON tools_mp_meal_attachments;
 CREATE POLICY "Users can update their own meal planner attachments" ON tools_mp_meal_attachments
   FOR UPDATE
   TO authenticated
-  USING (user_id = (select auth.uid()))
-  WITH CHECK (user_id = (select auth.uid()));
+  USING (public.can_access_user_data(user_id))
+  WITH CHECK (public.can_access_user_data(user_id));
 
 DROP POLICY IF EXISTS "Users can delete their own meal planner attachments" ON tools_mp_meal_attachments;
 CREATE POLICY "Users can delete their own meal planner attachments" ON tools_mp_meal_attachments
   FOR DELETE
   TO authenticated
-  USING (user_id = (select auth.uid()));
+  USING (public.can_access_user_data(user_id));
 
 
 -- Storage policies for bucket "meal-planner".
@@ -405,32 +405,32 @@ CREATE POLICY "meal-planner: Users can upload to their own folder"
 ON storage.objects FOR INSERT TO authenticated
 WITH CHECK (
   bucket_id = 'meal-planner' AND
-  (storage.foldername(name))[1] = (select auth.uid())::text
+  public.can_access_storage_owner((storage.foldername(name))[1])
 );
 
 CREATE POLICY "meal-planner: Users can read their own files"
 ON storage.objects FOR SELECT TO authenticated
 USING (
   bucket_id = 'meal-planner' AND
-  (storage.foldername(name))[1] = (select auth.uid())::text
+  public.can_access_storage_owner((storage.foldername(name))[1])
 );
 
 CREATE POLICY "meal-planner: Users can update their own files"
 ON storage.objects FOR UPDATE TO authenticated
 USING (
   bucket_id = 'meal-planner' AND
-  (storage.foldername(name))[1] = (select auth.uid())::text
+  public.can_access_storage_owner((storage.foldername(name))[1])
 )
 WITH CHECK (
   bucket_id = 'meal-planner' AND
-  (storage.foldername(name))[1] = (select auth.uid())::text
+  public.can_access_storage_owner((storage.foldername(name))[1])
 );
 
 CREATE POLICY "meal-planner: Users can delete their own files"
 ON storage.objects FOR DELETE TO authenticated
 USING (
   bucket_id = 'meal-planner' AND
-  (storage.foldername(name))[1] = (select auth.uid())::text
+  public.can_access_storage_owner((storage.foldername(name))[1])
 );
 
 

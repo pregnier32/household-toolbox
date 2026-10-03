@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { getSession } from '@/lib/session';
+import { getHouseholdDataSession } from '@/lib/session';
 import { supabaseServer } from '@/lib/supabaseServer';
 import { attachmentsByMealIds, deleteMealStorageFiles } from '@/lib/meal-planner-storage';
 
@@ -198,7 +198,7 @@ async function ensureDefaultMealTypes(userId: string, toolId: string) {
 }
 
 export async function GET(request: NextRequest) {
-  const user = await getSession();
+  const user = await getHouseholdDataSession();
   if (!user) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   }
@@ -493,7 +493,7 @@ async function insertAssignmentRows(rows: ReturnType<typeof assignmentsToRows>) 
 }
 
 export async function POST(request: NextRequest) {
-  const user = await getSession();
+  const user = await getHouseholdDataSession();
   if (!user) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   }

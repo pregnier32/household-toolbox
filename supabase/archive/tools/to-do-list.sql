@@ -129,21 +129,21 @@ ALTER TABLE tools_tdl_tasks ENABLE ROW LEVEL SECURITY;
 -- Categories
 DROP POLICY IF EXISTS "Users can view their own categories" ON tools_tdl_categories;
 CREATE POLICY "Users can view their own categories" ON tools_tdl_categories
-  FOR SELECT TO authenticated USING ((select auth.uid()) = user_id);
+  FOR SELECT TO authenticated USING (public.can_access_user_data(user_id));
 
 DROP POLICY IF EXISTS "Users can insert their own categories" ON tools_tdl_categories;
 CREATE POLICY "Users can insert their own categories" ON tools_tdl_categories
-  FOR INSERT TO authenticated WITH CHECK ((select auth.uid()) = user_id);
+  FOR INSERT TO authenticated WITH CHECK (public.can_access_user_data(user_id));
 
 DROP POLICY IF EXISTS "Users can update their own categories" ON tools_tdl_categories;
 CREATE POLICY "Users can update their own categories" ON tools_tdl_categories
   FOR UPDATE TO authenticated
-  USING ((select auth.uid()) = user_id)
-  WITH CHECK ((select auth.uid()) = user_id);
+  USING (public.can_access_user_data(user_id))
+  WITH CHECK (public.can_access_user_data(user_id));
 
 DROP POLICY IF EXISTS "Users can delete their own categories" ON tools_tdl_categories;
 CREATE POLICY "Users can delete their own categories" ON tools_tdl_categories
-  FOR DELETE TO authenticated USING ((select auth.uid()) = user_id);
+  FOR DELETE TO authenticated USING (public.can_access_user_data(user_id));
 
 -- Default categories (read-only; used to seed user categories)
 DROP POLICY IF EXISTS "Anyone can view default categories" ON tools_tdl_default_categories;
@@ -153,34 +153,34 @@ CREATE POLICY "Anyone can view default categories" ON tools_tdl_default_categori
 -- Tasks
 DROP POLICY IF EXISTS "Users can view their own tasks" ON tools_tdl_tasks;
 CREATE POLICY "Users can view their own tasks" ON tools_tdl_tasks
-  FOR SELECT TO authenticated USING ((select auth.uid()) = user_id);
+  FOR SELECT TO authenticated USING (public.can_access_user_data(user_id));
 
 DROP POLICY IF EXISTS "Users can insert their own tasks" ON tools_tdl_tasks;
 CREATE POLICY "Users can insert their own tasks" ON tools_tdl_tasks
   FOR INSERT TO authenticated
   WITH CHECK (
-    (select auth.uid()) = user_id AND
+    public.can_access_user_data(user_id) AND
     EXISTS (
       SELECT 1 FROM tools_tdl_categories c
-      WHERE c.id = category_id AND c.user_id = (select auth.uid())
+      WHERE c.id = category_id AND public.can_access_user_data(c.user_id)
     )
   );
 
 DROP POLICY IF EXISTS "Users can update their own tasks" ON tools_tdl_tasks;
 CREATE POLICY "Users can update their own tasks" ON tools_tdl_tasks
   FOR UPDATE TO authenticated
-  USING ((select auth.uid()) = user_id)
+  USING (public.can_access_user_data(user_id))
   WITH CHECK (
-    (select auth.uid()) = user_id AND
+    public.can_access_user_data(user_id) AND
     EXISTS (
       SELECT 1 FROM tools_tdl_categories c
-      WHERE c.id = category_id AND c.user_id = (select auth.uid())
+      WHERE c.id = category_id AND public.can_access_user_data(c.user_id)
     )
   );
 
 DROP POLICY IF EXISTS "Users can delete their own tasks" ON tools_tdl_tasks;
 CREATE POLICY "Users can delete their own tasks" ON tools_tdl_tasks
-  FOR DELETE TO authenticated USING ((select auth.uid()) = user_id);
+  FOR DELETE TO authenticated USING (public.can_access_user_data(user_id));
 
 -- ============================================================================
 -- SEED DEFAULT CATEGORIES (Home, Work, Kids, Errands)
@@ -220,26 +220,26 @@ DROP POLICY IF EXISTS "Users can view their own to-do attachments" ON tools_tdl_
 CREATE POLICY "Users can view their own to-do attachments" ON tools_tdl_attachments
   FOR SELECT
   TO authenticated
-  USING (user_id = (select auth.uid()));
+  USING (public.can_access_user_data(user_id));
 
 DROP POLICY IF EXISTS "Users can insert their own to-do attachments" ON tools_tdl_attachments;
 CREATE POLICY "Users can insert their own to-do attachments" ON tools_tdl_attachments
   FOR INSERT
   TO authenticated
-  WITH CHECK (user_id = (select auth.uid()));
+  WITH CHECK (public.can_access_user_data(user_id));
 
 DROP POLICY IF EXISTS "Users can update their own to-do attachments" ON tools_tdl_attachments;
 CREATE POLICY "Users can update their own to-do attachments" ON tools_tdl_attachments
   FOR UPDATE
   TO authenticated
-  USING (user_id = (select auth.uid()))
-  WITH CHECK (user_id = (select auth.uid()));
+  USING (public.can_access_user_data(user_id))
+  WITH CHECK (public.can_access_user_data(user_id));
 
 DROP POLICY IF EXISTS "Users can delete their own to-do attachments" ON tools_tdl_attachments;
 CREATE POLICY "Users can delete their own to-do attachments" ON tools_tdl_attachments
   FOR DELETE
   TO authenticated
-  USING (user_id = (select auth.uid()));
+  USING (public.can_access_user_data(user_id));
 
 
 -- Storage policies for bucket "to-do-list".
@@ -253,32 +253,32 @@ CREATE POLICY "to-do-list: Users can upload to their own folder"
 ON storage.objects FOR INSERT TO authenticated
 WITH CHECK (
   bucket_id = 'to-do-list' AND
-  (storage.foldername(name))[1] = (select auth.uid())::text
+  public.can_access_storage_owner((storage.foldername(name))[1])
 );
 
 CREATE POLICY "to-do-list: Users can read their own files"
 ON storage.objects FOR SELECT TO authenticated
 USING (
   bucket_id = 'to-do-list' AND
-  (storage.foldername(name))[1] = (select auth.uid())::text
+  public.can_access_storage_owner((storage.foldername(name))[1])
 );
 
 CREATE POLICY "to-do-list: Users can update their own files"
 ON storage.objects FOR UPDATE TO authenticated
 USING (
   bucket_id = 'to-do-list' AND
-  (storage.foldername(name))[1] = (select auth.uid())::text
+  public.can_access_storage_owner((storage.foldername(name))[1])
 )
 WITH CHECK (
   bucket_id = 'to-do-list' AND
-  (storage.foldername(name))[1] = (select auth.uid())::text
+  public.can_access_storage_owner((storage.foldername(name))[1])
 );
 
 CREATE POLICY "to-do-list: Users can delete their own files"
 ON storage.objects FOR DELETE TO authenticated
 USING (
   bucket_id = 'to-do-list' AND
-  (storage.foldername(name))[1] = (select auth.uid())::text
+  public.can_access_storage_owner((storage.foldername(name))[1])
 );
 
 

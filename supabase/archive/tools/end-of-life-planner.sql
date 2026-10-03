@@ -48,25 +48,25 @@ BEGIN
   -- Policy names are identifiers and must be double-quoted (%I), not string literals (%L).
   EXECUTE format('DROP POLICY IF EXISTS %I ON %I', 'eolp: Users can view their own rows', p_table);
   EXECUTE format(
-    'CREATE POLICY %I ON %I FOR SELECT TO authenticated USING ((select auth.uid()) = user_id)',
+    'CREATE POLICY %I ON %I FOR SELECT TO authenticated USING (public.can_access_user_data(user_id))',
     'eolp: Users can view their own rows', p_table
   );
 
   EXECUTE format('DROP POLICY IF EXISTS %I ON %I', 'eolp: Users can insert their own rows', p_table);
   EXECUTE format(
-    'CREATE POLICY %I ON %I FOR INSERT TO authenticated WITH CHECK ((select auth.uid()) = user_id)',
+    'CREATE POLICY %I ON %I FOR INSERT TO authenticated WITH CHECK (public.can_access_user_data(user_id))',
     'eolp: Users can insert their own rows', p_table
   );
 
   EXECUTE format('DROP POLICY IF EXISTS %I ON %I', 'eolp: Users can update their own rows', p_table);
   EXECUTE format(
-    'CREATE POLICY %I ON %I FOR UPDATE TO authenticated USING ((select auth.uid()) = user_id) WITH CHECK ((select auth.uid()) = user_id)',
+    'CREATE POLICY %I ON %I FOR UPDATE TO authenticated USING (public.can_access_user_data(user_id)) WITH CHECK (public.can_access_user_data(user_id))',
     'eolp: Users can update their own rows', p_table
   );
 
   EXECUTE format('DROP POLICY IF EXISTS %I ON %I', 'eolp: Users can delete their own rows', p_table);
   EXECUTE format(
-    'CREATE POLICY %I ON %I FOR DELETE TO authenticated USING ((select auth.uid()) = user_id)',
+    'CREATE POLICY %I ON %I FOR DELETE TO authenticated USING (public.can_access_user_data(user_id))',
     'eolp: Users can delete their own rows', p_table
   );
 END;
@@ -996,16 +996,16 @@ ALTER TABLE tools_eolp_document_attachments ENABLE ROW LEVEL SECURITY;
 
 DROP POLICY IF EXISTS "Users can view their own eolp document attachments" ON tools_eolp_document_attachments;
 CREATE POLICY "Users can view their own eolp document attachments" ON tools_eolp_document_attachments
-  FOR SELECT TO authenticated USING (user_id = (select auth.uid()));
+  FOR SELECT TO authenticated USING (public.can_access_user_data(user_id));
 DROP POLICY IF EXISTS "Users can insert their own eolp document attachments" ON tools_eolp_document_attachments;
 CREATE POLICY "Users can insert their own eolp document attachments" ON tools_eolp_document_attachments
-  FOR INSERT TO authenticated WITH CHECK (user_id = (select auth.uid()));
+  FOR INSERT TO authenticated WITH CHECK (public.can_access_user_data(user_id));
 DROP POLICY IF EXISTS "Users can update their own eolp document attachments" ON tools_eolp_document_attachments;
 CREATE POLICY "Users can update their own eolp document attachments" ON tools_eolp_document_attachments
-  FOR UPDATE TO authenticated USING (user_id = (select auth.uid())) WITH CHECK (user_id = (select auth.uid()));
+  FOR UPDATE TO authenticated USING (public.can_access_user_data(user_id)) WITH CHECK (public.can_access_user_data(user_id));
 DROP POLICY IF EXISTS "Users can delete their own eolp document attachments" ON tools_eolp_document_attachments;
 CREATE POLICY "Users can delete their own eolp document attachments" ON tools_eolp_document_attachments
-  FOR DELETE TO authenticated USING (user_id = (select auth.uid()));
+  FOR DELETE TO authenticated USING (public.can_access_user_data(user_id));
 
 CREATE TABLE IF NOT EXISTS tools_eolp_insurance_attachments (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
@@ -1025,16 +1025,16 @@ ALTER TABLE tools_eolp_insurance_attachments ENABLE ROW LEVEL SECURITY;
 
 DROP POLICY IF EXISTS "Users can view their own eolp insurance attachments" ON tools_eolp_insurance_attachments;
 CREATE POLICY "Users can view their own eolp insurance attachments" ON tools_eolp_insurance_attachments
-  FOR SELECT TO authenticated USING (user_id = (select auth.uid()));
+  FOR SELECT TO authenticated USING (public.can_access_user_data(user_id));
 DROP POLICY IF EXISTS "Users can insert their own eolp insurance attachments" ON tools_eolp_insurance_attachments;
 CREATE POLICY "Users can insert their own eolp insurance attachments" ON tools_eolp_insurance_attachments
-  FOR INSERT TO authenticated WITH CHECK (user_id = (select auth.uid()));
+  FOR INSERT TO authenticated WITH CHECK (public.can_access_user_data(user_id));
 DROP POLICY IF EXISTS "Users can update their own eolp insurance attachments" ON tools_eolp_insurance_attachments;
 CREATE POLICY "Users can update their own eolp insurance attachments" ON tools_eolp_insurance_attachments
-  FOR UPDATE TO authenticated USING (user_id = (select auth.uid())) WITH CHECK (user_id = (select auth.uid()));
+  FOR UPDATE TO authenticated USING (public.can_access_user_data(user_id)) WITH CHECK (public.can_access_user_data(user_id));
 DROP POLICY IF EXISTS "Users can delete their own eolp insurance attachments" ON tools_eolp_insurance_attachments;
 CREATE POLICY "Users can delete their own eolp insurance attachments" ON tools_eolp_insurance_attachments
-  FOR DELETE TO authenticated USING (user_id = (select auth.uid()));
+  FOR DELETE TO authenticated USING (public.can_access_user_data(user_id));
 
 CREATE TABLE IF NOT EXISTS tools_eolp_letter_attachments (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
@@ -1054,16 +1054,16 @@ ALTER TABLE tools_eolp_letter_attachments ENABLE ROW LEVEL SECURITY;
 
 DROP POLICY IF EXISTS "Users can view their own eolp letter attachments" ON tools_eolp_letter_attachments;
 CREATE POLICY "Users can view their own eolp letter attachments" ON tools_eolp_letter_attachments
-  FOR SELECT TO authenticated USING (user_id = (select auth.uid()));
+  FOR SELECT TO authenticated USING (public.can_access_user_data(user_id));
 DROP POLICY IF EXISTS "Users can insert their own eolp letter attachments" ON tools_eolp_letter_attachments;
 CREATE POLICY "Users can insert their own eolp letter attachments" ON tools_eolp_letter_attachments
-  FOR INSERT TO authenticated WITH CHECK (user_id = (select auth.uid()));
+  FOR INSERT TO authenticated WITH CHECK (public.can_access_user_data(user_id));
 DROP POLICY IF EXISTS "Users can update their own eolp letter attachments" ON tools_eolp_letter_attachments;
 CREATE POLICY "Users can update their own eolp letter attachments" ON tools_eolp_letter_attachments
-  FOR UPDATE TO authenticated USING (user_id = (select auth.uid())) WITH CHECK (user_id = (select auth.uid()));
+  FOR UPDATE TO authenticated USING (public.can_access_user_data(user_id)) WITH CHECK (public.can_access_user_data(user_id));
 DROP POLICY IF EXISTS "Users can delete their own eolp letter attachments" ON tools_eolp_letter_attachments;
 CREATE POLICY "Users can delete their own eolp letter attachments" ON tools_eolp_letter_attachments
-  FOR DELETE TO authenticated USING (user_id = (select auth.uid()));
+  FOR DELETE TO authenticated USING (public.can_access_user_data(user_id));
 
 CREATE TABLE IF NOT EXISTS tools_eolp_personal_item_attachments (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
@@ -1083,16 +1083,16 @@ ALTER TABLE tools_eolp_personal_item_attachments ENABLE ROW LEVEL SECURITY;
 
 DROP POLICY IF EXISTS "Users can view their own eolp personal item attachments" ON tools_eolp_personal_item_attachments;
 CREATE POLICY "Users can view their own eolp personal item attachments" ON tools_eolp_personal_item_attachments
-  FOR SELECT TO authenticated USING (user_id = (select auth.uid()));
+  FOR SELECT TO authenticated USING (public.can_access_user_data(user_id));
 DROP POLICY IF EXISTS "Users can insert their own eolp personal item attachments" ON tools_eolp_personal_item_attachments;
 CREATE POLICY "Users can insert their own eolp personal item attachments" ON tools_eolp_personal_item_attachments
-  FOR INSERT TO authenticated WITH CHECK (user_id = (select auth.uid()));
+  FOR INSERT TO authenticated WITH CHECK (public.can_access_user_data(user_id));
 DROP POLICY IF EXISTS "Users can update their own eolp personal item attachments" ON tools_eolp_personal_item_attachments;
 CREATE POLICY "Users can update their own eolp personal item attachments" ON tools_eolp_personal_item_attachments
-  FOR UPDATE TO authenticated USING (user_id = (select auth.uid())) WITH CHECK (user_id = (select auth.uid()));
+  FOR UPDATE TO authenticated USING (public.can_access_user_data(user_id)) WITH CHECK (public.can_access_user_data(user_id));
 DROP POLICY IF EXISTS "Users can delete their own eolp personal item attachments" ON tools_eolp_personal_item_attachments;
 CREATE POLICY "Users can delete their own eolp personal item attachments" ON tools_eolp_personal_item_attachments
-  FOR DELETE TO authenticated USING (user_id = (select auth.uid()));
+  FOR DELETE TO authenticated USING (public.can_access_user_data(user_id));
 
 CREATE TABLE IF NOT EXISTS tools_eolp_other_record_attachments (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
@@ -1112,16 +1112,16 @@ ALTER TABLE tools_eolp_other_record_attachments ENABLE ROW LEVEL SECURITY;
 
 DROP POLICY IF EXISTS "Users can view their own eolp other record attachments" ON tools_eolp_other_record_attachments;
 CREATE POLICY "Users can view their own eolp other record attachments" ON tools_eolp_other_record_attachments
-  FOR SELECT TO authenticated USING (user_id = (select auth.uid()));
+  FOR SELECT TO authenticated USING (public.can_access_user_data(user_id));
 DROP POLICY IF EXISTS "Users can insert their own eolp other record attachments" ON tools_eolp_other_record_attachments;
 CREATE POLICY "Users can insert their own eolp other record attachments" ON tools_eolp_other_record_attachments
-  FOR INSERT TO authenticated WITH CHECK (user_id = (select auth.uid()));
+  FOR INSERT TO authenticated WITH CHECK (public.can_access_user_data(user_id));
 DROP POLICY IF EXISTS "Users can update their own eolp other record attachments" ON tools_eolp_other_record_attachments;
 CREATE POLICY "Users can update their own eolp other record attachments" ON tools_eolp_other_record_attachments
-  FOR UPDATE TO authenticated USING (user_id = (select auth.uid())) WITH CHECK (user_id = (select auth.uid()));
+  FOR UPDATE TO authenticated USING (public.can_access_user_data(user_id)) WITH CHECK (public.can_access_user_data(user_id));
 DROP POLICY IF EXISTS "Users can delete their own eolp other record attachments" ON tools_eolp_other_record_attachments;
 CREATE POLICY "Users can delete their own eolp other record attachments" ON tools_eolp_other_record_attachments
-  FOR DELETE TO authenticated USING (user_id = (select auth.uid()));
+  FOR DELETE TO authenticated USING (public.can_access_user_data(user_id));
 
 
 -- Storage policies for bucket "end-of-life-planner".
@@ -1135,32 +1135,32 @@ CREATE POLICY "end-of-life-planner: Users can upload to their own folder"
 ON storage.objects FOR INSERT TO authenticated
 WITH CHECK (
   bucket_id = 'end-of-life-planner' AND
-  (storage.foldername(name))[1] = (select auth.uid())::text
+  public.can_access_storage_owner((storage.foldername(name))[1])
 );
 
 CREATE POLICY "end-of-life-planner: Users can read their own files"
 ON storage.objects FOR SELECT TO authenticated
 USING (
   bucket_id = 'end-of-life-planner' AND
-  (storage.foldername(name))[1] = (select auth.uid())::text
+  public.can_access_storage_owner((storage.foldername(name))[1])
 );
 
 CREATE POLICY "end-of-life-planner: Users can update their own files"
 ON storage.objects FOR UPDATE TO authenticated
 USING (
   bucket_id = 'end-of-life-planner' AND
-  (storage.foldername(name))[1] = (select auth.uid())::text
+  public.can_access_storage_owner((storage.foldername(name))[1])
 )
 WITH CHECK (
   bucket_id = 'end-of-life-planner' AND
-  (storage.foldername(name))[1] = (select auth.uid())::text
+  public.can_access_storage_owner((storage.foldername(name))[1])
 );
 
 CREATE POLICY "end-of-life-planner: Users can delete their own files"
 ON storage.objects FOR DELETE TO authenticated
 USING (
   bucket_id = 'end-of-life-planner' AND
-  (storage.foldername(name))[1] = (select auth.uid())::text
+  public.can_access_storage_owner((storage.foldername(name))[1])
 );
 
 

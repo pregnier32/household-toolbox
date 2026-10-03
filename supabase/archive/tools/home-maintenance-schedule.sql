@@ -333,78 +333,78 @@ CREATE POLICY "hms: Anyone can view default items" ON tools_hms_default_items
 -- Categories
 DROP POLICY IF EXISTS "hms: Users can view their own categories" ON tools_hms_categories;
 CREATE POLICY "hms: Users can view their own categories" ON tools_hms_categories
-  FOR SELECT TO authenticated USING ((select auth.uid()) = user_id);
+  FOR SELECT TO authenticated USING (public.can_access_user_data(user_id));
 
 DROP POLICY IF EXISTS "hms: Users can insert their own categories" ON tools_hms_categories;
 CREATE POLICY "hms: Users can insert their own categories" ON tools_hms_categories
-  FOR INSERT TO authenticated WITH CHECK ((select auth.uid()) = user_id);
+  FOR INSERT TO authenticated WITH CHECK (public.can_access_user_data(user_id));
 
 DROP POLICY IF EXISTS "hms: Users can update their own categories" ON tools_hms_categories;
 CREATE POLICY "hms: Users can update their own categories" ON tools_hms_categories
   FOR UPDATE TO authenticated
-  USING ((select auth.uid()) = user_id)
-  WITH CHECK ((select auth.uid()) = user_id);
+  USING (public.can_access_user_data(user_id))
+  WITH CHECK (public.can_access_user_data(user_id));
 
 DROP POLICY IF EXISTS "hms: Users can delete their own categories" ON tools_hms_categories;
 CREATE POLICY "hms: Users can delete their own categories" ON tools_hms_categories
-  FOR DELETE TO authenticated USING ((select auth.uid()) = user_id);
+  FOR DELETE TO authenticated USING (public.can_access_user_data(user_id));
 
 -- Items
 DROP POLICY IF EXISTS "hms: Users can view their own items" ON tools_hms_items;
 CREATE POLICY "hms: Users can view their own items" ON tools_hms_items
-  FOR SELECT TO authenticated USING ((select auth.uid()) = user_id);
+  FOR SELECT TO authenticated USING (public.can_access_user_data(user_id));
 
 DROP POLICY IF EXISTS "hms: Users can insert their own items" ON tools_hms_items;
 CREATE POLICY "hms: Users can insert their own items" ON tools_hms_items
-  FOR INSERT TO authenticated WITH CHECK ((select auth.uid()) = user_id);
+  FOR INSERT TO authenticated WITH CHECK (public.can_access_user_data(user_id));
 
 DROP POLICY IF EXISTS "hms: Users can update their own items" ON tools_hms_items;
 CREATE POLICY "hms: Users can update their own items" ON tools_hms_items
   FOR UPDATE TO authenticated
-  USING ((select auth.uid()) = user_id)
-  WITH CHECK ((select auth.uid()) = user_id);
+  USING (public.can_access_user_data(user_id))
+  WITH CHECK (public.can_access_user_data(user_id));
 
 DROP POLICY IF EXISTS "hms: Users can delete their own items" ON tools_hms_items;
 CREATE POLICY "hms: Users can delete their own items" ON tools_hms_items
-  FOR DELETE TO authenticated USING ((select auth.uid()) = user_id);
+  FOR DELETE TO authenticated USING (public.can_access_user_data(user_id));
 
 -- Tasks
 DROP POLICY IF EXISTS "hms: Users can view their own tasks" ON tools_hms_tasks;
 CREATE POLICY "hms: Users can view their own tasks" ON tools_hms_tasks
-  FOR SELECT TO authenticated USING ((select auth.uid()) = user_id);
+  FOR SELECT TO authenticated USING (public.can_access_user_data(user_id));
 
 DROP POLICY IF EXISTS "hms: Users can insert their own tasks" ON tools_hms_tasks;
 CREATE POLICY "hms: Users can insert their own tasks" ON tools_hms_tasks
-  FOR INSERT TO authenticated WITH CHECK ((select auth.uid()) = user_id);
+  FOR INSERT TO authenticated WITH CHECK (public.can_access_user_data(user_id));
 
 DROP POLICY IF EXISTS "hms: Users can update their own tasks" ON tools_hms_tasks;
 CREATE POLICY "hms: Users can update their own tasks" ON tools_hms_tasks
   FOR UPDATE TO authenticated
-  USING ((select auth.uid()) = user_id)
-  WITH CHECK ((select auth.uid()) = user_id);
+  USING (public.can_access_user_data(user_id))
+  WITH CHECK (public.can_access_user_data(user_id));
 
 DROP POLICY IF EXISTS "hms: Users can delete their own tasks" ON tools_hms_tasks;
 CREATE POLICY "hms: Users can delete their own tasks" ON tools_hms_tasks
-  FOR DELETE TO authenticated USING ((select auth.uid()) = user_id);
+  FOR DELETE TO authenticated USING (public.can_access_user_data(user_id));
 
 -- Completions
 DROP POLICY IF EXISTS "hms: Users can view their own completions" ON tools_hms_completions;
 CREATE POLICY "hms: Users can view their own completions" ON tools_hms_completions
-  FOR SELECT TO authenticated USING ((select auth.uid()) = user_id);
+  FOR SELECT TO authenticated USING (public.can_access_user_data(user_id));
 
 DROP POLICY IF EXISTS "hms: Users can insert their own completions" ON tools_hms_completions;
 CREATE POLICY "hms: Users can insert their own completions" ON tools_hms_completions
-  FOR INSERT TO authenticated WITH CHECK ((select auth.uid()) = user_id);
+  FOR INSERT TO authenticated WITH CHECK (public.can_access_user_data(user_id));
 
 DROP POLICY IF EXISTS "hms: Users can update their own completions" ON tools_hms_completions;
 CREATE POLICY "hms: Users can update their own completions" ON tools_hms_completions
   FOR UPDATE TO authenticated
-  USING ((select auth.uid()) = user_id)
-  WITH CHECK ((select auth.uid()) = user_id);
+  USING (public.can_access_user_data(user_id))
+  WITH CHECK (public.can_access_user_data(user_id));
 
 DROP POLICY IF EXISTS "hms: Users can delete their own completions" ON tools_hms_completions;
 CREATE POLICY "hms: Users can delete their own completions" ON tools_hms_completions
-  FOR DELETE TO authenticated USING ((select auth.uid()) = user_id);
+  FOR DELETE TO authenticated USING (public.can_access_user_data(user_id));
 
 -- ============================================================================
 -- SEED DEFAULT CATEGORIES (A–Z, matches Library sidebar)
@@ -571,26 +571,26 @@ DROP POLICY IF EXISTS "Users can view their own home maintenance item attachment
 CREATE POLICY "Users can view their own home maintenance item attachments" ON tools_hms_item_attachments
   FOR SELECT
   TO authenticated
-  USING (user_id = (select auth.uid()));
+  USING (public.can_access_user_data(user_id));
 
 DROP POLICY IF EXISTS "Users can insert their own home maintenance item attachments" ON tools_hms_item_attachments;
 CREATE POLICY "Users can insert their own home maintenance item attachments" ON tools_hms_item_attachments
   FOR INSERT
   TO authenticated
-  WITH CHECK (user_id = (select auth.uid()));
+  WITH CHECK (public.can_access_user_data(user_id));
 
 DROP POLICY IF EXISTS "Users can update their own home maintenance item attachments" ON tools_hms_item_attachments;
 CREATE POLICY "Users can update their own home maintenance item attachments" ON tools_hms_item_attachments
   FOR UPDATE
   TO authenticated
-  USING (user_id = (select auth.uid()))
-  WITH CHECK (user_id = (select auth.uid()));
+  USING (public.can_access_user_data(user_id))
+  WITH CHECK (public.can_access_user_data(user_id));
 
 DROP POLICY IF EXISTS "Users can delete their own home maintenance item attachments" ON tools_hms_item_attachments;
 CREATE POLICY "Users can delete their own home maintenance item attachments" ON tools_hms_item_attachments
   FOR DELETE
   TO authenticated
-  USING (user_id = (select auth.uid()));
+  USING (public.can_access_user_data(user_id));
 
 CREATE TABLE IF NOT EXISTS tools_hms_completion_attachments (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
@@ -612,26 +612,26 @@ DROP POLICY IF EXISTS "Users can view their own home maintenance completion atta
 CREATE POLICY "Users can view their own home maintenance completion attachments" ON tools_hms_completion_attachments
   FOR SELECT
   TO authenticated
-  USING (user_id = (select auth.uid()));
+  USING (public.can_access_user_data(user_id));
 
 DROP POLICY IF EXISTS "Users can insert their own home maintenance completion attachments" ON tools_hms_completion_attachments;
 CREATE POLICY "Users can insert their own home maintenance completion attachments" ON tools_hms_completion_attachments
   FOR INSERT
   TO authenticated
-  WITH CHECK (user_id = (select auth.uid()));
+  WITH CHECK (public.can_access_user_data(user_id));
 
 DROP POLICY IF EXISTS "Users can update their own home maintenance completion attachments" ON tools_hms_completion_attachments;
 CREATE POLICY "Users can update their own home maintenance completion attachments" ON tools_hms_completion_attachments
   FOR UPDATE
   TO authenticated
-  USING (user_id = (select auth.uid()))
-  WITH CHECK (user_id = (select auth.uid()));
+  USING (public.can_access_user_data(user_id))
+  WITH CHECK (public.can_access_user_data(user_id));
 
 DROP POLICY IF EXISTS "Users can delete their own home maintenance completion attachments" ON tools_hms_completion_attachments;
 CREATE POLICY "Users can delete their own home maintenance completion attachments" ON tools_hms_completion_attachments
   FOR DELETE
   TO authenticated
-  USING (user_id = (select auth.uid()));
+  USING (public.can_access_user_data(user_id));
 
 
 -- Storage policies for bucket "home-maintenance-schedule".
@@ -645,32 +645,32 @@ CREATE POLICY "home-maintenance-schedule: Users can upload to their own folder"
 ON storage.objects FOR INSERT TO authenticated
 WITH CHECK (
   bucket_id = 'home-maintenance-schedule' AND
-  (storage.foldername(name))[1] = (select auth.uid())::text
+  public.can_access_storage_owner((storage.foldername(name))[1])
 );
 
 CREATE POLICY "home-maintenance-schedule: Users can read their own files"
 ON storage.objects FOR SELECT TO authenticated
 USING (
   bucket_id = 'home-maintenance-schedule' AND
-  (storage.foldername(name))[1] = (select auth.uid())::text
+  public.can_access_storage_owner((storage.foldername(name))[1])
 );
 
 CREATE POLICY "home-maintenance-schedule: Users can update their own files"
 ON storage.objects FOR UPDATE TO authenticated
 USING (
   bucket_id = 'home-maintenance-schedule' AND
-  (storage.foldername(name))[1] = (select auth.uid())::text
+  public.can_access_storage_owner((storage.foldername(name))[1])
 )
 WITH CHECK (
   bucket_id = 'home-maintenance-schedule' AND
-  (storage.foldername(name))[1] = (select auth.uid())::text
+  public.can_access_storage_owner((storage.foldername(name))[1])
 );
 
 CREATE POLICY "home-maintenance-schedule: Users can delete their own files"
 ON storage.objects FOR DELETE TO authenticated
 USING (
   bucket_id = 'home-maintenance-schedule' AND
-  (storage.foldername(name))[1] = (select auth.uid())::text
+  public.can_access_storage_owner((storage.foldername(name))[1])
 );
 
 

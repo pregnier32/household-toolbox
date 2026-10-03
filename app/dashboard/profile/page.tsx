@@ -16,6 +16,7 @@ type User = {
   firstName: string;
   lastName?: string;
   userStatus?: string;
+  householdRole?: 'admin' | 'user';
 };
 
 export default function Profile() {
@@ -97,14 +98,14 @@ export default function Profile() {
     fetch('/api/auth/session')
       .then((res) => res.json())
       .then((data) => {
-        if (data.user) {
+          if (data.user) {
           setUser(data.user);
           setFormData({
             firstName: data.user.firstName,
             lastName: data.user.lastName || '',
             email: data.user.email,
           });
-          void loadOwnedToolCount();
+          if (data.user.householdRole !== 'user') void loadOwnedToolCount();
         } else {
           router.push('/');
         }
@@ -596,7 +597,9 @@ export default function Profile() {
           <div className="border-t border-slate-800 pt-6 mt-6">
             <h2 className="text-lg font-semibold text-slate-100 mb-2">Delete Account</h2>
             <p className="mb-4 text-sm text-slate-400">
-              Permanently delete your profile and remaining account data. You must remove every tool from My Tools first.
+              {user?.householdRole === 'user'
+                ? 'Permanently delete your login. Household tools and records stay with the household.'
+                : 'Permanently delete your profile and remaining account data. You must remove every tool from My Tools first.'}
             </p>
             <button
               type="button"
@@ -623,13 +626,16 @@ export default function Profile() {
               Delete account
             </h3>
             <div className={warningBoxClass}>
-              <p className={warningTitleClass}>You must remove all tools first.</p>
+              <p className={warningTitleClass}>
+                {user?.householdRole === 'user' ? 'This deletes your login only.' : 'You must remove all tools first.'}
+              </p>
               <p className={warningTextClass}>
-                Before you can delete your profile, go to My Tools and Remove every tool. That permanently deletes
-                each tool&apos;s records and documents. After that, deleting your account cannot be undone.
+                {user?.householdRole === 'user'
+                  ? 'You will lose access to this household. Tools, records, and files stay with the household.'
+                  : 'Before you can delete your profile, go to My Tools and Remove every tool. That permanently deletes each tool\'s records and documents. After that, deleting your account cannot be undone.'}
               </p>
             </div>
-            {ownedToolCount > 0 ? (
+            {user?.householdRole !== 'user' && ownedToolCount > 0 ? (
               <>
                 <p className={`${modalBodyClass} mb-4`}>
                   You still have <strong>{ownedToolCount}</strong> {ownedToolCount === 1 ? 'tool' : 'tools'}.
@@ -651,7 +657,9 @@ export default function Profile() {
             ) : (
               <>
                 <p className={`${modalBodyClass} mb-4`}>
-                  You currently have no tools. Confirm that you have removed them all, then continue.
+                  {user?.householdRole === 'user'
+                    ? 'Your login will be deleted. Household tools and records will stay.'
+                    : 'You currently have no tools. Confirm that you have removed them all, then continue.'}
                 </p>
                 <label className={checkboxLabelClass}>
                   <input
@@ -660,7 +668,11 @@ export default function Profile() {
                     onChange={(event) => setToolsRemovedAck(event.target.checked)}
                     className="mt-1 h-4 w-4 rounded border-slate-400"
                   />
-                  <span>I have removed all tools and I understand there is no undo.</span>
+                  <span>
+                    {user?.householdRole === 'user'
+                      ? 'I understand my login will be deleted and household records will stay.'
+                      : 'I have removed all tools and I understand there is no undo.'}
+                  </span>
                 </label>
                 <p className={`${modalBodyClass} mb-2`}>
                   Type <strong>delete</strong> to continue:

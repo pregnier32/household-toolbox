@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { getSession } from '@/lib/session';
+import { getHouseholdDataSession } from '@/lib/session';
 import { supabaseServer } from '@/lib/supabaseServer';
 import { deleteUserTool } from '@/lib/user-data-deletion';
 
@@ -25,7 +25,7 @@ function sortOwnedTools<T extends { tools?: EmbeddedTool | EmbeddedTool[] | null
 // GET - Fetch current user's owned tools (active and inactive) with details
 export async function GET() {
   // Check if user is authenticated
-  const user = await getSession();
+  const user = await getHouseholdDataSession();
 
   if (!user) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
@@ -73,10 +73,13 @@ export async function GET() {
 
 // DELETE - Permanently wipe one tool's records/files, then drop ownership
 export async function DELETE(request: NextRequest) {
-  const user = await getSession();
+  const user = await getHouseholdDataSession();
 
   if (!user) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+  }
+  if (user.householdRole !== 'admin') {
+    return NextResponse.json({ error: 'Only the household Admin can remove tools.' }, { status: 403 });
   }
 
   try {

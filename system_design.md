@@ -1,6 +1,10 @@
 # Household Toolbox Design System
 
-This document defines design standards, UX patterns, database conventions, and project setup for Household Toolbox so features stay consistent and onboarding stays straightforward.
+This document defines technical architecture, database conventions, security, Supabase setup, and project setup for Household Toolbox.
+
+**UX and visual design** now live in [`UX_DESIGN_STANDARD.md`](./UX_DESIGN_STANDARD.md). That file is the authoritative source for how the interface should look and behave (colors, buttons, forms, lists, modals, attachments UX, print/export, accessibility). If an older UI snippet in this file disagrees with `UX_DESIGN_STANDARD.md`, the UX document wins.
+
+Full UX recipes, class strings, and per-tool exceptions are in [`UX_DESIGN_STANDARD.md`](./UX_DESIGN_STANDARD.md). Machine-auditable rule IDs and the QA worksheet live there and in [`UX_AUDIT_CHECKLIST.md`](./UX_AUDIT_CHECKLIST.md). The UI sections below are kept as a short engineering reference and must match that file.
 
 ## Contents
 
@@ -18,7 +22,7 @@ This document defines design standards, UX patterns, database conventions, and p
 - [Database standards](#database-standards)
 - [Implementation notes](#implementation-notes)
 - [Future considerations](#future-considerations)
-- [Calendar events frequency design](#calendar-events-frequency-design)
+- [Calendar events frequency design (legacy)](#calendar-events-frequency-design-legacy)
 - [Users table recommendations](#users-table-recommendations)
 - [Product and project overview](#product-and-project-overview)
 - [Setup essentials](#setup-essentials)
@@ -112,9 +116,9 @@ Use these remaps for bulk legacy UI. For **popover-style UI** where remap grays 
 #### Defaults for new work
 
 - Prefer **`resolvedTheme`** when choosing between mutually exclusive light vs dark class strings.
-- Primary emerald CTAs generally **need no separate light variant**; focus rings may still use `focus:ring-offset-*` tuned per surface if you add light-specific panels.
-- **Icons on light surfaces**: Parent text colors such as `text-slate-600` with `hover:text-slate-900` read better than `text-slate-400` / `hover:text-slate-200` (which target dark chrome).
-- **Dashboard top navigation**: Use **`bg-slate-950`** on tab strips so light mode matches the **`#e9edf1`** canvas; active tab labels must not use `text-emerald-300` in light mode—see **Dashboard primary tabs**.
+- **Primary buttons are theme-aware.** Light: `emerald-600` fill and white text. Dark: `emerald-500` fill and `slate-950` text. See [`UX_DESIGN_STANDARD.md`](./UX_DESIGN_STANDARD.md).
+- **Icons on light surfaces:** default muted treatment is `text-slate-600` with `hover:text-slate-900`. Semantic icons keep their colors.
+- **Tabs (dashboard and in-tool):** light-mode active labels use `border-emerald-600 text-emerald-900 font-semibold`. Do not use `text-emerald-300` for an active tab in light mode.
 
 ## Visual Style - Typography
 
@@ -192,25 +196,13 @@ Use these remaps for bulk legacy UI. For **popover-style UI** where remap grays 
 ## Components - Buttons
 
 ### Primary Button
-```tsx
-className="rounded-lg bg-emerald-500 px-4 py-2.5 text-sm font-semibold text-slate-950 transition-colors hover:bg-emerald-400 focus:outline-none focus:ring-2 focus:ring-emerald-500/50 focus:ring-offset-2 focus:ring-offset-slate-900 disabled:cursor-not-allowed disabled:opacity-50"
-```
-- **Use For**: Primary actions (Submit, Save, Buy, Create Account)
-- **States**: 
-  - Default: `bg-emerald-500 text-slate-950`
-  - Hover: `hover:bg-emerald-400`
-  - Focus: `focus:ring-2 focus:ring-emerald-500/50`
-  - Disabled: `disabled:opacity-50 disabled:cursor-not-allowed`
-- **Sizes**: 
-  - Standard: `px-4 py-2.5`
-  - Small: `px-2.5 py-1 text-xs`
-  - Full Width: Add `w-full`
 
-### Primary button — Light mode (white / soft gray cards)
+Primary buttons are **theme-aware**. Full recipes: [`UX_DESIGN_STANDARD.md`](./UX_DESIGN_STANDARD.md) (`UX-BTN-001`).
 
-On **light** tool surfaces (`bg-white`, `bg-slate-50`, or the remapped page canvas), the default pattern `bg-emerald-500` + `text-slate-950` can look fine, but **disabled** primary buttons (`disabled:opacity-50`) are easy to read as a weak mint/grey. For **affordance and contrast (WCAG)**, prefer a **slightly deeper fill** and **white label** on primary CTAs, **`focus:ring-offset-white`**, and **avoid** pairing **`text-emerald-300`** with **`bg-emerald-500/20`** for compact actions—that mimics dark UI and reads as low-contrast green-on-green on pale cards.
+- **Light:** `bg-emerald-600`, `text-white`, `hover:bg-emerald-500`, `focus:ring-offset-white`
+- **Dark:** `bg-emerald-500`, `text-slate-950`, `hover:bg-emerald-400`, `focus:ring-offset-slate-900`
 
-Branch on `useTheme().resolvedTheme === 'light'` (or your tool’s `isLight` flag) when the control sits on explicit light surfaces.
+The `emerald-500` + `slate-950` snippet is **dark mode only**. Use this for every primary CTA (Submit, Save, Add, Generate PDF Report, Export to PDF).
 
 **Reference implementation:** `app/components/CalendarEventsTool.tsx` — `primaryButtonClass`, `compactEmeraldActionClass`, `primaryButtonCompactClass`.
 
@@ -261,45 +253,23 @@ className={
 }
 ```
 
-### Secondary Button
-```tsx
-className="px-4 py-2 rounded-lg border border-slate-700 bg-slate-800 text-slate-200 hover:bg-slate-700 transition-colors"
-```
-- **Use For**: Cancel, secondary actions, alternative options
-- **States**: Similar hover and focus patterns as primary
+### Secondary Button (including Cancel)
 
-### Secondary button — Light mode (soft fill + strong border)
+There is **one** secondary button. Cancel always uses it, including Export Options. See `UX-BTN-002` in `UX_DESIGN_STANDARD.md`.
 
-For **secondary actions on white or light card surfaces** in **light mode**, avoid relying on `bg-slate-800` / `border-slate-700` alone: `globals.css` remaps those to a **darker flat gray** that can look heavy or muddy. Use an **explicit** light pattern with a **soft fill**, **2px border**, and **darker text** so the control reads as clickable and sits cleanly on the card.
+- **Light:** `border-2 border-slate-400 bg-slate-100 text-slate-800`
+- **Dark:** `border-2 border-slate-500 bg-slate-800/70 text-slate-300`
 
-**Rationale:** `bg-slate-100` is not remapped by the current global background rules, so the fill stays a predictable, light gray. **Thicker, mid-tone borders** (`border-2 border-slate-400`) read as tappable without matching the old remapped slate-200 slab.
+Do not use the older 1px `border-slate-700 bg-slate-800` recipe or a `bg-slate-700` Export Cancel.
 
-**Reference implementation:** `app/dashboard/profile/page.tsx` — `secondaryOutlineButtonClass` and `editProfileButtonClass` (with `useTheme().resolvedTheme === 'light'`).
-
-**Full width / form row (e.g. Cancel, Change Password):**
-```tsx
-className="rounded-lg border-2 border-slate-400 bg-slate-100 px-4 py-2.5 text-sm font-medium text-slate-800 transition-colors hover:bg-slate-200/90 hover:border-slate-500 focus:outline-none focus:ring-2 focus:ring-slate-400/40 focus:ring-offset-2 focus:ring-offset-white disabled:cursor-not-allowed disabled:opacity-50"
-```
-
-**With leading icon (e.g. Edit Profile):** prefix with `flex items-center gap-2` and use `py-2` if the control is a bit shorter:
-```tsx
-className="flex items-center gap-2 rounded-lg border-2 border-slate-400 bg-slate-100 px-4 py-2 text-sm font-medium text-slate-800 transition-colors hover:bg-slate-200/90 hover:border-slate-500 focus:outline-none focus:ring-2 focus:ring-slate-400/40 focus:ring-offset-2 focus:ring-offset-white"
-```
-
-**Checklist**
-- **Default:** `border-2 border-slate-400`, `bg-slate-100`, `text-slate-800`
-- **Hover:** `hover:bg-slate-200/90`, `hover:border-slate-500`
-- **Focus:** `focus:ring-2 focus:ring-slate-400/40` with `focus:ring-offset-2 focus:ring-offset-white` (tune offset to match the card background if needed)
-- **Disabled:** `disabled:cursor-not-allowed disabled:opacity-50` when applicable
-
-**Dark mode (same components):** keep the existing dark secondary treatment (e.g. `border-2 border-slate-500` on `bg-slate-800/70`, `text-slate-300`, `hover:border-slate-400`) as implemented on the profile page for parity with the rest of the dark UI.
+**Reference implementation:** `app/dashboard/profile/page.tsx` — `secondaryOutlineButtonClass` and `editProfileButtonClass`. Full class strings: [`UX_DESIGN_STANDARD.md`](./UX_DESIGN_STANDARD.md).
 
 ### Text Button / Tab Button
 ```tsx
 className="px-3 py-2 text-sm font-medium transition-colors text-slate-400 hover:text-slate-300"
 ```
 - **Use For**: Tabs, navigation, less prominent actions
-- **Active State**: `border-b-2 border-emerald-500 text-emerald-300` for active tabs
+- **Active State**: theme-aware. Light: `border-b-2 border-emerald-600 text-emerald-900 font-semibold`. Dark: `border-b-2 border-emerald-500 text-emerald-300`. Same classes for dashboard and in-tool tabs.
 
 ### Icon Button
 ```tsx
@@ -326,8 +296,13 @@ For **tool apps** that list **active** records and an optional **History** (or i
 
 - **Row container**: `flex items-start justify-between` so the main content (title, metadata) sits on the **left** and actions on the **right**.
 - **Action group** (right): `flex shrink-0 items-center gap-1.5 ml-4` — a tight horizontal group of square icon buttons, aligned to the top of the row when titles wrap.
-- **Order** (left → right): **primary emerald** (e.g. Edit) → **secondary** (e.g. Move to history / Archive) on active rows; on history rows, **emerald** (e.g. Reactivate / Restore) → **danger** (e.g. Delete) when delete is supported.
-- **Button element**: `type="button"`, with **Icon Style** SVGs (`h-5 w-5`, `strokeWidth={2}`). Set **`aria-label`** and **`title`** to the same human-readable phrase for screen readers and hover tooltips.
+- **Slot order (left → right).** If a tool does not have an action, omit that slot. Do not reorder the rest.
+  1. Attachments (paperclip)
+  2. View (when the tool has View)
+  3. Primary (Edit, or Reactivate / Restore)
+  4. Secondary / lifecycle (Archive / Move to history)
+  5. Destructive (Delete), when supported
+- **Button element**: `type="button"`, with **Icon Style** SVGs (`h-5 w-5`, `strokeWidth={2}`). Set **`aria-label`** and **`title`** to the same phrase. The **hit area** is at least 44×44px on touch (`min-h-11 min-w-11`); the glyph stays 20px.
 
 #### Visual tiers — all actions use `border-2`
 
@@ -404,8 +379,8 @@ Use this format for every icon in icon-only buttons and inline icons so icons lo
 
 - **Style**: Outline (stroke) icons only — no filled icons. Use `fill="none"` and `stroke="currentColor"` so the icon inherits the parent's text color.
 - **Stroke**: `strokeWidth={2}`, `strokeLinecap="round"`, `strokeLinejoin="round"` for a clean, consistent line.
-- **Size**: `className="h-5 w-5"` (20px) for standard icon buttons; use `h-6 w-6` where a larger icon is needed.
-- **Color**: Set on the parent (e.g. the button). On **dark** surfaces use `text-slate-400` and `hover:text-slate-200`. On **light** surfaces (pale cards, white toolbars) prefer `text-slate-500` or `text-slate-600` with `hover:text-slate-900` so icons stay visible.
+- **Size**: glyph is `className="h-5 w-5"` (20px) for standard icons; `h-6 w-6` where a larger glyph is needed. The **button container** is at least 44×44px on touch.
+- **Color**: Set on the parent. On **dark** surfaces use `text-slate-400` and `hover:text-slate-200`. On **light** surfaces the default muted treatment is **`text-slate-600 hover:text-slate-900`**. Semantic icons (emerald Edit, red Delete) keep their colors.
 - **ViewBox**: Use `viewBox="0 0 24 24"` for 24pt icon sets so scaling is consistent.
 
 **Example — print icon in a button:**
@@ -449,66 +424,25 @@ className={
 ```
 
 ### Dashboard Toggle (Switch)
-Use this standard design for any "display on dashboard" or similar on/off toggle. The control is a capsule-shaped track with a white circular thumb that slides left (off) or right (on). When on, the track is emerald; when off, the track is slate.
 
-```tsx
-<label className="flex items-center gap-2 cursor-pointer" title="Display on dashboard">
-  <span className="text-xs text-slate-400 whitespace-nowrap">Dashboard</span>
-  <button
-    type="button"
-    role="switch"
-    aria-checked={isOn}
-    aria-label="Display on dashboard"
-    title="Display on dashboard"
-    onClick={() => toggle()}
-    className={`relative inline-flex h-6 w-11 flex-shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors focus:outline-none focus:ring-2 focus:ring-emerald-500/50 focus:ring-offset-2 focus:ring-offset-slate-900 ${
-      isOn ? 'bg-emerald-500' : 'bg-slate-700'
-    }`}
-  >
-    <span
-      className={`pointer-events-none inline-block h-5 w-5 transform rounded-full bg-white shadow ring-0 transition ${
-        isOn ? 'translate-x-5' : 'translate-x-1'
-      }`}
-    />
-  </button>
-</label>
-```
-- **Use For**: "Display on dashboard" and any similar boolean toggle where the standard is a switch (not a checkbox).
-- **Dashboard Calendar**: When the switch opts a *record* onto the Dashboard Calendar, use the label **Add to dashboard calendar**, default **off**, and follow **Add to Dashboard Calendar**. Do not reuse a generic "Dashboard" label for calendar pins.
-- **Track**: 
-  - Size: `h-6 w-11` (24px height, 44px width) — capsule shape via `rounded-full`
-  - On state: `bg-emerald-500` (green)
-  - Off state: `bg-slate-700`
-  - Focus: `focus:ring-2 focus:ring-emerald-500/50 focus:ring-offset-2 focus:ring-offset-slate-900`
-- **Thumb**: 
-  - Size: `h-5 w-5` (20px), `rounded-full`, `bg-white`, `shadow`
-  - Position: `translate-x-1` when off (left), `translate-x-5` when on (right)
-- **Label**: Place the label text (e.g. "Dashboard") to the left of the switch in `text-xs text-slate-400`. Use a `<label>` wrapping both so clicking the text toggles the switch.
-- **Accessibility**: Use `role="switch"`, `aria-checked={boolean}`, and `aria-label` (and `title` for tooltip).
+Every switch uses the **same theme-aware track**. Only the label changes. Full markup: [`UX_DESIGN_STANDARD.md`](./UX_DESIGN_STANDARD.md).
+
+- On: `bg-emerald-500`
+- Off: light `bg-slate-300`; dark `bg-slate-700`
+- Label: light `text-slate-600`; dark `text-slate-400`
+- Focus offset: light `focus:ring-offset-white`; dark `focus:ring-offset-slate-900`
+- Track size: `h-6 w-11`, white thumb
+- **Dashboard Calendar:** label is **Add to dashboard calendar**, default **off**. Do not reuse a generic "Dashboard" label for calendar pins.
+- Accessibility: `role="switch"`, `aria-checked`, `aria-label`, and `title`
 
 ### Add New Record Button
-```tsx
-<button
-  onClick={startAddingRecord}
-  className="px-4 py-2.5 rounded-lg bg-emerald-500 text-slate-950 font-semibold hover:bg-emerald-400 transition-colors focus:outline-none focus:ring-2 focus:ring-emerald-500/50 focus:ring-offset-2 focus:ring-offset-slate-900"
->
-  + Add New [Item Name]
-</button>
-```
-- **Use For**: Adding new records/items in simple single-list tools that are **not** pinning to the Dashboard Calendar (e.g., "+ Add New Subscription", "+ Add New Record").
-- **Do not use** this filled button for category-scoped, calendar-pinnable records. Those tools use the green plus + popup in **Add to Dashboard Calendar**.
-- **Styling**: 
-  - Emerald green background (`bg-emerald-500`) with dark text (`text-slate-950`)
-  - Font weight: `font-semibold` (not `font-medium`)
-  - Padding: `px-4 py-2.5`
-- **Text Format**: Always prefix with "+" followed by "Add New [Item Name]"
-  - Examples: "+ Add New Subscription", "+ Add New Record", "+ Add New Pet"
-- **Positioning**: 
-  - Place below navigation tabs and above search/filter boxes
-  - Use `flex justify-start` for left alignment
-  - Container: `<div className="flex justify-start">`
-- **Visibility**: Hide the button when the add form is open (`{!isAdding && (...)}`)
-- **States**: Same hover and focus patterns as primary button
+
+Use the **theme-aware primary button**. Text is always `+ Add New [Item Name]`.
+
+- **Simple single-list tools** use this filled button, **even when** an individual record can optionally be calendar-pinned. Subscription Tracker is the explicit example (`+ Add New Subscription`).
+- **Category-scoped / calendar-oriented tools** use the small emerald plus beside the section title, not this filled button.
+- Calendar pinning is an optional attribute of a record. It does not by itself require the section plus.
+- Position: below navigation tabs and above search/filter. Hide when the add form is open.
 
 ### Button Guidelines
 - Always include loading/disabled states for async actions
@@ -682,21 +616,25 @@ For dropdowns that need to display items organized by categories or areas (e.g.,
 ## UX Rules
 
 ### Modal Patterns
-- **Overlay**: `fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm`
-- **Modal Container**: `w-full max-w-lg rounded-2xl border border-slate-800 bg-slate-900 p-6 shadow-2xl`
-- **Close Button**: Position in top-right with `aria-label="Close modal"`
-- **Keyboard**: Support Escape key to close (implement with `useEffect`)
-- **Stacking**: The Attachment modal uses `z-50`. Any password, forgot-password, or confirm overlay that can open *from* attachments must use `z-[70]` (or higher) so it is never hidden behind the Attachment modal.
+
+One modal system. Full detail: [`UX_DESIGN_STANDARD.md`](./UX_DESIGN_STANDARD.md) (`UX-MOD-001`, `UX-MOD-002`, `UX-MOD-003`).
+
+- **Overlay:** `fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4`
+- **Card:** light `border-slate-200 bg-white`; dark `border-slate-800 bg-slate-900`; `rounded-2xl p-6 shadow-2xl`
+- **Width:** `max-w-md` confirmations and Export Options; `max-w-lg` standard; `max-w-2xl` larger forms (`max-h-[90vh] overflow-y-auto`)
+- **Close:** top-right icon with **`aria-label` and `title`**. Hit area at least 44×44px on touch.
+- **z-index (explicit, not DOM order):** normal modal `z-50`; child/stacked modal `z-[60]`; password / destructive confirm over a modal `z-[70]`
+- **Keyboard:** Escape closes the modal unless a stacked child is open.
 
 ### Add to Dashboard Calendar
 
 Standard for tools that let a user create a record and optionally show it on the Dashboard Calendar. **Reference:** Calendar Events (`app/components/CalendarEventsTool.tsx`), pin helpers in `lib/calendarPins.ts` and `lib/calendarPinsServer.ts`, table `calendar_pins` (`supabase/archive/platform/calendar-pins.sql`).
 
-Future tools that can appear on the Dashboard Calendar must follow this flow. Do not add a `show_on_dashboard` / `add_to_dashboard` column on the source table, and do not copy dates or titles into a calendar table.
+Future tools that can appear on the Dashboard Calendar must follow this flow. Do not add a `show_on_dashboard` / `add_to_dashboard` column on the source table, and do not copy dates or titles into a calendar table. This is the current implementation (`calendar_pins`). The frequency appendix later in this file is legacy.
 
 #### Default view
 
-Selecting a category (or equivalent scope) shows the **active list**, not an add form. Empty copy: “No calendar events yet. Click + to add one.” (Adapt the noun to the tool.) History stays collapsed below the active list.
+Selecting a category (or equivalent scope) shows the **active list**, not an add form. Empty copy for these tools: “No [items] yet. Click + to add one.” Simple single-list tools use “No [items] found. Add one to get started!” plus the filled Add button. History stays collapsed below the active list.
 
 #### Green plus on the section title
 
@@ -710,8 +648,8 @@ Place a small emerald plus immediately to the right of the section heading (`Ann
     onClick={openAddModal}
     className={
       isLight
-        ? 'inline-flex items-center justify-center rounded-md border-2 border-emerald-600 p-0.5 text-emerald-600 transition-colors hover:bg-emerald-50 hover:text-emerald-800'
-        : 'inline-flex items-center justify-center rounded-md border-2 border-emerald-400 p-0.5 text-emerald-400 transition-colors hover:bg-emerald-500/15 hover:text-emerald-300'
+        ? 'inline-flex items-center justify-center rounded-md border-2 border-emerald-600 min-h-11 min-w-11 p-0.5 text-emerald-600 transition-colors hover:bg-emerald-50 hover:text-emerald-800'
+        : 'inline-flex items-center justify-center rounded-md border-2 border-emerald-400 min-h-11 min-w-11 p-0.5 text-emerald-400 transition-colors hover:bg-emerald-500/15 hover:text-emerald-300'
     }
     aria-label="Add calendar event"
     title="Add calendar event"
@@ -731,11 +669,7 @@ Place a small emerald plus immediately to the right of the section heading (`Ann
 
 Clicking the plus opens a modal. The user fills the record there, then Save or Cancel. After a successful save, close the modal, reset the form, and return to the active list.
 
-- Overlay: `fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4`
-- Card: `rounded-2xl border … p-6 max-w-2xl w-full mx-4 max-h-[90vh] overflow-y-auto` (use `max-w-lg` only if the form is short). Light: `border-slate-200 bg-white shadow-xl`. Dark: `border-slate-800 bg-slate-900`.
-- Title: `Add [Category] Event` (or the tool’s record name). Close X top-right with `aria-label="Close"` and `title="Close"`.
-- Escape closes the add modal unless a stacked picker (holiday list, attachments) is open. Stack those pickers at `z-[60]` or higher.
-- Primary **Add …** + secondary **Cancel**. Do not keep an inline add form on the list screen.
+Use the **base modal** at `max-w-2xl` (or `max-w-lg` if the form is short) with `max-h-[90vh] overflow-y-auto`. Close X needs `aria-label` and `title`. Escape closes the add modal unless a stacked picker is open (`z-[60]`). Primary **Add …** + secondary **Cancel**. Do not keep an inline add form on the list screen. Simple single-list tools (including Subscription Tracker) keep the filled Add button instead of this plus.
 
 #### Add to dashboard calendar switch
 
@@ -795,7 +729,7 @@ When a saved row is pinned, show a compact chip next to the title on the collaps
 
 ### In-app notices and confirmations
 
-Never use the browser’s `alert()`, `confirm()`, or `prompt()`. Those Chrome/site dialogs sit outside the app, block QA, and cannot be styled. Every user-facing message stays on the page.
+Never use the browser’s `alert()`, `confirm()`, or `prompt()`. Those Chrome/site dialogs sit outside the app, block QA, and cannot be styled. Every user-facing message stays on the page. See `UX-DEL-001` and `UX-FBK-001` in `UX_DESIGN_STANDARD.md`.
 
 **Errors, validation, and success (not a confirm):** Use the shared in-app notice (`AppNoticeProvider` in `app/layout.tsx`, `useAppNotice()` → `showError` / `showSuccess`). Examples: save failed, grocery lines have no names, Shopping List created.
 
@@ -813,12 +747,16 @@ Never use the browser’s `alert()`, `confirm()`, or `prompt()`. Those Chrome/si
 - Do not open a confirm overlay behind the Attachment modal (use `z-[70]` or higher when it stacks on attachments).
 
 ### Tab Navigation
+
+Dashboard and in-tool tabs use the **same** active/inactive classes.
+
 - **Container**: `border-b border-slate-800` with `flex gap-2`
 - **Tab**: `px-4 py-2 text-sm font-medium transition-colors`
-- **Active Tab (dark UI / tools)**: `border-b-2 border-emerald-500 text-emerald-300`
-- **Inactive Tab (dark UI / tools)**: `text-slate-400 hover:text-slate-300`
-- **Dashboard shell tabs** (primary nav + Tool Box sub-tabs): Use **`resolvedTheme`** and the patterns in **Dashboard primary tabs** below—`text-emerald-300` is **not** used for active tabs in light mode (poor contrast on white).
-- **Export Tab Naming**: When tools have a tab for viewing/exporting all records across categories, it should be named **"Export"** (not "Reports" or other variations). This ensures consistency across all tools (e.g., Pet Care Schedule, Repair History).
+- **Active (light):** `border-b-2 border-emerald-600 text-emerald-900 font-semibold`
+- **Active (dark):** `border-b-2 border-emerald-500 text-emerald-300`
+- **Inactive (light):** `text-slate-600 hover:text-slate-900`
+- **Inactive (dark):** `text-slate-400 hover:text-slate-300`
+- **Export Tab Naming**: **"Export"** (not "Reports"). Examples: Pet Care Schedule, Repair History.
 
 ### Dashboard primary tabs
 
@@ -871,60 +809,16 @@ For tools that include an Export tab, use this consistent UI pattern to provide 
   - Format: "Export [Tool Name] Report" (e.g., "Export Subscription Report", "Export Repair History Report")
 - **Description**: `text-slate-300 mb-4`
   - Should explain what the report includes (all records, summary statistics, category breakdown, etc.)
-- **Button**: Primary emerald button with "Generate PDF Report" text
-  - Styling: `px-4 py-2.5 rounded-lg bg-emerald-500 text-slate-950 font-semibold`
-  - Opens export popup modal
+- **Button**: theme-aware primary, text “Generate PDF Report”, opens the export popup
 
 #### Export Popup Modal
-```tsx
-{showExportPopup && (
-  <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
-    <div className="bg-slate-800 rounded-2xl border border-slate-700 p-6 max-w-md w-full mx-4">
-      <div className="flex items-center justify-between mb-4">
-        <h3 className="text-lg font-semibold text-slate-50">Export Options</h3>
-        <button
-          onClick={() => setShowExportPopup(false)}
-          className="text-slate-400 hover:text-slate-200 transition-colors"
-        >
-          <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-          </svg>
-        </button>
-      </div>
-      
-      <div className="space-y-4">
-        {/* Optional: Export options (checkboxes, filters, etc.) */}
-        
-        <div className="flex gap-3 pt-4">
-          <button
-            onClick={exportToPDF}
-            className="flex-1 px-4 py-2.5 rounded-lg bg-emerald-500 text-slate-950 font-semibold hover:bg-emerald-400 transition-colors focus:outline-none focus:ring-2 focus:ring-emerald-500/50 focus:ring-offset-2 focus:ring-offset-slate-900"
-          >
-            Export to PDF
-          </button>
-          <button
-            onClick={() => setShowExportPopup(false)}
-            className="px-4 py-2 rounded-lg bg-slate-700 text-slate-200 hover:bg-slate-600 transition-colors"
-          >
-            Cancel
-          </button>
-        </div>
-      </div>
-    </div>
-  </div>
-)}
-```
 
-#### Modal Requirements
-- **Overlay**: `fixed inset-0 bg-black/50 flex items-center justify-center z-50`
-- **Container**: `bg-slate-800 rounded-2xl border border-slate-700 p-6 max-w-md w-full mx-4`
-- **Header**: 
-  - Title: "Export Options"
-  - Close button (X icon) in top-right
-- **Actions**:
-  - Primary: "Export to PDF" button (emerald, full width with `flex-1`)
-  - Secondary: "Cancel" button (slate, standard width)
-- **Optional Options**: Can include checkboxes or filters for export customization (e.g., "Include inactive items")
+Use the **base modal** at `max-w-md`. Do not use a separate `bg-slate-800` / `bg-black/50` chrome.
+
+- **Header:** “Export Options”; close icon with `aria-label="Close"` and `title="Close"`
+- **Actions:** theme-aware primary “Export to PDF”; Cancel uses the **secondary button**
+- **Copy:** describe the report contents and format. Do **not** say the report is generated in light mode, or mention internal theme or rendering implementation.
+- **Optional options:** checkboxes or filters (for example “Include inactive items”)
 
 #### State Management
 - **Popup State**: `const [showExportPopup, setShowExportPopup] = useState(false)`
@@ -1092,7 +986,7 @@ return (
 - Apply the same hierarchy (title → green section headings → black list/body) to other tools (e.g. export-to-PDF or print from Export tab) so printed and exported reports match this pattern.
 - Keep the printable area focused: no navigation, buttons, or decorative UI in the printed output.
 - In print CSS, explicitly set `color: black` for title, list, and body, and `color: #059669` for `.report-category`, so Tailwind’s on-screen colors don’t carry through.
-- Date display: Use MM/DD/YYYY in the report title and anywhere dates appear in the report body.
+- Date display: Use zero-padded MM/DD/YYYY (for example `02/06/2026`) in the report title and anywhere dates appear in the report body.
 
 ### Card Patterns
 - **Standard Card**: `rounded-2xl border border-slate-800 bg-slate-900/70 p-4` or `p-6`
@@ -1156,15 +1050,14 @@ Use this structure at the top of the tool so the header selector matches across 
 - **Click to Select**: Clicking the card selects it and loads its data
 
 #### Three-Dot Menu
-- **Menu Button**: Positioned absolutely in top-right corner of card
-  ```tsx
-  className="absolute top-1 right-1 p-1 rounded hover:bg-slate-700/50 transition-colors"
-  ```
-- **Menu Icon**: Vertical ellipsis (three dots) SVG
-- **Menu Popup**: 
-  - Position: `absolute top-10 right-0 z-50`
-  - Container: `bg-slate-800 border border-slate-700 rounded-lg shadow-lg min-w-[160px] py-1`
-  - Menu Items: `w-full px-4 py-2 text-left text-sm text-slate-200 hover:bg-slate-700 transition-colors flex items-center gap-2`
+
+Use the same **explicit light/dark panel** as header dropdowns. Do not leave this menu on remapped `bg-slate-800` in light mode.
+
+- **Menu button:** top-right of the card. Hit area at least 44×44px (`min-h-11 min-w-11`). Include `aria-label` and `title`.
+- **Light panel:** `border-slate-200 bg-white shadow-lg ring-1 ring-slate-900/5`
+- **Dark panel:** `border-slate-700 bg-slate-800 shadow-lg`
+- **Light items:** `text-slate-700 hover:bg-slate-100`
+- **Dark items:** `text-slate-200 hover:bg-slate-700`
 
 #### Edit Functionality
 - **Menu Option**: "Edit" with pencil icon
@@ -1182,7 +1075,7 @@ Use this structure at the top of the tool so the header selector matches across 
 - **Menu Option**: "Delete" with trash icon, styled in red
   - `text-red-400 hover:bg-slate-700`
 - **Confirmation Modal**: Required for all delete operations
-  - **Overlay**: `fixed inset-0 bg-black/50 flex items-center justify-center z-50`
+  - **Overlay**: base modal overlay (`bg-black/60 backdrop-blur-sm`) at `z-50`, or `z-[70]` if it stacks on another modal
   - **Container**:
     - **Dark**: `rounded-2xl border border-slate-800 bg-slate-900 p-6 max-w-md w-full mx-4`
     - **Light**: `rounded-2xl border border-slate-200 bg-white p-6 max-w-md w-full mx-4 shadow-2xl`
@@ -1240,8 +1133,11 @@ Use this structure at the top of the tool so the header selector matches across 
 - **Loading Indicator**: Consider spinner or skeleton screens for longer operations
 
 ### Empty States
-- **Message**: `text-slate-400 text-center py-8` - "No items found. Add one to get started!"
-- **Action**: Provide clear call-to-action button to add first item
+
+Two intentional patterns (`text-slate-400 text-center py-8`):
+
+- **Simple single-list tools:** “No [items] found. Add one to get started!” plus the filled **+ Add New** button
+- **Category-scoped / calendar-oriented tools:** “No [items] yet. Click + to add one.” plus the section `+`
 
 ### Search and Filter
 - **Search Input**: Use standard input styling with search icon if needed
@@ -1253,7 +1149,7 @@ Use this structure at the top of the tool so the header selector matches across 
 - **Active + History record rows** in tool apps: use **icon-only** right-aligned actions with **bordered** hit targets; see **Record row actions (Active and History)** under **Components - Buttons**
 - **Tables**: Use card-based layouts rather than traditional tables for better mobile experience
 - **Status Indicators**: Use color-coded badges or borders
-- **Date Display**: Whenever a date is displayed to the user (e.g. in lists, cards, summaries), show it in **MM/DD/YYYY** format. Use a small helper to convert from stored values (e.g. `YYYY-MM-DD` from `<input type="date">`) to display format, e.g. `2/26/2026` not `2026-02-26`. Form inputs may continue to use the native date picker and ISO date strings internally; only the visible text shown to the user should be MM/DD/YYYY.
+- **Date Display**: Show dates as **zero-padded MM/DD/YYYY**. February 6, 2026 is `02/06/2026`, not `2/6/2026` or `2026-02-06`. Form inputs may keep the native date picker and ISO strings internally. See `UX-DAT-001` in `UX_DESIGN_STANDARD.md`.
 
 ### Navigation
 - **Breadcrumbs**: Not currently used, but if needed, use `text-sm text-slate-400` with `hover:text-emerald-300` links
@@ -1329,6 +1225,8 @@ Use `shrink-0` on row icons (SVG) where layout needs it. Use `type="button"` on 
 
 ## Attachments
 
+See `UX-ATT-001` through `UX-ATT-007` in `UX_DESIGN_STANDARD.md`.
+
 Every tool that stores files with a record must use the same paperclip + modal experience. Users should not have to relearn how to add, view, download, or remove files when they move from Important Documents to Healthcare, Repair History, or any later tool.
 
 **Reference implementation:** Important Documents (`app/components/ImportantDocumentsTool.tsx`) using `AttachmentButton` and `AttachmentModal`. Shared helpers live in `lib/attachments.ts`. Shared quota logic lives in `lib/user-storage.ts`.
@@ -1361,16 +1259,13 @@ Use these; do not invent a per-tool upload UI.
 - `previewItem` to open an in-modal image preview after a successful View
 - `maxFiles` — omit for unlimited; set `1` for a single-file record (Important Documents)
 - `busy` while an upload, replace, or remove is in flight
-- `readOnly` — hide add/replace/remove (History). View and Download stay available.
+- `readOnly` — hide add/replace/remove when the **record** is not editable (or for completion-proof files after complete). If History still has Edit, keep attachments editable. View and Download stay available.
 
 ### Paperclip placement
 
-Put `AttachmentButton` in the record action toolbar with the other icon actions (see **Record row actions**). Typical left-to-right order:
+Put `AttachmentButton` first in the record action toolbar. Remaining slots follow **Record row actions**:
 
-1. Paperclip
-2. Primary emerald (Edit / Reactivate)
-3. Secondary (Move to history)
-4. Danger (Delete), when supported
+Paperclip → View (when applicable) → Edit / Reactivate / Restore → Archive / Move to History → Delete.
 
 On add/edit forms, place the paperclip near the record title or the other header actions — not as a full-width file field in the form body.
 
@@ -1384,7 +1279,7 @@ On add/edit forms, place the paperclip near the record title or the other header
 - **Single-file tools (`maxFiles={1}`):** Drop/browse replaces the current file. Button label becomes “Replace file”.
 - **Footer:** “Storage used: {used} of {limit}” from `GET /api/account/storage`.
 - **Escape:** Closes an open image preview first, then the modal.
-- **Overlay:** `z-50`. Do not raise the Attachment modal above password or confirm dialogs.
+- **Overlay:** `z-50` when it is the only modal; **`z-[60]`** when it stacks on another modal. Password and destructive confirms use `z-[70]`.
 
 ### Allowed files
 
@@ -1414,7 +1309,7 @@ A successful Download must not pop a site `alert` (“Document downloaded succes
 
 - **New record:** Files chosen in the modal stay queued on the client until the user saves the parent record. Removing a queued file only clears local state.
 - **Saved record:** Add/replace/remove call the tool API immediately, then refresh the record. Show `busy` on the modal while that request runs.
-- **History / inactive records:** Same paperclip and modal. If the tool treats history as read-only, disable add/replace/remove but still allow View/Download (and password prompts).
+- **History / inactive records:** Same paperclip and modal. Set `readOnly` only when the **record** is read-only until Reactivate / Restore. If History still has Edit, keep attachments editable. Completion-proof files stay read-only after complete.
 
 ### Password-protected files
 
@@ -1551,7 +1446,7 @@ Event files and expense files. Do not attach files to vendors, categories, types
 - History is real (`is_active = false`). History cards show the event paperclip as View/Download only. Expense files stay on the expense but are not reachable until Reactivate. The API must reject add/remove on inactive events.
 - Edit Event is the detail surface. There is no separate event page.
 - Queue files on create; persist immediately on saved records. `addExpense` returns `expenseId` so queued uploads can run after Save Expense.
-- Render `AttachmentModal` after the expense modal so it stacks on top (both use `z-50`).
+- Render `AttachmentModal` after the expense modal. The Attachment overlay uses **`z-[60]`** when it stacks on the expense modal.
 - No paperclip on Vendors, Categories, Types, category-budget rows, Calendar, or export.
 
 ### Meal Planner
@@ -1573,7 +1468,7 @@ List files only. Do not attach files to master items, line items, Print, the Ite
 - Line items are deleted and re-inserted on every list save, so do not attach files to a line item.
 - Queue files on create; persist immediately on saved lists. Save does not require a file.
 - Building a new list from History or Meal Planner “Save as Shopping List” does not copy files.
-- The View modal owns add/view/download/remove. Do not embed a second Attachments section above Print. Render `AttachmentModal` after the View modal so it stacks on top (both use `z-50`).
+- The View modal owns add/view/download/remove. Do not embed a second Attachments section above Print. Render `AttachmentModal` after the View modal. The Attachment overlay uses **`z-[60]`** when it stacks on the View modal.
 - No paperclip on master-item Add/Edit, line-item rows, Print, Items, or the dashboard pin.
 
 ### Goals Tracking
@@ -1585,7 +1480,7 @@ Goal files and update files. Do not attach files to categories, phases, tasks, t
 - Completed is a status field, not Notes-style History. Files stay editable.
 - Phases and tasks are first-class saved records, but do not add paperclips on those rows. Standing files stay on the goal; dated evidence stays on updates.
 - Queue files on create goal and until Add update; persist immediately on saved goals and posted updates. `create` update_note already returns `note.id`. Save / Add update does not require a file.
-- Render `AttachmentModal` after the Update history and Edit Goal modals so it stacks on top (both use `z-50`).
+- Render `AttachmentModal` after the Update history and Edit Goal modals. The Attachment overlay uses **`z-[60]`** when it stacks on those modals.
 - No paperclip on categories, phase/task rows, dashboard pin, or reminder controls.
 
 ### Healthcare Appts & History
@@ -1625,6 +1520,7 @@ Event-series files only (`tools_ce_event_attachments`, bucket `calendar-events`,
 
 Subscription files only (`tools_st_subscription_attachments`, bucket `subscription-tracker`, path `{userId}/{subscriptionId}/...`). Receipts, contracts, and renewal notices share this one store.
 
+- **Add control:** filled **+ Add New Subscription** button. Calendar pinning is optional on a subscription; do not replace this with the section plus.
 - Paperclip on Add New Subscription (queue until save), Edit Subscription, each Active row (paperclip → Edit → Move to history), and each History row (View/Download only).
 - History is `is_active = false` and has no Edit (Reactivate + Delete only). The modal is read-only and the API rejects add/remove until the subscription is reactivated. Reactivate restores the same files as editable.
 - Queue files on create; persist immediately on saved subscriptions. Save does not require a file.
@@ -1638,7 +1534,7 @@ Address files only (`tools_ab_address_attachments`, bucket `address-book`, path 
 - Paperclip on Add New Address (queue until save), Edit Address, View Address (header, beside Close), each Active row (paperclip → View → Edit → Move to history), and each History row (View/Download only).
 - History is `is_active = false` and has no Edit (Restore + Delete only). The modal is read-only and the API rejects add/remove until the address is restored. Restore brings back the same files as editable.
 - Queue files on create; persist immediately on saved addresses. Save does not require a file.
-- Render `AttachmentModal` after the View Address dialog so it stacks on top (both use `z-50`).
+- Render `AttachmentModal` after the View Address dialog. The Attachment overlay uses **`z-[60]`** when it stacks on that dialog.
 - Delete address removes storage objects before the row.
 - No paperclip on the Tags tab, tag chips, Add/Edit tag, or Tag History.
 
@@ -1682,7 +1578,7 @@ Address files only (`tools_ab_address_attachments`, bucket `address-book`, path 
 
 ### Responsive Design
 - **Mobile First**: Design for mobile, enhance for desktop
-- **Touch Targets**: Ensure buttons and interactive elements are at least 44x44px
+- **Touch Targets**: The **clickable container** is at least 44×44px. Glyphs stay 16/20/24px. The same rule applies to the section plus and three-dot menus.
 - **Text Size**: Maintain readable text sizes on mobile (minimum 14px for body text)
 - **Spacing**: Use responsive spacing utilities (`sm:`, `md:`, `lg:`)
 
@@ -1789,13 +1685,17 @@ CREATE POLICY "Users can view their own items" ON junction_table
 ### Storage Buckets and Policies
 
 #### Storage Bucket Setup
-When creating storage buckets for file uploads, follow this standardized pattern:
+When creating storage buckets for file uploads, follow this standardized pattern.
 
-**Bucket Configuration**:
-- **Name**: Use kebab-case (e.g., `repair-history`, `pet-care-schedule`, `important-documents`)
-- **Public**: `true` (or `false` if using signed URLs)
-- **File Size Limit**: `10MB`
-- **Allowed MIME Types**: `image/*`, `application/pdf`
+**Current product standard** (matches `lib/attachments.ts` and `UX_DESIGN_STANDARD.md`):
+- **Name**: kebab-case (e.g., `repair-history`, `pet-care-schedule`, `important-documents`)
+- **Public**: `false` (private). View and download go through the tool’s authenticated route. Do not expose a raw public storage URL in the browser.
+- **File Size Limit**: `10MB` per file
+- **Allowed MIME Types** for **record attachments**: JPEG, PNG, GIF, WebP, HEIC/HEIF, BMP, TIFF, PDF, Word (`.doc` / `.docx`), Excel (`.xls` / `.xlsx`) — the list in `ATTACHMENT_ALLOWED_MIME_TYPES`
+
+**Legacy (do not use for new buckets):** older notes said `Public: true` and allowed only `image/*` plus `application/pdf`. Some archived SQL comments and upload helpers still mention `getPublicUrl`. Treat those as leftover implementation, not the standard.
+
+**Verification note (2026-09-29):** app attachment APIs already validate the newer type list and 10 MB cap. This repo does not contain `INSERT INTO storage.buckets` that would prove live public/private flags. Confirm each hosted bucket is private in the Supabase dashboard before changing production bucket settings. Do not change application code in this documentation pass.
 
 **Folder Structure**:
 Files are organized by user ID in subfolders:
@@ -2014,7 +1914,7 @@ $$;
 
 ## Future Considerations
 
-- Light theme is implemented for authenticated users (see `AppThemeProvider`, `globals.css`, and **Dropdown menus — Light mode** above); extend the same explicit light-mode patterns to other popovers (e.g. in-tool menus) as needed
+- Light theme is implemented for authenticated users (see `AppThemeProvider`, `globals.css`, and **Dropdown menus — Light mode** above). In-tool / category three-dot menus now follow the same explicit light/dark panel as header dropdowns; see `UX_DESIGN_STANDARD.md`
 - Document animation and transition patterns as they're added
 - Create component library/storybook for reusable components
 - Expand the icon set as needed; use the documented Icon Style (outline, stroke, currentColor) for consistency
@@ -2022,9 +1922,22 @@ $$;
 
 ---
 
-## Calendar Events Frequency Design
+## Calendar Events Frequency Design (legacy)
 
-This appendix explains how event **definitions** in `tools_ce_events` relate to the **Dashboard Calendar**, documents the current gap for recurring events, and compares implementation options.
+**Superseded.** Dashboard Calendar pins use the `calendar_pins` table. Dates and titles stay on the source tool row. Do not add `show_on_dashboard` / `add_to_dashboard` on the source table, and do not copy occurrences into `dashboard_items`.
+
+**Verified in this repo (2026-09-29):**
+- Current schema: `supabase/archive/platform/calendar-pins.sql`
+- Server helpers: `lib/calendarPins.ts`, `lib/calendarPinsServer.ts` (`syncCalendarPin`)
+- Generated types include `calendar_pins`
+- One-time cleanup: `supabase/archive/one-time/REMOVE_dashboard_items_and_calendar_flags.sql` drops `dashboard_items` and per-tool `add_to_dashboard` / `show_on_dashboard_calendar` columns
+- Leftover `show_on_dashboard` on shopping lists, to-do categories, or goals is a separate unused KPI-widget flag, not the calendar pin model
+
+The text below is **historical design discussion** (how recurring events might have been expanded into `dashboard_items`). It is not the current implementation and must not be used as a UX or schema requirement. Recurring event **definitions** still live on `tools_ce_events` (frequency, days of week, and so on); the dashboard feed expands **pinned + active** source rows.
+
+---
+
+This appendix originally explained how event **definitions** in `tools_ce_events` relate to the **Dashboard Calendar**, documented a gap for recurring events, and compared implementation options.
 
 ## Current Design Overview
 
@@ -2367,7 +2280,7 @@ Key application areas:
 - `lib/` for shared server/client utility modules.
 - `public/` for static assets.
 
-`system_design.md` is the primary source for design standards, setup essentials, and operational architecture notes.
+`UX_DESIGN_STANDARD.md` is the primary source for UX and visual design. `system_design.md` remains the primary source for setup essentials and operational architecture.
 
 ---
 

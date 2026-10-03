@@ -13,6 +13,7 @@ import {
   isPdfAttachment,
   type AttachmentItem,
 } from '@/lib/attachments';
+import { formatDisplayDate } from '@/lib/format-display-date';
 import {
   QUARTER_GROUPS,
   isQuarterAnchorDate,
@@ -220,16 +221,16 @@ const DEFAULT_CATEGORIES = [
   'Other'
 ];
 
-// Date-only YYYY-MM-DD as local calendar day (not UTC midnight).
-function parseLocalDate(isoDate: string): Date | null {
-  const match = /^(\d{4})-(\d{2})-(\d{2})/.exec(isoDate);
-  if (!match) return null;
-  return new Date(Number(match[1]), Number(match[2]) - 1, Number(match[3]));
+function formatLocalDate(isoDate: string): string {
+  const formatted = formatDisplayDate(isoDate);
+  return formatted || isoDate;
 }
 
-function formatLocalDate(isoDate: string): string {
-  const d = parseLocalDate(isoDate);
-  return d ? d.toLocaleDateString() : isoDate;
+function formatPdfDate(isoDate: string): string {
+  const match = /^(\d{4})-(\d{2})-(\d{2})/.exec(isoDate);
+  if (!match) return isoDate;
+  const date = new Date(Number(match[1]), Number(match[2]) - 1, Number(match[3]));
+  return Number.isNaN(date.getTime()) ? isoDate : date.toLocaleDateString();
 }
 
 function formatReportDate(date: Date): string {
@@ -362,6 +363,7 @@ export function SubscriptionTrackerTool({ toolId }: SubscriptionTrackerToolProps
 
   // History state
   const [showHistory, setShowHistory] = useState(false);
+  const [historyConfirmId, setHistoryConfirmId] = useState<string | null>(null);
   const [deleteConfirmId, setDeleteConfirmId] = useState<string | null>(null);
   const [deleteConfirmText, setDeleteConfirmText] = useState('');
   const deleteConfirmIdRef = useRef<string | null>(null);
@@ -534,6 +536,17 @@ export function SubscriptionTrackerTool({ toolId }: SubscriptionTrackerToolProps
     window.addEventListener('keydown', onKeyDown);
     return () => window.removeEventListener('keydown', onKeyDown);
   }, [showExportPopup, isExportingPdf]);
+
+  useEffect(() => {
+    if (!historyConfirmId) return;
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') {
+        setHistoryConfirmId(null);
+      }
+    };
+    window.addEventListener('keydown', onKeyDown);
+    return () => window.removeEventListener('keydown', onKeyDown);
+  }, [historyConfirmId]);
 
   // Calculate monthly spend
   const calculateMonthlySpend = () => {
@@ -1142,8 +1155,8 @@ export function SubscriptionTrackerTool({ toolId }: SubscriptionTrackerToolProps
           detailLines.push(`Monthly equivalent: ${formatMoney(monthlyEquivalent(subscription))}`);
         }
         if (subscription.frequency === 'annual') {
-          if (subscription.billedDate) detailLines.push(`Billed date: ${formatLocalDate(subscription.billedDate)}`);
-          if (subscription.renewalDate) detailLines.push(`Renewal date: ${formatLocalDate(subscription.renewalDate)}`);
+          if (subscription.billedDate) detailLines.push(`Billed date: ${formatPdfDate(subscription.billedDate)}`);
+          if (subscription.renewalDate) detailLines.push(`Renewal date: ${formatPdfDate(subscription.renewalDate)}`);
         } else if (subscription.dayOfMonth) {
           detailLines.push(`Day of month: ${subscription.dayOfMonth}`);
           if (subscription.frequency === 'quarterly') {
@@ -1151,9 +1164,9 @@ export function SubscriptionTrackerTool({ toolId }: SubscriptionTrackerToolProps
             if (months) detailLines.push(`Billing months: ${months}`);
           }
         }
-        if (subscription.dateAdded) detailLines.push(`Date added: ${formatLocalDate(subscription.dateAdded)}`);
+        if (subscription.dateAdded) detailLines.push(`Date added: ${formatPdfDate(subscription.dateAdded)}`);
         if (!subscription.isActive && subscription.dateInactivated) {
-          detailLines.push(`Date inactivated: ${formatLocalDate(subscription.dateInactivated)}`);
+          detailLines.push(`Date inactivated: ${formatPdfDate(subscription.dateInactivated)}`);
         }
         if (subscription.notes.trim()) detailLines.push(`Notes: ${subscription.notes.trim()}`);
 
@@ -1303,10 +1316,10 @@ export function SubscriptionTrackerTool({ toolId }: SubscriptionTrackerToolProps
         : [];
 
   return (
-    <div className="space-y-6">
+    <div className="min-w-0 space-y-6">
       {/* Header */}
-      <div className="flex items-start justify-between gap-3">
-        <div>
+      <div className="flex flex-wrap items-start justify-between gap-3">
+        <div className="min-w-0">
           <h2 className={titleClass}>Subscription Tracker</h2>
           <p className={descClass}>
             Track and manage all your subscriptions in one place
@@ -1802,58 +1815,58 @@ export function SubscriptionTrackerTool({ toolId }: SubscriptionTrackerToolProps
                         </div>
                       </div>
                     ) : (
-                      <div className="flex items-start justify-between">
-                        <div className="flex-1">
-                          <div className="flex items-center gap-3 mb-2">
-                            <h4 className="text-lg font-semibold text-slate-100">{subscription.name}</h4>
+                      <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+                        <div className="min-w-0 flex-1">
+                          <div className="mb-2 flex flex-wrap items-center gap-3">
+                            <h4 className="min-w-0 break-words text-lg font-semibold text-slate-100">{subscription.name}</h4>
                             <span className={isLight ? 'px-2 py-1 rounded text-xs font-medium border border-emerald-300 bg-emerald-50 text-emerald-800' : 'px-2 py-1 rounded text-xs font-medium bg-emerald-500/20 text-emerald-300'}>
                               {subscription.category}
                             </span>
                             {subscription.addToDashboard && <OnCalendarChip isLight={isLight} />}
                           </div>
-                          <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-sm">
-                            <div>
+                          <div className="grid grid-cols-1 gap-3 text-sm sm:grid-cols-2 lg:grid-cols-4 lg:gap-4">
+                            <div className="flex min-w-0 flex-wrap items-baseline gap-x-2">
                               <span className="text-slate-400">Frequency:</span>
-                              <span className="ml-2 text-slate-200 capitalize">{subscription.frequency}</span>
+                              <span className="break-words text-slate-200 capitalize">{subscription.frequency}</span>
                             </div>
-                            <div>
+                            <div className="flex min-w-0 flex-wrap items-baseline gap-x-2">
                               <span className="text-slate-400">Amount:</span>
-                              <span className="ml-2 text-slate-200">${subscription.amount.toFixed(2)}</span>
+                              <span className="break-words text-slate-200">${subscription.amount.toFixed(2)}</span>
                             </div>
                             {subscription.frequency === 'annual' ? (
-                              <div>
-                                <div>
+                              <div className="min-w-0">
+                                <div className="flex min-w-0 flex-wrap items-baseline gap-x-2">
                                   <span className="text-slate-400">Billed Date:</span>
-                                  <span className="ml-2 text-slate-200">
+                                  <span className="break-words text-slate-200">
                                     {subscription.billedDate ? formatLocalDate(subscription.billedDate) : 'N/A'}
                                   </span>
                                 </div>
-                                <div className="mt-1">
+                                <div className="mt-1 flex min-w-0 flex-wrap items-baseline gap-x-2">
                                   <span className="text-slate-400">Renewal Date:</span>
-                                  <span className="ml-2 text-slate-200">
+                                  <span className="break-words text-slate-200">
                                     {subscription.renewalDate ? formatLocalDate(subscription.renewalDate) : 'N/A'}
                                   </span>
                                 </div>
                               </div>
                             ) : (
-                              <div>
-                                <div>
+                              <div className="min-w-0">
+                                <div className="flex min-w-0 flex-wrap items-baseline gap-x-2">
                                   <span className="text-slate-400">Day of Month:</span>
-                                  <span className="ml-2 text-slate-200">{subscription.dayOfMonth}</span>
+                                  <span className="break-words text-slate-200">{subscription.dayOfMonth}</span>
                                 </div>
                                 {subscription.frequency === 'quarterly' && (
-                                  <div className="mt-1">
+                                  <div className="mt-1 flex min-w-0 flex-wrap items-baseline gap-x-2">
                                     <span className="text-slate-400">Billing months:</span>
-                                    <span className="ml-2 text-slate-200">
+                                    <span className="break-words text-slate-200">
                                       {billingMonthsLabel(subscription.billedDate, subscription.dateAdded) || 'N/A'}
                                     </span>
                                   </div>
                                 )}
                               </div>
                             )}
-                            <div className="md:col-start-4">
+                            <div className="flex min-w-0 flex-wrap items-baseline gap-x-2 lg:col-start-4">
                               <span className="text-slate-400">Monthly:</span>
-                              <span className="ml-2 text-slate-200">
+                              <span className="break-words text-slate-200">
                                 ${subscription.frequency === 'annual' 
                                   ? (subscription.amount / 12).toFixed(2)
                                   : subscription.frequency === 'quarterly'
@@ -1869,7 +1882,7 @@ export function SubscriptionTrackerTool({ toolId }: SubscriptionTrackerToolProps
                             </div>
                           )}
                         </div>
-                        <div className="flex shrink-0 items-center gap-1.5 ml-4">
+                        <div className="flex shrink-0 flex-wrap items-center gap-1.5 sm:ml-4">
                           <AttachmentButton
                             count={subscription.attachments?.length || 0}
                             onClick={() => setAttachmentModal(subscription.id)}
@@ -1887,7 +1900,7 @@ export function SubscriptionTrackerTool({ toolId }: SubscriptionTrackerToolProps
                           </button>
                           <button
                             type="button"
-                            onClick={() => inactivateSubscription(subscription.id)}
+                            onClick={() => setHistoryConfirmId(subscription.id)}
                             aria-label="Move to history"
                             title="Move to history"
                             className={rowIconSecondaryClass}
@@ -1927,27 +1940,27 @@ export function SubscriptionTrackerTool({ toolId }: SubscriptionTrackerToolProps
                 <div className="space-y-4">
                   {inactiveSubscriptions.map(subscription => (
                     <div key={subscription.id} className={`${nestedCardClass} ${isLight ? '' : 'opacity-75'}`}>
-                      <div className="flex items-start justify-between">
-                        <div className="flex-1">
-                          <div className="flex items-center gap-3 mb-2">
-                            <h4 className="text-lg font-semibold text-slate-300">{subscription.name}</h4>
+                      <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+                        <div className="min-w-0 flex-1">
+                          <div className="mb-2 flex flex-wrap items-center gap-3">
+                            <h4 className="min-w-0 break-words text-lg font-semibold text-slate-300">{subscription.name}</h4>
                             <span className={isLight ? 'px-2 py-1 rounded text-xs font-medium border border-slate-300 bg-slate-100 text-slate-700' : 'px-2 py-1 rounded text-xs font-medium bg-slate-600/50 text-slate-400'}>
                               {subscription.category}
                             </span>
                             {subscription.addToDashboard && <OnCalendarChip isLight={isLight} />}
                           </div>
-                          <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-sm">
-                            <div>
+                          <div className="grid grid-cols-1 gap-3 text-sm sm:grid-cols-2 lg:grid-cols-4 lg:gap-4">
+                            <div className="flex min-w-0 flex-wrap items-baseline gap-x-2">
                               <span className="text-slate-500">Frequency:</span>
-                              <span className="ml-2 text-slate-400 capitalize">{subscription.frequency}</span>
+                              <span className="break-words text-slate-400 capitalize">{subscription.frequency}</span>
                             </div>
-                            <div>
+                            <div className="flex min-w-0 flex-wrap items-baseline gap-x-2">
                               <span className="text-slate-500">Amount:</span>
-                              <span className="ml-2 text-slate-400">${subscription.amount.toFixed(2)}</span>
+                              <span className="break-words text-slate-400">${subscription.amount.toFixed(2)}</span>
                             </div>
-                            <div>
+                            <div className="flex min-w-0 flex-wrap items-baseline gap-x-2">
                               <span className="text-slate-500">Inactivated:</span>
-                              <span className="ml-2 text-slate-400">
+                              <span className="break-words text-slate-400">
                                 {subscription.dateInactivated ? formatLocalDate(subscription.dateInactivated) : 'N/A'}
                               </span>
                             </div>
@@ -1959,7 +1972,7 @@ export function SubscriptionTrackerTool({ toolId }: SubscriptionTrackerToolProps
                             </div>
                           )}
                         </div>
-                        <div className="flex shrink-0 items-center gap-1.5 ml-4">
+                        <div className="flex shrink-0 flex-wrap items-center gap-1.5 sm:ml-4">
                           <AttachmentButton
                             count={subscription.attachments?.length || 0}
                             onClick={() => setAttachmentModal(subscription.id)}
@@ -2129,6 +2142,46 @@ export function SubscriptionTrackerTool({ toolId }: SubscriptionTrackerToolProps
                   Cancel
                 </button>
               </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {historyConfirmId && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4 backdrop-blur-sm">
+          <div
+            className={isLight
+              ? 'w-full max-w-md rounded-2xl border border-slate-200 bg-white p-6 shadow-2xl'
+              : 'w-full max-w-md rounded-2xl border border-slate-800 bg-slate-900 p-6 shadow-2xl'}
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="st-history-confirm-title"
+          >
+            <h3 id="st-history-confirm-title" className={isLight ? 'mb-2 text-xl font-semibold text-slate-900' : 'mb-2 text-xl font-semibold text-slate-50'}>
+              Move to History
+            </h3>
+            <p className={isLight ? 'mb-4 text-slate-700' : 'mb-4 text-slate-300'}>
+              Move “{subscriptions.find((subscription) => subscription.id === historyConfirmId)?.name || 'this subscription'}” to history?
+            </p>
+            <div className="flex gap-3">
+              <button
+                type="button"
+                onClick={() => {
+                  const subscriptionId = historyConfirmId;
+                  setHistoryConfirmId(null);
+                  if (subscriptionId) void inactivateSubscription(subscriptionId);
+                }}
+                className={`flex-1 ${primaryButtonClass}`}
+              >
+                Move to History
+              </button>
+              <button
+                type="button"
+                onClick={() => setHistoryConfirmId(null)}
+                className={secondaryButtonClass}
+              >
+                Cancel
+              </button>
             </div>
           </div>
         </div>

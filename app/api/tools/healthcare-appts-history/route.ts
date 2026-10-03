@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { getSession } from '@/lib/session';
+import { getHouseholdDataSession } from '@/lib/session';
 import { supabaseServer } from '@/lib/supabaseServer';
 import { attachmentsByRecordIds, deleteHeaderRecordStorageFiles, deleteRecordStorageFiles, removeHealthcareStorageFiles } from '@/lib/healthcare-storage';
 import { CALENDAR_SOURCE_HEALTHCARE_APPOINTMENT } from '@/lib/calendarPins';
@@ -64,7 +64,7 @@ async function removeEmptyStockHeaders(userId: string, toolId: string): Promise<
 }
 
 export async function GET(request: NextRequest) {
-  const user = await getSession();
+  const user = await getHouseholdDataSession();
   if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
 
   const { searchParams } = new URL(request.url);
@@ -149,7 +149,7 @@ export async function GET(request: NextRequest) {
 }
 
 export async function POST(request: NextRequest) {
-  const user = await getSession();
+  const user = await getHouseholdDataSession();
   if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
 
   try {
@@ -332,7 +332,7 @@ export async function POST(request: NextRequest) {
 }
 
 export async function DELETE(request: NextRequest) {
-  const user = await getSession();
+  const user = await getHouseholdDataSession();
   if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   const { searchParams } = new URL(request.url);
   const toolId = searchParams.get('toolId');

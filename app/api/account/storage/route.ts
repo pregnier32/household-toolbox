@@ -1,9 +1,9 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { getSession } from '@/lib/session';
+import { getHouseholdDataSession } from '@/lib/session';
 import { getUserStorageQuota } from '@/lib/user-storage';
 
 export async function GET(request: NextRequest) {
-  const user = await getSession();
+  const user = await getHouseholdDataSession();
   if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
 
   const refresh = request.nextUrl.searchParams.get('refresh') === '1';

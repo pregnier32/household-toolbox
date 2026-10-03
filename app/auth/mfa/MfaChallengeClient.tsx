@@ -12,7 +12,12 @@ function messageForCode(code: string | undefined): string {
   return 'Something went wrong. Try again.';
 }
 
-export function MfaChallengeClient({ checkFailed }: { checkFailed: boolean }) {
+function safeNextPath(value: string | null): string {
+  if (!value || !value.startsWith('/invite/') || value.startsWith('//') || value.includes('\\')) return '/dashboard';
+  return value;
+}
+
+export function MfaChallengeClient({ checkFailed, nextPath = '/dashboard' }: { checkFailed: boolean; nextPath?: string }) {
   const [code, setCode] = useState('');
   const [error, setError] = useState<string | null>(null);
   const [isVerifying, setIsVerifying] = useState(false);
@@ -49,7 +54,7 @@ export function MfaChallengeClient({ checkFailed }: { checkFailed: boolean }) {
         setError(messageForCode(verified.error.code));
         return;
       }
-      window.location.assign('/dashboard');
+      window.location.assign(safeNextPath(nextPath));
     } catch {
       console.error('MFA challenge failed');
       setError('Something went wrong. Try again.');

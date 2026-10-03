@@ -14,8 +14,9 @@ DROP POLICY IF EXISTS "Users can delete their own files" ON storage.objects;
 
 -- Storage RLS for every Household Toolbox file bucket.
 -- Safe to re-run. Does not create buckets; only (re)creates object policies.
--- Path rule: first folder must be the signed-in user's id.
+-- Path rule: first folder is the household Admin's user id.
 --   {bucket}/{userId}/...
+-- Requires public.can_access_storage_owner from households.sql.
 --
 -- Run in Supabase Dashboard > SQL Editor.
 
@@ -56,26 +57,26 @@ BEGIN
     EXECUTE format('DROP POLICY IF EXISTS %I ON storage.objects', b || ': Users can delete their own files');
 
     EXECUTE format(
-      'CREATE POLICY %I ON storage.objects FOR INSERT TO authenticated WITH CHECK (bucket_id = %L AND (storage.foldername(name))[1] = (select auth.uid())::text)',
+      'CREATE POLICY %I ON storage.objects FOR INSERT TO authenticated WITH CHECK (bucket_id = %L AND public.can_access_storage_owner((storage.foldername(name))[1]))',
       b || ': Users can upload to their own folder',
       b
     );
 
     EXECUTE format(
-      'CREATE POLICY %I ON storage.objects FOR SELECT TO authenticated USING (bucket_id = %L AND (storage.foldername(name))[1] = (select auth.uid())::text)',
+      'CREATE POLICY %I ON storage.objects FOR SELECT TO authenticated USING (bucket_id = %L AND public.can_access_storage_owner((storage.foldername(name))[1]))',
       b || ': Users can read their own files',
       b
     );
 
     EXECUTE format(
-      'CREATE POLICY %I ON storage.objects FOR UPDATE TO authenticated USING (bucket_id = %L AND (storage.foldername(name))[1] = (select auth.uid())::text) WITH CHECK (bucket_id = %L AND (storage.foldername(name))[1] = (select auth.uid())::text)',
+      'CREATE POLICY %I ON storage.objects FOR UPDATE TO authenticated USING (bucket_id = %L AND public.can_access_storage_owner((storage.foldername(name))[1])) WITH CHECK (bucket_id = %L AND public.can_access_storage_owner((storage.foldername(name))[1]))',
       b || ': Users can update their own files',
       b,
       b
     );
 
     EXECUTE format(
-      'CREATE POLICY %I ON storage.objects FOR DELETE TO authenticated USING (bucket_id = %L AND (storage.foldername(name))[1] = (select auth.uid())::text)',
+      'CREATE POLICY %I ON storage.objects FOR DELETE TO authenticated USING (bucket_id = %L AND public.can_access_storage_owner((storage.foldername(name))[1]))',
       b || ': Users can delete their own files',
       b
     );

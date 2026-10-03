@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { getSession } from '@/lib/session';
+import { getHouseholdDataSession } from '@/lib/session';
 import { supabaseServer } from '@/lib/supabaseServer';
 import {
   attachmentsByAddressIds,
@@ -75,7 +75,7 @@ async function replaceAddressTags(addressId: string, selectedTags: string[]) {
 
 // GET - Fetch all addresses and tags for the current user
 export async function GET(request: NextRequest) {
-  const user = await getSession();
+  const user = await getHouseholdDataSession();
 
   if (!user) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
@@ -136,7 +136,7 @@ export async function GET(request: NextRequest) {
 
 // POST - Create, update, inactivate, activate, or delete an address
 export async function POST(request: NextRequest) {
-  const user = await getSession();
+  const user = await getHouseholdDataSession();
 
   if (!user) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
@@ -290,7 +290,7 @@ export async function POST(request: NextRequest) {
 
 // DELETE - Permanently delete an address (from history)
 export async function DELETE(request: NextRequest) {
-  const user = await getSession();
+  const user = await getHouseholdDataSession();
 
   if (!user) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });

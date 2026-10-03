@@ -6,6 +6,7 @@ export type User = {
   firstName: string;
   lastName?: string;
   userStatus?: string;
+  householdRole?: 'admin' | 'user';
 };
 
 export type ToolIcon = {

@@ -60,29 +60,29 @@ DROP POLICY IF EXISTS "Users can view their own subscriptions" ON tools_st_subsc
 CREATE POLICY "Users can view their own subscriptions" ON tools_st_subscriptions
   FOR SELECT
   TO authenticated
-  USING ((select auth.uid()) = user_id);
+  USING (public.can_access_user_data(user_id));
 
 -- INSERT policy
 DROP POLICY IF EXISTS "Users can insert their own subscriptions" ON tools_st_subscriptions;
 CREATE POLICY "Users can insert their own subscriptions" ON tools_st_subscriptions
   FOR INSERT
   TO authenticated
-  WITH CHECK ((select auth.uid()) = user_id);
+  WITH CHECK (public.can_access_user_data(user_id));
 
 -- UPDATE policy
 DROP POLICY IF EXISTS "Users can update their own subscriptions" ON tools_st_subscriptions;
 CREATE POLICY "Users can update their own subscriptions" ON tools_st_subscriptions
   FOR UPDATE
   TO authenticated
-  USING ((select auth.uid()) = user_id)
-  WITH CHECK ((select auth.uid()) = user_id);
+  USING (public.can_access_user_data(user_id))
+  WITH CHECK (public.can_access_user_data(user_id));
 
 -- DELETE policy
 DROP POLICY IF EXISTS "Users can delete their own subscriptions" ON tools_st_subscriptions;
 CREATE POLICY "Users can delete their own subscriptions" ON tools_st_subscriptions
   FOR DELETE
   TO authenticated
-  USING ((select auth.uid()) = user_id);
+  USING (public.can_access_user_data(user_id));
 
 
 
@@ -120,26 +120,26 @@ DROP POLICY IF EXISTS "Users can view their own subscription attachments" ON too
 CREATE POLICY "Users can view their own subscription attachments" ON tools_st_subscription_attachments
   FOR SELECT
   TO authenticated
-  USING (user_id = (select auth.uid()));
+  USING (public.can_access_user_data(user_id));
 
 DROP POLICY IF EXISTS "Users can insert their own subscription attachments" ON tools_st_subscription_attachments;
 CREATE POLICY "Users can insert their own subscription attachments" ON tools_st_subscription_attachments
   FOR INSERT
   TO authenticated
-  WITH CHECK (user_id = (select auth.uid()));
+  WITH CHECK (public.can_access_user_data(user_id));
 
 DROP POLICY IF EXISTS "Users can update their own subscription attachments" ON tools_st_subscription_attachments;
 CREATE POLICY "Users can update their own subscription attachments" ON tools_st_subscription_attachments
   FOR UPDATE
   TO authenticated
-  USING (user_id = (select auth.uid()))
-  WITH CHECK (user_id = (select auth.uid()));
+  USING (public.can_access_user_data(user_id))
+  WITH CHECK (public.can_access_user_data(user_id));
 
 DROP POLICY IF EXISTS "Users can delete their own subscription attachments" ON tools_st_subscription_attachments;
 CREATE POLICY "Users can delete their own subscription attachments" ON tools_st_subscription_attachments
   FOR DELETE
   TO authenticated
-  USING (user_id = (select auth.uid()));
+  USING (public.can_access_user_data(user_id));
 
 
 -- Trigger functions with a fixed search_path.
@@ -166,32 +166,32 @@ CREATE POLICY "subscription-tracker: Users can upload to their own folder"
 ON storage.objects FOR INSERT TO authenticated
 WITH CHECK (
   bucket_id = 'subscription-tracker' AND
-  (storage.foldername(name))[1] = (select auth.uid())::text
+  public.can_access_storage_owner((storage.foldername(name))[1])
 );
 
 CREATE POLICY "subscription-tracker: Users can read their own files"
 ON storage.objects FOR SELECT TO authenticated
 USING (
   bucket_id = 'subscription-tracker' AND
-  (storage.foldername(name))[1] = (select auth.uid())::text
+  public.can_access_storage_owner((storage.foldername(name))[1])
 );
 
 CREATE POLICY "subscription-tracker: Users can update their own files"
 ON storage.objects FOR UPDATE TO authenticated
 USING (
   bucket_id = 'subscription-tracker' AND
-  (storage.foldername(name))[1] = (select auth.uid())::text
+  public.can_access_storage_owner((storage.foldername(name))[1])
 )
 WITH CHECK (
   bucket_id = 'subscription-tracker' AND
-  (storage.foldername(name))[1] = (select auth.uid())::text
+  public.can_access_storage_owner((storage.foldername(name))[1])
 );
 
 CREATE POLICY "subscription-tracker: Users can delete their own files"
 ON storage.objects FOR DELETE TO authenticated
 USING (
   bucket_id = 'subscription-tracker' AND
-  (storage.foldername(name))[1] = (select auth.uid())::text
+  public.can_access_storage_owner((storage.foldername(name))[1])
 );
 
 

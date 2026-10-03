@@ -212,21 +212,21 @@ ALTER TABLE tools_hsa_expenses ENABLE ROW LEVEL SECURITY;
 -- Accounts
 DROP POLICY IF EXISTS "hsa: Users can view their own accounts" ON tools_hsa_accounts;
 CREATE POLICY "hsa: Users can view their own accounts" ON tools_hsa_accounts
-  FOR SELECT TO authenticated USING ((select auth.uid()) = user_id);
+  FOR SELECT TO authenticated USING (public.can_access_user_data(user_id));
 
 DROP POLICY IF EXISTS "hsa: Users can insert their own accounts" ON tools_hsa_accounts;
 CREATE POLICY "hsa: Users can insert their own accounts" ON tools_hsa_accounts
-  FOR INSERT TO authenticated WITH CHECK ((select auth.uid()) = user_id);
+  FOR INSERT TO authenticated WITH CHECK (public.can_access_user_data(user_id));
 
 DROP POLICY IF EXISTS "hsa: Users can update their own accounts" ON tools_hsa_accounts;
 CREATE POLICY "hsa: Users can update their own accounts" ON tools_hsa_accounts
   FOR UPDATE TO authenticated
-  USING ((select auth.uid()) = user_id)
-  WITH CHECK ((select auth.uid()) = user_id);
+  USING (public.can_access_user_data(user_id))
+  WITH CHECK (public.can_access_user_data(user_id));
 
 DROP POLICY IF EXISTS "hsa: Users can delete their own accounts" ON tools_hsa_accounts;
 CREATE POLICY "hsa: Users can delete their own accounts" ON tools_hsa_accounts
-  FOR DELETE TO authenticated USING ((select auth.uid()) = user_id);
+  FOR DELETE TO authenticated USING (public.can_access_user_data(user_id));
 
 -- Default accounts (read-only seed data)
 DROP POLICY IF EXISTS "hsa: Anyone can view default accounts" ON tools_hsa_default_accounts;
@@ -236,66 +236,66 @@ CREATE POLICY "hsa: Anyone can view default accounts" ON tools_hsa_default_accou
 -- Deposits
 DROP POLICY IF EXISTS "hsa: Users can view their own deposits" ON tools_hsa_deposits;
 CREATE POLICY "hsa: Users can view their own deposits" ON tools_hsa_deposits
-  FOR SELECT TO authenticated USING ((select auth.uid()) = user_id);
+  FOR SELECT TO authenticated USING (public.can_access_user_data(user_id));
 
 DROP POLICY IF EXISTS "hsa: Users can insert their own deposits" ON tools_hsa_deposits;
 CREATE POLICY "hsa: Users can insert their own deposits" ON tools_hsa_deposits
   FOR INSERT TO authenticated
   WITH CHECK (
-    (select auth.uid()) = user_id
+    public.can_access_user_data(user_id)
     AND EXISTS (
       SELECT 1 FROM tools_hsa_accounts a
-      WHERE a.id = account_id AND a.user_id = (select auth.uid())
+      WHERE a.id = account_id AND public.can_access_user_data(a.user_id)
     )
   );
 
 DROP POLICY IF EXISTS "hsa: Users can update their own deposits" ON tools_hsa_deposits;
 CREATE POLICY "hsa: Users can update their own deposits" ON tools_hsa_deposits
   FOR UPDATE TO authenticated
-  USING ((select auth.uid()) = user_id)
+  USING (public.can_access_user_data(user_id))
   WITH CHECK (
-    (select auth.uid()) = user_id
+    public.can_access_user_data(user_id)
     AND EXISTS (
       SELECT 1 FROM tools_hsa_accounts a
-      WHERE a.id = account_id AND a.user_id = (select auth.uid())
+      WHERE a.id = account_id AND public.can_access_user_data(a.user_id)
     )
   );
 
 DROP POLICY IF EXISTS "hsa: Users can delete their own deposits" ON tools_hsa_deposits;
 CREATE POLICY "hsa: Users can delete their own deposits" ON tools_hsa_deposits
-  FOR DELETE TO authenticated USING ((select auth.uid()) = user_id);
+  FOR DELETE TO authenticated USING (public.can_access_user_data(user_id));
 
 -- Expenses
 DROP POLICY IF EXISTS "hsa: Users can view their own expenses" ON tools_hsa_expenses;
 CREATE POLICY "hsa: Users can view their own expenses" ON tools_hsa_expenses
-  FOR SELECT TO authenticated USING ((select auth.uid()) = user_id);
+  FOR SELECT TO authenticated USING (public.can_access_user_data(user_id));
 
 DROP POLICY IF EXISTS "hsa: Users can insert their own expenses" ON tools_hsa_expenses;
 CREATE POLICY "hsa: Users can insert their own expenses" ON tools_hsa_expenses
   FOR INSERT TO authenticated
   WITH CHECK (
-    (select auth.uid()) = user_id
+    public.can_access_user_data(user_id)
     AND EXISTS (
       SELECT 1 FROM tools_hsa_accounts a
-      WHERE a.id = account_id AND a.user_id = (select auth.uid())
+      WHERE a.id = account_id AND public.can_access_user_data(a.user_id)
     )
   );
 
 DROP POLICY IF EXISTS "hsa: Users can update their own expenses" ON tools_hsa_expenses;
 CREATE POLICY "hsa: Users can update their own expenses" ON tools_hsa_expenses
   FOR UPDATE TO authenticated
-  USING ((select auth.uid()) = user_id)
+  USING (public.can_access_user_data(user_id))
   WITH CHECK (
-    (select auth.uid()) = user_id
+    public.can_access_user_data(user_id)
     AND EXISTS (
       SELECT 1 FROM tools_hsa_accounts a
-      WHERE a.id = account_id AND a.user_id = (select auth.uid())
+      WHERE a.id = account_id AND public.can_access_user_data(a.user_id)
     )
   );
 
 DROP POLICY IF EXISTS "hsa: Users can delete their own expenses" ON tools_hsa_expenses;
 CREATE POLICY "hsa: Users can delete their own expenses" ON tools_hsa_expenses
-  FOR DELETE TO authenticated USING ((select auth.uid()) = user_id);
+  FOR DELETE TO authenticated USING (public.can_access_user_data(user_id));
 
 -- ============================================================================
 -- SEED DEFAULT ACCOUNTS
@@ -335,26 +335,26 @@ DROP POLICY IF EXISTS "Users can view their own HSA receipts" ON tools_hsa_expen
 CREATE POLICY "Users can view their own HSA receipts" ON tools_hsa_expense_receipts
   FOR SELECT
   TO authenticated
-  USING (user_id = (select auth.uid()));
+  USING (public.can_access_user_data(user_id));
 
 DROP POLICY IF EXISTS "Users can insert their own HSA receipts" ON tools_hsa_expense_receipts;
 CREATE POLICY "Users can insert their own HSA receipts" ON tools_hsa_expense_receipts
   FOR INSERT
   TO authenticated
-  WITH CHECK (user_id = (select auth.uid()));
+  WITH CHECK (public.can_access_user_data(user_id));
 
 DROP POLICY IF EXISTS "Users can update their own HSA receipts" ON tools_hsa_expense_receipts;
 CREATE POLICY "Users can update their own HSA receipts" ON tools_hsa_expense_receipts
   FOR UPDATE
   TO authenticated
-  USING (user_id = (select auth.uid()))
-  WITH CHECK (user_id = (select auth.uid()));
+  USING (public.can_access_user_data(user_id))
+  WITH CHECK (public.can_access_user_data(user_id));
 
 DROP POLICY IF EXISTS "Users can delete their own HSA receipts" ON tools_hsa_expense_receipts;
 CREATE POLICY "Users can delete their own HSA receipts" ON tools_hsa_expense_receipts
   FOR DELETE
   TO authenticated
-  USING (user_id = (select auth.uid()));
+  USING (public.can_access_user_data(user_id));
 
 
 -- Storage policies for bucket "hsa-tracker".
@@ -368,32 +368,32 @@ CREATE POLICY "hsa-tracker: Users can upload to their own folder"
 ON storage.objects FOR INSERT TO authenticated
 WITH CHECK (
   bucket_id = 'hsa-tracker' AND
-  (storage.foldername(name))[1] = (select auth.uid())::text
+  public.can_access_storage_owner((storage.foldername(name))[1])
 );
 
 CREATE POLICY "hsa-tracker: Users can read their own files"
 ON storage.objects FOR SELECT TO authenticated
 USING (
   bucket_id = 'hsa-tracker' AND
-  (storage.foldername(name))[1] = (select auth.uid())::text
+  public.can_access_storage_owner((storage.foldername(name))[1])
 );
 
 CREATE POLICY "hsa-tracker: Users can update their own files"
 ON storage.objects FOR UPDATE TO authenticated
 USING (
   bucket_id = 'hsa-tracker' AND
-  (storage.foldername(name))[1] = (select auth.uid())::text
+  public.can_access_storage_owner((storage.foldername(name))[1])
 )
 WITH CHECK (
   bucket_id = 'hsa-tracker' AND
-  (storage.foldername(name))[1] = (select auth.uid())::text
+  public.can_access_storage_owner((storage.foldername(name))[1])
 );
 
 CREATE POLICY "hsa-tracker: Users can delete their own files"
 ON storage.objects FOR DELETE TO authenticated
 USING (
   bucket_id = 'hsa-tracker' AND
-  (storage.foldername(name))[1] = (select auth.uid())::text
+  public.can_access_storage_owner((storage.foldername(name))[1])
 );
 
 

@@ -185,21 +185,21 @@ ALTER TABLE tools_tl_journal_notes ENABLE ROW LEVEL SECURITY;
 -- Trips
 DROP POLICY IF EXISTS "tl: Users can view their own trips" ON tools_tl_trips;
 CREATE POLICY "tl: Users can view their own trips" ON tools_tl_trips
-  FOR SELECT TO authenticated USING ((select auth.uid()) = user_id);
+  FOR SELECT TO authenticated USING (public.can_access_user_data(user_id));
 
 DROP POLICY IF EXISTS "tl: Users can insert their own trips" ON tools_tl_trips;
 CREATE POLICY "tl: Users can insert their own trips" ON tools_tl_trips
-  FOR INSERT TO authenticated WITH CHECK ((select auth.uid()) = user_id);
+  FOR INSERT TO authenticated WITH CHECK (public.can_access_user_data(user_id));
 
 DROP POLICY IF EXISTS "tl: Users can update their own trips" ON tools_tl_trips;
 CREATE POLICY "tl: Users can update their own trips" ON tools_tl_trips
   FOR UPDATE TO authenticated
-  USING ((select auth.uid()) = user_id)
-  WITH CHECK ((select auth.uid()) = user_id);
+  USING (public.can_access_user_data(user_id))
+  WITH CHECK (public.can_access_user_data(user_id));
 
 DROP POLICY IF EXISTS "tl: Users can delete their own trips" ON tools_tl_trips;
 CREATE POLICY "tl: Users can delete their own trips" ON tools_tl_trips
-  FOR DELETE TO authenticated USING ((select auth.uid()) = user_id);
+  FOR DELETE TO authenticated USING (public.can_access_user_data(user_id));
 
 -- Lodging (via parent trip ownership)
 DROP POLICY IF EXISTS "tl: Users can view their own lodging" ON tools_tl_lodging;
@@ -209,7 +209,7 @@ CREATE POLICY "tl: Users can view their own lodging" ON tools_tl_lodging
     EXISTS (
       SELECT 1 FROM tools_tl_trips t
       WHERE t.id = tools_tl_lodging.trip_id
-        AND t.user_id = (select auth.uid())
+        AND public.can_access_user_data(t.user_id)
     )
   );
 
@@ -220,7 +220,7 @@ CREATE POLICY "tl: Users can insert their own lodging" ON tools_tl_lodging
     EXISTS (
       SELECT 1 FROM tools_tl_trips t
       WHERE t.id = tools_tl_lodging.trip_id
-        AND t.user_id = (select auth.uid())
+        AND public.can_access_user_data(t.user_id)
     )
   );
 
@@ -231,14 +231,14 @@ CREATE POLICY "tl: Users can update their own lodging" ON tools_tl_lodging
     EXISTS (
       SELECT 1 FROM tools_tl_trips t
       WHERE t.id = tools_tl_lodging.trip_id
-        AND t.user_id = (select auth.uid())
+        AND public.can_access_user_data(t.user_id)
     )
   )
   WITH CHECK (
     EXISTS (
       SELECT 1 FROM tools_tl_trips t
       WHERE t.id = tools_tl_lodging.trip_id
-        AND t.user_id = (select auth.uid())
+        AND public.can_access_user_data(t.user_id)
     )
   );
 
@@ -249,7 +249,7 @@ CREATE POLICY "tl: Users can delete their own lodging" ON tools_tl_lodging
     EXISTS (
       SELECT 1 FROM tools_tl_trips t
       WHERE t.id = tools_tl_lodging.trip_id
-        AND t.user_id = (select auth.uid())
+        AND public.can_access_user_data(t.user_id)
     )
   );
 
@@ -261,7 +261,7 @@ CREATE POLICY "tl: Users can view their own journal notes" ON tools_tl_journal_n
     EXISTS (
       SELECT 1 FROM tools_tl_trips t
       WHERE t.id = tools_tl_journal_notes.trip_id
-        AND t.user_id = (select auth.uid())
+        AND public.can_access_user_data(t.user_id)
     )
   );
 
@@ -272,7 +272,7 @@ CREATE POLICY "tl: Users can insert their own journal notes" ON tools_tl_journal
     EXISTS (
       SELECT 1 FROM tools_tl_trips t
       WHERE t.id = tools_tl_journal_notes.trip_id
-        AND t.user_id = (select auth.uid())
+        AND public.can_access_user_data(t.user_id)
     )
   );
 
@@ -283,14 +283,14 @@ CREATE POLICY "tl: Users can update their own journal notes" ON tools_tl_journal
     EXISTS (
       SELECT 1 FROM tools_tl_trips t
       WHERE t.id = tools_tl_journal_notes.trip_id
-        AND t.user_id = (select auth.uid())
+        AND public.can_access_user_data(t.user_id)
     )
   )
   WITH CHECK (
     EXISTS (
       SELECT 1 FROM tools_tl_trips t
       WHERE t.id = tools_tl_journal_notes.trip_id
-        AND t.user_id = (select auth.uid())
+        AND public.can_access_user_data(t.user_id)
     )
   );
 
@@ -301,7 +301,7 @@ CREATE POLICY "tl: Users can delete their own journal notes" ON tools_tl_journal
     EXISTS (
       SELECT 1 FROM tools_tl_trips t
       WHERE t.id = tools_tl_journal_notes.trip_id
-        AND t.user_id = (select auth.uid())
+        AND public.can_access_user_data(t.user_id)
     )
   );
 
@@ -337,26 +337,26 @@ DROP POLICY IF EXISTS "Users can view their own travel log attachments" ON tools
 CREATE POLICY "Users can view their own travel log attachments" ON tools_tl_trip_attachments
   FOR SELECT
   TO authenticated
-  USING (user_id = (select auth.uid()));
+  USING (public.can_access_user_data(user_id));
 
 DROP POLICY IF EXISTS "Users can insert their own travel log attachments" ON tools_tl_trip_attachments;
 CREATE POLICY "Users can insert their own travel log attachments" ON tools_tl_trip_attachments
   FOR INSERT
   TO authenticated
-  WITH CHECK (user_id = (select auth.uid()));
+  WITH CHECK (public.can_access_user_data(user_id));
 
 DROP POLICY IF EXISTS "Users can update their own travel log attachments" ON tools_tl_trip_attachments;
 CREATE POLICY "Users can update their own travel log attachments" ON tools_tl_trip_attachments
   FOR UPDATE
   TO authenticated
-  USING (user_id = (select auth.uid()))
-  WITH CHECK (user_id = (select auth.uid()));
+  USING (public.can_access_user_data(user_id))
+  WITH CHECK (public.can_access_user_data(user_id));
 
 DROP POLICY IF EXISTS "Users can delete their own travel log attachments" ON tools_tl_trip_attachments;
 CREATE POLICY "Users can delete their own travel log attachments" ON tools_tl_trip_attachments
   FOR DELETE
   TO authenticated
-  USING (user_id = (select auth.uid()));
+  USING (public.can_access_user_data(user_id));
 
 
 -- Storage policies for bucket "travel-log".
@@ -370,32 +370,32 @@ CREATE POLICY "travel-log: Users can upload to their own folder"
 ON storage.objects FOR INSERT TO authenticated
 WITH CHECK (
   bucket_id = 'travel-log' AND
-  (storage.foldername(name))[1] = (select auth.uid())::text
+  public.can_access_storage_owner((storage.foldername(name))[1])
 );
 
 CREATE POLICY "travel-log: Users can read their own files"
 ON storage.objects FOR SELECT TO authenticated
 USING (
   bucket_id = 'travel-log' AND
-  (storage.foldername(name))[1] = (select auth.uid())::text
+  public.can_access_storage_owner((storage.foldername(name))[1])
 );
 
 CREATE POLICY "travel-log: Users can update their own files"
 ON storage.objects FOR UPDATE TO authenticated
 USING (
   bucket_id = 'travel-log' AND
-  (storage.foldername(name))[1] = (select auth.uid())::text
+  public.can_access_storage_owner((storage.foldername(name))[1])
 )
 WITH CHECK (
   bucket_id = 'travel-log' AND
-  (storage.foldername(name))[1] = (select auth.uid())::text
+  public.can_access_storage_owner((storage.foldername(name))[1])
 );
 
 CREATE POLICY "travel-log: Users can delete their own files"
 ON storage.objects FOR DELETE TO authenticated
 USING (
   bucket_id = 'travel-log' AND
-  (storage.foldername(name))[1] = (select auth.uid())::text
+  public.can_access_storage_owner((storage.foldername(name))[1])
 );
 
 

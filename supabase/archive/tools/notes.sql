@@ -140,26 +140,26 @@ DROP POLICY IF EXISTS "Users can view their own notes" ON tools_note_notes;
 CREATE POLICY "Users can view their own notes" ON tools_note_notes
   FOR SELECT
   TO authenticated
-  USING ((select auth.uid()) = user_id);
+  USING (public.can_access_user_data(user_id));
 
 DROP POLICY IF EXISTS "Users can insert their own notes" ON tools_note_notes;
 CREATE POLICY "Users can insert their own notes" ON tools_note_notes
   FOR INSERT
   TO authenticated
-  WITH CHECK ((select auth.uid()) = user_id);
+  WITH CHECK (public.can_access_user_data(user_id));
 
 DROP POLICY IF EXISTS "Users can update their own notes" ON tools_note_notes;
 CREATE POLICY "Users can update their own notes" ON tools_note_notes
   FOR UPDATE
   TO authenticated
-  USING ((select auth.uid()) = user_id)
-  WITH CHECK ((select auth.uid()) = user_id);
+  USING (public.can_access_user_data(user_id))
+  WITH CHECK (public.can_access_user_data(user_id));
 
 DROP POLICY IF EXISTS "Users can delete their own notes" ON tools_note_notes;
 CREATE POLICY "Users can delete their own notes" ON tools_note_notes
   FOR DELETE
   TO authenticated
-  USING ((select auth.uid()) = user_id);
+  USING (public.can_access_user_data(user_id));
 
 -- ============================================================================
 -- Tags table policies
@@ -168,26 +168,26 @@ DROP POLICY IF EXISTS "Users can view their own tags" ON tools_note_tags;
 CREATE POLICY "Users can view their own tags" ON tools_note_tags
   FOR SELECT
   TO authenticated
-  USING ((select auth.uid()) = user_id);
+  USING (public.can_access_user_data(user_id));
 
 DROP POLICY IF EXISTS "Users can insert their own tags" ON tools_note_tags;
 CREATE POLICY "Users can insert their own tags" ON tools_note_tags
   FOR INSERT
   TO authenticated
-  WITH CHECK ((select auth.uid()) = user_id);
+  WITH CHECK (public.can_access_user_data(user_id));
 
 DROP POLICY IF EXISTS "Users can update their own tags" ON tools_note_tags;
 CREATE POLICY "Users can update their own tags" ON tools_note_tags
   FOR UPDATE
   TO authenticated
-  USING ((select auth.uid()) = user_id)
-  WITH CHECK ((select auth.uid()) = user_id);
+  USING (public.can_access_user_data(user_id))
+  WITH CHECK (public.can_access_user_data(user_id));
 
 DROP POLICY IF EXISTS "Users can delete their own tags" ON tools_note_tags;
 CREATE POLICY "Users can delete their own tags" ON tools_note_tags
   FOR DELETE
   TO authenticated
-  USING ((select auth.uid()) = user_id);
+  USING (public.can_access_user_data(user_id));
 
 -- ============================================================================
 -- Note tags junction table policies
@@ -200,7 +200,7 @@ CREATE POLICY "Users can view their own note tags" ON tools_note_note_tags
     EXISTS (
       SELECT 1 FROM tools_note_notes
       WHERE tools_note_notes.id = tools_note_note_tags.note_id
-      AND tools_note_notes.user_id = (select auth.uid())
+      AND public.can_access_user_data(tools_note_notes.user_id)
     )
   );
 
@@ -212,13 +212,13 @@ CREATE POLICY "Users can insert their own note tags" ON tools_note_note_tags
     EXISTS (
       SELECT 1 FROM tools_note_notes
       WHERE tools_note_notes.id = tools_note_note_tags.note_id
-      AND tools_note_notes.user_id = (select auth.uid())
+      AND public.can_access_user_data(tools_note_notes.user_id)
     )
     AND
     EXISTS (
       SELECT 1 FROM tools_note_tags
       WHERE tools_note_tags.id = tools_note_note_tags.tag_id
-      AND tools_note_tags.user_id = (select auth.uid())
+      AND public.can_access_user_data(tools_note_tags.user_id)
     )
   );
 
@@ -230,20 +230,20 @@ CREATE POLICY "Users can update their own note tags" ON tools_note_note_tags
     EXISTS (
       SELECT 1 FROM tools_note_notes
       WHERE tools_note_notes.id = tools_note_note_tags.note_id
-      AND tools_note_notes.user_id = (select auth.uid())
+      AND public.can_access_user_data(tools_note_notes.user_id)
     )
   )
   WITH CHECK (
     EXISTS (
       SELECT 1 FROM tools_note_notes
       WHERE tools_note_notes.id = tools_note_note_tags.note_id
-      AND tools_note_notes.user_id = (select auth.uid())
+      AND public.can_access_user_data(tools_note_notes.user_id)
     )
     AND
     EXISTS (
       SELECT 1 FROM tools_note_tags
       WHERE tools_note_tags.id = tools_note_note_tags.tag_id
-      AND tools_note_tags.user_id = (select auth.uid())
+      AND public.can_access_user_data(tools_note_tags.user_id)
     )
   );
 
@@ -255,7 +255,7 @@ CREATE POLICY "Users can delete their own note tags" ON tools_note_note_tags
     EXISTS (
       SELECT 1 FROM tools_note_notes
       WHERE tools_note_notes.id = tools_note_note_tags.note_id
-      AND tools_note_notes.user_id = (select auth.uid())
+      AND public.can_access_user_data(tools_note_notes.user_id)
     )
   );
 
@@ -270,7 +270,7 @@ CREATE POLICY "Users can view their own security questions" ON tools_note_securi
     EXISTS (
       SELECT 1 FROM tools_note_notes
       WHERE tools_note_notes.id = tools_note_security_questions.note_id
-      AND tools_note_notes.user_id = (select auth.uid())
+      AND public.can_access_user_data(tools_note_notes.user_id)
     )
   );
 
@@ -282,7 +282,7 @@ CREATE POLICY "Users can insert their own security questions" ON tools_note_secu
     EXISTS (
       SELECT 1 FROM tools_note_notes
       WHERE tools_note_notes.id = tools_note_security_questions.note_id
-      AND tools_note_notes.user_id = (select auth.uid())
+      AND public.can_access_user_data(tools_note_notes.user_id)
     )
   );
 
@@ -294,14 +294,14 @@ CREATE POLICY "Users can update their own security questions" ON tools_note_secu
     EXISTS (
       SELECT 1 FROM tools_note_notes
       WHERE tools_note_notes.id = tools_note_security_questions.note_id
-      AND tools_note_notes.user_id = (select auth.uid())
+      AND public.can_access_user_data(tools_note_notes.user_id)
     )
   )
   WITH CHECK (
     EXISTS (
       SELECT 1 FROM tools_note_notes
       WHERE tools_note_notes.id = tools_note_security_questions.note_id
-      AND tools_note_notes.user_id = (select auth.uid())
+      AND public.can_access_user_data(tools_note_notes.user_id)
     )
   );
 
@@ -313,7 +313,7 @@ CREATE POLICY "Users can delete their own security questions" ON tools_note_secu
     EXISTS (
       SELECT 1 FROM tools_note_notes
       WHERE tools_note_notes.id = tools_note_security_questions.note_id
-      AND tools_note_notes.user_id = (select auth.uid())
+      AND public.can_access_user_data(tools_note_notes.user_id)
     )
   );
 
@@ -345,26 +345,26 @@ DROP POLICY IF EXISTS "Users can view their own note attachments" ON tools_note_
 CREATE POLICY "Users can view their own note attachments" ON tools_note_attachments
   FOR SELECT
   TO authenticated
-  USING (user_id = (select auth.uid()));
+  USING (public.can_access_user_data(user_id));
 
 DROP POLICY IF EXISTS "Users can insert their own note attachments" ON tools_note_attachments;
 CREATE POLICY "Users can insert their own note attachments" ON tools_note_attachments
   FOR INSERT
   TO authenticated
-  WITH CHECK (user_id = (select auth.uid()));
+  WITH CHECK (public.can_access_user_data(user_id));
 
 DROP POLICY IF EXISTS "Users can update their own note attachments" ON tools_note_attachments;
 CREATE POLICY "Users can update their own note attachments" ON tools_note_attachments
   FOR UPDATE
   TO authenticated
-  USING (user_id = (select auth.uid()))
-  WITH CHECK (user_id = (select auth.uid()));
+  USING (public.can_access_user_data(user_id))
+  WITH CHECK (public.can_access_user_data(user_id));
 
 DROP POLICY IF EXISTS "Users can delete their own note attachments" ON tools_note_attachments;
 CREATE POLICY "Users can delete their own note attachments" ON tools_note_attachments
   FOR DELETE
   TO authenticated
-  USING (user_id = (select auth.uid()));
+  USING (public.can_access_user_data(user_id));
 
 
 -- Trigger functions with a fixed search_path.
@@ -413,32 +413,32 @@ CREATE POLICY "notes: Users can upload to their own folder"
 ON storage.objects FOR INSERT TO authenticated
 WITH CHECK (
   bucket_id = 'notes' AND
-  (storage.foldername(name))[1] = (select auth.uid())::text
+  public.can_access_storage_owner((storage.foldername(name))[1])
 );
 
 CREATE POLICY "notes: Users can read their own files"
 ON storage.objects FOR SELECT TO authenticated
 USING (
   bucket_id = 'notes' AND
-  (storage.foldername(name))[1] = (select auth.uid())::text
+  public.can_access_storage_owner((storage.foldername(name))[1])
 );
 
 CREATE POLICY "notes: Users can update their own files"
 ON storage.objects FOR UPDATE TO authenticated
 USING (
   bucket_id = 'notes' AND
-  (storage.foldername(name))[1] = (select auth.uid())::text
+  public.can_access_storage_owner((storage.foldername(name))[1])
 )
 WITH CHECK (
   bucket_id = 'notes' AND
-  (storage.foldername(name))[1] = (select auth.uid())::text
+  public.can_access_storage_owner((storage.foldername(name))[1])
 );
 
 CREATE POLICY "notes: Users can delete their own files"
 ON storage.objects FOR DELETE TO authenticated
 USING (
   bucket_id = 'notes' AND
-  (storage.foldername(name))[1] = (select auth.uid())::text
+  public.can_access_storage_owner((storage.foldername(name))[1])
 );
 
 

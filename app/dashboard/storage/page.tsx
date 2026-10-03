@@ -39,6 +39,7 @@ export default function StoragePage() {
   const isLight = resolvedTheme === 'light';
   const router = useRouter();
   const [userName, setUserName] = useState('Account');
+  const [householdRole, setHouseholdRole] = useState<'admin' | 'user' | null>(null);
   const [storage, setStorage] = useState<StorageDetails | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -74,6 +75,7 @@ export default function StoragePage() {
       .then((data) => {
         if (data.user) {
           setUserName(`${data.user.firstName || ''} ${data.user.lastName || ''}`.trim() || 'Account');
+          setHouseholdRole(data.user.householdRole === 'user' ? 'user' : 'admin');
         } else {
           router.push('/');
         }
@@ -165,17 +167,25 @@ export default function StoragePage() {
               <h2 className={isLight ? 'text-lg font-semibold text-slate-900' : 'text-lg font-semibold text-slate-50'}>
                 Increase your limit
               </h2>
-              <p className={`${mutedClass} mt-1 mb-4`}>
-                Plan billing is not enabled yet. These options will become available when pricing is set up.
-              </p>
-              <div className="flex flex-wrap gap-3">
-                <button type="button" disabled className={disabledButtonClass}>
-                  Upgrade to Paid · 1 GB
-                </button>
-                <button type="button" disabled className={disabledButtonClass}>
-                  Add 1 GB · $1/month
-                </button>
-              </div>
+              {householdRole === 'user' ? (
+                <p className={`${mutedClass} mt-1`}>
+                  Only the household Admin can upgrade storage, change the subscription, or purchase add-ons.
+                </p>
+              ) : (
+                <>
+                  <p className={`${mutedClass} mt-1 mb-4`}>
+                    Plan billing is not enabled yet. These options will become available when pricing is set up.
+                  </p>
+                  <div className="flex flex-wrap gap-3">
+                    <button type="button" disabled className={disabledButtonClass}>
+                      Upgrade to Paid · 1 GB
+                    </button>
+                    <button type="button" disabled className={disabledButtonClass}>
+                      Add 1 GB · $1/month
+                    </button>
+                  </div>
+                </>
+              )}
             </section>
 
             <section className={tableCardClass}>

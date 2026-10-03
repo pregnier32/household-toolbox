@@ -1,12 +1,12 @@
 import { NextResponse } from 'next/server';
-import { getSession } from '@/lib/session';
+import { getHouseholdDataSession } from '@/lib/session';
 import { supabaseServer } from '@/lib/supabaseServer';
 import { getUsedTrialToolIds, toolOffersTrial } from '@/lib/user-tool-entitlements';
 
 // GET - Fetch all tools with their icons for authenticated users
 export async function GET() {
   // Check if user is authenticated
-  const user = await getSession();
+  const user = await getHouseholdDataSession();
 
   if (!user) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });

@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { getSession } from '@/lib/session';
+import { getHouseholdDataSession } from '@/lib/session';
 import { supabaseServer } from '@/lib/supabaseServer';
 import { ensureToolEntitlement, toolOffersTrial } from '@/lib/user-tool-entitlements';
 
@@ -22,10 +22,13 @@ async function recordEntitlement(userId: string, tool: { id: string; name: strin
 // POST - Purchase a tool (add to users_tools table)
 export async function POST(request: NextRequest) {
   // Check if user is authenticated
-  const user = await getSession();
+  const user = await getHouseholdDataSession();
 
   if (!user) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+  }
+  if (user.householdRole !== 'admin') {
+    return NextResponse.json({ error: 'Only the household Admin can add tools.' }, { status: 403 });
   }
 
   try {

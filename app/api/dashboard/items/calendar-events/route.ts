@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { getSession } from '@/lib/session';
+import { getHouseholdDataSession } from '@/lib/session';
 import { supabaseServer } from '@/lib/supabaseServer';
 import { CALENDAR_SOURCE_CALENDAR_EVENT } from '@/lib/calendarPins';
 import { getPinnedSourceIds } from '@/lib/calendarPinsServer';
@@ -177,7 +177,7 @@ function expandEventToOccurrences(
  * - toolId: Optional tool ID to filter by specific tool
  */
 export async function GET(request: NextRequest) {
-  const user = await getSession();
+  const user = await getHouseholdDataSession();
 
   if (!user) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });

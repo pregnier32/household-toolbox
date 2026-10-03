@@ -237,119 +237,119 @@ CREATE POLICY "Anyone can view default categories" ON tools_gt_default_categorie
 -- Categories
 DROP POLICY IF EXISTS "Users can view their own categories" ON tools_gt_categories;
 CREATE POLICY "Users can view their own categories" ON tools_gt_categories
-  FOR SELECT TO authenticated USING ((select auth.uid()) = user_id);
+  FOR SELECT TO authenticated USING (public.can_access_user_data(user_id));
 
 DROP POLICY IF EXISTS "Users can insert their own categories" ON tools_gt_categories;
 CREATE POLICY "Users can insert their own categories" ON tools_gt_categories
-  FOR INSERT TO authenticated WITH CHECK ((select auth.uid()) = user_id);
+  FOR INSERT TO authenticated WITH CHECK (public.can_access_user_data(user_id));
 
 DROP POLICY IF EXISTS "Users can update their own categories" ON tools_gt_categories;
 CREATE POLICY "Users can update their own categories" ON tools_gt_categories
   FOR UPDATE TO authenticated
-  USING ((select auth.uid()) = user_id)
-  WITH CHECK ((select auth.uid()) = user_id);
+  USING (public.can_access_user_data(user_id))
+  WITH CHECK (public.can_access_user_data(user_id));
 
 DROP POLICY IF EXISTS "Users can delete their own categories" ON tools_gt_categories;
 CREATE POLICY "Users can delete their own categories" ON tools_gt_categories
-  FOR DELETE TO authenticated USING ((select auth.uid()) = user_id);
+  FOR DELETE TO authenticated USING (public.can_access_user_data(user_id));
 
 -- Goals
 DROP POLICY IF EXISTS "Users can view their own goals" ON tools_gt_goals;
 CREATE POLICY "Users can view their own goals" ON tools_gt_goals
-  FOR SELECT TO authenticated USING ((select auth.uid()) = user_id);
+  FOR SELECT TO authenticated USING (public.can_access_user_data(user_id));
 
 DROP POLICY IF EXISTS "Users can insert their own goals" ON tools_gt_goals;
 CREATE POLICY "Users can insert their own goals" ON tools_gt_goals
   FOR INSERT TO authenticated
   WITH CHECK (
-    (select auth.uid()) = user_id AND
+    public.can_access_user_data(user_id) AND
     EXISTS (
       SELECT 1 FROM tools_gt_categories c
-      WHERE c.id = category_id AND c.user_id = (select auth.uid())
+      WHERE c.id = category_id AND public.can_access_user_data(c.user_id)
     )
   );
 
 DROP POLICY IF EXISTS "Users can update their own goals" ON tools_gt_goals;
 CREATE POLICY "Users can update their own goals" ON tools_gt_goals
   FOR UPDATE TO authenticated
-  USING ((select auth.uid()) = user_id)
+  USING (public.can_access_user_data(user_id))
   WITH CHECK (
-    (select auth.uid()) = user_id AND
+    public.can_access_user_data(user_id) AND
     EXISTS (
       SELECT 1 FROM tools_gt_categories c
-      WHERE c.id = category_id AND c.user_id = (select auth.uid())
+      WHERE c.id = category_id AND public.can_access_user_data(c.user_id)
     )
   );
 
 DROP POLICY IF EXISTS "Users can delete their own goals" ON tools_gt_goals;
 CREATE POLICY "Users can delete their own goals" ON tools_gt_goals
-  FOR DELETE TO authenticated USING ((select auth.uid()) = user_id);
+  FOR DELETE TO authenticated USING (public.can_access_user_data(user_id));
 
 -- Phases (access via goal ownership)
 DROP POLICY IF EXISTS "Users can view their own phases" ON tools_gt_phases;
 CREATE POLICY "Users can view their own phases" ON tools_gt_phases
   FOR SELECT TO authenticated
-  USING (EXISTS (SELECT 1 FROM tools_gt_goals g WHERE g.id = goal_id AND g.user_id = (select auth.uid())));
+  USING (EXISTS (SELECT 1 FROM tools_gt_goals g WHERE g.id = goal_id AND public.can_access_user_data(g.user_id)));
 
 DROP POLICY IF EXISTS "Users can insert their own phases" ON tools_gt_phases;
 CREATE POLICY "Users can insert their own phases" ON tools_gt_phases
   FOR INSERT TO authenticated
-  WITH CHECK (EXISTS (SELECT 1 FROM tools_gt_goals g WHERE g.id = goal_id AND g.user_id = (select auth.uid())));
+  WITH CHECK (EXISTS (SELECT 1 FROM tools_gt_goals g WHERE g.id = goal_id AND public.can_access_user_data(g.user_id)));
 
 DROP POLICY IF EXISTS "Users can update their own phases" ON tools_gt_phases;
 CREATE POLICY "Users can update their own phases" ON tools_gt_phases
   FOR UPDATE TO authenticated
-  USING (EXISTS (SELECT 1 FROM tools_gt_goals g WHERE g.id = goal_id AND g.user_id = (select auth.uid())))
-  WITH CHECK (EXISTS (SELECT 1 FROM tools_gt_goals g WHERE g.id = goal_id AND g.user_id = (select auth.uid())));
+  USING (EXISTS (SELECT 1 FROM tools_gt_goals g WHERE g.id = goal_id AND public.can_access_user_data(g.user_id)))
+  WITH CHECK (EXISTS (SELECT 1 FROM tools_gt_goals g WHERE g.id = goal_id AND public.can_access_user_data(g.user_id)));
 
 DROP POLICY IF EXISTS "Users can delete their own phases" ON tools_gt_phases;
 CREATE POLICY "Users can delete their own phases" ON tools_gt_phases
   FOR DELETE TO authenticated
-  USING (EXISTS (SELECT 1 FROM tools_gt_goals g WHERE g.id = goal_id AND g.user_id = (select auth.uid())));
+  USING (EXISTS (SELECT 1 FROM tools_gt_goals g WHERE g.id = goal_id AND public.can_access_user_data(g.user_id)));
 
 -- Tasks (access via goal ownership)
 DROP POLICY IF EXISTS "Users can view their own tasks" ON tools_gt_tasks;
 CREATE POLICY "Users can view their own tasks" ON tools_gt_tasks
   FOR SELECT TO authenticated
-  USING (EXISTS (SELECT 1 FROM tools_gt_goals g WHERE g.id = goal_id AND g.user_id = (select auth.uid())));
+  USING (EXISTS (SELECT 1 FROM tools_gt_goals g WHERE g.id = goal_id AND public.can_access_user_data(g.user_id)));
 
 DROP POLICY IF EXISTS "Users can insert their own tasks" ON tools_gt_tasks;
 CREATE POLICY "Users can insert their own tasks" ON tools_gt_tasks
   FOR INSERT TO authenticated
-  WITH CHECK (EXISTS (SELECT 1 FROM tools_gt_goals g WHERE g.id = goal_id AND g.user_id = (select auth.uid())));
+  WITH CHECK (EXISTS (SELECT 1 FROM tools_gt_goals g WHERE g.id = goal_id AND public.can_access_user_data(g.user_id)));
 
 DROP POLICY IF EXISTS "Users can update their own tasks" ON tools_gt_tasks;
 CREATE POLICY "Users can update their own tasks" ON tools_gt_tasks
   FOR UPDATE TO authenticated
-  USING (EXISTS (SELECT 1 FROM tools_gt_goals g WHERE g.id = goal_id AND g.user_id = (select auth.uid())))
-  WITH CHECK (EXISTS (SELECT 1 FROM tools_gt_goals g WHERE g.id = goal_id AND g.user_id = (select auth.uid())));
+  USING (EXISTS (SELECT 1 FROM tools_gt_goals g WHERE g.id = goal_id AND public.can_access_user_data(g.user_id)))
+  WITH CHECK (EXISTS (SELECT 1 FROM tools_gt_goals g WHERE g.id = goal_id AND public.can_access_user_data(g.user_id)));
 
 DROP POLICY IF EXISTS "Users can delete their own tasks" ON tools_gt_tasks;
 CREATE POLICY "Users can delete their own tasks" ON tools_gt_tasks
   FOR DELETE TO authenticated
-  USING (EXISTS (SELECT 1 FROM tools_gt_goals g WHERE g.id = goal_id AND g.user_id = (select auth.uid())));
+  USING (EXISTS (SELECT 1 FROM tools_gt_goals g WHERE g.id = goal_id AND public.can_access_user_data(g.user_id)));
 
 -- Update notes (access via goal ownership)
 DROP POLICY IF EXISTS "Users can view their own update notes" ON tools_gt_update_notes;
 CREATE POLICY "Users can view their own update notes" ON tools_gt_update_notes
   FOR SELECT TO authenticated
-  USING (EXISTS (SELECT 1 FROM tools_gt_goals g WHERE g.id = goal_id AND g.user_id = (select auth.uid())));
+  USING (EXISTS (SELECT 1 FROM tools_gt_goals g WHERE g.id = goal_id AND public.can_access_user_data(g.user_id)));
 
 DROP POLICY IF EXISTS "Users can insert their own update notes" ON tools_gt_update_notes;
 CREATE POLICY "Users can insert their own update notes" ON tools_gt_update_notes
   FOR INSERT TO authenticated
-  WITH CHECK (EXISTS (SELECT 1 FROM tools_gt_goals g WHERE g.id = goal_id AND g.user_id = (select auth.uid())));
+  WITH CHECK (EXISTS (SELECT 1 FROM tools_gt_goals g WHERE g.id = goal_id AND public.can_access_user_data(g.user_id)));
 
 DROP POLICY IF EXISTS "Users can update their own update notes" ON tools_gt_update_notes;
 CREATE POLICY "Users can update their own update notes" ON tools_gt_update_notes
   FOR UPDATE TO authenticated
-  USING (EXISTS (SELECT 1 FROM tools_gt_goals g WHERE g.id = goal_id AND g.user_id = (select auth.uid())))
-  WITH CHECK (EXISTS (SELECT 1 FROM tools_gt_goals g WHERE g.id = goal_id AND g.user_id = (select auth.uid())));
+  USING (EXISTS (SELECT 1 FROM tools_gt_goals g WHERE g.id = goal_id AND public.can_access_user_data(g.user_id)))
+  WITH CHECK (EXISTS (SELECT 1 FROM tools_gt_goals g WHERE g.id = goal_id AND public.can_access_user_data(g.user_id)));
 
 DROP POLICY IF EXISTS "Users can delete their own update notes" ON tools_gt_update_notes;
 CREATE POLICY "Users can delete their own update notes" ON tools_gt_update_notes
   FOR DELETE TO authenticated
-  USING (EXISTS (SELECT 1 FROM tools_gt_goals g WHERE g.id = goal_id AND g.user_id = (select auth.uid())));
+  USING (EXISTS (SELECT 1 FROM tools_gt_goals g WHERE g.id = goal_id AND public.can_access_user_data(g.user_id)));
 
 -- ============================================================================
 -- SEED DEFAULT CATEGORIES (Home, Finance, Health, Career, Personal)
@@ -394,26 +394,26 @@ DROP POLICY IF EXISTS "Users can view their own GT goal attachments" ON tools_gt
 CREATE POLICY "Users can view their own GT goal attachments" ON tools_gt_goal_attachments
   FOR SELECT
   TO authenticated
-  USING (user_id = (select auth.uid()));
+  USING (public.can_access_user_data(user_id));
 
 DROP POLICY IF EXISTS "Users can insert their own GT goal attachments" ON tools_gt_goal_attachments;
 CREATE POLICY "Users can insert their own GT goal attachments" ON tools_gt_goal_attachments
   FOR INSERT
   TO authenticated
-  WITH CHECK (user_id = (select auth.uid()));
+  WITH CHECK (public.can_access_user_data(user_id));
 
 DROP POLICY IF EXISTS "Users can update their own GT goal attachments" ON tools_gt_goal_attachments;
 CREATE POLICY "Users can update their own GT goal attachments" ON tools_gt_goal_attachments
   FOR UPDATE
   TO authenticated
-  USING (user_id = (select auth.uid()))
-  WITH CHECK (user_id = (select auth.uid()));
+  USING (public.can_access_user_data(user_id))
+  WITH CHECK (public.can_access_user_data(user_id));
 
 DROP POLICY IF EXISTS "Users can delete their own GT goal attachments" ON tools_gt_goal_attachments;
 CREATE POLICY "Users can delete their own GT goal attachments" ON tools_gt_goal_attachments
   FOR DELETE
   TO authenticated
-  USING (user_id = (select auth.uid()));
+  USING (public.can_access_user_data(user_id));
 
 CREATE TABLE IF NOT EXISTS tools_gt_update_attachments (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
@@ -435,26 +435,26 @@ DROP POLICY IF EXISTS "Users can view their own GT update attachments" ON tools_
 CREATE POLICY "Users can view their own GT update attachments" ON tools_gt_update_attachments
   FOR SELECT
   TO authenticated
-  USING (user_id = (select auth.uid()));
+  USING (public.can_access_user_data(user_id));
 
 DROP POLICY IF EXISTS "Users can insert their own GT update attachments" ON tools_gt_update_attachments;
 CREATE POLICY "Users can insert their own GT update attachments" ON tools_gt_update_attachments
   FOR INSERT
   TO authenticated
-  WITH CHECK (user_id = (select auth.uid()));
+  WITH CHECK (public.can_access_user_data(user_id));
 
 DROP POLICY IF EXISTS "Users can update their own GT update attachments" ON tools_gt_update_attachments;
 CREATE POLICY "Users can update their own GT update attachments" ON tools_gt_update_attachments
   FOR UPDATE
   TO authenticated
-  USING (user_id = (select auth.uid()))
-  WITH CHECK (user_id = (select auth.uid()));
+  USING (public.can_access_user_data(user_id))
+  WITH CHECK (public.can_access_user_data(user_id));
 
 DROP POLICY IF EXISTS "Users can delete their own GT update attachments" ON tools_gt_update_attachments;
 CREATE POLICY "Users can delete their own GT update attachments" ON tools_gt_update_attachments
   FOR DELETE
   TO authenticated
-  USING (user_id = (select auth.uid()));
+  USING (public.can_access_user_data(user_id));
 
 
 -- Storage policies for bucket "goals-tracking".
@@ -468,32 +468,32 @@ CREATE POLICY "goals-tracking: Users can upload to their own folder"
 ON storage.objects FOR INSERT TO authenticated
 WITH CHECK (
   bucket_id = 'goals-tracking' AND
-  (storage.foldername(name))[1] = (select auth.uid())::text
+  public.can_access_storage_owner((storage.foldername(name))[1])
 );
 
 CREATE POLICY "goals-tracking: Users can read their own files"
 ON storage.objects FOR SELECT TO authenticated
 USING (
   bucket_id = 'goals-tracking' AND
-  (storage.foldername(name))[1] = (select auth.uid())::text
+  public.can_access_storage_owner((storage.foldername(name))[1])
 );
 
 CREATE POLICY "goals-tracking: Users can update their own files"
 ON storage.objects FOR UPDATE TO authenticated
 USING (
   bucket_id = 'goals-tracking' AND
-  (storage.foldername(name))[1] = (select auth.uid())::text
+  public.can_access_storage_owner((storage.foldername(name))[1])
 )
 WITH CHECK (
   bucket_id = 'goals-tracking' AND
-  (storage.foldername(name))[1] = (select auth.uid())::text
+  public.can_access_storage_owner((storage.foldername(name))[1])
 );
 
 CREATE POLICY "goals-tracking: Users can delete their own files"
 ON storage.objects FOR DELETE TO authenticated
 USING (
   bucket_id = 'goals-tracking' AND
-  (storage.foldername(name))[1] = (select auth.uid())::text
+  public.can_access_storage_owner((storage.foldername(name))[1])
 );
 
 

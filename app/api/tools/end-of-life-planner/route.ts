@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { getSession } from '@/lib/session';
+import { getHouseholdDataSession } from '@/lib/session';
 import {
   createEolPlan,
   deleteEolPlan,
@@ -14,7 +14,7 @@ function toolIdFrom(request: NextRequest, body?: { toolId?: string }) {
 }
 
 export async function GET(request: NextRequest) {
-  const user = await getSession();
+  const user = await getHouseholdDataSession();
   if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   const toolId = toolIdFrom(request);
   if (!toolId) return NextResponse.json({ error: 'toolId is required' }, { status: 400 });
@@ -28,7 +28,7 @@ export async function GET(request: NextRequest) {
 }
 
 export async function POST(request: NextRequest) {
-  const user = await getSession();
+  const user = await getHouseholdDataSession();
   if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   try {
     const body = await request.json();
@@ -54,7 +54,7 @@ export async function POST(request: NextRequest) {
 }
 
 export async function PUT(request: NextRequest) {
-  const user = await getSession();
+  const user = await getHouseholdDataSession();
   if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   try {
     const body = await request.json();
@@ -70,7 +70,7 @@ export async function PUT(request: NextRequest) {
 }
 
 export async function PATCH(request: NextRequest) {
-  const user = await getSession();
+  const user = await getHouseholdDataSession();
   if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   try {
     const body = await request.json();
@@ -85,7 +85,7 @@ export async function PATCH(request: NextRequest) {
 }
 
 export async function DELETE(request: NextRequest) {
-  const user = await getSession();
+  const user = await getHouseholdDataSession();
   if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   const toolId = toolIdFrom(request);
   const planId = request.nextUrl.searchParams.get('id');

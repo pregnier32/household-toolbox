@@ -129,40 +129,40 @@ ALTER TABLE tools_ab_address_tags ENABLE ROW LEVEL SECURITY;
 -- Addresses
 DROP POLICY IF EXISTS "ab: Users can view their own addresses" ON tools_ab_addresses;
 CREATE POLICY "ab: Users can view their own addresses" ON tools_ab_addresses
-  FOR SELECT TO authenticated USING ((select auth.uid()) = user_id);
+  FOR SELECT TO authenticated USING (public.can_access_user_data(user_id));
 
 DROP POLICY IF EXISTS "ab: Users can insert their own addresses" ON tools_ab_addresses;
 CREATE POLICY "ab: Users can insert their own addresses" ON tools_ab_addresses
-  FOR INSERT TO authenticated WITH CHECK ((select auth.uid()) = user_id);
+  FOR INSERT TO authenticated WITH CHECK (public.can_access_user_data(user_id));
 
 DROP POLICY IF EXISTS "ab: Users can update their own addresses" ON tools_ab_addresses;
 CREATE POLICY "ab: Users can update their own addresses" ON tools_ab_addresses
   FOR UPDATE TO authenticated
-  USING ((select auth.uid()) = user_id)
-  WITH CHECK ((select auth.uid()) = user_id);
+  USING (public.can_access_user_data(user_id))
+  WITH CHECK (public.can_access_user_data(user_id));
 
 DROP POLICY IF EXISTS "ab: Users can delete their own addresses" ON tools_ab_addresses;
 CREATE POLICY "ab: Users can delete their own addresses" ON tools_ab_addresses
-  FOR DELETE TO authenticated USING ((select auth.uid()) = user_id);
+  FOR DELETE TO authenticated USING (public.can_access_user_data(user_id));
 
 -- Tags
 DROP POLICY IF EXISTS "ab: Users can view their own tags" ON tools_ab_tags;
 CREATE POLICY "ab: Users can view their own tags" ON tools_ab_tags
-  FOR SELECT TO authenticated USING ((select auth.uid()) = user_id);
+  FOR SELECT TO authenticated USING (public.can_access_user_data(user_id));
 
 DROP POLICY IF EXISTS "ab: Users can insert their own tags" ON tools_ab_tags;
 CREATE POLICY "ab: Users can insert their own tags" ON tools_ab_tags
-  FOR INSERT TO authenticated WITH CHECK ((select auth.uid()) = user_id);
+  FOR INSERT TO authenticated WITH CHECK (public.can_access_user_data(user_id));
 
 DROP POLICY IF EXISTS "ab: Users can update their own tags" ON tools_ab_tags;
 CREATE POLICY "ab: Users can update their own tags" ON tools_ab_tags
   FOR UPDATE TO authenticated
-  USING ((select auth.uid()) = user_id)
-  WITH CHECK ((select auth.uid()) = user_id);
+  USING (public.can_access_user_data(user_id))
+  WITH CHECK (public.can_access_user_data(user_id));
 
 DROP POLICY IF EXISTS "ab: Users can delete their own tags" ON tools_ab_tags;
 CREATE POLICY "ab: Users can delete their own tags" ON tools_ab_tags
-  FOR DELETE TO authenticated USING ((select auth.uid()) = user_id);
+  FOR DELETE TO authenticated USING (public.can_access_user_data(user_id));
 
 -- Address tags (junction — user must own both address and tag)
 DROP POLICY IF EXISTS "ab: Users can view their own address tags" ON tools_ab_address_tags;
@@ -172,7 +172,7 @@ CREATE POLICY "ab: Users can view their own address tags" ON tools_ab_address_ta
     EXISTS (
       SELECT 1 FROM tools_ab_addresses a
       WHERE a.id = tools_ab_address_tags.address_id
-        AND a.user_id = (select auth.uid())
+        AND public.can_access_user_data(a.user_id)
     )
   );
 
@@ -183,12 +183,12 @@ CREATE POLICY "ab: Users can insert their own address tags" ON tools_ab_address_
     EXISTS (
       SELECT 1 FROM tools_ab_addresses a
       WHERE a.id = tools_ab_address_tags.address_id
-        AND a.user_id = (select auth.uid())
+        AND public.can_access_user_data(a.user_id)
     )
     AND EXISTS (
       SELECT 1 FROM tools_ab_tags t
       WHERE t.id = tools_ab_address_tags.tag_id
-        AND t.user_id = (select auth.uid())
+        AND public.can_access_user_data(t.user_id)
     )
   );
 
@@ -199,19 +199,19 @@ CREATE POLICY "ab: Users can update their own address tags" ON tools_ab_address_
     EXISTS (
       SELECT 1 FROM tools_ab_addresses a
       WHERE a.id = tools_ab_address_tags.address_id
-        AND a.user_id = (select auth.uid())
+        AND public.can_access_user_data(a.user_id)
     )
   )
   WITH CHECK (
     EXISTS (
       SELECT 1 FROM tools_ab_addresses a
       WHERE a.id = tools_ab_address_tags.address_id
-        AND a.user_id = (select auth.uid())
+        AND public.can_access_user_data(a.user_id)
     )
     AND EXISTS (
       SELECT 1 FROM tools_ab_tags t
       WHERE t.id = tools_ab_address_tags.tag_id
-        AND t.user_id = (select auth.uid())
+        AND public.can_access_user_data(t.user_id)
     )
   );
 
@@ -222,7 +222,7 @@ CREATE POLICY "ab: Users can delete their own address tags" ON tools_ab_address_
     EXISTS (
       SELECT 1 FROM tools_ab_addresses a
       WHERE a.id = tools_ab_address_tags.address_id
-        AND a.user_id = (select auth.uid())
+        AND public.can_access_user_data(a.user_id)
     )
   );
 
@@ -261,26 +261,26 @@ DROP POLICY IF EXISTS "Users can view their own address attachments" ON tools_ab
 CREATE POLICY "Users can view their own address attachments" ON tools_ab_address_attachments
   FOR SELECT
   TO authenticated
-  USING (user_id = (select auth.uid()));
+  USING (public.can_access_user_data(user_id));
 
 DROP POLICY IF EXISTS "Users can insert their own address attachments" ON tools_ab_address_attachments;
 CREATE POLICY "Users can insert their own address attachments" ON tools_ab_address_attachments
   FOR INSERT
   TO authenticated
-  WITH CHECK (user_id = (select auth.uid()));
+  WITH CHECK (public.can_access_user_data(user_id));
 
 DROP POLICY IF EXISTS "Users can update their own address attachments" ON tools_ab_address_attachments;
 CREATE POLICY "Users can update their own address attachments" ON tools_ab_address_attachments
   FOR UPDATE
   TO authenticated
-  USING (user_id = (select auth.uid()))
-  WITH CHECK (user_id = (select auth.uid()));
+  USING (public.can_access_user_data(user_id))
+  WITH CHECK (public.can_access_user_data(user_id));
 
 DROP POLICY IF EXISTS "Users can delete their own address attachments" ON tools_ab_address_attachments;
 CREATE POLICY "Users can delete their own address attachments" ON tools_ab_address_attachments
   FOR DELETE
   TO authenticated
-  USING (user_id = (select auth.uid()));
+  USING (public.can_access_user_data(user_id));
 
 
 -- Storage policies for bucket "address-book".
@@ -294,32 +294,32 @@ CREATE POLICY "address-book: Users can upload to their own folder"
 ON storage.objects FOR INSERT TO authenticated
 WITH CHECK (
   bucket_id = 'address-book' AND
-  (storage.foldername(name))[1] = (select auth.uid())::text
+  public.can_access_storage_owner((storage.foldername(name))[1])
 );
 
 CREATE POLICY "address-book: Users can read their own files"
 ON storage.objects FOR SELECT TO authenticated
 USING (
   bucket_id = 'address-book' AND
-  (storage.foldername(name))[1] = (select auth.uid())::text
+  public.can_access_storage_owner((storage.foldername(name))[1])
 );
 
 CREATE POLICY "address-book: Users can update their own files"
 ON storage.objects FOR UPDATE TO authenticated
 USING (
   bucket_id = 'address-book' AND
-  (storage.foldername(name))[1] = (select auth.uid())::text
+  public.can_access_storage_owner((storage.foldername(name))[1])
 )
 WITH CHECK (
   bucket_id = 'address-book' AND
-  (storage.foldername(name))[1] = (select auth.uid())::text
+  public.can_access_storage_owner((storage.foldername(name))[1])
 );
 
 CREATE POLICY "address-book: Users can delete their own files"
 ON storage.objects FOR DELETE TO authenticated
 USING (
   bucket_id = 'address-book' AND
-  (storage.foldername(name))[1] = (select auth.uid())::text
+  public.can_access_storage_owner((storage.foldername(name))[1])
 );
 
 

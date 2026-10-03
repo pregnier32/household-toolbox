@@ -145,26 +145,26 @@ DROP POLICY IF EXISTS "Users can view their own documents" ON tools_id_documents
 CREATE POLICY "Users can view their own documents" ON tools_id_documents
   FOR SELECT
   TO authenticated
-  USING ((select auth.uid()) = user_id);
+  USING (public.can_access_user_data(user_id));
 
 DROP POLICY IF EXISTS "Users can insert their own documents" ON tools_id_documents;
 CREATE POLICY "Users can insert their own documents" ON tools_id_documents
   FOR INSERT
   TO authenticated
-  WITH CHECK ((select auth.uid()) = user_id);
+  WITH CHECK (public.can_access_user_data(user_id));
 
 DROP POLICY IF EXISTS "Users can update their own documents" ON tools_id_documents;
 CREATE POLICY "Users can update their own documents" ON tools_id_documents
   FOR UPDATE
   TO authenticated
-  USING ((select auth.uid()) = user_id)
-  WITH CHECK ((select auth.uid()) = user_id);
+  USING (public.can_access_user_data(user_id))
+  WITH CHECK (public.can_access_user_data(user_id));
 
 DROP POLICY IF EXISTS "Users can delete their own documents" ON tools_id_documents;
 CREATE POLICY "Users can delete their own documents" ON tools_id_documents
   FOR DELETE
   TO authenticated
-  USING ((select auth.uid()) = user_id);
+  USING (public.can_access_user_data(user_id));
 
 -- ============================================================================
 -- Tags table policies
@@ -173,26 +173,26 @@ DROP POLICY IF EXISTS "Users can view their own tags" ON tools_id_tags;
 CREATE POLICY "Users can view their own tags" ON tools_id_tags
   FOR SELECT
   TO authenticated
-  USING ((select auth.uid()) = user_id);
+  USING (public.can_access_user_data(user_id));
 
 DROP POLICY IF EXISTS "Users can insert their own tags" ON tools_id_tags;
 CREATE POLICY "Users can insert their own tags" ON tools_id_tags
   FOR INSERT
   TO authenticated
-  WITH CHECK ((select auth.uid()) = user_id);
+  WITH CHECK (public.can_access_user_data(user_id));
 
 DROP POLICY IF EXISTS "Users can update their own tags" ON tools_id_tags;
 CREATE POLICY "Users can update their own tags" ON tools_id_tags
   FOR UPDATE
   TO authenticated
-  USING ((select auth.uid()) = user_id)
-  WITH CHECK ((select auth.uid()) = user_id);
+  USING (public.can_access_user_data(user_id))
+  WITH CHECK (public.can_access_user_data(user_id));
 
 DROP POLICY IF EXISTS "Users can delete their own tags" ON tools_id_tags;
 CREATE POLICY "Users can delete their own tags" ON tools_id_tags
   FOR DELETE
   TO authenticated
-  USING ((select auth.uid()) = user_id);
+  USING (public.can_access_user_data(user_id));
 
 -- ============================================================================
 -- Document tags junction table policies
@@ -205,7 +205,7 @@ CREATE POLICY "Users can view their own document tags" ON tools_id_document_tags
     EXISTS (
       SELECT 1 FROM tools_id_documents
       WHERE tools_id_documents.id = tools_id_document_tags.document_id
-      AND tools_id_documents.user_id = (select auth.uid())
+      AND public.can_access_user_data(tools_id_documents.user_id)
     )
   );
 
@@ -217,13 +217,13 @@ CREATE POLICY "Users can insert their own document tags" ON tools_id_document_ta
     EXISTS (
       SELECT 1 FROM tools_id_documents
       WHERE tools_id_documents.id = tools_id_document_tags.document_id
-      AND tools_id_documents.user_id = (select auth.uid())
+      AND public.can_access_user_data(tools_id_documents.user_id)
     )
     AND
     EXISTS (
       SELECT 1 FROM tools_id_tags
       WHERE tools_id_tags.id = tools_id_document_tags.tag_id
-      AND tools_id_tags.user_id = (select auth.uid())
+      AND public.can_access_user_data(tools_id_tags.user_id)
     )
   );
 
@@ -235,20 +235,20 @@ CREATE POLICY "Users can update their own document tags" ON tools_id_document_ta
     EXISTS (
       SELECT 1 FROM tools_id_documents
       WHERE tools_id_documents.id = tools_id_document_tags.document_id
-      AND tools_id_documents.user_id = (select auth.uid())
+      AND public.can_access_user_data(tools_id_documents.user_id)
     )
   )
   WITH CHECK (
     EXISTS (
       SELECT 1 FROM tools_id_documents
       WHERE tools_id_documents.id = tools_id_document_tags.document_id
-      AND tools_id_documents.user_id = (select auth.uid())
+      AND public.can_access_user_data(tools_id_documents.user_id)
     )
     AND
     EXISTS (
       SELECT 1 FROM tools_id_tags
       WHERE tools_id_tags.id = tools_id_document_tags.tag_id
-      AND tools_id_tags.user_id = (select auth.uid())
+      AND public.can_access_user_data(tools_id_tags.user_id)
     )
   );
 
@@ -260,7 +260,7 @@ CREATE POLICY "Users can delete their own document tags" ON tools_id_document_ta
     EXISTS (
       SELECT 1 FROM tools_id_documents
       WHERE tools_id_documents.id = tools_id_document_tags.document_id
-      AND tools_id_documents.user_id = (select auth.uid())
+      AND public.can_access_user_data(tools_id_documents.user_id)
     )
   );
 
@@ -275,7 +275,7 @@ CREATE POLICY "Users can view their own security questions" ON tools_id_security
     EXISTS (
       SELECT 1 FROM tools_id_documents
       WHERE tools_id_documents.id = tools_id_security_questions.document_id
-      AND tools_id_documents.user_id = (select auth.uid())
+      AND public.can_access_user_data(tools_id_documents.user_id)
     )
   );
 
@@ -287,7 +287,7 @@ CREATE POLICY "Users can insert their own security questions" ON tools_id_securi
     EXISTS (
       SELECT 1 FROM tools_id_documents
       WHERE tools_id_documents.id = tools_id_security_questions.document_id
-      AND tools_id_documents.user_id = (select auth.uid())
+      AND public.can_access_user_data(tools_id_documents.user_id)
     )
   );
 
@@ -299,14 +299,14 @@ CREATE POLICY "Users can update their own security questions" ON tools_id_securi
     EXISTS (
       SELECT 1 FROM tools_id_documents
       WHERE tools_id_documents.id = tools_id_security_questions.document_id
-      AND tools_id_documents.user_id = (select auth.uid())
+      AND public.can_access_user_data(tools_id_documents.user_id)
     )
   )
   WITH CHECK (
     EXISTS (
       SELECT 1 FROM tools_id_documents
       WHERE tools_id_documents.id = tools_id_security_questions.document_id
-      AND tools_id_documents.user_id = (select auth.uid())
+      AND public.can_access_user_data(tools_id_documents.user_id)
     )
   );
 
@@ -318,7 +318,7 @@ CREATE POLICY "Users can delete their own security questions" ON tools_id_securi
     EXISTS (
       SELECT 1 FROM tools_id_documents
       WHERE tools_id_documents.id = tools_id_security_questions.document_id
-      AND tools_id_documents.user_id = (select auth.uid())
+      AND public.can_access_user_data(tools_id_documents.user_id)
     )
   );
 
@@ -369,32 +369,32 @@ CREATE POLICY "important-documents: Users can upload to their own folder"
 ON storage.objects FOR INSERT TO authenticated
 WITH CHECK (
   bucket_id = 'important-documents' AND
-  (storage.foldername(name))[1] = (select auth.uid())::text
+  public.can_access_storage_owner((storage.foldername(name))[1])
 );
 
 CREATE POLICY "important-documents: Users can read their own files"
 ON storage.objects FOR SELECT TO authenticated
 USING (
   bucket_id = 'important-documents' AND
-  (storage.foldername(name))[1] = (select auth.uid())::text
+  public.can_access_storage_owner((storage.foldername(name))[1])
 );
 
 CREATE POLICY "important-documents: Users can update their own files"
 ON storage.objects FOR UPDATE TO authenticated
 USING (
   bucket_id = 'important-documents' AND
-  (storage.foldername(name))[1] = (select auth.uid())::text
+  public.can_access_storage_owner((storage.foldername(name))[1])
 )
 WITH CHECK (
   bucket_id = 'important-documents' AND
-  (storage.foldername(name))[1] = (select auth.uid())::text
+  public.can_access_storage_owner((storage.foldername(name))[1])
 );
 
 CREATE POLICY "important-documents: Users can delete their own files"
 ON storage.objects FOR DELETE TO authenticated
 USING (
   bucket_id = 'important-documents' AND
-  (storage.foldername(name))[1] = (select auth.uid())::text
+  public.can_access_storage_owner((storage.foldername(name))[1])
 );
 
 

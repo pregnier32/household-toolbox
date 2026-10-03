@@ -171,44 +171,44 @@ DROP POLICY IF EXISTS "Users can view their own headers" ON tools_rh_headers;
 CREATE POLICY "Users can view their own headers" ON tools_rh_headers
   FOR SELECT
   TO authenticated
-  USING ((select auth.uid()) = user_id);
+  USING (public.can_access_user_data(user_id));
 
 DROP POLICY IF EXISTS "Users can insert their own headers" ON tools_rh_headers;
 CREATE POLICY "Users can insert their own headers" ON tools_rh_headers
   FOR INSERT
   TO authenticated
-  WITH CHECK ((select auth.uid()) = user_id);
+  WITH CHECK (public.can_access_user_data(user_id));
 
 DROP POLICY IF EXISTS "Users can update their own headers" ON tools_rh_headers;
 CREATE POLICY "Users can update their own headers" ON tools_rh_headers
   FOR UPDATE
   TO authenticated
-  USING ((select auth.uid()) = user_id)
-  WITH CHECK ((select auth.uid()) = user_id);
+  USING (public.can_access_user_data(user_id))
+  WITH CHECK (public.can_access_user_data(user_id));
 
 DROP POLICY IF EXISTS "Users can delete their own headers" ON tools_rh_headers;
 CREATE POLICY "Users can delete their own headers" ON tools_rh_headers
   FOR DELETE
   TO authenticated
-  USING ((select auth.uid()) = user_id);
+  USING (public.can_access_user_data(user_id));
 
 -- Records table policies
 DROP POLICY IF EXISTS "Users can view their own records" ON tools_rh_records;
 CREATE POLICY "Users can view their own records" ON tools_rh_records
   FOR SELECT
   TO authenticated
-  USING ((select auth.uid()) = user_id);
+  USING (public.can_access_user_data(user_id));
 
 DROP POLICY IF EXISTS "Users can insert their own records" ON tools_rh_records;
 CREATE POLICY "Users can insert their own records" ON tools_rh_records
   FOR INSERT
   TO authenticated
   WITH CHECK (
-    (select auth.uid()) = user_id AND
+    public.can_access_user_data(user_id) AND
     EXISTS (
       SELECT 1 FROM tools_rh_headers
       WHERE tools_rh_headers.id = tools_rh_records.header_id
-      AND tools_rh_headers.user_id = (select auth.uid())
+      AND public.can_access_user_data(tools_rh_headers.user_id)
     )
   );
 
@@ -216,13 +216,13 @@ DROP POLICY IF EXISTS "Users can update their own records" ON tools_rh_records;
 CREATE POLICY "Users can update their own records" ON tools_rh_records
   FOR UPDATE
   TO authenticated
-  USING ((select auth.uid()) = user_id)
+  USING (public.can_access_user_data(user_id))
   WITH CHECK (
-    (select auth.uid()) = user_id AND
+    public.can_access_user_data(user_id) AND
     EXISTS (
       SELECT 1 FROM tools_rh_headers
       WHERE tools_rh_headers.id = tools_rh_records.header_id
-      AND tools_rh_headers.user_id = (select auth.uid())
+      AND public.can_access_user_data(tools_rh_headers.user_id)
     )
   );
 
@@ -230,7 +230,7 @@ DROP POLICY IF EXISTS "Users can delete their own records" ON tools_rh_records;
 CREATE POLICY "Users can delete their own records" ON tools_rh_records
   FOR DELETE
   TO authenticated
-  USING ((select auth.uid()) = user_id);
+  USING (public.can_access_user_data(user_id));
 
 -- Repair pictures table policies
 DROP POLICY IF EXISTS "Users can view their own repair pictures" ON tools_rh_repair_pictures;
@@ -241,7 +241,7 @@ CREATE POLICY "Users can view their own repair pictures" ON tools_rh_repair_pict
     EXISTS (
       SELECT 1 FROM tools_rh_records
       WHERE tools_rh_records.id = tools_rh_repair_pictures.record_id
-      AND tools_rh_records.user_id = (select auth.uid())
+      AND public.can_access_user_data(tools_rh_records.user_id)
     )
   );
 
@@ -253,7 +253,7 @@ CREATE POLICY "Users can insert their own repair pictures" ON tools_rh_repair_pi
     EXISTS (
       SELECT 1 FROM tools_rh_records
       WHERE tools_rh_records.id = tools_rh_repair_pictures.record_id
-      AND tools_rh_records.user_id = (select auth.uid())
+      AND public.can_access_user_data(tools_rh_records.user_id)
     )
   );
 
@@ -265,14 +265,14 @@ CREATE POLICY "Users can update their own repair pictures" ON tools_rh_repair_pi
     EXISTS (
       SELECT 1 FROM tools_rh_records
       WHERE tools_rh_records.id = tools_rh_repair_pictures.record_id
-      AND tools_rh_records.user_id = (select auth.uid())
+      AND public.can_access_user_data(tools_rh_records.user_id)
     )
   )
   WITH CHECK (
     EXISTS (
       SELECT 1 FROM tools_rh_records
       WHERE tools_rh_records.id = tools_rh_repair_pictures.record_id
-      AND tools_rh_records.user_id = (select auth.uid())
+      AND public.can_access_user_data(tools_rh_records.user_id)
     )
   );
 
@@ -284,7 +284,7 @@ CREATE POLICY "Users can delete their own repair pictures" ON tools_rh_repair_pi
     EXISTS (
       SELECT 1 FROM tools_rh_records
       WHERE tools_rh_records.id = tools_rh_repair_pictures.record_id
-      AND tools_rh_records.user_id = (select auth.uid())
+      AND public.can_access_user_data(tools_rh_records.user_id)
     )
   );
 
@@ -293,26 +293,26 @@ DROP POLICY IF EXISTS "Users can view their own items" ON tools_rh_items;
 CREATE POLICY "Users can view their own items" ON tools_rh_items
   FOR SELECT
   TO authenticated
-  USING ((select auth.uid()) = user_id OR is_default = true);
+  USING (public.can_access_user_data(user_id) OR is_default = true);
 
 DROP POLICY IF EXISTS "Users can insert their own items" ON tools_rh_items;
 CREATE POLICY "Users can insert their own items" ON tools_rh_items
   FOR INSERT
   TO authenticated
-  WITH CHECK ((select auth.uid()) = user_id AND is_default = false);
+  WITH CHECK (public.can_access_user_data(user_id) AND is_default = false);
 
 DROP POLICY IF EXISTS "Users can update their own items" ON tools_rh_items;
 CREATE POLICY "Users can update their own items" ON tools_rh_items
   FOR UPDATE
   TO authenticated
-  USING ((select auth.uid()) = user_id AND is_default = false)
-  WITH CHECK ((select auth.uid()) = user_id AND is_default = false);
+  USING (public.can_access_user_data(user_id) AND is_default = false)
+  WITH CHECK (public.can_access_user_data(user_id) AND is_default = false);
 
 DROP POLICY IF EXISTS "Users can delete their own items" ON tools_rh_items;
 CREATE POLICY "Users can delete their own items" ON tools_rh_items
   FOR DELETE
   TO authenticated
-  USING ((select auth.uid()) = user_id AND is_default = false);
+  USING (public.can_access_user_data(user_id) AND is_default = false);
 
 
 -- Repair History Tool Defaults Table
@@ -606,14 +606,14 @@ DROP POLICY IF EXISTS "Users can update their own items" ON tools_rh_items;
 CREATE POLICY "Users can update their own items" ON tools_rh_items
   FOR UPDATE
   TO authenticated
-  USING ((select auth.uid()) = user_id)
-  WITH CHECK ((select auth.uid()) = user_id);
+  USING (public.can_access_user_data(user_id))
+  WITH CHECK (public.can_access_user_data(user_id));
 
 DROP POLICY IF EXISTS "Users can delete their own items" ON tools_rh_items;
 CREATE POLICY "Users can delete their own items" ON tools_rh_items
   FOR DELETE
   TO authenticated
-  USING ((select auth.uid()) = user_id);
+  USING (public.can_access_user_data(user_id));
 
 
 -- Repair History attachments: multiple optional files per repair record.
@@ -647,26 +647,26 @@ DROP POLICY IF EXISTS "Users can view their own repair history attachments" ON t
 CREATE POLICY "Users can view their own repair history attachments" ON tools_rh_record_attachments
   FOR SELECT
   TO authenticated
-  USING (user_id = (select auth.uid()));
+  USING (public.can_access_user_data(user_id));
 
 DROP POLICY IF EXISTS "Users can insert their own repair history attachments" ON tools_rh_record_attachments;
 CREATE POLICY "Users can insert their own repair history attachments" ON tools_rh_record_attachments
   FOR INSERT
   TO authenticated
-  WITH CHECK (user_id = (select auth.uid()));
+  WITH CHECK (public.can_access_user_data(user_id));
 
 DROP POLICY IF EXISTS "Users can update their own repair history attachments" ON tools_rh_record_attachments;
 CREATE POLICY "Users can update their own repair history attachments" ON tools_rh_record_attachments
   FOR UPDATE
   TO authenticated
-  USING (user_id = (select auth.uid()))
-  WITH CHECK (user_id = (select auth.uid()));
+  USING (public.can_access_user_data(user_id))
+  WITH CHECK (public.can_access_user_data(user_id));
 
 DROP POLICY IF EXISTS "Users can delete their own repair history attachments" ON tools_rh_record_attachments;
 CREATE POLICY "Users can delete their own repair history attachments" ON tools_rh_record_attachments
   FOR DELETE
   TO authenticated
-  USING (user_id = (select auth.uid()));
+  USING (public.can_access_user_data(user_id));
 
 -- Move existing pictures into the shared store (same ids so re-runs skip them).
 INSERT INTO tools_rh_record_attachments (id, record_id, user_id, file_url, file_name, file_size, file_type, created_at)
@@ -770,32 +770,32 @@ CREATE POLICY "repair-history: Users can upload to their own folder"
 ON storage.objects FOR INSERT TO authenticated
 WITH CHECK (
   bucket_id = 'repair-history' AND
-  (storage.foldername(name))[1] = (select auth.uid())::text
+  public.can_access_storage_owner((storage.foldername(name))[1])
 );
 
 CREATE POLICY "repair-history: Users can read their own files"
 ON storage.objects FOR SELECT TO authenticated
 USING (
   bucket_id = 'repair-history' AND
-  (storage.foldername(name))[1] = (select auth.uid())::text
+  public.can_access_storage_owner((storage.foldername(name))[1])
 );
 
 CREATE POLICY "repair-history: Users can update their own files"
 ON storage.objects FOR UPDATE TO authenticated
 USING (
   bucket_id = 'repair-history' AND
-  (storage.foldername(name))[1] = (select auth.uid())::text
+  public.can_access_storage_owner((storage.foldername(name))[1])
 )
 WITH CHECK (
   bucket_id = 'repair-history' AND
-  (storage.foldername(name))[1] = (select auth.uid())::text
+  public.can_access_storage_owner((storage.foldername(name))[1])
 );
 
 CREATE POLICY "repair-history: Users can delete their own files"
 ON storage.objects FOR DELETE TO authenticated
 USING (
   bucket_id = 'repair-history' AND
-  (storage.foldername(name))[1] = (select auth.uid())::text
+  public.can_access_storage_owner((storage.foldername(name))[1])
 );
 
 

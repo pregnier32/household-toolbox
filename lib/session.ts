@@ -5,17 +5,26 @@ import { cookies } from 'next/headers';
 import { supabaseServer } from './supabaseServer';
 import { createSupabaseAuthServerClient } from './supabaseAuthServer';
 import { readMfaAccess } from './mfa-gate';
+import { resolveHouseholdAccess } from './household-access';
+import type { HouseholdRole } from './session-types';
 
 /** Stale browsers may still hold this cookie from before Supabase Auth. It is not read for sign-in. */
 const LEGACY_SESSION_COOKIE_NAME = 'household-toolbox-session';
 
+export type { HouseholdRole } from './session-types';
+
 export type AppSession = {
   id: string;
+  actorId: string;
   email: string;
   firstName: string;
   lastName?: string;
   userStatus?: string;
   themePreference?: 'light' | 'dark';
+  householdReady: boolean;
+  householdId: string;
+  householdRole: HouseholdRole;
+  householdOwnerId: string;
 };
 
 function themePreference(value: string | null | undefined): 'light' | 'dark' | undefined {
@@ -33,11 +42,16 @@ function toAppSession(user: {
 }): AppSession {
   return {
     id: user.id,
+    actorId: user.id,
     email: user.email,
     firstName: user.first_name,
     lastName: user.last_name || undefined,
     userStatus: user.user_status || undefined,
     themePreference: themePreference(user.theme_preference),
+    householdReady: false,
+    householdId: user.id,
+    householdRole: 'admin',
+    householdOwnerId: user.id,
   };
 }
 
@@ -96,7 +110,14 @@ async function resolveSession(): Promise<SessionGate> {
       await signOutSupabaseAuth();
       return { status: 'anonymous' };
     }
-    const appUser = toAppSession(user);
+    const access = await resolveHouseholdAccess(user.id);
+    const appUser: AppSession = {
+      ...toAppSession(user),
+      householdReady: access.ready,
+      householdId: access.householdId,
+      householdRole: access.householdRole,
+      householdOwnerId: access.householdOwnerId,
+    };
     const mfa = await readMfaAccess();
     if (mfa === 'required') return { status: 'mfa_required', user: appUser };
     if (mfa === 'unknown') return { status: 'mfa_unknown', user: appUser };
@@ -113,6 +134,14 @@ export async function getSession(): Promise<AppSession | null> {
   const gate = await getSessionGate();
   if (gate.status !== 'ok') return null;
   return gate.user;
+}
+
+/** Tool, storage, and calendar reads use the household Admin's user id. */
+export async function getHouseholdDataSession(): Promise<AppSession | null> {
+  const user = await getSession();
+  if (!user) return null;
+  if (user.id === user.householdOwnerId) return user;
+  return { ...user, id: user.householdOwnerId };
 }
 
 /** Expires a leftover pre-Auth cookie. Sign-in does not read it. */

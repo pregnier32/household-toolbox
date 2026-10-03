@@ -133,7 +133,7 @@ export default function MyToolsPage() {
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
-  const [user, setUser] = useState<{ id?: string; firstName?: string; lastName?: string } | null>(null);
+  const [user, setUser] = useState<{ id?: string; firstName?: string; lastName?: string; householdRole?: 'admin' | 'user' } | null>(null);
   const [removeTool, setRemoveTool] = useState<UserTool | null>(null);
   const [removeStep, setRemoveStep] = useState<'warn' | 'final' | null>(null);
   const [exportedAck, setExportedAck] = useState(false);
@@ -407,15 +407,19 @@ export default function MyToolsPage() {
                             {formatCurrency(Number(tool.price))}
                           </td>
                           <td className="px-6 py-4 text-right">
-                            <button
-                              type="button"
-                              onClick={() => openRemoveFlow(tool)}
-                              disabled={isRemoving}
-                              className={removeButtonClass}
-                              title="Remove tool and delete all of its data"
-                            >
-                              Remove
-                            </button>
+                            {user?.householdRole === 'user' ? (
+                              <span className={cellMutedClass}>Admin only</span>
+                            ) : (
+                              <button
+                                type="button"
+                                onClick={() => openRemoveFlow(tool)}
+                                disabled={isRemoving}
+                                className={removeButtonClass}
+                                title="Remove tool and delete all of its data"
+                              >
+                                Remove
+                              </button>
+                            )}
                           </td>
                         </tr>
                       );
