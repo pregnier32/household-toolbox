@@ -13,6 +13,7 @@ import {
   isPdfAttachment,
   type AttachmentItem,
 } from '@/lib/attachments';
+import { formatDisplayDate as formatPaddedDisplayDate } from '@/lib/format-display-date';
 import {
   addDays,
   addMonthsSetDay,
@@ -128,11 +129,16 @@ const RANGE_CHIPS: { id: RangeId; label: string }[] = [
   { id: 'all_active', label: 'All Active' },
 ];
 
-function formatDateForDisplay(isoDate: string): string {
+function formatPdfDate(isoDate: string): string {
   if (!isoDate) return '—';
   const [year, month, day] = isoDate.split('T')[0].split('-');
   if (!year || !month || !day) return isoDate;
   return `${Number(month)}/${Number(day)}/${year}`;
+}
+
+function formatDateForDisplay(isoDate: string): string {
+  if (!isoDate) return '—';
+  return formatPaddedDisplayDate(isoDate) || '—';
 }
 
 function formatReportDate(date: Date): string {
@@ -740,6 +746,7 @@ export function CleaningScheduleTool({ toolId }: CleaningScheduleToolProps) {
   const [viewPreview, setViewPreview] = useState<AttachmentItem | null>(null);
 
   const [deleteTarget, setDeleteTarget] = useState<DeleteTarget | null>(null);
+  const [historyConfirmTaskId, setHistoryConfirmTaskId] = useState<string | null>(null);
   const [deleteConfirmText, setDeleteConfirmText] = useState('');
   const [showExportPopup, setShowExportPopup] = useState(false);
   const [includeHistory, setIncludeHistory] = useState(false);
@@ -841,6 +848,10 @@ export function CleaningScheduleTool({ toolId }: CleaningScheduleToolProps) {
   useEffect(() => {
     const onKey = (event: KeyboardEvent) => {
       if (event.key !== 'Escape') return;
+      if (historyConfirmTaskId) {
+        setHistoryConfirmTaskId(null);
+        return;
+      }
       if (deleteTarget) {
         setDeleteTarget(null);
         setDeleteConfirmText('');
@@ -868,7 +879,7 @@ export function CleaningScheduleTool({ toolId }: CleaningScheduleToolProps) {
     };
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
-  }, [deleteTarget, completeOccurrence, pendingCompletionAttachments, attachmentModal, activateItemIds, detailTaskId, showExportPopup, isExportingPdf]);
+  }, [historyConfirmTaskId, deleteTarget, completeOccurrence, pendingCompletionAttachments, attachmentModal, activateItemIds, detailTaskId, showExportPopup, isExportingPdf]);
 
   const sortedCategories = useMemo(
     () => [...categories].sort((a, b) => a.name.localeCompare(b.name)),
@@ -1723,7 +1734,7 @@ export function CleaningScheduleTool({ toolId }: CleaningScheduleToolProps) {
           </button>
           <button
             type="button"
-            onClick={() => deactivateTask(row.taskId)}
+            onClick={() => setHistoryConfirmTaskId(row.taskId)}
             className={rowIconSecondaryClass}
             aria-label="Move to history — archive this task (inactive). Not completion history."
             title="Move to history — archive this task (inactive). Not completion history."
@@ -2083,10 +2094,10 @@ export function CleaningScheduleTool({ toolId }: CleaningScheduleToolProps) {
         checkNewPage(24);
         addText(row.item.name, 11, true, 8);
         addText(`Frequency: ${frequencyLabel(row.task.frequency)}`, 9, false, 8);
-        addText(`Next due: ${formatDateForDisplay(row.task.nextDueDate)}`, 9, false, 8);
+        addText(`Next due: ${formatPdfDate(row.task.nextDueDate)}`, 9, false, 8);
         addText(`Status: ${row.status}`, 9, false, 8);
         if (row.task.lastCompletedDate) {
-          addText(`Last completed: ${formatDateForDisplay(row.task.lastCompletedDate)}`, 9, false, 8);
+          addText(`Last completed: ${formatPdfDate(row.task.lastCompletedDate)}`, 9, false, 8);
         }
         if (row.item.description.trim()) {
           addText(`Description: ${row.item.description.trim()}`, 9, false, 8);
@@ -2095,7 +2106,7 @@ export function CleaningScheduleTool({ toolId }: CleaningScheduleToolProps) {
           addText(`Notes: ${row.item.notes.trim()}`, 9, false, 8);
         }
         if (!row.task.isActive && row.task.dateInactivated) {
-          addText(`Date inactivated: ${formatDateForDisplay(row.task.dateInactivated)}`, 9, false, 8);
+          addText(`Date inactivated: ${formatPdfDate(row.task.dateInactivated)}`, 9, false, 8);
         }
         yPos += 3;
       };
@@ -3072,7 +3083,7 @@ export function CleaningScheduleTool({ toolId }: CleaningScheduleToolProps) {
                       </button>
                       <button
                         type="button"
-                        onClick={() => deactivateTask(detailTask.id)}
+                        onClick={() => setHistoryConfirmTaskId(detailTask.id)}
                         className={secondaryButtonClass}
                         title="Move to history — archive this task (inactive). Not completion history."
                       >
@@ -3131,6 +3142,43 @@ export function CleaningScheduleTool({ toolId }: CleaningScheduleToolProps) {
                   </table>
                 </div>
               )}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {historyConfirmTaskId && (
+        <div className={overlayClass}>
+          <div
+            className={modalCardClass}
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="cs-history-confirm-title"
+          >
+            <h3
+              id="cs-history-confirm-title"
+              className={isLight ? 'text-xl font-semibold text-slate-900 mb-2' : 'text-xl font-semibold text-slate-50 mb-2'}
+            >
+              Move to History
+            </h3>
+            <p className={isLight ? 'text-slate-700 mb-4' : 'text-slate-300 mb-4'}>
+              Move “{libraryItems.find((item) => item.id === scheduledTasks.find((task) => task.id === historyConfirmTaskId)?.libraryItemId)?.name || 'this task'}” to History?
+            </p>
+            <div className="flex gap-3">
+              <button
+                type="button"
+                onClick={() => {
+                  const taskId = historyConfirmTaskId;
+                  setHistoryConfirmTaskId(null);
+                  if (taskId) void deactivateTask(taskId);
+                }}
+                className={`flex-1 ${primaryButtonClass}`}
+              >
+                Move to History
+              </button>
+              <button type="button" onClick={() => setHistoryConfirmTaskId(null)} className={secondaryButtonClass}>
+                Cancel
+              </button>
             </div>
           </div>
         </div>

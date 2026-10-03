@@ -13,6 +13,7 @@ import {
   isPdfAttachment,
   type AttachmentItem,
 } from '@/lib/attachments';
+import { formatDisplayDate as formatPaddedDisplayDate } from '@/lib/format-display-date';
 
 const TRIP_TYPES = ['Family', 'Couple', 'Solo', 'Business', 'Friends', 'Group Tour', 'Other'] as const;
 const TRIP_GOALS = ['Relaxation', 'Adventure', 'Family Time', 'Business', 'Other'] as const;
@@ -154,10 +155,15 @@ function parseLocalDate(isoDate: string): Date | null {
   return new Date(y, m - 1, d);
 }
 
-function formatDateDisplay(isoDate: string): string {
+function formatPdfDate(isoDate: string): string {
   const d = parseLocalDate(isoDate);
   if (!d || Number.isNaN(d.getTime())) return isoDate || 'N/A';
   return `${d.getMonth() + 1}/${d.getDate()}/${d.getFullYear()}`;
+}
+
+function formatDateDisplay(isoDate: string): string {
+  if (!isoDate) return 'N/A';
+  return formatPaddedDisplayDate(isoDate) || 'N/A';
 }
 
 function formatReportDate(date: Date): string {
@@ -2313,8 +2319,8 @@ export function TravelLogTool({ toolId }: TravelLogToolProps) {
         if (trip.startDate) {
           const days = calculateTripDays(trip.startDate, trip.endDate);
           const range = trip.endDate
-            ? `${formatDateDisplay(trip.startDate)} – ${formatDateDisplay(trip.endDate)}`
-            : formatDateDisplay(trip.startDate);
+            ? `${formatPdfDate(trip.startDate)} – ${formatPdfDate(trip.endDate)}`
+            : formatPdfDate(trip.startDate);
           addText(days !== null ? `Dates: ${range} (${days} day${days === 1 ? '' : 's'})` : `Dates: ${range}`, 9, false, 5);
         }
         if (filledText(trip.tripType)) addText(`Trip type: ${filledText(trip.tripType)}`, 9, false, 5);
@@ -2337,8 +2343,8 @@ export function TravelLogTool({ toolId }: TravelLogToolProps) {
             const stayName = filledText(stay.name) || 'Lodging';
             addText(stayName, 10, true, 8);
             if (filledText(stay.type)) addText(`Type: ${filledText(stay.type)}`, 9, false, 10);
-            if (stay.checkInDate) addText(`Check in: ${formatDateDisplay(stay.checkInDate)}`, 9, false, 10);
-            if (stay.checkOutDate) addText(`Check out: ${formatDateDisplay(stay.checkOutDate)}`, 9, false, 10);
+            if (stay.checkInDate) addText(`Check in: ${formatPdfDate(stay.checkInDate)}`, 9, false, 10);
+            if (stay.checkOutDate) addText(`Check out: ${formatPdfDate(stay.checkOutDate)}`, 9, false, 10);
             if (stay.rating > 0) addText(`Rating: ${stay.rating} of 5`, 9, false, 10);
             if (filledText(stay.notes)) addText(`Notes: ${filledText(stay.notes)}`, 9, false, 10);
           });
@@ -2351,7 +2357,7 @@ export function TravelLogTool({ toolId }: TravelLogToolProps) {
           addText('Journal', 11, true, 5);
           journal.forEach((note) => {
             const noteName = filledText(note.name) || 'Journal note';
-            addText(note.noteDate ? `${noteName} — ${formatDateDisplay(note.noteDate)}` : noteName, 10, true, 8);
+            addText(note.noteDate ? `${noteName} — ${formatPdfDate(note.noteDate)}` : noteName, 10, true, 8);
             if (filledText(note.text)) addText(filledText(note.text), 9, false, 10);
           });
         }
@@ -2365,7 +2371,7 @@ export function TravelLogTool({ toolId }: TravelLogToolProps) {
         (trip.attachments || []).forEach((file) => {
           const fileName = file.name?.trim();
           if (!fileName) return;
-          const dateLabel = trip.startDate ? formatDateDisplay(trip.startDate) : '';
+          const dateLabel = trip.startDate ? formatPdfDate(trip.startDate) : '';
           attachmentRefs.push(dateLabel ? `${tripName} — ${dateLabel} — ${fileName}` : `${tripName} — ${fileName}`);
         });
         repeatingTripTitle = null;

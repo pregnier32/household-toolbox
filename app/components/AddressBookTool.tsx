@@ -20,6 +20,7 @@ import {
   isPdfAttachment,
   type AttachmentItem,
 } from '@/lib/attachments';
+import { formatDisplayDate as formatPaddedDisplayDate } from '@/lib/format-display-date';
 
 const API_BASE = '/api/tools/address-book';
 
@@ -82,7 +83,7 @@ function emptyAddressForm(): AddressFormState {
   };
 }
 
-function formatDisplayDate(isoDate: string | undefined): string {
+function formatPdfDate(isoDate: string | undefined): string {
   if (!isoDate) return 'N/A';
   const parts = isoDate.split('T')[0].split('-');
   if (parts.length !== 3) {
@@ -92,6 +93,16 @@ function formatDisplayDate(isoDate: string | undefined): string {
   }
   const [year, month, day] = parts;
   return `${Number(month)}/${Number(day)}/${year}`;
+}
+
+function formatDisplayDate(isoDate: string | undefined): string {
+  if (!isoDate) return 'N/A';
+  if (/^\d{4}-\d{2}-\d{2}/.test(isoDate.trim())) {
+    return formatPaddedDisplayDate(isoDate) || 'N/A';
+  }
+  const parsed = new Date(isoDate);
+  if (Number.isNaN(parsed.getTime())) return isoDate;
+  return formatPaddedDisplayDate(parsed) || isoDate;
 }
 
 function transformAddressFromDb(row: Record<string, unknown>): AddressRecord {
@@ -259,6 +270,7 @@ export function AddressBookTool({ toolId }: AddressBookToolProps) {
 
   const [showHistory, setShowHistory] = useState(false);
   const [showInactiveTags, setShowInactiveTags] = useState(false);
+  const [historyConfirm, setHistoryConfirm] = useState<{ kind: 'address' | 'tag'; id: string } | null>(null);
   const [deleteConfirmId, setDeleteConfirmId] = useState<string | null>(null);
   const [deleteConfirmText, setDeleteConfirmText] = useState('');
   const [deleteTagConfirmId, setDeleteTagConfirmId] = useState<string | null>(null);
@@ -890,6 +902,10 @@ export function AddressBookTool({ toolId }: AddressBookToolProps) {
   useEffect(() => {
     const onKeyDown = (e: KeyboardEvent) => {
       if (e.key !== 'Escape') return;
+      if (historyConfirm) {
+        setHistoryConfirm(null);
+        return;
+      }
       if (attachmentModal !== null) {
         closeAttachmentModal();
         return;
@@ -908,7 +924,7 @@ export function AddressBookTool({ toolId }: AddressBookToolProps) {
     };
     window.addEventListener('keydown', onKeyDown);
     return () => window.removeEventListener('keydown', onKeyDown);
-  }, [deleteConfirmId, deleteTagConfirmId, viewAddressModal, attachmentModal, showExportPopup, isExportingPdf, showLabelPopup, isExportingLabels]);
+  }, [historyConfirm, deleteConfirmId, deleteTagConfirmId, viewAddressModal, attachmentModal, showExportPopup, isExportingPdf, showLabelPopup, isExportingLabels]);
 
   const renderAddressFields = (
     form: AddressFormState,
@@ -1197,7 +1213,7 @@ export function AddressBookTool({ toolId }: AddressBookToolProps) {
             ) : (
               <button
                 type="button"
-                onClick={() => inactivateAddress(record.id)}
+                onClick={() => setHistoryConfirm({ kind: 'address', id: record.id })}
                 className={rowIconSecondaryClass}
                 title="Move to history"
                 aria-label="Move to history"
@@ -1409,7 +1425,7 @@ export function AddressBookTool({ toolId }: AddressBookToolProps) {
           addText(`Tags: ${tagNames.join(', ')}`, 9, false, 8);
         }
         if (!record.isActive && record.dateInactivated) {
-          addText(`Date inactivated: ${formatDisplayDate(record.dateInactivated)}`, 9, false, 8);
+          addText(`Date inactivated: ${formatPdfDate(record.dateInactivated)}`, 9, false, 8);
         }
         yPos += 3;
       };
@@ -1775,7 +1791,7 @@ export function AddressBookTool({ toolId }: AddressBookToolProps) {
                           </button>
                           <button
                             type="button"
-                            onClick={() => inactivateTag(tag.id)}
+                            onClick={() => setHistoryConfirm({ kind: 'tag', id: tag.id })}
                             className={rowIconSecondaryClass}
                             title="Move to history"
                             aria-label="Move to history"
@@ -1871,6 +1887,55 @@ export function AddressBookTool({ toolId }: AddressBookToolProps) {
             ) : (
               <p className={`${descClass} text-center py-8`}>No inactive tags.</p>
               ))}
+          </div>
+        </div>
+      )}
+
+      {historyConfirm && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4 backdrop-blur-sm">
+          <div
+            className={modalCardClass}
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="ab-history-confirm-title"
+          >
+            <h3
+              id="ab-history-confirm-title"
+              className={isLight ? 'text-xl font-semibold text-slate-900 mb-2' : 'text-xl font-semibold text-slate-50 mb-2'}
+            >
+              Move to History
+            </h3>
+            <p className={isLight ? 'text-slate-700 mb-4' : 'text-slate-300 mb-4'}>
+              Move “{(() => {
+                if (historyConfirm.kind === 'tag') {
+                  return tags.find((tag) => tag.id === historyConfirm.id)?.name || 'this tag';
+                }
+                const record = addresses.find((address) => address.id === historyConfirm.id);
+                if (!record) return 'this address';
+                const personName = [record.firstName, record.lastName]
+                  .map((part) => part.trim())
+                  .filter(Boolean)
+                  .join(' ');
+                return personName || record.mailingName || 'this address';
+              })()}” to History?
+            </p>
+            <div className="flex gap-3">
+              <button
+                type="button"
+                onClick={() => {
+                  const pending = historyConfirm;
+                  setHistoryConfirm(null);
+                  if (pending.kind === 'address') void inactivateAddress(pending.id);
+                  else void inactivateTag(pending.id);
+                }}
+                className={`flex-1 ${primaryButtonClass}`}
+              >
+                Move to History
+              </button>
+              <button type="button" onClick={() => setHistoryConfirm(null)} className={secondaryButtonClass}>
+                Cancel
+              </button>
+            </div>
           </div>
         </div>
       )}

@@ -13,6 +13,7 @@ import {
   isPdfAttachment,
   type AttachmentItem,
 } from '@/lib/attachments';
+import { formatDisplayDate as formatPaddedDisplayDate } from '@/lib/format-display-date';
 
 const API_BASE = '/api/tools/event-budget-planner';
 
@@ -94,12 +95,17 @@ function todayIso(): string {
   return new Date().toISOString().split('T')[0];
 }
 
-function formatDisplayDate(isoDate: string): string {
+function formatPdfDate(isoDate: string): string {
   if (!isoDate) return 'N/A';
   const parts = isoDate.split('T')[0].split('-');
   if (parts.length !== 3) return isoDate;
   const [year, month, day] = parts;
   return `${Number(month)}/${Number(day)}/${year}`;
+}
+
+function formatDisplayDate(isoDate: string): string {
+  if (!isoDate) return 'N/A';
+  return formatPaddedDisplayDate(isoDate) || 'N/A';
 }
 
 function formatReportDate(date: Date): string {
@@ -2285,7 +2291,7 @@ export function EventBudgetPlannerTool({ toolId }: EventBudgetPlannerToolProps) 
         const totals = getEventTotals(event);
         checkNewPage(28);
         addText(event.name, 12, true, 5);
-        addText(`Date: ${formatDisplayDate(event.date)}`, 9, false, 8);
+        addText(`Date: ${formatPdfDate(event.date)}`, 9, false, 8);
         addText(`Type: ${getTypeName(event.typeId)}`, 9, false, 8);
         addText(`Budgeted: ${formatCurrency(totals.totalBudgeted)}`, 9, false, 8);
         addText(`Actual: ${formatCurrency(totals.totalActual)}`, 9, false, 8);
@@ -2301,7 +2307,7 @@ export function EventBudgetPlannerTool({ toolId }: EventBudgetPlannerToolProps) 
           addText(`Notes: ${event.notes.trim()}`, 9, false, 8);
         }
         if (!event.isActive && event.dateInactivated) {
-          addText(`Date inactivated: ${formatDisplayDate(event.dateInactivated)}`, 9, false, 8);
+          addText(`Date inactivated: ${formatPdfDate(event.dateInactivated)}`, 9, false, 8);
         }
 
         const groups = categoriesForEvent(event);
@@ -2336,7 +2342,7 @@ export function EventBudgetPlannerTool({ toolId }: EventBudgetPlannerToolProps) 
                     .join(' · ')
                 : getVendorName(expense.vendorId || splits[0]?.vendorId);
             addText(
-              `${formatDisplayDate(expense.date)}  ·  ${formatCurrency(asMoney(expense.amount))}  ·  ${vendorLabel}`,
+              `${formatPdfDate(expense.date)}  ·  ${formatCurrency(asMoney(expense.amount))}  ·  ${vendorLabel}`,
               8,
               false,
               10

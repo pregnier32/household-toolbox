@@ -3073,7 +3073,7 @@ Narrow this rule so it does not re-test:
 
 ## Application-Specific UX Exceptions
 
-These rules are intentional differences. They do not replace the global paperclip, modal, or confirmation standards. They say **which records** get files, whether history stays editable, and which chrome must not grow a paperclip.
+These rules are intentional differences. They do not replace the global paperclip, modal, or confirmation standards. They say **which records** get files, whether history stays editable, and which chrome must not grow a paperclip. Approved layout and add-control exceptions are listed under the tool they apply to. They do not change the global rules for other tools.
 
 Global defaults still apply unless a bullet below says otherwise: one paperclip, one Attachment modal, 10 MB, the shared type list, queue-until-save on create, immediate persist on saved records, and no browser dialogs.
 
@@ -3093,6 +3093,8 @@ Two file stores. Do not attach files to scheduled tasks. A task is 1:1 with its 
 - **Completion files** (`tools_cs_completion_attachments`, path `{userId}/completions/{completionId}/...`): dated proof for one occurrence. Queue in the Complete dialog. After save they are read-only in completion History. No add/remove after complete.
 - No paperclip on categories or Activate.
 
+**Library and add-control exception (intentional):** Cleaning Schedule keeps its Library and Categories structure, the filled **+ Add New Cleaning Item** button, the existing inline Add New Cleaning Item workflow, and the filled **+ Add New Category** control. Do not convert this tool to the Calendar Events category-selector or section-plus pattern. This is the exception for `UX-LAY-003` and `UX-ADD-002`.
+
 ### Home Maintenance Schedule
 
 Two file stores. Do not attach files to scheduled tasks. A task is 1:1 with its library item, so task-level files would duplicate the item store. Provider fields are columns on the task; do not add a second upload control.
@@ -3100,6 +3102,8 @@ Two file stores. Do not attach files to scheduled tasks. A task is 1:1 with its 
 - **Library item files** (`tools_hms_item_attachments`, bucket `home-maintenance-schedule`, path `{userId}/items/{itemId}/...`): standing manuals, invoices, and photos for the item. Library add/edit/cards, schedule rows, View/Edit, and archived (moved-to-history) paperclips all open this store. Files stay editable when a task is archived. Files stay when a task is deleted. Permanent item delete removes them.
 - **Completion files** (`tools_hms_completion_attachments`, path `{userId}/completions/{completionId}/...`): dated proof for one occurrence. Queue in the Complete dialog. After save they are View/Download only on the Completed chip, History completion rows, and the in-modal Completion history table. No add/remove after complete.
 - No paperclip on categories, Activate, Export, search/filter, or provider fields.
+
+**Library and add-control exception (intentional):** Home Maintenance Schedule keeps its Library and category structure, the filled **+ Add New Maintenance Item** button, the existing inline add workflow, and the existing category-creation workflow, including the filled **+ Add New Category** control. Do not convert this tool to the Calendar Events category-selector or section-plus pattern. This is the exception for `UX-LAY-003` and `UX-ADD-002`.
 
 ### End of Life Planner
 
@@ -3126,6 +3130,8 @@ Expense receipts only. Do not attach files to accounts, deposits, Summary KPIs, 
 - Reimbursed is a field, not History. Files stay editable.
 - No paperclip on account add/edit, deposits, or Reports.
 
+**Add control exception (intentional):** HSA Tracker keeps the filled Add button and the existing inline workflow for expenses and deposits, including **+ Add New Expense**. Do not convert expenses or deposits to a section-plus or modal add pattern. This is the exception for `UX-ADD-002`.
+
 ### Travel Log
 
 Trip files only. Do not attach files to lodging or journal notes until those child rows are upserted by id (they are currently deleted and re-inserted on every trip save).
@@ -3133,6 +3139,8 @@ Trip files only. Do not attach files to lodging or journal notes until those chi
 - **Trip files** (`tools_tl_trip_attachments`, bucket `travel-log`, path `{userId}/{tripId}/...`): multiple optional tickets, boarding passes, photos, and receipts. Paperclip on Add trip, Edit trip, and trip cards.
 - The “Trip History” heading is the trip list, not an archive. Files stay editable.
 - No second “Upload receipts” control under Budget. No paperclip on lodging/journal modals or Export.
+
+**Add placement exception (intentional):** Travel Log keeps Search before **+ Add New Trip**. Do not move the add button above the search area to satisfy the generic `UX-ADD-001` placement rule.
 
 ### Repair History
 
@@ -3155,6 +3163,8 @@ Event files and expense files. Do not attach files to vendors, categories, types
 - Queue files on create; persist immediately on saved records. `addExpense` returns `expenseId` so queued uploads can run after Save Expense.
 - Render `AttachmentModal` after the expense modal. The Attachment overlay uses **`z-[60]`** when it stacks on the expense modal.
 - No paperclip on Vendors, Categories, Types, category-budget rows, Calendar, or export.
+
+**Add-form control order exception (intentional):** On Add New Event, the Birthday starter template stays after the Dashboard Calendar switch. Do not move controls so the Dashboard Calendar switch is literally the final optional control. This is the exception for `UX-ADD-003`.
 
 ### Meal Planner
 
@@ -3250,6 +3260,8 @@ Address files only (`tools_ab_address_attachments`, bucket `address-book`, path 
 - Render `AttachmentModal` after the View Address dialog. The Attachment overlay uses **`z-[60]`** when it stacks on that dialog.
 - Delete address removes storage objects before the row.
 - No paperclip on the Tags tab, tag chips, Add/Edit tag, or Tag History.
+
+**Add placement exception (intentional):** Address Book keeps the Search and tag-filter area before **+ Add New Address**. Do not move the add button above Search to satisfy the generic `UX-ADD-001` placement rule.
 
 ---
 

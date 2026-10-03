@@ -13,6 +13,7 @@ import {
   isPdfAttachment,
   type AttachmentItem,
 } from '@/lib/attachments';
+import { formatDisplayDate as formatPaddedDisplayDate } from '@/lib/format-display-date';
 import {
   addDays,
   addMonthsSetDay,
@@ -165,11 +166,16 @@ const RANGE_CHIPS: { id: RangeId; label: string }[] = [
   { id: 'completed', label: 'Completed' },
 ];
 
-function formatDateForDisplay(isoDate: string): string {
+function formatPdfDate(isoDate: string): string {
   if (!isoDate) return '—';
   const [year, month, day] = isoDate.split('T')[0].split('-');
   if (!year || !month || !day) return isoDate;
   return `${Number(month)}/${Number(day)}/${year}`;
+}
+
+function formatDateForDisplay(isoDate: string): string {
+  if (!isoDate) return '—';
+  return formatPaddedDisplayDate(isoDate) || '—';
 }
 
 function formatReportDate(date: Date): string {
@@ -952,6 +958,7 @@ export function HomeMaintenanceScheduleTool({ toolId }: HomeMaintenanceScheduleT
   const [viewPreview, setViewPreview] = useState<AttachmentItem | null>(null);
 
   const [deleteTarget, setDeleteTarget] = useState<DeleteTarget | null>(null);
+  const [historyConfirmTaskId, setHistoryConfirmTaskId] = useState<string | null>(null);
   const [deleteConfirmText, setDeleteConfirmText] = useState('');
   const [showExportPopup, setShowExportPopup] = useState(false);
   const [includeHistory, setIncludeHistory] = useState(false);
@@ -1045,6 +1052,10 @@ export function HomeMaintenanceScheduleTool({ toolId }: HomeMaintenanceScheduleT
   useEffect(() => {
     const onKey = (event: KeyboardEvent) => {
       if (event.key !== 'Escape') return;
+      if (historyConfirmTaskId) {
+        setHistoryConfirmTaskId(null);
+        return;
+      }
       if (attachmentModal) {
         setAttachmentModal(null);
         setViewPreview(null);
@@ -1076,7 +1087,7 @@ export function HomeMaintenanceScheduleTool({ toolId }: HomeMaintenanceScheduleT
     };
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
-  }, [attachmentModal, deleteTarget, completeOccurrence, pendingCompletionAttachments, activateItemId, detailTaskId, showExportPopup, isExportingPdf]);
+  }, [historyConfirmTaskId, attachmentModal, deleteTarget, completeOccurrence, pendingCompletionAttachments, activateItemId, detailTaskId, showExportPopup, isExportingPdf]);
 
   const sortedCategories = useMemo(
     () => [...categories].sort((a, b) => a.name.localeCompare(b.name)),
@@ -2238,10 +2249,10 @@ export function HomeMaintenanceScheduleTool({ toolId }: HomeMaintenanceScheduleT
         checkNewPage(28);
         addText(row.item.name, 11, true, 8);
         addText(`Frequency: ${frequencyLabel(row.task.frequency)}`, 9, false, 8);
-        addText(`Next due: ${formatDateForDisplay(row.task.nextDueDate)}`, 9, false, 8);
+        addText(`Next due: ${formatPdfDate(row.task.nextDueDate)}`, 9, false, 8);
         addText(`Status: ${row.status}`, 9, false, 8);
         if (row.task.lastCompletedDate) {
-          addText(`Last completed: ${formatDateForDisplay(row.task.lastCompletedDate)}`, 9, false, 8);
+          addText(`Last completed: ${formatPdfDate(row.task.lastCompletedDate)}`, 9, false, 8);
         }
         const location = row.task.location.trim() || row.item.defaultLocation.trim();
         if (location) {
@@ -2263,7 +2274,7 @@ export function HomeMaintenanceScheduleTool({ toolId }: HomeMaintenanceScheduleT
           if (provider.notes.trim()) addText(`Provider notes: ${provider.notes.trim()}`, 9, false, 8);
         }
         if (!row.task.isActive && row.task.dateInactivated) {
-          addText(`Date inactivated: ${formatDateForDisplay(row.task.dateInactivated)}`, 9, false, 8);
+          addText(`Date inactivated: ${formatPdfDate(row.task.dateInactivated)}`, 9, false, 8);
         }
         yPos += 3;
       };
@@ -2545,7 +2556,7 @@ export function HomeMaintenanceScheduleTool({ toolId }: HomeMaintenanceScheduleT
                         </button>
                         <button
                           type="button"
-                          onClick={() => deactivateTask(row.taskId)}
+                          onClick={() => setHistoryConfirmTaskId(row.taskId)}
                           className={rowIconSecondaryClass}
                           aria-label="Move to history"
                           title="Move to history"
@@ -3419,7 +3430,7 @@ export function HomeMaintenanceScheduleTool({ toolId }: HomeMaintenanceScheduleT
                       <button type="button" onClick={() => openComplete(detailTask.id, detailTask.nextDueDate)} className={primaryButtonClass}>
                         Complete
                       </button>
-                      <button type="button" onClick={() => deactivateTask(detailTask.id)} className={secondaryButtonClass}>
+                      <button type="button" onClick={() => setHistoryConfirmTaskId(detailTask.id)} className={secondaryButtonClass}>
                         Move to history
                       </button>
                     </>
@@ -3476,6 +3487,43 @@ export function HomeMaintenanceScheduleTool({ toolId }: HomeMaintenanceScheduleT
                   </table>
                 </div>
               )}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {historyConfirmTaskId && (
+        <div className={overlayClass}>
+          <div
+            className={modalCardClass}
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="hms-history-confirm-title"
+          >
+            <h3
+              id="hms-history-confirm-title"
+              className={isLight ? 'text-xl font-semibold text-slate-900 mb-2' : 'text-xl font-semibold text-slate-50 mb-2'}
+            >
+              Move to History
+            </h3>
+            <p className={isLight ? 'text-slate-700 mb-4' : 'text-slate-300 mb-4'}>
+              Move “{libraryItems.find((item) => item.id === scheduledTasks.find((task) => task.id === historyConfirmTaskId)?.libraryItemId)?.name || 'this task'}” to History?
+            </p>
+            <div className="flex gap-3">
+              <button
+                type="button"
+                onClick={() => {
+                  const taskId = historyConfirmTaskId;
+                  setHistoryConfirmTaskId(null);
+                  if (taskId) void deactivateTask(taskId);
+                }}
+                className={`flex-1 ${primaryButtonClass}`}
+              >
+                Move to History
+              </button>
+              <button type="button" onClick={() => setHistoryConfirmTaskId(null)} className={secondaryButtonClass}>
+                Cancel
+              </button>
             </div>
           </div>
         </div>

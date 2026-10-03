@@ -13,6 +13,7 @@ import {
   isPdfAttachment,
   type AttachmentItem,
 } from '@/lib/attachments';
+import { formatDisplayDate as formatPaddedDisplayDate } from '@/lib/format-display-date';
 
 function generateId(): string {
   return typeof crypto !== 'undefined' && crypto.randomUUID
@@ -20,10 +21,15 @@ function generateId(): string {
     : `id-${Date.now()}-${Math.random().toString(36).slice(2, 9)}`;
 }
 
-function formatDateForDisplay(isoDate: string): string {
+function formatPdfDate(isoDate: string): string {
   if (!isoDate) return '';
   const [y, m, d] = isoDate.split('-');
   return `${Number(m)}/${Number(d)}/${y}`;
+}
+
+function formatDateForDisplay(isoDate: string): string {
+  if (!isoDate) return '';
+  return formatPaddedDisplayDate(isoDate) || '';
 }
 
 function formatMoney(n: number): string {
@@ -1336,7 +1342,7 @@ export function HSATrackerTool({ toolId }: HSATrackerToolProps) {
               const deposit = line.deposit;
               running += deposit.amount;
               addText(
-                `${formatDateForDisplay(deposit.date)}  ·  Deposit — ${deposit.name}`,
+                `${formatPdfDate(deposit.date)}  ·  Deposit — ${deposit.name}`,
                 11,
                 true,
                 5
@@ -1357,7 +1363,7 @@ export function HSATrackerTool({ toolId }: HSATrackerToolProps) {
               running -= expense.amount;
               const expenseLines: { text: string; fontSize: number; isBold: boolean; indent: number }[] = [
                 {
-                  text: `${formatDateForDisplay(expense.date)}  ·  Expense — ${expense.name}`,
+                  text: `${formatPdfDate(expense.date)}  ·  Expense — ${expense.name}`,
                   fontSize: 11,
                   isBold: true,
                   indent: 5,
@@ -1381,7 +1387,7 @@ export function HSATrackerTool({ toolId }: HSATrackerToolProps) {
               });
               expenseLines.push({
                 text: expense.reimbursementDate
-                  ? `Reimbursed: ${expense.reimbursedYet} (${formatDateForDisplay(expense.reimbursementDate)})`
+                  ? `Reimbursed: ${expense.reimbursedYet} (${formatPdfDate(expense.reimbursementDate)})`
                   : `Reimbursed: ${expense.reimbursedYet}`,
                 fontSize: 9,
                 isBold: false,
@@ -1431,7 +1437,7 @@ export function HSATrackerTool({ toolId }: HSATrackerToolProps) {
             .map((file) => file.name?.trim())
             .filter((name): name is string => Boolean(name))
             .map((fileName) =>
-              `${block.account.name} — ${expense.name} — ${formatDateForDisplay(expense.date)} — ${fileName}`
+              `${block.account.name} — ${expense.name} — ${formatPdfDate(expense.date)} — ${fileName}`
             )
         )
       );
@@ -1836,7 +1842,7 @@ export function HSATrackerTool({ toolId }: HSATrackerToolProps) {
                     ))}
                   </select>
                   <span className={`${mutedSmallClass} min-w-0 whitespace-nowrap`}>
-                    KPI amounts use calendar year {summaryYear}. Balance is as of 12/31/{summaryYear}.
+                    KPI amounts use calendar year {summaryYear}. Balance is as of {formatDateForDisplay(`${summaryYear}-12-31`)}.
                   </span>
                   <button type="button" onClick={() => exportReportCsv(summaryYear)} className={`${secondaryButtonClass} shrink-0`}>
                     Export CSV
@@ -1851,10 +1857,10 @@ export function HSATrackerTool({ toolId }: HSATrackerToolProps) {
 
               <div className={cardClass} aria-label="Rollover balances">
                 <p className={isLight ? 'text-sm text-slate-800' : 'text-sm text-slate-200'}>
-                  Starting 1/1/{summaryYear}: {formatMoney(summaryMetrics.startingBalance)}
+                  Starting {formatDateForDisplay(`${summaryYear}-01-01`)}: {formatMoney(summaryMetrics.startingBalance)}
                 </p>
                 <p className={`mt-1 ${isLight ? 'text-sm text-slate-800' : 'text-sm text-slate-200'}`}>
-                  Matches ending 12/31/{summaryYear - 1}: {formatMoney(summaryMetrics.startingBalance)}
+                  Matches ending {formatDateForDisplay(`${summaryYear - 1}-12-31`)}: {formatMoney(summaryMetrics.startingBalance)}
                 </p>
               </div>
 
