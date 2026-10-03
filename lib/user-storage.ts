@@ -305,12 +305,14 @@ const ATTACHMENT_COUNT_TABLES = [
   'tools_tl_trip_attachments',
 ] as const;
 
-async function countAttachmentRows(): Promise<number> {
+async function countAttachmentRows(excludeUserIds: string[] = []): Promise<number> {
   const counts = await Promise.all(
     ATTACHMENT_COUNT_TABLES.map(async (table) => {
-      const { count, error } = await supabaseServer
-        .from(table)
-        .select('*', { count: 'exact', head: true });
+      const { count, error } = await withoutUserIds(
+        supabaseServer.from(table).select('*', { count: 'exact', head: true }),
+        'user_id',
+        excludeUserIds,
+      );
       if (error) {
         console.error(`Failed to count ${table}:`, error);
         return 0;
@@ -320,14 +322,16 @@ async function countAttachmentRows(): Promise<number> {
   );
 
   const extraFileColumns = await Promise.all([
-    supabaseServer
-      .from('tools_rh_records')
-      .select('*', { count: 'exact', head: true })
-      .not('receipt_file_url', 'is', null),
-    supabaseServer
-      .from('tools_rh_records')
-      .select('*', { count: 'exact', head: true })
-      .not('warranty_file_url', 'is', null),
+    withoutUserIds(
+      supabaseServer.from('tools_rh_records').select('*', { count: 'exact', head: true }).not('receipt_file_url', 'is', null),
+      'user_id',
+      excludeUserIds,
+    ),
+    withoutUserIds(
+      supabaseServer.from('tools_rh_records').select('*', { count: 'exact', head: true }).not('warranty_file_url', 'is', null),
+      'user_id',
+      excludeUserIds,
+    ),
   ]);
 
   const extraCount = extraFileColumns.reduce((sum, result) => {
@@ -341,10 +345,18 @@ async function countAttachmentRows(): Promise<number> {
   return counts.reduce((sum, value) => sum + value, 0) + extraCount;
 }
 
-async function sumCachedUserStorageBytes(): Promise<number> {
-  const { data, error } = await supabaseServer
-    .from('users')
-    .select('storage_used_bytes');
+function withoutUserIds<T>(query: T, column: string, userIds: string[]): T {
+  if (userIds.length === 0) return query;
+  const filterable = query as { not: (column: string, operator: string, value: string) => T };
+  return filterable.not(column, 'in', `(${userIds.join(',')})`);
+}
+
+async function sumCachedUserStorageBytes(excludeUserIds: string[] = []): Promise<number> {
+  const { data, error } = await withoutUserIds(
+    supabaseServer.from('users').select('storage_used_bytes'),
+    'id',
+    excludeUserIds,
+  );
 
   if (error) {
     console.error('Failed to sum cached storage usage:', error);
@@ -354,14 +366,85 @@ async function sumCachedUserStorageBytes(): Promise<number> {
   return (data || []).reduce((sum, row) => sum + Math.max(0, row.storage_used_bytes ?? 0), 0);
 }
 
-export async function getSiteStorageStats(): Promise<SiteStorageStats> {
+async function countPrefixFiles(bucket: string, prefix: string): Promise<number> {
+  let offset = 0;
+  let total = 0;
+  const limit = 1000;
+
+  while (true) {
+    const { data, error } = await supabaseServer.storage.from(bucket).list(prefix, { limit, offset });
+    if (error || !data?.length) break;
+
+    for (const item of data) {
+      if (item.id) {
+        total += 1;
+      } else {
+        const childPrefix = prefix ? `${prefix}/${item.name}` : item.name;
+        total += await countPrefixFiles(bucket, childPrefix);
+      }
+    }
+
+    if (data.length < limit) break;
+    offset += limit;
+  }
+
+  return total;
+}
+
+async function countUserStorageFiles(userId: string): Promise<number> {
+  let total = 0;
+
+  for (const tool of STORAGE_TOOL_BUCKETS) {
+    const { data: root, error } = await supabaseServer.storage.from(tool.bucket).list('', { limit: 1000, offset: 0 });
+    if (error || !root) continue;
+
+    for (const item of root) {
+      const path = item.name;
+      if (item.id) {
+        if (objectBelongsToUser(path, userId)) total += 1;
+        continue;
+      }
+      if (path === userId) {
+        total += await countPrefixFiles(tool.bucket, userId);
+        continue;
+      }
+      total += await countPrefixFiles(tool.bucket, `${path}/${userId}`);
+    }
+  }
+
+  return total;
+}
+
+async function storageOwnedByUsers(userIds: string[]): Promise<{ files: number; bytes: number }> {
+  if (userIds.length === 0) return { files: 0, bytes: 0 };
+
+  let bytes = 0;
+  const usageResults = await Promise.all(
+    userIds.map((userId) => supabaseServer.rpc('get_user_storage_usage', { p_user_id: userId })),
+  );
+  for (const result of usageResults) {
+    if (result.error) {
+      console.error('Excluded storage usage lookup failed', result.error.code ?? 'unknown');
+      continue;
+    }
+    for (const row of result.data || []) {
+      bytes += Math.max(0, Number(row.used_bytes) || 0);
+    }
+  }
+
+  const fileCounts = await Promise.all(userIds.map((userId) => countUserStorageFiles(userId)));
+  return { files: fileCounts.reduce((sum, count) => sum + count, 0), bytes };
+}
+
+export async function getSiteStorageStats(excludeUserIds: string[] = []): Promise<SiteStorageStats> {
   const { data, error } = await supabaseServer.rpc('get_site_storage_stats');
   if (!error) {
     const row = Array.isArray(data) ? data[0] : data;
     if (row) {
-      const usedBytes = Math.max(0, Number(row.used_bytes) || 0);
+      const excluded = await storageOwnedByUsers(excludeUserIds);
+      const usedBytes = Math.max(0, (Number(row.used_bytes) || 0) - excluded.bytes);
       return {
-        documentCount: Math.max(0, Number(row.document_count) || 0),
+        documentCount: Math.max(0, (Number(row.document_count) || 0) - excluded.files),
         usedBytes,
         usedLabel: formatStorageBytes(usedBytes),
       };
@@ -371,8 +454,8 @@ export async function getSiteStorageStats(): Promise<SiteStorageStats> {
   }
 
   const [documentCount, usedBytes] = await Promise.all([
-    countAttachmentRows(),
-    sumCachedUserStorageBytes(),
+    countAttachmentRows(excludeUserIds),
+    sumCachedUserStorageBytes(excludeUserIds),
   ]);
 
   return {

@@ -13,6 +13,7 @@ import {
   isPdfAttachment,
   type AttachmentItem,
 } from '@/lib/attachments';
+import { formatDisplayDate as formatPaddedDisplayDate } from '@/lib/format-display-date';
 import { htbPdfLogoBox, loadHtbPdfLogo, stampHtbPdfLogo } from '@/lib/htb-pdf-logo';
 
 const API_BASE = '/api/tools/pet-care-schedule';
@@ -186,9 +187,14 @@ function parseLocalDate(isoDate: string): Date | null {
   return new Date(Number(match[1]), Number(match[2]) - 1, Number(match[3]));
 }
 
-function formatLocalDate(isoDate: string): string {
+function formatPdfDate(isoDate: string): string {
   const d = parseLocalDate(isoDate);
   return d ? d.toLocaleDateString() : isoDate;
+}
+
+function formatLocalDate(isoDate: string): string {
+  if (!isoDate) return '';
+  return formatPaddedDisplayDate(isoDate) || isoDate;
 }
 
 function formatReportDate(date: Date): string {
@@ -2307,7 +2313,7 @@ export function PetCareScheduleTool({ toolId }: PetCareScheduleToolProps) {
 
         beginSection('Pet information');
         if (report.petTypeLabel) addText(`Type: ${report.petTypeLabel}`, 9, false, 8);
-        if (report.birthdate) addText(`Birthdate: ${formatLocalDate(report.birthdate)}`, 9, false, 8);
+        if (report.birthdate) addText(`Birthdate: ${formatPdfDate(report.birthdate)}`, 9, false, 8);
         if (report.breed) addText(`Breed: ${report.breed}`, 9, false, 8);
         if (report.weight) addText(`Weight: ${report.weight}`, 9, false, 8);
         if (report.color) addText(`Color: ${report.color}`, 9, false, 8);
@@ -2327,8 +2333,8 @@ export function PetCareScheduleTool({ toolId }: PetCareScheduleToolProps) {
           beginSection('Food');
           const writeFood = (food: FoodEntry) => {
             addText(food.name || 'Food', 10, true, 8);
-            if (food.startDate) addText(`Started: ${formatLocalDate(food.startDate)}`, 9, false, 10);
-            if (food.endDate) addText(`Ended: ${formatLocalDate(food.endDate)}`, 9, false, 10);
+            if (food.startDate) addText(`Started: ${formatPdfDate(food.startDate)}`, 9, false, 10);
+            if (food.endDate) addText(`Ended: ${formatPdfDate(food.endDate)}`, 9, false, 10);
             if (food.rating) addText(`Rating: ${food.rating} of 5`, 9, false, 10);
             if (food.notes.trim()) addText(`Notes: ${food.notes.trim()}`, 9, false, 10);
             yPos += 1;
@@ -2386,8 +2392,8 @@ export function PetCareScheduleTool({ toolId }: PetCareScheduleToolProps) {
             addText(item.name || 'Care item', 10, true, 8);
             if (item.frequency) addText(`Frequency: ${item.frequency}`, 9, false, 10);
             addText(`Priority: ${formatPriorityLabel(item.priority)}`, 9, false, 10);
-            if (item.startDate) addText(`Started: ${formatLocalDate(item.startDate)}`, 9, false, 10);
-            if (item.endDate) addText(`Ended: ${formatLocalDate(item.endDate)}`, 9, false, 10);
+            if (item.startDate) addText(`Started: ${formatPdfDate(item.startDate)}`, 9, false, 10);
+            if (item.endDate) addText(`Ended: ${formatPdfDate(item.endDate)}`, 9, false, 10);
             if (item.notes.trim()) addText(`Notes: ${item.notes.trim()}`, 9, false, 10);
             yPos += 1;
           };
@@ -2407,7 +2413,7 @@ export function PetCareScheduleTool({ toolId }: PetCareScheduleToolProps) {
           vaccinationRows.forEach((item) => {
             const label = item.name || 'Vaccination';
             addText(label, 10, true, 8);
-            if (item.date) addText(`Date: ${formatLocalDate(item.date)}`, 9, false, 10);
+            if (item.date) addText(`Date: ${formatPdfDate(item.date)}`, 9, false, 10);
             if (item.veterinarian) addText(`Veterinarian: ${item.veterinarian}`, 9, false, 10);
             if (item.notes.trim()) addText(`Notes: ${item.notes.trim()}`, 9, false, 10);
             fileLines(item.attachments).forEach((fileName) => {
@@ -2432,7 +2438,7 @@ export function PetCareScheduleTool({ toolId }: PetCareScheduleToolProps) {
           const writeAppointment = (item: Appointment) => {
             const label = item.type || 'Appointment';
             addText(label, 10, true, 8);
-            if (item.date) addText(`Date: ${formatLocalDate(item.date)}`, 9, false, 10);
+            if (item.date) addText(`Date: ${formatPdfDate(item.date)}`, 9, false, 10);
             if (item.time) addText(`Time: ${formatClockTime(item.time)}`, 9, false, 10);
             if (item.veterinarian) addText(`Veterinarian: ${item.veterinarian}`, 9, false, 10);
             if (item.notes.trim()) addText(`Notes: ${item.notes.trim()}`, 9, false, 10);
@@ -2457,7 +2463,7 @@ export function PetCareScheduleTool({ toolId }: PetCareScheduleToolProps) {
           documentRows.forEach((doc) => {
             const label = doc.name || 'Document';
             addText(label, 10, true, 8);
-            if (doc.date) addText(`Date: ${formatLocalDate(doc.date)}`, 9, false, 10);
+            if (doc.date) addText(`Date: ${formatPdfDate(doc.date)}`, 9, false, 10);
             if (doc.description.trim()) addText(`Description: ${doc.description.trim()}`, 9, false, 10);
             fileLines(doc.attachments).forEach((fileName) => {
               attachmentRefs.push(`${report.name} — Document — ${label} — ${fileName}`);
@@ -2477,7 +2483,7 @@ export function PetCareScheduleTool({ toolId }: PetCareScheduleToolProps) {
         if (noteRows.length > 0) {
           beginSection('Notes');
           const writeNote = (note: Note) => {
-            if (note.date) addText(formatLocalDate(note.date), 10, true, 8);
+            if (note.date) addText(formatPdfDate(note.date), 10, true, 8);
             if (note.content.trim()) addText(note.content.trim(), 9, false, 10);
             yPos += 1;
           };
@@ -3019,15 +3025,14 @@ export function PetCareScheduleTool({ toolId }: PetCareScheduleToolProps) {
       {selectedPetId && (
         <>
 
+          {selectedPet && (
+            <h3 className={isLight ? 'break-words text-lg font-semibold text-slate-900' : 'break-words text-lg font-semibold text-slate-100'}>
+              {selectedPet.name}
+            </h3>
+          )}
           {/* Navigation Tabs */}
           <div className={tabStripClass}>
-            <div className="flex gap-2 overflow-x-auto">
-              {/* Pet Name as First Tab */}
-              {selectedPet && (
-                <div className="px-4 py-2 text-[18px] font-medium text-slate-200 whitespace-nowrap border-b-2 border-transparent">
-                  {selectedPet.name}:
-                </div>
-              )}
+            <div className="flex flex-wrap gap-2">
               {/* Regular Tabs */}
               {[
                 { id: 'info', label: 'Pet Info' },

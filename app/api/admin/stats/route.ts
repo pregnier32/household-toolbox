@@ -16,14 +16,13 @@ export async function GET() {
   }
 
   try {
-    // Count users where active = 'Y'
-    const { count, error } = await supabaseServer
+    const { count: adminStatusCount, error: adminStatusError } = await supabaseServer
       .from('users')
       .select('*', { count: 'exact', head: true })
-      .eq('active', 'Y');
+      .eq('user_status', 'admin');
 
-    if (error) {
-      console.error('Error fetching active user count:', error);
+    if (adminStatusError) {
+      console.error('Error fetching admin user count:', adminStatusError);
       return NextResponse.json({ error: 'Failed to fetch stats' }, { status: 500 });
     }
 
@@ -38,37 +37,42 @@ export async function GET() {
       return NextResponse.json({ error: 'Failed to fetch stats' }, { status: 500 });
     }
 
-    // Count active tools
-    const { count: activeTrialToolsCount, error: toolsError } = await supabaseServer
-      .from('users_tools')
-      .select('*', { count: 'exact', head: true })
-      .eq('status', 'active');
+    const { data: superadminRows, error: superadminError } = await supabaseServer
+      .from('users')
+      .select('id')
+      .eq('user_status', 'superadmin');
+
+    if (superadminError) {
+      console.error('Error fetching superadmin accounts:', superadminError);
+      return NextResponse.json({ error: 'Failed to fetch stats' }, { status: 500 });
+    }
+
+    const superadminIds = (superadminRows || []).map((row) => row.id);
+    const excludeSuperadmin = <T extends { not: (column: string, operator: string, value: string) => T }>(
+      query: T,
+      column: string,
+    ) => (superadminIds.length === 0 ? query : query.not(column, 'in', `(${superadminIds.join(',')})`));
+
+    // Count active tools owned by accounts other than superadmin
+    const { count: activeTrialToolsCount, error: toolsError } = await excludeSuperadmin(
+      supabaseServer.from('users_tools').select('*', { count: 'exact', head: true }).eq('status', 'active'),
+      'user_id',
+    );
 
     if (toolsError) {
       console.error('Error fetching active/trial tools count:', toolsError);
       return NextResponse.json({ error: 'Failed to fetch stats' }, { status: 500 });
     }
 
-    // Count admin users (admin or superadmin status)
-    const { count: adminUserCount, error: adminUserError } = await supabaseServer
-      .from('users')
-      .select('*', { count: 'exact', head: true })
-      .in('user_status', ['admin', 'superadmin']);
-
-    if (adminUserError) {
-      console.error('Error fetching admin user count:', adminUserError);
-      return NextResponse.json({ error: 'Failed to fetch stats' }, { status: 500 });
-    }
-
-    // Calculate average active/trial tools per admin user
-    const avgToolsPerAdmin = adminUserCount && adminUserCount > 0 
-      ? (activeTrialToolsCount || 0) / adminUserCount 
+    // Average uses admin accounts only. Superadmin tools are already left out of the tool count.
+    const avgToolsPerAdmin = adminStatusCount && adminStatusCount > 0
+      ? (activeTrialToolsCount || 0) / adminStatusCount
       : 0;
 
-    const { data: usersToolsData, error: usersToolsError } = await supabaseServer
-      .from('users_tools')
-      .select('tool_id')
-      .eq('status', 'active');
+    const { data: usersToolsData, error: usersToolsError } = await excludeSuperadmin(
+      supabaseServer.from('users_tools').select('tool_id').eq('status', 'active'),
+      'user_id',
+    );
 
     if (usersToolsError) {
       console.error('Error fetching users_tools:', usersToolsError);
@@ -102,30 +106,27 @@ export async function GET() {
         return a.name.localeCompare(b.name, undefined, { sensitivity: 'base' });
       });
 
-    // Get users created in the last 12 months, grouped by month
-    const twelveMonthsAgo = new Date();
-    twelveMonthsAgo.setMonth(twelveMonthsAgo.getMonth() - 12);
+    // Twelve months starting August 2026.
+    const chartStart = new Date(2026, 7, 1);
 
     const { data: usersData, error: usersError } = await supabaseServer
       .from('users')
       .select('created_at')
-      .gte('created_at', twelveMonthsAgo.toISOString());
+      .gte('created_at', new Date(Date.UTC(2026, 7, 1)).toISOString())
+      .neq('user_status', 'superadmin');
 
     if (usersError) {
       console.error('Error fetching users by month:', usersError);
       return NextResponse.json({ error: 'Failed to fetch stats' }, { status: 500 });
     }
 
-    // Initialize 12 months of data with 0 counts
     const monthsData: { month: string; count: number; monthKey: string }[] = [];
-    const now = new Date();
     const monthCounts = new Map<string, number>();
-    
-    // Initialize all 12 months
-    for (let i = 11; i >= 0; i--) {
-      const date = new Date(now.getFullYear(), now.getMonth() - i, 1);
-      const monthKey = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}`;
-      const monthLabel = date.toLocaleDateString('en-US', { month: 'short', year: 'numeric' });
+
+    for (let i = 0; i < 12; i++) {
+      const cursor = new Date(chartStart.getFullYear(), chartStart.getMonth() + i, 1);
+      const monthKey = `${cursor.getFullYear()}-${String(cursor.getMonth() + 1).padStart(2, '0')}`;
+      const monthLabel = cursor.toLocaleDateString('en-US', { month: 'short', year: 'numeric' });
       monthCounts.set(monthKey, 0);
       monthsData.push({ month: monthLabel, count: 0, monthKey });
     }
@@ -154,10 +155,10 @@ export async function GET() {
     const monthlyRevenue = 0;
     const lifetimeRevenue = 0;
     const revenueByDay: { date: string; revenue: number }[] = [];
-    const storageStats = await getSiteStorageStats();
+    const storageStats = await getSiteStorageStats(superadminIds);
 
     return NextResponse.json({ 
-      activeUserCount: count || 0,
+      adminStatusCount: adminStatusCount || 0,
       guestUserCount: guestCount || 0,
       activeTrialToolsCount: activeTrialToolsCount || 0,
       avgToolsPerAdmin: Math.round(avgToolsPerAdmin * 100) / 100, // Round to 2 decimal places

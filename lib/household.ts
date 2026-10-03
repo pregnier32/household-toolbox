@@ -551,7 +551,7 @@ export async function acceptHouseholdInvitationSignup(input: {
     first_name: firstName,
     last_name: '',
     active: 'Y',
-    user_status: 'user',
+    user_status: 'guest',
     theme_preference: 'light',
     user_id: userId,
   });

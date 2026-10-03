@@ -3,7 +3,7 @@ import { publicMetadata } from '@/lib/public-site';
 
 export const metadata: Metadata = publicMetadata({
   title: 'Support | Household Toolbox',
-  description: 'Contact Household Toolbox support with a question, a problem, or a feature request.',
+  description: 'Contact Household Toolbox support, or read answers to common questions about accounts and tools.',
   path: '/support',
 });
 

@@ -2,6 +2,8 @@ import { NextRequest, NextResponse } from 'next/server';
 import { getHouseholdDataSession } from '@/lib/session';
 import { supabaseServer } from '@/lib/supabaseServer';
 import { deleteUserTool } from '@/lib/user-data-deletion';
+import { formatCents } from '@/lib/account-pricing';
+import { getAccountPricingState } from '@/lib/load-account-pricing';
 
 type EmbeddedTool = {
   id: string;
@@ -59,11 +61,34 @@ export async function GET() {
       }, { status: 500 });
     }
 
+    let labels = new Map<string, { accessLabel: string; expectedMonthlyCents: number; daysRemaining: number | null }>();
+    let expectedMonthlyCents = 0;
+    try {
+      const pricing = await getAccountPricingState(user.id, new Date());
+      expectedMonthlyCents = pricing?.effectiveMonthlyCents ?? 0;
+      labels = new Map((pricing?.tools ?? []).map((tool) => [tool.toolId, {
+        accessLabel: tool.inTrial && tool.daysRemaining != null
+          ? `Trial — ${tool.daysRemaining} day${tool.daysRemaining === 1 ? '' : 's'} remaining`
+          : tool.accessLabel,
+        expectedMonthlyCents: tool.expectedMonthlyCents,
+        daysRemaining: tool.daysRemaining,
+      }]));
+    } catch (pricingError) {
+      console.error('My tools pricing failed', pricingError instanceof Error ? pricingError.message : 'unknown');
+    }
+
     return NextResponse.json({
-      tools: sortOwnedTools(userTools || []).map((row) => ({
-        ...row,
-        tools: asOwnedTool(row.tools),
-      })),
+      expectedMonthlyCost: formatCents(expectedMonthlyCents),
+      tools: sortOwnedTools(userTools || []).map((row) => {
+        const owned = asOwnedTool(row.tools);
+        const label = owned ? labels.get(owned.id) : undefined;
+        return {
+          ...row,
+          tools: owned,
+          accessLabel: row.status === 'inactive' ? 'Inactive' : (label?.accessLabel || 'Included'),
+          expectedAmount: row.status === 'inactive' ? null : formatCents(label?.expectedMonthlyCents ?? 0),
+        };
+      }),
     });
   } catch (error) {
     console.error('Error in my-tools API:', error);

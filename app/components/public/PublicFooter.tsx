@@ -26,7 +26,7 @@ export function PublicFooter() {
           <p className="text-xs font-semibold uppercase tracking-[0.16em] text-slate-300">Help</p>
           <ul className="mt-3 space-y-2">
             <li>
-              <Link href="/faq" className={linkClass}>
+              <Link href="/support#faq" className={linkClass}>
                 FAQ
               </Link>
             </li>

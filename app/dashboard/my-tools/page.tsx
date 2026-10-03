@@ -13,6 +13,8 @@ type UserTool = {
   status: string;
   created_at: string;
   updated_at: string | null;
+  accessLabel?: string;
+  expectedAmount?: string | null;
   tools: {
     id: string;
     name: string;
@@ -109,11 +111,7 @@ export default function MyToolsPage() {
 
   const totalTitleClass = isLight ? 'text-lg font-semibold text-slate-900' : 'text-lg font-semibold text-slate-50';
 
-  const totalMetaClass = isLight ? 'text-sm text-slate-600' : 'text-sm text-slate-300';
-
   const totalAmountClass = isLight ? 'text-3xl font-semibold text-emerald-800' : 'text-3xl font-semibold text-emerald-400';
-
-  const totalInlineAmountClass = isLight ? 'font-medium text-emerald-800' : 'font-medium text-emerald-300';
 
   const totalPerMonthClass = isLight ? 'text-xs text-slate-500 mt-1' : 'text-xs text-slate-400 mt-1';
 
@@ -130,6 +128,7 @@ export default function MyToolsPage() {
   const loadingHintClass = isLight ? 'text-slate-600' : 'text-slate-400';
 
   const [tools, setTools] = useState<UserTool[]>([]);
+  const [expectedMonthlyCost, setExpectedMonthlyCost] = useState('$0.00');
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
@@ -178,6 +177,7 @@ export default function MyToolsPage() {
         (a.tools?.name || '').localeCompare(b.tools?.name || '', undefined, { sensitivity: 'base' })
       );
       setTools(sorted);
+      setExpectedMonthlyCost(data.expectedMonthlyCost || '$0.00');
       setIsLoading(false);
     } catch (err) {
       console.error('Error loading tools:', err);
@@ -275,11 +275,7 @@ export default function MyToolsPage() {
     }
   };
 
-  // Calculate total monthly cost
-  const totalMonthlyCost = tools.reduce((sum, tool) => {
-    if (tool.status === 'active') return sum + Number(tool.price);
-    return sum;
-  }, 0);
+  const totalMonthlyCost = expectedMonthlyCost;
 
   if (isLoading) {
     return (
@@ -332,7 +328,21 @@ export default function MyToolsPage() {
       <div className="mx-auto max-w-7xl px-4 py-8 sm:px-6 lg:px-8">
         <div className="mb-6">
           <h1 className={pageTitleClass}>My Tools</h1>
-          <p className={pageSubtitleClass}>View and manage your active tools.</p>
+          <p className={pageSubtitleClass}>
+            View and manage your active tools.
+            {user && user.householdRole !== 'user' && (
+              <>
+                {' '}
+                <button
+                  type="button"
+                  onClick={() => router.push('/dashboard/plan/access')}
+                  className={isLight ? 'font-medium text-emerald-800 underline-offset-2 hover:underline' : 'font-medium text-emerald-300 underline-offset-2 hover:underline'}
+                >
+                  Preview how free tools and trials will look
+                </button>
+              </>
+            )}
+          </p>
         </div>
 
         {/* Error Message */}
@@ -404,7 +414,10 @@ export default function MyToolsPage() {
                             {formatDate(tool.created_at)}
                           </td>
                           <td className={`px-6 py-4 ${priceClass}`}>
-                            {formatCurrency(Number(tool.price))}
+                            <div>{tool.accessLabel || formatCurrency(Number(tool.price))}</div>
+                            {tool.expectedAmount && tool.status === 'active' && (
+                              <div className={cellMutedClass}>{tool.expectedAmount}</div>
+                            )}
                           </td>
                           <td className="px-6 py-4 text-right">
                             {user?.householdRole === 'user' ? (
@@ -433,19 +446,12 @@ export default function MyToolsPage() {
             <div className={totalBoxClass}>
               <div className="flex items-center justify-between">
                 <div className="flex-1">
-                  <h3 className={totalTitleClass}>Total Monthly Charge</h3>
-                  <div className="mt-2 space-y-1">
-                    {totalMonthlyCost > 0 && (
-                      <p className={totalMetaClass}>
-                        Active Tools: <span className={totalInlineAmountClass}>{formatCurrency(totalMonthlyCost)}</span>
-                      </p>
-                    )}
-                  </div>
+                  <h3 className={totalTitleClass}>Expected Monthly Cost</h3>
                 </div>
                 <div className="flex items-end">
                   <div className="text-right">
                     <p className={totalAmountClass}>
-                      {formatCurrency(totalMonthlyCost)}
+                      {totalMonthlyCost}
                     </p>
                     <p className={totalPerMonthClass}>per month</p>
                   </div>

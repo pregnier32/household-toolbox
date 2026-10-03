@@ -7,6 +7,7 @@ import { AttachmentButton } from './AttachmentButton';
 import { AttachmentModal } from './AttachmentModal';
 import { ExportPdfIconButton } from './ExportPdfIconButton';
 import { canPreviewAttachment, formatAttachmentBytes, isImageAttachment, isPdfAttachment, type AttachmentItem } from '@/lib/attachments';
+import { formatDisplayDate as formatPaddedDisplayDate } from '@/lib/format-display-date';
 
 type DocumentTag = {
   id: string;
@@ -90,14 +91,24 @@ function parseLocalDate(isoDate: string): Date | null {
   return new Date(Number(match[1]), Number(match[2]) - 1, Number(match[3]));
 }
 
-function formatLocalDate(isoDate: string): string {
+function formatPdfLocalDate(isoDate: string): string {
   const d = parseLocalDate(isoDate);
   return d ? d.toLocaleDateString() : isoDate;
 }
 
-function formatUploadedDate(isoDate: string): string {
+function formatPdfUploadedDate(isoDate: string): string {
   const d = new Date(isoDate);
   return Number.isNaN(d.getTime()) ? isoDate : d.toLocaleDateString();
+}
+
+function formatLocalDate(isoDate: string): string {
+  if (!isoDate) return '';
+  return formatPaddedDisplayDate(isoDate) || isoDate;
+}
+
+function formatUploadedDate(isoDate: string): string {
+  if (!isoDate) return '';
+  return formatPaddedDisplayDate(isoDate) || isoDate;
 }
 
 function formatLocalDateLong(isoDate: string): string {
@@ -1820,10 +1831,10 @@ export function ImportantDocumentsTool({ toolId }: ImportantDocumentsToolProps) 
           addText(`Tags: ${tagNames.join(', ')}`, 9, false, 8);
         }
         if (doc.uploadedDate) {
-          addText(`Uploaded: ${formatUploadedDate(doc.uploadedDate)}`, 9, false, 8);
+          addText(`Uploaded: ${formatPdfUploadedDate(doc.uploadedDate)}`, 9, false, 8);
         }
         if (doc.effectiveDate) {
-          addText(`Effective: ${formatLocalDate(doc.effectiveDate)}`, 9, false, 8);
+          addText(`Effective: ${formatPdfLocalDate(doc.effectiveDate)}`, 9, false, 8);
         }
         if (doc.note?.trim()) {
           addText(`Note: ${doc.note.trim()}`, 9, false, 8);
@@ -1832,7 +1843,7 @@ export function ImportantDocumentsTool({ toolId }: ImportantDocumentsToolProps) 
           addText('Password protected: Yes', 9, false, 8);
         }
         if (!doc.isActive && doc.dateInactivated) {
-          addText(`Date inactivated: ${formatLocalDate(doc.dateInactivated)}`, 9, false, 8);
+          addText(`Date inactivated: ${formatPdfLocalDate(doc.dateInactivated)}`, 9, false, 8);
         }
         yPos += 3;
       };
@@ -1938,10 +1949,10 @@ export function ImportantDocumentsTool({ toolId }: ImportantDocumentsToolProps) 
         : [];
 
   return (
-    <div className="space-y-6">
+    <div className="min-w-0 space-y-6">
       {/* Header */}
-      <div className="flex items-start justify-between gap-3">
-        <div>
+      <div className="flex flex-wrap items-start justify-between gap-3">
+        <div className="min-w-0">
           <h2 className={titleClass}>Important Documents</h2>
           <p className={descClass}>
             Upload, tag, and manage your important documents
@@ -1985,7 +1996,7 @@ export function ImportantDocumentsTool({ toolId }: ImportantDocumentsToolProps) 
         <div className="space-y-6">
           {/* Search and Filter */}
           <div className={cardClass}>
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div className="grid grid-cols-1 gap-4 md:grid-cols-2 [&>*]:min-w-0">
               <div>
                 <label className={labelClass}>
                   Search Documents
@@ -2030,7 +2041,7 @@ export function ImportantDocumentsTool({ toolId }: ImportantDocumentsToolProps) 
             <div className={cardClass}>
               <h3 className="text-lg font-semibold text-slate-50 mb-4">Add New Document</h3>
               <div className="space-y-4">
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div className="grid grid-cols-1 gap-4 md:grid-cols-2 [&>*]:min-w-0">
                   <div>
                     <label className="block text-sm font-medium text-slate-300 mb-2">
                       Document Name <span className="text-red-400">*</span>
@@ -2069,7 +2080,7 @@ export function ImportantDocumentsTool({ toolId }: ImportantDocumentsToolProps) 
                     <label className="block text-sm font-medium text-slate-300 mb-2">
                       Attachments <span className="text-red-400">*</span>
                     </label>
-                    <div className="flex items-center gap-3">
+                    <div className="flex min-w-0 items-start gap-3">
                       <AttachmentButton
                         count={newDocument.file ? 1 : 0}
                         onClick={() => setAttachmentModal('add')}
@@ -2154,7 +2165,7 @@ export function ImportantDocumentsTool({ toolId }: ImportantDocumentsToolProps) 
                     </label>
                   </div>
                   {newDocument.requiresPasswordForDownload && (
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div className="grid grid-cols-1 gap-4 md:grid-cols-2 [&>*]:min-w-0">
                       <div>
                         <label className="block text-sm font-medium text-slate-300 mb-2">
                           Download Password <span className="text-red-400">*</span>
@@ -2228,7 +2239,7 @@ export function ImportantDocumentsTool({ toolId }: ImportantDocumentsToolProps) 
                       </p>
                       <div className="space-y-4">
                         {newDocument.securityQuestions.map((sq, index) => (
-                          <div key={index} className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                          <div key={index} className="grid grid-cols-1 gap-4 md:grid-cols-2 [&>*]:min-w-0">
                             <div>
                               <label className="block text-sm font-medium text-slate-300 mb-2">
                                 Security Question {index + 1} <span className="text-red-400">*</span>
@@ -2318,7 +2329,7 @@ export function ImportantDocumentsTool({ toolId }: ImportantDocumentsToolProps) 
 
           {/* Active Documents */}
           <div className={cardClass}>
-            <div className="flex items-center justify-between mb-4">
+            <div className="mb-4 flex flex-wrap items-center justify-between gap-2">
               <h3 className={sectionTitleClass}>Active Documents</h3>
               <span className={counterTextClass}>
                 {isDocumentFilterActive
@@ -2334,7 +2345,7 @@ export function ImportantDocumentsTool({ toolId }: ImportantDocumentsToolProps) 
                     <div key={document.id} className={nestedCardClass}>
                     {editingId === document.id ? (
                       <div className="space-y-4">
-                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        <div className="grid grid-cols-1 gap-4 md:grid-cols-2 [&>*]:min-w-0">
                           <div>
                             <label className="block text-sm font-medium text-slate-300 mb-2">
                               Document Name <span className="text-red-400">*</span>
@@ -2436,7 +2447,7 @@ export function ImportantDocumentsTool({ toolId }: ImportantDocumentsToolProps) 
                             </label>
                           </div>
                           {editingDocument.requiresPasswordForDownload && (
-                            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                            <div className="grid grid-cols-1 gap-4 md:grid-cols-2 [&>*]:min-w-0">
                               <div>
                                 <label className="block text-sm font-medium text-slate-300 mb-2">
                                   Download Password {document.requiresPasswordForDownload ? null : <span className="text-red-400">*</span>}
@@ -2541,10 +2552,10 @@ export function ImportantDocumentsTool({ toolId }: ImportantDocumentsToolProps) 
                         </div>
                       </div>
                     ) : (
-                      <div className="flex items-start justify-between gap-3">
-                        <div className="flex-1 min-w-0">
+                      <div className="flex flex-wrap items-start justify-between gap-3">
+                        <div className="min-w-0 flex-1 basis-full sm:basis-0">
                           <div className="flex items-center gap-2 mb-1.5 flex-wrap">
-                            <h4 className="text-base font-semibold text-slate-100">{document.documentName}</h4>
+                            <h4 className="break-words text-base font-semibold text-slate-100">{document.documentName}</h4>
                             <div className="flex flex-wrap gap-1.5">
                               {document.tags.map(tagId => {
                                 const tag = tags.find(t => t.id === tagId);
@@ -2581,11 +2592,11 @@ export function ImportantDocumentsTool({ toolId }: ImportantDocumentsToolProps) 
                           {document.note && (
                             <div className="mt-1.5">
                               <span className="text-xs text-slate-400">Note: </span>
-                              <span className="text-xs text-slate-300 italic">"{document.note}"</span>
+                              <span className="break-words text-xs text-slate-300 italic">"{document.note}"</span>
                             </div>
                           )}
                         </div>
-                        <div className="flex gap-1.5 flex-shrink-0">
+                        <div className="flex flex-wrap gap-1.5">
                           <AttachmentButton
                             count={documentHasAttachment(document) ? 1 : 0}
                             onClick={() => setAttachmentModal(document.id)}
@@ -2639,7 +2650,7 @@ export function ImportantDocumentsTool({ toolId }: ImportantDocumentsToolProps) 
 
           {/* History Section */}
           <div className={cardClass}>
-            <div className="flex items-center justify-between mb-4">
+            <div className="mb-4 flex flex-wrap items-center justify-between gap-2">
               <h3 className={sectionTitleClass}>History</h3>
               <button
                 onClick={() => setShowHistory(!showHistory)}
@@ -2655,10 +2666,10 @@ export function ImportantDocumentsTool({ toolId }: ImportantDocumentsToolProps) 
                 <div className="space-y-4">
                   {inactiveDocuments.map(document => (
                     <div key={document.id} className="p-3 rounded-lg border border-slate-700 bg-slate-800/50 opacity-75">
-                      <div className="flex items-start justify-between gap-3">
-                        <div className="flex-1 min-w-0">
+                      <div className="flex flex-wrap items-start justify-between gap-3">
+                        <div className="min-w-0 flex-1 basis-full sm:basis-0">
                           <div className="flex items-center gap-2 mb-1.5 flex-wrap">
-                            <h4 className="text-base font-semibold text-slate-300">{document.documentName}</h4>
+                            <h4 className="break-words text-base font-semibold text-slate-300">{document.documentName}</h4>
                             <div className="flex flex-wrap gap-1.5">
                               {document.tags.map(tagId => {
                                 const tag = tags.find(t => t.id === tagId);
@@ -2687,20 +2698,20 @@ export function ImportantDocumentsTool({ toolId }: ImportantDocumentsToolProps) 
                               <span className="text-slate-500">Uploaded:</span> {formatUploadedDate(document.uploadedDate)}
                             </span>
                             <span>
-                              <span className="text-slate-500">Added:</span> {new Date(document.dateAdded).toLocaleDateString()}
+                              <span className="text-slate-500">Added:</span> {formatLocalDate(document.dateAdded)}
                             </span>
                             <span>
-                              <span className="text-slate-500">Inactivated:</span> {document.dateInactivated ? new Date(document.dateInactivated).toLocaleDateString() : 'N/A'}
+                              <span className="text-slate-500">Inactivated:</span> {document.dateInactivated ? formatLocalDate(document.dateInactivated) : 'N/A'}
                             </span>
                           </div>
                           {document.note && (
                             <div className="mt-1.5">
                               <span className="text-xs text-slate-500">Note: </span>
-                              <span className="text-xs text-slate-400 italic">"{document.note}"</span>
+                              <span className="break-words text-xs text-slate-400 italic">"{document.note}"</span>
                             </div>
                           )}
                         </div>
-                        <div className="flex gap-1.5 flex-shrink-0">
+                        <div className="flex flex-wrap gap-1.5">
                           <AttachmentButton
                             count={documentHasAttachment(document) ? 1 : 0}
                             onClick={() => setAttachmentModal(document.id)}
@@ -2846,7 +2857,7 @@ export function ImportantDocumentsTool({ toolId }: ImportantDocumentsToolProps) 
                         </button>
                       </div>
                     ) : (
-                      <div className="flex items-center justify-between">
+                      <div className="flex flex-wrap items-center justify-between gap-2">
                         <div className="flex items-center gap-3">
                           <span className="text-lg font-medium text-slate-100">{tag.name}</span>
                           <span className="px-2 py-1 rounded text-xs font-medium bg-slate-700 text-slate-300">
@@ -2901,7 +2912,7 @@ export function ImportantDocumentsTool({ toolId }: ImportantDocumentsToolProps) 
                   const usageCount = getTagUsageCount(tag.id);
                   return (
                     <div key={tag.id} className="p-4 rounded-lg border border-slate-700 bg-slate-800/50 opacity-75">
-                      <div className="flex items-center justify-between">
+                      <div className="flex flex-wrap items-center justify-between gap-2">
                         <div className="flex items-center gap-3">
                           <span className="text-lg font-medium text-slate-300">{tag.name}</span>
                           <span className="px-2 py-1 rounded text-xs font-medium bg-slate-700 text-slate-400">

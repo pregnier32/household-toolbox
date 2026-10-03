@@ -238,6 +238,42 @@ export default function SiteMaintenancePage() {
               </svg>
             </div>
           </button>
+
+          <button
+            onClick={() => router.push('/dashboard/admin/discount-codes')}
+            className="rounded-lg border border-slate-800 bg-slate-900/70 p-6 text-left hover:border-emerald-500/50 transition-colors"
+          >
+            <div className="mb-4">
+              <h2 className="text-lg font-semibold text-slate-50 mb-2">Discount Codes</h2>
+              <p className="text-sm text-slate-400">
+                Create and review promotional codes and account benefits
+              </p>
+            </div>
+            <div className="flex items-center justify-between">
+              <span className="text-xs text-slate-400">Manage codes</span>
+              <svg className="h-5 w-5 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+              </svg>
+            </div>
+          </button>
+
+          <button
+            onClick={() => router.push('/dashboard/admin/promotion-reporting')}
+            className="rounded-lg border border-slate-800 bg-slate-900/70 p-6 text-left hover:border-emerald-500/50 transition-colors"
+          >
+            <div className="mb-4">
+              <h2 className="text-lg font-semibold text-slate-50 mb-2">Promotion Reporting</h2>
+              <p className="text-sm text-slate-400">
+                Review sample performance for promotions, campaigns, and partners
+              </p>
+            </div>
+            <div className="flex items-center justify-between">
+              <span className="text-xs text-slate-400">View reporting</span>
+              <svg className="h-5 w-5 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+              </svg>
+            </div>
+          </button>
         </div>
 
         {openModal === 'user-registration' && (

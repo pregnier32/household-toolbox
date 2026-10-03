@@ -3,7 +3,83 @@ import { supabaseServer } from '@/lib/supabaseServer';
 type SupabaseLikeError = { message?: string; code?: string } | null;
 
 function isMissingRelationError(error: SupabaseLikeError): boolean {
-  return error?.code === '42P01' || (error?.message || '').toLowerCase().includes('does not exist');
+  return (
+    error?.code === '42P01' ||
+    error?.code === 'PGRST205' ||
+    (error?.message || '').toLowerCase().includes('does not exist')
+  );
+}
+
+export type LinkedGuestAccount = {
+  id: string;
+  email: string;
+  first_name: string;
+  last_name: string | null;
+};
+
+/** Guest logins on the household owned by these admin user ids. */
+export async function listLinkedGuestAccounts(
+  adminUserIds: string[]
+): Promise<Map<string, LinkedGuestAccount[]>> {
+  const grouped = new Map<string, LinkedGuestAccount[]>();
+  const adminIds = [...new Set(adminUserIds.filter(Boolean))];
+  if (adminIds.length === 0) return grouped;
+
+  const { data: households, error: householdError } = await supabaseServer
+    .from('households')
+    .select('id, admin_user_id')
+    .in('admin_user_id', adminIds);
+
+  if (householdError) {
+    if (isMissingRelationError(householdError)) return grouped;
+    throw householdError;
+  }
+  if (!households?.length) return grouped;
+
+  const adminByHousehold = new Map(
+    households.map((household) => [household.id, household.admin_user_id])
+  );
+
+  const { data: members, error: memberError } = await supabaseServer
+    .from('household_members')
+    .select('household_id, user_id')
+    .in('household_id', households.map((household) => household.id))
+    .eq('role', 'user')
+    .eq('status', 'active');
+
+  if (memberError) {
+    if (isMissingRelationError(memberError)) return grouped;
+    throw memberError;
+  }
+
+  const memberIds = [
+    ...new Set(
+      (members || [])
+        .map((member) => member.user_id)
+        .filter((userId): userId is string => Boolean(userId) && !adminIds.includes(userId))
+    ),
+  ];
+  if (memberIds.length === 0) return grouped;
+
+  const { data: guests, error: guestError } = await supabaseServer
+    .from('users')
+    .select('id, email, first_name, last_name')
+    .in('id', memberIds)
+    .eq('user_status', 'guest');
+
+  if (guestError) throw guestError;
+
+  const guestsById = new Map((guests || []).map((guest) => [guest.id, guest]));
+  for (const member of members || []) {
+    const guest = guestsById.get(member.user_id);
+    const adminUserId = adminByHousehold.get(member.household_id);
+    if (!guest || !adminUserId) continue;
+    const current = grouped.get(adminUserId) ?? [];
+    if (!current.some((row) => row.id === guest.id)) current.push(guest);
+    grouped.set(adminUserId, current);
+  }
+
+  return grouped;
 }
 
 function extractStoragePath(fileUrl: string, bucket: string): string | null {
@@ -95,7 +171,9 @@ async function deleteUserToolRows(table: string, userId: string, toolId: string)
  * coverage, scoped to one catalog tool; does not delete the user).
  * All of a user's tools: `deleteUserTools` / `delete_user_tools`.
  *
- * Flow: remove storage objects referenced by the user, then delete `users` (FK CASCADE).
+ * Flow: when this user owns a household, delete each attached guest account first
+ * (their tools, storage, `users` row, and Auth login), then remove storage objects
+ * referenced by this user and delete `users` (FK CASCADE).
  * `user_tool_entitlements` is removed with the user, not with per-tool Remove.
  *
  * Storage cleanup (this file) — query tables for file URLs, then remove from bucket:
@@ -159,7 +237,21 @@ async function deleteUserToolRows(table: string, userId: string, toolId: string)
  * End of Life Planner UI: app/components/EndOfLifePlannerTool.tsx
  * End of Life Planner helpers: lib/end-of-life-planner.ts, lib/end-of-life-planner-db.ts
  */
-export async function deleteUserAndAssociatedData(userId: string): Promise<void> {
+export async function deleteUserAndAssociatedData(
+  userId: string,
+  options?: { visited?: Set<string> }
+): Promise<void> {
+  const visited = options?.visited ?? new Set<string>();
+  if (visited.has(userId)) return;
+  visited.add(userId);
+
+  const guests = (await listLinkedGuestAccounts([userId])).get(userId) ?? [];
+  for (const guest of guests) {
+    if (visited.has(guest.id)) continue;
+    await deleteUserTools(guest.id);
+    await deleteUserAndAssociatedData(guest.id, { visited });
+  }
+
   const storageDeletes: Array<{ bucket: string; path: string }> = [];
 
   // Important Documents — supabase/archive/create-important-documents-*.sql

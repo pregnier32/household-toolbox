@@ -2,6 +2,22 @@ import { NextResponse } from 'next/server';
 import { getHouseholdDataSession } from '@/lib/session';
 import { supabaseServer } from '@/lib/supabaseServer';
 import { getUsedTrialToolIds, toolOffersTrial } from '@/lib/user-tool-entitlements';
+import { dollarsToCents, formatCents } from '@/lib/account-pricing';
+import { getAccountPricingState } from '@/lib/load-account-pricing';
+
+function offerNoteForTool(input: {
+  owned: boolean;
+  trialEligible: boolean;
+  specificallyCovered: boolean;
+  freeSlotsRemaining: number;
+  shelfCents: number;
+}): string | null {
+  if (input.owned || input.shelfCents <= 0) return null;
+  if (input.trialEligible) return '7-day free trial. No payment is required to start.';
+  if (input.specificallyCovered) return 'Free through a promotion.';
+  if (input.freeSlotsRemaining > 0) return 'Included with your account.';
+  return `Expected cost ${formatCents(input.shelfCents)} per month. Payment setup will be required later. No payment is collected now.`;
+}
 
 // GET - Fetch all tools with their icons for authenticated users
 export async function GET() {
@@ -125,6 +141,18 @@ export async function GET() {
       console.error('Error fetching tool entitlements:', entitlementError);
     }
 
+    let pricing = null;
+    try {
+      pricing = await getAccountPricingState(user.id, new Date());
+    } catch (pricingError) {
+      console.error('Error calculating tool offers:', pricingError instanceof Error ? pricingError.message : 'unknown');
+    }
+    const coveredToolIds = new Set(
+      (pricing?.activePromotions ?? [])
+        .filter((promotion) => promotion.benefitType === 'specific_tools')
+        .flatMap((promotion) => promotion.toolIds),
+    );
+
     // Attach icons to tools and mark if user owns them
     const toolsWithIcons = allTools?.map((tool) => {
       const offersTrial = toolOffersTrial(tool);
@@ -136,6 +164,13 @@ export async function GET() {
         trialEligible: offersTrial && !usedTrialToolIds.has(tool.id),
         trialStatus: null,
         trialEndDate: null,
+        offerNote: offerNoteForTool({
+          owned: ownedToolIds.has(tool.id),
+          trialEligible: offersTrial && !usedTrialToolIds.has(tool.id),
+          specificallyCovered: coveredToolIds.has(tool.id),
+          freeSlotsRemaining: pricing?.freeSlotsRemaining ?? 0,
+          shelfCents: dollarsToCents(Number(tool.price) || 0),
+        }),
       };
     });
 

@@ -6,6 +6,7 @@ import { supabaseServer } from './supabaseServer';
 import { createSupabaseAuthServerClient } from './supabaseAuthServer';
 import { readMfaAccess } from './mfa-gate';
 import { resolveHouseholdAccess } from './household-access';
+import { ensureDefaultAccountEntitlements } from './promotion-service';
 import type { HouseholdRole } from './session-types';
 
 /** Stale browsers may still hold this cookie from before Supabase Auth. It is not read for sign-in. */
@@ -111,6 +112,13 @@ async function resolveSession(): Promise<SessionGate> {
       return { status: 'anonymous' };
     }
     const access = await resolveHouseholdAccess(user.id);
+    if (access.ready && access.householdRole === 'admin' && access.householdOwnerId === user.id) {
+      try {
+        await ensureDefaultAccountEntitlements(user.id);
+      } catch (error) {
+        console.error('Default entitlement check failed', error instanceof Error ? error.message : 'unknown');
+      }
+    }
     const appUser: AppSession = {
       ...toAppSession(user),
       householdReady: access.ready,

@@ -7,6 +7,7 @@ import { useAppNotice } from './AppNotice';
 import { AttachmentButton } from './AttachmentButton';
 import { AttachmentModal } from './AttachmentModal';
 import { ExportPdfIconButton } from './ExportPdfIconButton';
+import { formatDisplayDate as formatPaddedDisplayDate } from '@/lib/format-display-date';
 import {
   canPreviewAttachment,
   createPendingAttachment,
@@ -203,14 +204,19 @@ function parseLocalDate(isoDate: string): Date {
   return new Date(y, (m ?? 1) - 1, d ?? 1);
 }
 
-/** Format YYYY-MM-DD to local M/D/YYYY. */
-function formatDateDisplay(isoDate: string): string {
+/** Unpadded M/D/YYYY for print and PDF only. */
+function formatPdfDate(isoDate: string): string {
   if (!isoDate) return '';
   const d = parseLocalDate(isoDate);
   const m = d.getMonth() + 1;
   const day = d.getDate();
   const y = d.getFullYear();
   return `${m}/${day}/${y}`;
+}
+
+function formatDateDisplay(isoDate: string): string {
+  if (!isoDate) return '';
+  return formatPaddedDisplayDate(isoDate);
 }
 
 function formatReportDate(date: Date): string {
@@ -953,23 +959,30 @@ export function MealPlannerTool({ toolId }: MealPlannerToolProps) {
     return (
       <tr
         key={meal.id}
-        className={`transition-colors text-sm ${
+        className={`text-sm transition-colors max-md:mb-3 max-md:block max-md:rounded-lg max-md:border max-md:p-3 md:table-row ${
           isLight
-            ? 'border-b border-slate-200 bg-white hover:bg-slate-50'
-            : 'border-b border-slate-700/50 bg-slate-800/50 hover:bg-slate-800'
+            ? 'border-b border-slate-200 bg-white hover:bg-slate-50 max-md:border-slate-200'
+            : 'border-b border-slate-700/50 bg-slate-800/50 hover:bg-slate-800 max-md:border-slate-700'
         }`}
       >
-        <td className={`px-3 py-2 font-medium truncate max-w-0 ${isLight ? 'text-slate-900' : 'text-slate-100'}`} title={meal.name}>
-          {meal.name}
+        <td className={`block px-3 py-2 font-medium md:table-cell md:max-w-0 md:truncate ${isLight ? 'text-slate-900' : 'text-slate-100'}`} title={meal.name}>
+          <span className={`mr-2 text-xs font-semibold uppercase tracking-wider md:hidden ${isLight ? 'text-slate-500' : 'text-slate-400'}`}>Name</span>
+          <span className="break-words">{meal.name}</span>
         </td>
-        <td className={`px-3 py-2 truncate max-w-0 ${isLight ? 'text-slate-700' : 'text-slate-300'}`}>{typeName}</td>
-        <td className={`px-3 py-2 whitespace-nowrap ${isLight ? 'text-slate-700' : 'text-slate-300'}`}>
+        <td className={`block px-3 py-1 md:table-cell md:max-w-0 md:truncate md:py-2 ${isLight ? 'text-slate-700' : 'text-slate-300'}`}>
+          <span className={`mr-2 text-xs font-semibold uppercase tracking-wider md:hidden ${isLight ? 'text-slate-500' : 'text-slate-400'}`}>Type</span>
+          <span className="break-words">{typeName}</span>
+        </td>
+        <td className={`block whitespace-normal px-3 py-1 md:table-cell md:whitespace-nowrap md:py-2 ${isLight ? 'text-slate-700' : 'text-slate-300'}`}>
+          <span className={`mr-2 text-xs font-semibold uppercase tracking-wider md:hidden ${isLight ? 'text-slate-500' : 'text-slate-400'}`}>Duration</span>
           {meal.prepTimeMinutes != null ? `${meal.prepTimeMinutes} min` : '—'}
         </td>
-        <td className={`px-3 py-2 capitalize whitespace-nowrap ${isLight ? 'text-slate-700' : 'text-slate-300'}`}>
+        <td className={`block whitespace-normal px-3 py-1 capitalize md:table-cell md:whitespace-nowrap md:py-2 ${isLight ? 'text-slate-700' : 'text-slate-300'}`}>
+          <span className={`mr-2 text-xs font-semibold uppercase tracking-wider normal-case md:hidden ${isLight ? 'text-slate-500' : 'text-slate-400'}`}>Difficulty</span>
           {meal.difficulty || '—'}
         </td>
-        <td className="px-3 py-2">
+        <td className="block px-3 py-1 md:table-cell md:py-2">
+          <span className={`mr-2 text-xs font-semibold uppercase tracking-wider md:hidden ${isLight ? 'text-slate-500' : 'text-slate-400'}`}>Rating</span>
           <div className="flex items-center gap-0.5">
             {[1, 2, 3, 4, 5].map((star) => (
               <span
@@ -984,8 +997,9 @@ export function MealPlannerTool({ toolId }: MealPlannerToolProps) {
             ))}
           </div>
         </td>
-        <td className="px-3 py-2 text-right whitespace-nowrap">
-          <div className="flex items-center justify-end gap-1">
+        <td className="block px-3 py-2 text-right md:table-cell">
+          <div className={`mb-1 text-left text-xs font-semibold uppercase tracking-wider md:hidden ${isLight ? 'text-slate-500' : 'text-slate-400'}`}>Actions</div>
+          <div className="flex flex-wrap items-center justify-end gap-1">
             <AttachmentButton
               count={meal.attachments?.length || 0}
               onClick={() => setAttachmentModal(meal.id)}
@@ -1720,7 +1734,7 @@ export function MealPlannerTool({ toolId }: MealPlannerToolProps) {
       const scopeLabel = exportAllPlans
         ? 'All plans'
         : chosenPlan
-          ? `${chosenPlan.name}  ·  Week of ${formatDateDisplay(chosenPlan.startDate)}`
+          ? `${chosenPlan.name}  ·  Week of ${formatPdfDate(chosenPlan.startDate)}`
           : 'Selected plan';
       pdf.text(`${historyLabel}  ·  ${scopeLabel}`, margin, yPos);
       yPos += 10;
@@ -1744,16 +1758,16 @@ export function MealPlannerTool({ toolId }: MealPlannerToolProps) {
 
         addSectionHeader(
           plan.isActive
-            ? `${plan.name}  ·  Week of ${formatDateDisplay(plan.startDate)}`
-            : `${plan.name}  ·  Week of ${formatDateDisplay(plan.startDate)} (history)`
+            ? `${plan.name}  ·  Week of ${formatPdfDate(plan.startDate)}`
+            : `${plan.name}  ·  Week of ${formatPdfDate(plan.startDate)} (history)`
         );
-        addText(`Week: ${formatDateDisplay(plan.startDate)} – ${formatDateDisplay(weekEndIso(plan.startDate))}`, 10, false, 5);
+        addText(`Week: ${formatPdfDate(plan.startDate)} – ${formatPdfDate(weekEndIso(plan.startDate))}`, 10, false, 5);
         addText(`Assigned meals: ${assignedSlots}`, 10, false, 5);
         yPos += 2;
 
         addText('Week', 11, true, 5);
         dates.forEach(({ key, date, label }) => {
-          addText(`${label} ${formatDateDisplay(date)}`, 10, true, 8);
+          addText(`${label} ${formatPdfDate(date)}`, 10, true, 8);
           let slotPrinted = false;
           DAY_SLOTS.forEach(({ key: slot, label: slotLabel }) => {
             const value = assignments[key]?.[slot];
@@ -1856,7 +1870,7 @@ export function MealPlannerTool({ toolId }: MealPlannerToolProps) {
             .map((file) => file.name?.trim())
             .filter((name): name is string => Boolean(name))
             .map((fileName) =>
-              `Week of ${formatDateDisplay(plan.startDate)} — ${meal.name} — ${fileName}`
+              `Week of ${formatPdfDate(plan.startDate)} — ${meal.name} — ${fileName}`
             )
         )
       );
@@ -1935,13 +1949,13 @@ export function MealPlannerTool({ toolId }: MealPlannerToolProps) {
             >
               <div className="print-meal-plan">
                 <h2 className="print-title" style={{ margin: 0, fontSize: '18px', fontWeight: 700 }}>
-                  {plan.name} — Week of {formatDateDisplay(plan.startDate)}
+                  {plan.name} — Week of {formatPdfDate(plan.startDate)}
                 </h2>
                 <div className="print-week-grid">
                   {dates.map(({ key, date, label }) => (
                     <div key={key} className="print-day-cell">
                       <div className="print-day-label">{label}</div>
-                      <div className="print-day-date">{formatDateDisplay(date)}</div>
+                      <div className="print-day-date">{formatPdfDate(date)}</div>
                       {DAY_SLOTS.map(({ key: slot, label: slotLabel }) => {
                         const value = assignments[key]?.[slot];
                         const mealId = slotMealId(value);
@@ -2751,8 +2765,8 @@ export function MealPlannerTool({ toolId }: MealPlannerToolProps) {
                   </div>
                 </div>
                 <div className={`rounded-lg overflow-hidden ${isLight ? 'border border-slate-200' : 'border border-slate-700'}`}>
-                  <table className="w-full table-fixed border-collapse">
-                    <thead>
+                  <table className="w-full border-collapse max-md:block md:table-fixed">
+                    <thead className="max-md:hidden">
                       <tr
                         className={`text-xs font-semibold uppercase tracking-wider ${
                           isLight
@@ -2768,7 +2782,7 @@ export function MealPlannerTool({ toolId }: MealPlannerToolProps) {
                         <th className="px-3 py-2 text-right w-[10%]">Actions</th>
                       </tr>
                     </thead>
-                    <tbody>
+                    <tbody className="max-md:block">
                       {filteredActiveMeals.length === 0 ? (
                         <tr>
                           <td colSpan={6} className="px-3 py-6 text-slate-500 text-sm text-center">
@@ -2809,8 +2823,8 @@ export function MealPlannerTool({ toolId }: MealPlannerToolProps) {
                     {inactiveMealsList.length === 0 ? (
                       <p className="text-slate-500 text-sm py-4 px-3">No inactive meals.</p>
                     ) : (
-                      <table className="w-full table-fixed border-collapse">
-                        <thead>
+                      <table className="w-full border-collapse max-md:block md:table-fixed">
+                        <thead className="max-md:hidden">
                           <tr
                             className={`text-xs font-semibold uppercase tracking-wider ${
                               isLight
@@ -2826,7 +2840,7 @@ export function MealPlannerTool({ toolId }: MealPlannerToolProps) {
                             <th className="px-3 py-2 text-right w-[10%]">Actions</th>
                           </tr>
                         </thead>
-                        <tbody>
+                        <tbody className="max-md:block">
                           {filteredInactiveMeals.map((meal) => renderMealRow(meal, false))}
                         </tbody>
                       </table>
@@ -3453,7 +3467,7 @@ export function MealPlannerTool({ toolId }: MealPlannerToolProps) {
               style={{ position: 'absolute', left: '-9999px', width: '1px', height: '1px', overflow: 'hidden' }}
             >
               <div className="print-title mb-2 text-lg font-semibold">
-                {plan.name} — {formatDateDisplay(plan.startDate)}
+                {plan.name} — {formatPdfDate(plan.startDate)}
               </div>
               {items.length === 0 ? (
                 <p className="text-sm py-4">No ingredients. Assign meals to days first.</p>
@@ -3532,7 +3546,7 @@ export function MealPlannerTool({ toolId }: MealPlannerToolProps) {
                 </div>
                 <div className="overflow-y-auto flex-1 min-h-0 pr-2">
                   <div className="print-title hidden mb-2 text-lg font-semibold">
-                    {plan.name} — {formatDateDisplay(plan.startDate)}
+                    {plan.name} — {formatPdfDate(plan.startDate)}
                   </div>
                 {items.length === 0 ? (
                   <p className="text-slate-500 text-sm py-4">No ingredients. Assign meals to days first.</p>

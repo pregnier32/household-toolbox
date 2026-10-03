@@ -1,7 +1,68 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getSession } from '@/lib/session';
 import { supabaseServer } from '@/lib/supabaseServer';
-import { delete_user, delete_user_tools } from '@/lib/user-data-deletion';
+import { delete_user, delete_user_tools, listLinkedGuestAccounts } from '@/lib/user-data-deletion';
+
+type LinkedAccount = {
+  email: string;
+  first_name: string;
+  last_name: string | null;
+};
+
+async function linkedHouseholdAccounts(userIds: string[]): Promise<Map<string, LinkedAccount>> {
+  const links = new Map<string, LinkedAccount>();
+  if (userIds.length === 0) return links;
+
+  const members = await supabaseServer
+    .from('household_members')
+    .select('user_id, household_id')
+    .in('user_id', userIds)
+    .eq('role', 'user')
+    .eq('status', 'active');
+
+  if (members.error || !members.data?.length) {
+    if (members.error) console.error('Household link lookup failed', members.error.code ?? 'unknown');
+    return links;
+  }
+
+  const householdIds = [...new Set(members.data.map((member) => member.household_id))];
+  const households = await supabaseServer
+    .from('households')
+    .select('id, admin_user_id')
+    .in('id', householdIds);
+
+  if (households.error || !households.data?.length) {
+    if (households.error) console.error('Household admin lookup failed', households.error.code ?? 'unknown');
+    return links;
+  }
+
+  const adminIds = [...new Set(households.data.map((household) => household.admin_user_id))];
+  const admins = await supabaseServer
+    .from('users')
+    .select('id, email, first_name, last_name')
+    .in('id', adminIds);
+
+  if (admins.error || !admins.data) {
+    if (admins.error) console.error('Linked account lookup failed', admins.error.code ?? 'unknown');
+    return links;
+  }
+
+  const householdAdmin = new Map(households.data.map((household) => [household.id, household.admin_user_id]));
+  const adminById = new Map(admins.data.map((admin) => [admin.id, admin]));
+
+  for (const member of members.data) {
+    const adminId = householdAdmin.get(member.household_id);
+    const admin = adminId ? adminById.get(adminId) : undefined;
+    if (!admin) continue;
+    links.set(member.user_id, {
+      email: admin.email,
+      first_name: admin.first_name,
+      last_name: admin.last_name,
+    });
+  }
+
+  return links;
+}
 
 // GET - Fetch all users
 export async function GET(request: NextRequest) {
@@ -45,10 +106,21 @@ export async function GET(request: NextRequest) {
       toolCountMap.set(item.user_id, count + 1);
     });
 
+    const householdUserIds = (data || [])
+      .filter((user) => (user.user_status || 'guest').toLowerCase() === 'guest')
+      .map((user) => user.id);
+    const linkedAccounts = await linkedHouseholdAccounts(householdUserIds);
+    const adminUserIds = (data || [])
+      .filter((user) => (user.user_status || 'guest').toLowerCase() !== 'guest')
+      .map((user) => user.id);
+    const linkedGuests = await listLinkedGuestAccounts(adminUserIds);
+
     // Add tool counts to users
     const usersWithToolCounts = (data || []).map((user) => ({
       ...user,
       active_tools_count: toolCountMap.get(user.id) || 0,
+      linked_account: linkedAccounts.get(user.id) ?? null,
+      linked_guests: linkedGuests.get(user.id) ?? [],
     }));
 
     return NextResponse.json({ users: usersWithToolCounts });

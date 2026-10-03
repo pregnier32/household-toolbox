@@ -7,6 +7,7 @@ import { useAppNotice } from './AppNotice';
 import { AttachmentButton } from './AttachmentButton';
 import { AttachmentModal } from './AttachmentModal';
 import { ExportPdfIconButton } from './ExportPdfIconButton';
+import { formatDisplayDate as formatPaddedDisplayDate } from '@/lib/format-display-date';
 import {
   canPreviewAttachment,
   createPendingAttachment,
@@ -97,10 +98,15 @@ function generateId(): string {
     : `id-${Date.now()}-${Math.random().toString(36).slice(2, 9)}`;
 }
 
-function formatDateForDisplay(isoDate: string): string {
+function formatPdfDate(isoDate: string): string {
   if (!isoDate) return '';
   const [y, m, d] = isoDate.split('-');
   return `${Number(m)}/${Number(d)}/${y}`;
+}
+
+function formatDateForDisplay(isoDate: string): string {
+  if (!isoDate) return '';
+  return formatPaddedDisplayDate(isoDate);
 }
 
 function formatReportDate(date: Date): string {
@@ -1280,6 +1286,10 @@ export function GoalsTrackingTool({ toolId }: GoalsTrackingToolProps) {
           if (!isExportingPdf) setShowExportPopup(false);
           return;
         }
+        if (editingGoalId) {
+          cancelEditingGoal();
+          return;
+        }
         setMenuOpenCategoryId(null);
         if (showAllUpdatesGoalId) setShowAllUpdatesGoalId(null);
         if (deleteConfirmCategoryId) {
@@ -1301,7 +1311,7 @@ export function GoalsTrackingTool({ toolId }: GoalsTrackingToolProps) {
     };
     window.addEventListener('keydown', onKeyDown);
     return () => window.removeEventListener('keydown', onKeyDown);
-  }, [attachmentModal, showExportPopup, isExportingPdf, deleteConfirmCategoryId, deleteConfirmGoalId, showAllUpdatesGoalId, editingCategoryId, completePrompt]);
+  }, [attachmentModal, showExportPopup, isExportingPdf, deleteConfirmCategoryId, deleteConfirmGoalId, showAllUpdatesGoalId, editingCategoryId, editingGoalId, completePrompt]);
 
   const savedGoalForAttachments =
     attachmentModal?.kind === 'goal' && attachmentModal.id !== 'add'
@@ -1462,13 +1472,13 @@ export function GoalsTrackingTool({ toolId }: GoalsTrackingToolProps) {
         addText(goal.title, 12, true, 5);
         addText(`Status: ${goal.status}`, 9, false, 8);
         addText(`Priority: ${goal.priority}`, 9, false, 8);
-        addText(`Target date: ${goal.targetDate ? formatDateForDisplay(goal.targetDate) : '—'}`, 9, false, 8);
+        addText(`Target date: ${goal.targetDate ? formatPdfDate(goal.targetDate) : '—'}`, 9, false, 8);
         addText(`Percent complete: ${getGoalPercent(goal)}%`, 9, false, 8);
         if (goal.description.trim()) {
           addText(`Description: ${goal.description.trim()}`, 9, false, 8);
         }
         if (goal.lastUpdateDate) {
-          addText(`Last update: ${formatDateForDisplay(goal.lastUpdateDate)}`, 9, false, 8);
+          addText(`Last update: ${formatPdfDate(goal.lastUpdateDate)}`, 9, false, 8);
         }
 
         const phases = [...goal.phases].sort((a, b) => a.order - b.order);
@@ -1504,7 +1514,7 @@ export function GoalsTrackingTool({ toolId }: GoalsTrackingToolProps) {
         if (notes.length > 0) {
           addText('Updates', 10, true, 8);
           notes.forEach((note) => {
-            addText(`${formatDateForDisplay(note.noteDate)}: ${note.note}`, 8, false, 10);
+            addText(`${formatPdfDate(note.noteDate)}: ${note.note}`, 8, false, 10);
           });
         }
 

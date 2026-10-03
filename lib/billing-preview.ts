@@ -1,0 +1,329 @@
+import {
+  calculateAccountPricing,
+  formatCents,
+  nextPricingInstant,
+  parsePreviewEffectiveAt,
+  upcomingBillingEvents,
+  type AccountPricingInput,
+  type PricingAssignmentInput,
+} from './account-pricing';
+import { draftAccountNotices, type NoticeDraft } from './account-notice-drafts';
+import type { CustomerPlanBenefit, CustomerPlanSource } from './customer-plan-preview';
+
+export type PreviewAccess = 'unauthorized' | 'forbidden' | null;
+
+export function previewAccess(userStatus: string | null | undefined): PreviewAccess {
+  if (!userStatus) return 'unauthorized';
+  if (userStatus !== 'superadmin') return 'forbidden';
+  return null;
+}
+
+export type PromotionTiming = 'active' | 'scheduled' | 'expired' | 'removed';
+
+export function promotionTiming(assignment: Pick<PricingAssignmentInput, 'removedAt' | 'effectiveAt' | 'expiresAt'>, effectiveAt: Date): PromotionTiming {
+  if (assignment.removedAt) return 'removed';
+  const start = Date.parse(assignment.effectiveAt);
+  if (!Number.isNaN(start) && start > effectiveAt.getTime()) return 'scheduled';
+  if (assignment.expiresAt) {
+    const end = Date.parse(assignment.expiresAt);
+    if (!Number.isNaN(end) && end <= effectiveAt.getTime()) return 'expired';
+  }
+  return 'active';
+}
+
+export type PreviewPerson = {
+  id: string;
+  email: string;
+  firstName: string;
+  lastName: string | null;
+};
+
+export type PreviewNotice = {
+  id: string;
+  severity: 'info' | 'attention' | 'action';
+  title: string;
+  body: string;
+  createdAt: string;
+  readAt: string | null;
+};
+
+export type CustomerPlanPayload = {
+  accountType: 'personal' | 'business';
+  freeSlots: number;
+  freeSlotsUsed: number;
+  freeSlotsRemaining: number;
+  tools: { id: string; name: string; label: string; amount: string | null }[];
+  benefits: CustomerPlanBenefit[];
+  currentMonthly: string;
+  upcoming: { at: string; amount: string } | null;
+  storageUsed: string;
+  storageAllowance: string;
+  paymentMethod: string;
+  paymentSetupWouldBeNeeded: boolean;
+  notice: { title: string; body: string } | null;
+};
+
+export type BillingPreviewPayload = {
+  actualAt: string;
+  simulatedAt: string;
+  simulationIsToday: boolean;
+  openedUserId: string;
+  billingUserId: string;
+  viewingName: string;
+  viewingEmail: string;
+  accountType: 'personal' | 'business';
+  isTestAccount: boolean;
+  summary: {
+    activeTools: number;
+    toolsInTrial: number;
+    includedTools: number;
+    billableTools: number;
+    expectedMonthly: string;
+    storageAllowance: string;
+    storageUsed: string;
+    paymentSetup: 'Would Be Required' | 'Not Required';
+  };
+  tools: {
+    id: string;
+    name: string;
+    added: string;
+    trialStatus: string;
+    trialEnd: string | null;
+    coverage: string;
+    shelfPrice: string;
+    expectedCharge: string;
+    status: string;
+    reason: string;
+  }[];
+  slots: {
+    baseline: string;
+    additional: string[];
+    effective: number;
+    used: number;
+    available: number;
+  };
+  promotions: {
+    id: string;
+    name: string;
+    code: string;
+    benefit: string;
+    source: string;
+    effective: string;
+    expiration: string | null;
+    daysRemaining: string;
+    tools: string[];
+    timing: PromotionTiming;
+  }[];
+  pricingLines: { label: string; amount: string }[];
+  trace: string[];
+  expectedMonthly: string;
+  storage: {
+    base: string;
+    addon: string;
+    bonus: string;
+    allowance: string;
+    used: string;
+    percent: number;
+  };
+  simulatedNotices: NoticeDraft[];
+  actualNotices: PreviewNotice[];
+  events: { at: string; labels: string[]; before: string; after: string }[];
+  customerPlan: CustomerPlanPayload;
+};
+
+function personName(person: PreviewPerson): string {
+  return [person.firstName, person.lastName].filter(Boolean).join(' ').trim() || person.email;
+}
+
+function storageLabel(bytes: number): string {
+  const safe = Math.max(0, bytes);
+  if (safe < 1024) return `${safe} B`;
+  if (safe < 1024 * 1024) return `${(safe / 1024).toFixed(safe < 10 * 1024 ? 1 : 0)} KB`;
+  if (safe < 1024 * 1024 * 1024) return `${(safe / (1024 * 1024)).toFixed(safe < 10 * 1024 * 1024 ? 1 : 0)} MB`;
+  return `${(safe / (1024 * 1024 * 1024)).toFixed(2)} GB`;
+}
+
+function sourceFor(source: string): CustomerPlanSource {
+  if (source === 'user_entered') return 'code';
+  if (source === 'automatic') return 'included';
+  return 'added';
+}
+
+function benefitText(assignment: PricingAssignmentInput, toolNames: Map<string, string>): string {
+  if (assignment.benefitType === 'free_tool_slots') {
+    const count = assignment.slotCount ?? 0;
+    return assignment.slotMode === 'additional' ? `+${count} free tool slots` : `${count} free tool slots total`;
+  }
+  if (assignment.benefitType === 'specific_tools') {
+    const names = assignment.toolIds.map((id) => toolNames.get(id) || 'Tool');
+    return names.length > 0 ? names.join(', ') : 'Specific tools';
+  }
+  if (assignment.benefitType === 'percent_100') return '100% off';
+  if (assignment.benefitType === 'percentage') return `${assignment.percentOff ?? 0}% off`;
+  if (assignment.benefitType === 'fixed_amount') return `${formatCents(assignment.amountCents ?? 0)} off / month`;
+  const gigabytes = (assignment.bonusStorageBytes ?? 0) / (1024 * 1024 * 1024);
+  return `${gigabytes} GB bonus storage`;
+}
+
+function daysLabel(assignment: PricingAssignmentInput, effectiveAt: Date, timing: PromotionTiming): string {
+  if (timing === 'removed') return 'Removed';
+  if (timing === 'expired') return 'Expired';
+  if (!assignment.expiresAt) return timing === 'scheduled' ? 'Lifetime after start' : 'Lifetime';
+  const target = timing === 'scheduled' ? assignment.effectiveAt : assignment.expiresAt;
+  const ms = Date.parse(target) - effectiveAt.getTime();
+  const days = Math.max(0, Math.ceil(ms / 86_400_000));
+  if (timing === 'scheduled') return days === 1 ? 'Starts in 1 day' : `Starts in ${days} days`;
+  if (days === 0) return 'Ends today';
+  return days === 1 ? '1 day remaining' : `${days} days remaining`;
+}
+
+function moneyLine(label: string, cents: number, signed = false): { label: string; amount: string } {
+  if (!signed || cents === 0) return { label, amount: formatCents(Math.abs(cents)) };
+  return { label, amount: `-${formatCents(cents)}` };
+}
+
+export function assembleBillingPreview(args: {
+  input: AccountPricingInput;
+  opened: PreviewPerson;
+  billing: PreviewPerson;
+  notices: PreviewNotice[];
+  toolNames: Map<string, string>;
+  actualAt: Date;
+  simulatedAt: Date;
+}): BillingPreviewPayload {
+  const state = calculateAccountPricing(args.input, args.simulatedAt);
+  const drafts = draftAccountNotices(args.input, args.simulatedAt);
+  const events = upcomingBillingEvents(args.input, args.simulatedAt);
+  const next = nextPricingInstant(args.input, args.simulatedAt);
+  const upcomingState = next ? calculateAccountPricing(args.input, next) : null;
+  const diagnostics = state.diagnostics;
+  const zeroIncluded = Math.max(0, diagnostics.shelfSubtotalCents - diagnostics.trialCoverageCents - diagnostics.specificCoverageCents - diagnostics.freeSlotCoverageCents - diagnostics.billableSubtotalCents);
+  const pricingLines = [
+    moneyLine('Tool subtotal', diagnostics.shelfSubtotalCents),
+    moneyLine('Trial coverage', diagnostics.trialCoverageCents, true),
+    moneyLine('Specific-tool promotion', diagnostics.specificCoverageCents, true),
+    moneyLine('Free slot coverage', diagnostics.freeSlotCoverageCents, true),
+    ...(zeroIncluded > 0 ? [moneyLine('Included at $0', zeroIncluded, true)] : []),
+    moneyLine('Remaining billable subtotal', diagnostics.billableSubtotalCents),
+    ...diagnostics.discountSteps.map((step) => moneyLine(step.publicCode ? `${step.label} (${step.publicCode})` : step.label, step.discountCents, true)),
+    { label: 'Expected monthly cost', amount: formatCents(state.effectiveMonthlyCents) },
+  ];
+  const percent = state.effectiveStorageBytes > 0
+    ? Math.min(100, Math.round((state.storageUsedBytes / state.effectiveStorageBytes) * 100))
+    : 0;
+  const benefits: CustomerPlanBenefit[] = args.input.assignments.map((assignment) => ({
+    id: assignment.id,
+    name: assignment.displayName,
+    publicCode: assignment.publicCode || '',
+    benefit: benefitText(assignment, args.toolNames),
+    description: assignment.customerDescription,
+    effectiveDate: assignment.effectiveAt.slice(0, 10),
+    expirationDate: assignment.expiresAt ? assignment.expiresAt.slice(0, 10) : null,
+    status: assignment.removedAt ? 'removed' : 'active',
+    source: sourceFor(assignment.source),
+  }));
+  const firstDraft = drafts[0];
+
+  return {
+    actualAt: args.actualAt.toISOString(),
+    simulatedAt: state.effectiveAt,
+    simulationIsToday: args.actualAt.toISOString() === state.effectiveAt,
+    openedUserId: args.opened.id,
+    billingUserId: args.billing.id,
+    viewingName: personName(args.billing),
+    viewingEmail: args.billing.email,
+    accountType: state.accountType,
+    isTestAccount: state.isTestAccount,
+    summary: {
+      activeTools: state.activeToolCount,
+      toolsInTrial: state.trialToolCount,
+      includedTools: state.includedToolCount,
+      billableTools: state.billableToolCount,
+      expectedMonthly: `${formatCents(state.effectiveMonthlyCents)}/month`,
+      storageAllowance: storageLabel(state.effectiveStorageBytes),
+      storageUsed: storageLabel(state.storageUsedBytes),
+      paymentSetup: state.paymentSetupWouldBeNeeded ? 'Would Be Required' : 'Not Required',
+    },
+    tools: state.tools.map((tool) => ({
+      id: tool.toolId,
+      name: tool.name,
+      added: tool.ownedAt,
+      trialStatus: tool.inTrial ? 'In trial' : tool.trialPreviouslyUsed ? 'Trial used' : 'No trial',
+      trialEnd: tool.trialEndsAt,
+      coverage: tool.coverage,
+      shelfPrice: formatCents(tool.shelfPriceCents),
+      expectedCharge: formatCents(tool.expectedMonthlyCents),
+      status: tool.accessLabel,
+      reason: tool.reason,
+    })),
+    slots: {
+      baseline: diagnostics.slotBaseline
+        ? `${diagnostics.slotBaseline.slotCount} — ${diagnostics.slotBaseline.publicCode || diagnostics.slotBaseline.displayName}`
+        : 'None',
+      additional: diagnostics.additionalSlots.map((slot) => `+${slot.slotCount} — ${slot.publicCode || slot.displayName}`),
+      effective: state.freeSlots,
+      used: state.freeSlotsUsed,
+      available: state.freeSlotsRemaining,
+    },
+    promotions: args.input.assignments.map((assignment) => {
+      const timing = promotionTiming(assignment, args.simulatedAt);
+      return {
+        id: assignment.id,
+        name: assignment.displayName,
+        code: assignment.publicCode || '',
+        benefit: benefitText(assignment, args.toolNames),
+        source: assignment.source,
+        effective: assignment.effectiveAt,
+        expiration: assignment.expiresAt,
+        daysRemaining: daysLabel(assignment, args.simulatedAt, timing),
+        tools: assignment.toolIds.map((id) => args.toolNames.get(id) || 'Tool'),
+        timing,
+      };
+    }),
+    pricingLines,
+    trace: diagnostics.trace,
+    expectedMonthly: formatCents(state.effectiveMonthlyCents),
+    storage: {
+      base: storageLabel(state.baseStorageBytes),
+      addon: storageLabel(state.purchasedAddonBytes),
+      bonus: storageLabel(state.promotionalStorageBytes),
+      allowance: storageLabel(state.effectiveStorageBytes),
+      used: storageLabel(state.storageUsedBytes),
+      percent,
+    },
+    simulatedNotices: drafts,
+    actualNotices: args.notices,
+    events: events.map((event) => ({
+      at: event.at,
+      labels: event.labels,
+      before: `${formatCents(event.beforeCents)}/month`,
+      after: `${formatCents(event.afterCents)}/month`,
+    })),
+    customerPlan: {
+      accountType: state.accountType,
+      freeSlots: state.freeSlots,
+      freeSlotsUsed: state.freeSlotsUsed,
+      freeSlotsRemaining: state.freeSlotsRemaining,
+      tools: state.tools.map((tool) => ({
+        id: tool.toolId,
+        name: tool.name,
+        label: tool.inTrial && tool.daysRemaining != null
+          ? `Free Trial — ${tool.daysRemaining} day${tool.daysRemaining === 1 ? '' : 's'} remaining`
+          : tool.accessLabel,
+        amount: tool.billable ? formatCents(tool.expectedMonthlyCents) : null,
+      })),
+      benefits,
+      currentMonthly: formatCents(state.effectiveMonthlyCents),
+      upcoming: next && upcomingState ? { at: next.toISOString().slice(0, 10), amount: formatCents(upcomingState.effectiveMonthlyCents) } : null,
+      storageUsed: storageLabel(state.storageUsedBytes),
+      storageAllowance: storageLabel(state.effectiveStorageBytes),
+      paymentMethod: 'Not configured yet',
+      paymentSetupWouldBeNeeded: state.paymentSetupWouldBeNeeded,
+      notice: firstDraft ? { title: firstDraft.title, body: firstDraft.body } : null,
+    },
+  };
+}
+
+export function simulatedInstant(raw: string | null | undefined, now = new Date()): Date | null {
+  return parsePreviewEffectiveAt(raw, now);
+}

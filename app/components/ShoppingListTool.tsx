@@ -13,6 +13,7 @@ import {
   isPdfAttachment,
   type AttachmentItem,
 } from '@/lib/attachments';
+import { formatDisplayDate as formatPaddedDisplayDate } from '@/lib/format-display-date';
 
 const API_BASE = '/api/tools/shopping-list';
 
@@ -47,13 +48,18 @@ type ShoppingListToolProps = {
   toolId?: string;
 };
 
-function formatDateDisplay(isoDate: string): string {
+function formatPdfDate(isoDate: string): string {
   if (!isoDate) return '';
   const d = new Date(isoDate);
   const m = d.getMonth() + 1;
   const day = d.getDate();
   const y = d.getFullYear();
   return `${m}/${day}/${y}`;
+}
+
+function formatDateDisplay(isoDate: string): string {
+  if (!isoDate) return '';
+  return formatPaddedDisplayDate(isoDate);
 }
 
 const UNIT_WORDS = ['bottles', 'bottle', 'boxes', 'box', 'bags', 'bag', 'rolls', 'roll', 'bars', 'bar', 'each'] as const;
@@ -1965,7 +1971,7 @@ export function ShoppingListTool({ toolId }: ShoppingListToolProps) {
                 </div>
                 <div className="shopping-list-view-print overflow-y-auto flex-1 pr-2">
                   <div className="print-title hidden mb-2 text-lg font-semibold">
-                    {list.name} — {formatDateDisplay(list.date)}
+                    {list.name} — {formatPdfDate(list.date)}
                   </div>
                   {list.items.length === 0 ? (
                     <p className="text-slate-500 text-sm">No items</p>

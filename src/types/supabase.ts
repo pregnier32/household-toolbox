@@ -14,6 +14,97 @@ export type Database = {
   }
   public: {
     Tables: {
+      account_notices: {
+        Row: {
+          body: string
+          created_at: string
+          cta_label: string | null
+          event_key: string
+          href: string | null
+          id: string
+          kind: string
+          read_at: string | null
+          severity: string
+          title: string
+          user_id: string
+        }
+        Insert: {
+          body: string
+          created_at?: string
+          cta_label?: string | null
+          event_key: string
+          href?: string | null
+          id?: string
+          kind: string
+          read_at?: string | null
+          severity: string
+          title: string
+          user_id: string
+        }
+        Update: {
+          body?: string
+          created_at?: string
+          cta_label?: string | null
+          event_key?: string
+          href?: string | null
+          id?: string
+          kind?: string
+          read_at?: string | null
+          severity?: string
+          title?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "account_notices_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "users"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      admin_actions: {
+        Row: {
+          action: string
+          actor_user_id: string | null
+          created_at: string
+          detail: Json | null
+          id: string
+          note: string | null
+          subject_id: string
+          subject_type: string
+        }
+        Insert: {
+          action: string
+          actor_user_id?: string | null
+          created_at?: string
+          detail?: Json | null
+          id?: string
+          note?: string | null
+          subject_id: string
+          subject_type: string
+        }
+        Update: {
+          action?: string
+          actor_user_id?: string | null
+          created_at?: string
+          detail?: Json | null
+          id?: string
+          note?: string | null
+          subject_id?: string
+          subject_type?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "admin_actions_actor_user_id_fkey"
+            columns: ["actor_user_id"]
+            isOneToOne: false
+            referencedRelation: "users"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       calendar_pins: {
         Row: {
           created_at: string
@@ -56,6 +147,558 @@ export type Database = {
             isOneToOne: false
             referencedRelation: "users"
             referencedColumns: ["id"]
+          },
+        ]
+      }
+      campaigns: {
+        Row: {
+          created_at: string
+          ends_on: string | null
+          id: string
+          name: string
+          notes: string | null
+          partner_id: string
+          platform_code: string
+          starts_on: string | null
+          status: string
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          ends_on?: string | null
+          id?: string
+          name: string
+          notes?: string | null
+          partner_id: string
+          platform_code: string
+          starts_on?: string | null
+          status: string
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          ends_on?: string | null
+          id?: string
+          name?: string
+          notes?: string | null
+          partner_id?: string
+          platform_code?: string
+          starts_on?: string | null
+          status?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "campaigns_partner_id_fkey"
+            columns: ["partner_id"]
+            isOneToOne: false
+            referencedRelation: "partners"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "campaigns_platform_code_fkey"
+            columns: ["platform_code"]
+            isOneToOne: false
+            referencedRelation: "platforms"
+            referencedColumns: ["code"]
+          },
+        ]
+      }
+      household_invitations: {
+        Row: {
+          accepted_at: string | null
+          accepted_by_user_id: string | null
+          created_at: string
+          expires_at: string
+          household_id: string
+          id: string
+          invited_by_user_id: string
+          invited_email: string
+          invited_first_name: string
+          status: string
+          token_hash: string
+        }
+        Insert: {
+          accepted_at?: string | null
+          accepted_by_user_id?: string | null
+          created_at?: string
+          expires_at: string
+          household_id: string
+          id?: string
+          invited_by_user_id: string
+          invited_email: string
+          invited_first_name: string
+          status?: string
+          token_hash: string
+        }
+        Update: {
+          accepted_at?: string | null
+          accepted_by_user_id?: string | null
+          created_at?: string
+          expires_at?: string
+          household_id?: string
+          id?: string
+          invited_by_user_id?: string
+          invited_email?: string
+          invited_first_name?: string
+          status?: string
+          token_hash?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "household_invitations_accepted_by_user_id_fkey"
+            columns: ["accepted_by_user_id"]
+            isOneToOne: false
+            referencedRelation: "users"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "household_invitations_household_id_fkey"
+            columns: ["household_id"]
+            isOneToOne: false
+            referencedRelation: "households"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "household_invitations_invited_by_user_id_fkey"
+            columns: ["invited_by_user_id"]
+            isOneToOne: false
+            referencedRelation: "users"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      household_members: {
+        Row: {
+          household_id: string
+          id: string
+          joined_at: string
+          role: string
+          status: string
+          user_id: string
+        }
+        Insert: {
+          household_id: string
+          id?: string
+          joined_at?: string
+          role: string
+          status?: string
+          user_id: string
+        }
+        Update: {
+          household_id?: string
+          id?: string
+          joined_at?: string
+          role?: string
+          status?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "household_members_household_id_fkey"
+            columns: ["household_id"]
+            isOneToOne: false
+            referencedRelation: "households"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "household_members_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: true
+            referencedRelation: "users"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      households: {
+        Row: {
+          admin_user_id: string
+          created_at: string
+          id: string
+        }
+        Insert: {
+          admin_user_id: string
+          created_at?: string
+          id?: string
+        }
+        Update: {
+          admin_user_id?: string
+          created_at?: string
+          id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "households_admin_user_id_fkey"
+            columns: ["admin_user_id"]
+            isOneToOne: true
+            referencedRelation: "users"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      partner_platforms: {
+        Row: {
+          partner_id: string
+          platform_code: string
+        }
+        Insert: {
+          partner_id: string
+          platform_code: string
+        }
+        Update: {
+          partner_id?: string
+          platform_code?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "partner_platforms_partner_id_fkey"
+            columns: ["partner_id"]
+            isOneToOne: false
+            referencedRelation: "partners"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "partner_platforms_platform_code_fkey"
+            columns: ["platform_code"]
+            isOneToOne: false
+            referencedRelation: "platforms"
+            referencedColumns: ["code"]
+          },
+        ]
+      }
+      partners: {
+        Row: {
+          created_at: string
+          id: string
+          name: string
+          notes: string | null
+          revenue_share_percent: number | null
+          status: string
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          name: string
+          notes?: string | null
+          revenue_share_percent?: number | null
+          status: string
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          name?: string
+          notes?: string | null
+          revenue_share_percent?: number | null
+          status?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
+      platforms: {
+        Row: {
+          code: string
+          label: string
+        }
+        Insert: {
+          code: string
+          label: string
+        }
+        Update: {
+          code?: string
+          label?: string
+        }
+        Relationships: []
+      }
+      promotion_assignment_tools: {
+        Row: {
+          assignment_id: string
+          tool_id: string
+        }
+        Insert: {
+          assignment_id: string
+          tool_id: string
+        }
+        Update: {
+          assignment_id?: string
+          tool_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "promotion_assignment_tools_assignment_id_fkey"
+            columns: ["assignment_id"]
+            isOneToOne: false
+            referencedRelation: "promotion_assignments"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "promotion_assignment_tools_tool_id_fkey"
+            columns: ["tool_id"]
+            isOneToOne: false
+            referencedRelation: "tools"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      promotion_assignments: {
+        Row: {
+          amount_cents: number | null
+          assigned_at: string
+          assigned_by_user_id: string | null
+          benefit_type: string
+          bonus_storage_bytes: number | null
+          created_at: string
+          customer_description_snapshot: string
+          display_name: string
+          duration_amount: number | null
+          duration_unit: string
+          effective_at: string
+          expires_at: string | null
+          id: string
+          internal_note: string | null
+          override_used: boolean
+          percent_off: number | null
+          promotion_id: string | null
+          public_code: string | null
+          redemption_ordinal: number
+          removal_reason: string | null
+          removed_at: string | null
+          removed_by_user_id: string | null
+          slot_count: number | null
+          slot_mode: string | null
+          source: string
+          user_id: string
+        }
+        Insert: {
+          amount_cents?: number | null
+          assigned_at: string
+          assigned_by_user_id?: string | null
+          benefit_type: string
+          bonus_storage_bytes?: number | null
+          created_at?: string
+          customer_description_snapshot: string
+          display_name: string
+          duration_amount?: number | null
+          duration_unit: string
+          effective_at: string
+          expires_at?: string | null
+          id?: string
+          internal_note?: string | null
+          override_used?: boolean
+          percent_off?: number | null
+          promotion_id?: string | null
+          public_code?: string | null
+          redemption_ordinal?: number
+          removal_reason?: string | null
+          removed_at?: string | null
+          removed_by_user_id?: string | null
+          slot_count?: number | null
+          slot_mode?: string | null
+          source: string
+          user_id: string
+        }
+        Update: {
+          amount_cents?: number | null
+          assigned_at?: string
+          assigned_by_user_id?: string | null
+          benefit_type?: string
+          bonus_storage_bytes?: number | null
+          created_at?: string
+          customer_description_snapshot?: string
+          display_name?: string
+          duration_amount?: number | null
+          duration_unit?: string
+          effective_at?: string
+          expires_at?: string | null
+          id?: string
+          internal_note?: string | null
+          override_used?: boolean
+          percent_off?: number | null
+          promotion_id?: string | null
+          public_code?: string | null
+          redemption_ordinal?: number
+          removal_reason?: string | null
+          removed_at?: string | null
+          removed_by_user_id?: string | null
+          slot_count?: number | null
+          slot_mode?: string | null
+          source?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "promotion_assignments_assigned_by_user_id_fkey"
+            columns: ["assigned_by_user_id"]
+            isOneToOne: false
+            referencedRelation: "users"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "promotion_assignments_promotion_id_fkey"
+            columns: ["promotion_id"]
+            isOneToOne: false
+            referencedRelation: "promotions"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "promotion_assignments_removed_by_user_id_fkey"
+            columns: ["removed_by_user_id"]
+            isOneToOne: false
+            referencedRelation: "users"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "promotion_assignments_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "users"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      promotion_tools: {
+        Row: {
+          promotion_id: string
+          tool_id: string
+        }
+        Insert: {
+          promotion_id: string
+          tool_id: string
+        }
+        Update: {
+          promotion_id?: string
+          tool_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "promotion_tools_promotion_id_fkey"
+            columns: ["promotion_id"]
+            isOneToOne: false
+            referencedRelation: "promotions"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "promotion_tools_tool_id_fkey"
+            columns: ["tool_id"]
+            isOneToOne: false
+            referencedRelation: "tools"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      promotions: {
+        Row: {
+          admin_notes: string | null
+          amount_cents: number | null
+          assignment_method: string
+          benefit_type: string
+          bonus_storage_bytes: number | null
+          campaign_id: string | null
+          can_stack: boolean
+          created_at: string
+          customer_description: string
+          duration_amount: number | null
+          duration_unit: string
+          eligible_account_type: string
+          eligible_users: string
+          id: string
+          internal_name: string
+          max_redemptions: number | null
+          partner_id: string | null
+          per_user: string
+          percent_off: number | null
+          platform_code: string | null
+          public_code: string | null
+          redeem_end_date: string | null
+          redeem_start_date: string | null
+          revenue_share_percent: number | null
+          slot_count: number | null
+          slot_mode: string | null
+          status: string
+          updated_at: string
+        }
+        Insert: {
+          admin_notes?: string | null
+          amount_cents?: number | null
+          assignment_method: string
+          benefit_type: string
+          bonus_storage_bytes?: number | null
+          campaign_id?: string | null
+          can_stack: boolean
+          created_at?: string
+          customer_description: string
+          duration_amount?: number | null
+          duration_unit: string
+          eligible_account_type: string
+          eligible_users: string
+          id?: string
+          internal_name: string
+          max_redemptions?: number | null
+          partner_id?: string | null
+          per_user: string
+          percent_off?: number | null
+          platform_code?: string | null
+          public_code?: string | null
+          redeem_end_date?: string | null
+          redeem_start_date?: string | null
+          revenue_share_percent?: number | null
+          slot_count?: number | null
+          slot_mode?: string | null
+          status: string
+          updated_at?: string
+        }
+        Update: {
+          admin_notes?: string | null
+          amount_cents?: number | null
+          assignment_method?: string
+          benefit_type?: string
+          bonus_storage_bytes?: number | null
+          campaign_id?: string | null
+          can_stack?: boolean
+          created_at?: string
+          customer_description?: string
+          duration_amount?: number | null
+          duration_unit?: string
+          eligible_account_type?: string
+          eligible_users?: string
+          id?: string
+          internal_name?: string
+          max_redemptions?: number | null
+          partner_id?: string | null
+          per_user?: string
+          percent_off?: number | null
+          platform_code?: string | null
+          public_code?: string | null
+          redeem_end_date?: string | null
+          redeem_start_date?: string | null
+          revenue_share_percent?: number | null
+          slot_count?: number | null
+          slot_mode?: string | null
+          status?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "promotions_campaign_id_fkey"
+            columns: ["campaign_id"]
+            isOneToOne: false
+            referencedRelation: "campaigns"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "promotions_partner_id_fkey"
+            columns: ["partner_id"]
+            isOneToOne: false
+            referencedRelation: "partners"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "promotions_platform_code_fkey"
+            columns: ["platform_code"]
+            isOneToOne: false
+            referencedRelation: "platforms"
+            referencedColumns: ["code"]
           },
         ]
       }
@@ -8027,6 +8670,65 @@ export type Database = {
           },
         ]
       }
+      user_acquisitions: {
+        Row: {
+          acquired_at: string
+          campaign_id: string | null
+          created_at: string
+          partner_id: string | null
+          promotion_id: string | null
+          public_code: string | null
+          user_id: string
+        }
+        Insert: {
+          acquired_at: string
+          campaign_id?: string | null
+          created_at?: string
+          partner_id?: string | null
+          promotion_id?: string | null
+          public_code?: string | null
+          user_id: string
+        }
+        Update: {
+          acquired_at?: string
+          campaign_id?: string | null
+          created_at?: string
+          partner_id?: string | null
+          promotion_id?: string | null
+          public_code?: string | null
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "user_acquisitions_campaign_id_fkey"
+            columns: ["campaign_id"]
+            isOneToOne: false
+            referencedRelation: "campaigns"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "user_acquisitions_partner_id_fkey"
+            columns: ["partner_id"]
+            isOneToOne: false
+            referencedRelation: "partners"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "user_acquisitions_promotion_id_fkey"
+            columns: ["promotion_id"]
+            isOneToOne: false
+            referencedRelation: "promotions"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "user_acquisitions_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: true
+            referencedRelation: "users"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       user_release_note_reads: {
         Row: {
           last_viewed_id: string | null
@@ -8113,12 +8815,14 @@ export type Database = {
       }
       users: {
         Row: {
+          account_type: string
           active: string
           created_at: string
           email: string
           first_name: string
           guest_admin_id: number | null
           id: string
+          is_test_account: boolean
           last_name: string
           storage_addon_gb: number
           storage_plan: string
@@ -8130,12 +8834,14 @@ export type Database = {
           user_status: string
         }
         Insert: {
+          account_type?: string
           active: string
           created_at?: string
           email: string
           first_name: string
           guest_admin_id?: number | null
           id?: string
+          is_test_account?: boolean
           last_name: string
           storage_addon_gb?: number
           storage_plan?: string
@@ -8147,12 +8853,14 @@ export type Database = {
           user_status: string
         }
         Update: {
+          account_type?: string
           active?: string
           created_at?: string
           email?: string
           first_name?: string
           guest_admin_id?: number | null
           id?: string
+          is_test_account?: boolean
           last_name?: string
           storage_addon_gb?: number
           storage_plan?: string
@@ -8219,6 +8927,8 @@ export type Database = {
         Args: { p_table: string }
         Returns: undefined
       }
+      can_access_storage_owner: { Args: { folder: string }; Returns: boolean }
+      can_access_user_data: { Args: { owner_id: string }; Returns: boolean }
       get_site_storage_stats: {
         Args: never
         Returns: {
@@ -8233,6 +8943,7 @@ export type Database = {
           used_bytes: number
         }[]
       }
+      rewrite_household_owner_check: { Args: { expr: string }; Returns: string }
     }
     Enums: {
       [_ in never]: never

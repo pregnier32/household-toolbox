@@ -1,9 +1,22 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { Fragment, useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { SideLogo } from '../../../components/SideLogo';
 import { useTheme } from '../../../components/AppThemeProvider';
+
+type LinkedAccount = {
+  email: string;
+  first_name: string;
+  last_name: string | null;
+};
+
+type LinkedGuestAccount = {
+  id: string;
+  email: string;
+  first_name: string;
+  last_name: string | null;
+};
 
 type User = {
   id: string;
@@ -15,7 +28,20 @@ type User = {
   created_at: string;
   updated_at: string | null;
   active_tools_count?: number;
+  linked_account?: LinkedAccount | null;
+  linked_guests?: LinkedGuestAccount[];
 };
+
+function linkedAccountLabel(account: LinkedAccount | null | undefined): string | null {
+  if (!account?.email) return null;
+  const name = [account.first_name, account.last_name].filter(Boolean).join(' ').trim();
+  return name ? `${name} (${account.email})` : account.email;
+}
+
+function guestAccountLabel(guest: LinkedGuestAccount): string {
+  const name = [guest.first_name, guest.last_name].filter(Boolean).join(' ').trim();
+  return name ? `${name} (${guest.email})` : guest.email;
+}
 
 type UserFormData = {
   email: string;
@@ -66,6 +92,7 @@ export default function UsersPage() {
     ? 'inline-flex rounded-full bg-red-100 px-2 py-1 text-xs font-medium text-red-900'
     : 'inline-flex rounded-full bg-red-500/20 px-2 py-1 text-xs font-medium text-red-300';
   const actionViewClass = isLight ? 'text-blue-700 hover:text-blue-800 transition-colors' : 'text-blue-400 hover:text-blue-300 transition-colors';
+  const actionDiscountClass = isLight ? 'text-amber-700 hover:text-amber-800 transition-colors' : 'text-amber-400 hover:text-amber-300 transition-colors';
   const actionEditClass = isLight ? 'text-emerald-700 hover:text-emerald-800 transition-colors' : 'text-emerald-400 hover:text-emerald-300 transition-colors';
   const actionDeleteClass = isLight
     ? 'text-red-700 hover:text-red-800 transition-colors disabled:cursor-not-allowed disabled:opacity-50'
@@ -534,6 +561,9 @@ export default function UsersPage() {
     );
   }
 
+  const deleteGuests =
+    users.find((row) => row.id === deleteConfirm.userId)?.linked_guests ?? [];
+
   return (
     <main className="min-h-screen bg-slate-950 text-slate-100">
       {/* Header */}
@@ -658,7 +688,8 @@ export default function UsersPage() {
                   </tr>
                 ) : (
                   filteredUsers.map((tableUser) => (
-                    <tr key={tableUser.id} className={tableRowClass}>
+                    <Fragment key={tableUser.id}>
+                    <tr className={tableRowClass}>
                       {editingId === tableUser.id ? (
                         <>
                           <td className="px-6 py-4">
@@ -710,7 +741,7 @@ export default function UsersPage() {
                               onChange={(e) =>
                                 setFormData({ ...formData, userStatus: e.target.value })
                               }
-                              placeholder="user, admin, superadmin"
+                              placeholder="guest, admin, superadmin"
                               className="w-full rounded border border-slate-700 bg-slate-900 px-2 py-1 text-sm text-slate-100 focus:border-emerald-500/50 focus:outline-none"
                             />
                           </td>
@@ -774,7 +805,7 @@ export default function UsersPage() {
                             </span>
                           </td>
                           <td className={`px-6 py-4 ${isLight ? 'text-sm text-slate-700' : 'text-sm text-slate-300'}`}>
-                            {tableUser.user_status || 'user'}
+                            {tableUser.user_status || 'guest'}
                           </td>
                           <td className={`px-6 py-4 ${isLight ? 'text-sm text-slate-700 text-center' : 'text-sm text-slate-300 text-center'}`}>
                             {tableUser.active_tools_count ?? 0}
@@ -784,6 +815,20 @@ export default function UsersPage() {
                           </td>
                           <td className="px-6 py-4">
                             <div className="flex items-center gap-2">
+                              <button
+                                onClick={() => {
+                                  const name = `${tableUser.first_name} ${tableUser.last_name || ''}`.trim();
+                                  const params = new URLSearchParams({ name, email: tableUser.email });
+                                  router.push(`/dashboard/admin/users/${tableUser.id}?${params.toString()}`);
+                                }}
+                                className={actionDiscountClass}
+                                title="Discounts and entitlements"
+                                aria-label={`Discounts and entitlements for ${tableUser.first_name}`}
+                              >
+                                <svg className="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 7h.01M7 3h5c.512 0 1.024.195 1.414.586l7 7a2 2 0 010 2.828l-7 7a2 2 0 01-2.828 0l-7-7A1.994 1.994 0 013 12V7a4 4 0 014-4z" />
+                                </svg>
+                              </button>
                               <button
                                 onClick={() => handleViewTools(tableUser)}
                                 className={actionViewClass}
@@ -818,6 +863,19 @@ export default function UsersPage() {
                         </>
                       )}
                     </tr>
+                    {editingId === tableUser.id && (tableUser.user_status || 'guest').toLowerCase() === 'guest' && (
+                      <tr className={isLight ? 'bg-slate-50' : 'bg-slate-800/40'}>
+                        <td colSpan={8} className="px-6 pb-4">
+                          <p className={bodyTextMutedClass}>
+                            Linked account:{' '}
+                            <span className={bodyTextPrimaryClass}>
+                              {linkedAccountLabel(tableUser.linked_account) ?? 'Not linked to a household account'}
+                            </span>
+                          </p>
+                        </td>
+                      </tr>
+                    )}
+                    </Fragment>
                   ))
                 )}
               </tbody>
@@ -978,6 +1036,9 @@ export default function UsersPage() {
               <p className={isLight ? 'text-sm text-red-900 font-medium mb-1' : 'text-sm text-red-300 font-medium mb-1'}>This action cannot be undone</p>
               <p className={isLight ? 'text-xs text-red-800/90' : 'text-xs text-red-300/80'}>
                 This removes the user account, all of their tools, and the records and files stored in those tools.
+                {deleteGuests.length > 0
+                  ? ` It also removes ${deleteGuests.length} guest ${deleteGuests.length === 1 ? 'account' : 'accounts'} attached to this profile: ${deleteGuests.map(guestAccountLabel).join(', ')}.`
+                  : ''}
               </p>
             </div>
             <p className={deleteModalTextClass}>
@@ -1028,16 +1089,31 @@ export default function UsersPage() {
             <p className={deleteModalTextClass}>
               Last chance to keep <span className={deleteEmailClass}>{deleteConfirm.userEmail}</span>. Their account and tool data will be permanently removed.
             </p>
+            {deleteGuests.length > 0 && (
+              <div className={deleteWarningBoxClass}>
+                <p className={isLight ? 'text-sm text-red-900 font-medium mb-1' : 'text-sm text-red-300 font-medium mb-1'}>
+                  Guest accounts attached to this profile
+                </p>
+                <p className={isLight ? 'text-xs text-red-800/90' : 'text-xs text-red-300/80'}>
+                  {deleteGuests.map(guestAccountLabel).join(', ')}
+                </p>
+              </div>
+            )}
             <div className={deleteWarningBoxClass}>
               <p className={isLight ? 'text-sm text-red-900 font-medium' : 'text-sm text-red-300 font-medium'}>
-                Type yes only if you want this user deleted.
+                {deleteGuests.length > 0
+                  ? 'Type yes to agree to remove all guest accounts attached to this profile.'
+                  : 'Type yes only if you want this user deleted.'}
               </p>
             </div>
             {error && (
               <p className={isLight ? 'mb-3 text-sm text-red-800' : 'mb-3 text-sm text-red-300'}>{error}</p>
             )}
             <p className={deleteModalTextClass}>
-              Type <span className={deleteKeywordClass}>yes</span> to delete this user:
+              Type <span className={deleteKeywordClass}>yes</span>
+              {deleteGuests.length > 0
+                ? ' to agree to remove all guest accounts attached to this profile:'
+                : ' to delete this user:'}
             </p>
             <input
               type="text"

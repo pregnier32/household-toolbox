@@ -70,6 +70,9 @@ export default function Profile() {
   const [isChangingPasswordLoading, setIsChangingPasswordLoading] = useState(false);
   const [isDeletingAccount, setIsDeletingAccount] = useState(false);
   const [ownedToolCount, setOwnedToolCount] = useState(0);
+  const [linkedGuests, setLinkedGuests] = useState<
+    Array<{ id: string; email: string; first_name: string; last_name: string | null }>
+  >([]);
   const [deleteStep, setDeleteStep] = useState<'warn' | 'final' | null>(null);
   const [toolsRemovedAck, setToolsRemovedAck] = useState(false);
   const [deleteAccountConfirmText, setDeleteAccountConfirmText] = useState('');
@@ -244,6 +247,14 @@ export default function Profile() {
     setAgreeConfirmText('');
   };
 
+  const guestConfirmRequired = linkedGuests.length > 0;
+  const guestConfirmAccepted = agreeConfirmText.trim().toLowerCase() === 'yes';
+
+  const guestLabel = (guest: { email: string; first_name: string; last_name: string | null }) => {
+    const name = [guest.first_name, guest.last_name].filter(Boolean).join(' ').trim();
+    return name ? `${name} (${guest.email})` : guest.email;
+  };
+
   const openDeleteAccountConfirm = async () => {
     setError(null);
     setSuccess(null);
@@ -251,12 +262,31 @@ export default function Profile() {
     setDeleteAccountConfirmText('');
     setFinalAck(false);
     setAgreeConfirmText('');
+
+    if (user?.householdRole === 'user') {
+      setLinkedGuests([]);
+    } else {
+      try {
+        const response = await fetch('/api/account/linked-guests');
+        const data = await response.json();
+        if (!response.ok) {
+          throw new Error(data.error || 'Failed to load guest accounts');
+        }
+        setLinkedGuests(Array.isArray(data.guests) ? data.guests : []);
+      } catch (err) {
+        setLinkedGuests([]);
+        setError(err instanceof Error ? err.message : 'Failed to load guest accounts');
+        return;
+      }
+    }
+
     await loadOwnedToolCount();
     setDeleteStep('warn');
   };
 
   const handleDeleteAccount = async () => {
-    if (agreeConfirmText !== 'I Agree' || !finalAck) return;
+    const phraseOk = guestConfirmRequired ? guestConfirmAccepted : agreeConfirmText === 'I Agree';
+    if (!phraseOk || !finalAck) return;
 
     const remainingTools = await loadOwnedToolCount();
     if (remainingTools > 0) {
@@ -640,6 +670,9 @@ export default function Profile() {
                 <p className={`${modalBodyClass} mb-4`}>
                   You still have <strong>{ownedToolCount}</strong> {ownedToolCount === 1 ? 'tool' : 'tools'}.
                   Continue stays disabled until those tools are removed.
+                  {guestConfirmRequired
+                    ? ` Deleting this profile will also remove ${linkedGuests.length} guest ${linkedGuests.length === 1 ? 'account' : 'accounts'} attached to it.`
+                    : ''}
                 </p>
                 <div className="flex justify-end gap-3">
                   <button type="button" onClick={resetDeleteFlow} className={cancelButtonClass}>
@@ -661,6 +694,13 @@ export default function Profile() {
                     ? 'Your login will be deleted. Household tools and records will stay.'
                     : 'You currently have no tools. Confirm that you have removed them all, then continue.'}
                 </p>
+                {guestConfirmRequired && (
+                  <p className={`${modalBodyClass} mb-4`}>
+                    This also permanently removes {linkedGuests.length} guest{' '}
+                    {linkedGuests.length === 1 ? 'account' : 'accounts'} attached to your profile:{' '}
+                    {linkedGuests.map(guestLabel).join(', ')}.
+                  </p>
+                )}
                 <label className={checkboxLabelClass}>
                   <input
                     type="checkbox"
@@ -725,7 +765,9 @@ export default function Profile() {
             <div className={warningBoxClass}>
               <p className={warningTitleClass}>Last chance to keep this account.</p>
               <p className={warningTextClass}>
-                Your profile and all remaining account data will be permanently removed. This cannot be undone.
+                {guestConfirmRequired
+                  ? `Your profile, remaining account data, and every guest account attached to your profile will be permanently removed: ${linkedGuests.map(guestLabel).join(', ')}. This cannot be undone.`
+                  : 'Your profile and all remaining account data will be permanently removed. This cannot be undone.'}
               </p>
             </div>
             <label className={checkboxLabelClass}>
@@ -735,16 +777,28 @@ export default function Profile() {
                 onChange={(event) => setFinalAck(event.target.checked)}
                 className="mt-1 h-4 w-4 rounded border-slate-400"
               />
-              <span>I understand that all data for this account will be permanently removed.</span>
+              <span>
+                {guestConfirmRequired
+                  ? 'I agree to remove all guest accounts attached to my profile, along with this account.'
+                  : 'I understand that all data for this account will be permanently removed.'}
+              </span>
             </label>
             <p className={`${modalBodyClass} mb-2`}>
-              Type <strong>I Agree</strong> to delete this account:
+              {guestConfirmRequired ? (
+                <>
+                  Type <strong>yes</strong> to agree to remove all guest accounts attached to your profile:
+                </>
+              ) : (
+                <>
+                  Type <strong>I Agree</strong> to delete this account:
+                </>
+              )}
             </p>
             <input
               type="text"
               value={agreeConfirmText}
               onChange={(event) => setAgreeConfirmText(event.target.value)}
-              placeholder='Type "I Agree"'
+              placeholder={guestConfirmRequired ? 'Type yes' : 'Type "I Agree"'}
               autoFocus
               onKeyDown={(event) => {
                 if (event.key === 'Escape' && !isDeletingAccount) setDeleteStep('warn');
@@ -762,7 +816,11 @@ export default function Profile() {
               </button>
               <button
                 type="button"
-                disabled={!finalAck || agreeConfirmText !== 'I Agree' || isDeletingAccount}
+                disabled={
+                  !finalAck ||
+                  (guestConfirmRequired ? !guestConfirmAccepted : agreeConfirmText !== 'I Agree') ||
+                  isDeletingAccount
+                }
                 onClick={() => void handleDeleteAccount()}
                 className={confirmDangerButtonClass}
               >

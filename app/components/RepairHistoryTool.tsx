@@ -13,6 +13,7 @@ import {
   isPdfAttachment,
   type AttachmentItem,
 } from '@/lib/attachments';
+import { formatDisplayDate as formatPaddedDisplayDate } from '@/lib/format-display-date';
 
 type HeaderRecord = {
   id: string;
@@ -59,10 +60,15 @@ type RepairHistoryToolProps = {
 };
 
 /** Parse YYYY-MM-DD as a local calendar day (avoids UTC midnight shifting the displayed day). */
-function formatLocalCalendarDate(dateStr: string): string {
+function formatPdfDate(dateStr: string): string {
   const match = /^(\d{4})-(\d{2})-(\d{2})/.exec(dateStr);
   if (!match) return dateStr;
   return new Date(Number(match[1]), Number(match[2]) - 1, Number(match[3])).toLocaleDateString();
+}
+
+function formatLocalCalendarDate(dateStr: string): string {
+  if (!dateStr) return '';
+  return formatPaddedDisplayDate(dateStr) || dateStr;
 }
 
 function formatReportDate(date: Date): string {
@@ -1637,7 +1643,7 @@ export function RepairHistoryTool({ toolId }: RepairHistoryToolProps) {
           const entryLines: { text: string; fontSize: number; isBold: boolean; indent: number }[] = [
             { text: `${itemLabel}  ·  ${typeLabel}`, fontSize: 11, isBold: true, indent: 5 },
           ];
-          if (record.date) entryLines.push({ text: `Date: ${formatLocalCalendarDate(record.date)}`, fontSize: 9, isBold: false, indent: 8 });
+          if (record.date) entryLines.push({ text: `Date: ${formatPdfDate(record.date)}`, fontSize: 9, isBold: false, indent: 8 });
           if (record.description.trim()) entryLines.push({ text: `Description: ${record.description.trim()}`, fontSize: 9, isBold: false, indent: 8 });
           if (record.cost.trim()) {
             const formattedCost = formatCurrencyDisplay(record.cost.trim());
@@ -1651,7 +1657,7 @@ export function RepairHistoryTool({ toolId }: RepairHistoryToolProps) {
             }
           }
           if (record.serviceProvider.trim()) entryLines.push({ text: `Service provider: ${record.serviceProvider.trim()}`, fontSize: 9, isBold: false, indent: 8 });
-          if (record.warrantyEndDate) entryLines.push({ text: `Warranty end: ${formatLocalCalendarDate(record.warrantyEndDate)}`, fontSize: 9, isBold: false, indent: 8 });
+          if (record.warrantyEndDate) entryLines.push({ text: `Warranty end: ${formatPdfDate(record.warrantyEndDate)}`, fontSize: 9, isBold: false, indent: 8 });
           if (record.submittedToInsurance) {
             entryLines.push({ text: 'Submitted to insurance: Yes', fontSize: 9, isBold: false, indent: 8 });
             if (record.insuranceCarrier.trim()) entryLines.push({ text: `Carrier: ${record.insuranceCarrier.trim()}`, fontSize: 9, isBold: false, indent: 10 });
@@ -1679,7 +1685,7 @@ export function RepairHistoryTool({ toolId }: RepairHistoryToolProps) {
           (record.attachments || []).forEach((file) => {
             const fileName = file.name?.trim();
             if (!fileName) return;
-            const dateLabel = record.date ? formatLocalCalendarDate(record.date) : 'Undated';
+            const dateLabel = record.date ? formatPdfDate(record.date) : 'Undated';
             attachmentRefs.push(`${category.name} — ${itemLabel} — ${dateLabel} — ${fileName}`);
           });
           yPos += 2;

@@ -9,6 +9,59 @@ import { completeSignOut } from '@/lib/client-sign-out';
 
 type RequestType = 'question' | 'support' | 'feature' | 'custom_tool';
 
+type FAQItem = {
+  question: string;
+  answer: string;
+};
+
+const faqData: FAQItem[] = [
+  {
+    question: 'What is Household Toolbox?',
+    answer:
+      'Household Toolbox is a store of tools for the records a household keeps. You choose which tools to add. Dates you pin from those tools show up on one dashboard calendar. Files stay on the record they belong to, and you can export a PDF when you want a copy.',
+  },
+  {
+    question: 'What can I keep in it?',
+    answer:
+      'Each tool keeps its own list and history. Home tools cover cleaning, maintenance, and repairs. Health and care tools cover appointments, pet care, and HSA records. Money and events tools cover subscriptions and event budgets. Plans and lists cover calendar events, to-dos, goals, meals, and shopping. People and records tools cover contacts, important documents, notes, travel, and an end-of-life plan. The Tools page describes each one.',
+  },
+  {
+    question: 'How do I create an account?',
+    answer:
+      'On the homepage, open Sign Up and enter your first name, last name, email, and a password of at least 8 characters. If email confirmation is required, check your inbox before you sign in. After you sign in, add the tools you want from the store. If new registration is turned off, the form says so.',
+  },
+  {
+    question: 'How much does it cost?',
+    answer:
+      'Your first two tools have no monthly charge and include 200MB of storage. Each tool after that is $2 a month, and that plan includes 1GB. Extra storage is $1 a month for each additional GB. The Pricing page shows examples. A payment method is not charged today. If a paid feature is billed later, the price is shown before you confirm.',
+  },
+  {
+    question: 'Who can see my records?',
+    answer:
+      'You sign in with your own email and password, and the records stay in that account. Tools such as Healthcare Appts & History, Pet Care Schedule, and Address Book let you list family members, pets, or contacts inside the tool. We do not sell your information, and we do not use it for advertising.',
+  },
+  {
+    question: 'How do dates and files work?',
+    answer:
+      'Pin a trip, appointment, chore, bill, or other dated item and it shows on the dashboard calendar with the rest of your dates. Photos, scans, and receipts stay attached to the trip, repair, document, or other record they belong to.',
+  },
+  {
+    question: 'Can I get a copy of my records?',
+    answer:
+      'Yes. Export a PDF of the records you choose in a tool. Attachment file names are listed at the end of the report. To ask for a copy of your account information and tool data, email support@householdtoolbox.com.',
+  },
+  {
+    question: 'How is my information protected?',
+    answer:
+      'The site uses encrypted connections (HTTPS). Passwords are stored as hashes, sign-in uses an httpOnly cookie, and tool records and uploaded files are kept with your account. No online service can guarantee perfect security. Records you enter, including healthcare, money, and end-of-life plans, are for your own household use. They are not medical, legal, tax, or financial advice.',
+  },
+  {
+    question: 'What happens if I close my account?',
+    answer:
+      'Remove your tools in My Tools, then delete the account from your profile. Deleting the account deletes the account, the tool records tied to it, and the uploaded files tied to it. You can also email support@householdtoolbox.com and ask us to delete the account.',
+  },
+];
+
 export default function Support() {
   const { resolvedTheme } = useTheme();
   const isLight = resolvedTheme === 'light';
@@ -53,6 +106,18 @@ export default function Support() {
   const helpListClass = isLight ? 'space-y-2 text-sm text-slate-700' : 'space-y-2 text-sm text-slate-400';
   const helpBulletClass = isLight ? 'text-emerald-700 mt-0.5' : 'text-emerald-400 mt-0.5';
   const helpLinkClass = isLight ? 'text-emerald-700 hover:text-emerald-800 underline' : 'text-emerald-400 hover:text-emerald-300 underline';
+  const faqTitleClass = isLight ? 'text-2xl font-semibold text-slate-900 mb-4' : 'text-2xl font-semibold text-slate-50 mb-4';
+  const faqCardClass = isLight
+    ? 'rounded-2xl border border-slate-200 bg-white overflow-hidden transition-all hover:border-slate-300 shadow-sm'
+    : 'rounded-2xl border border-slate-800 bg-slate-900/70 overflow-hidden transition-all hover:border-slate-700';
+  const faqTriggerClass = isLight
+    ? 'w-full px-6 py-5 flex items-center justify-between text-left hover:bg-slate-50 transition-colors'
+    : 'w-full px-6 py-5 flex items-center justify-between text-left hover:bg-slate-800/50 transition-colors';
+  const faqQuestionClass = isLight ? 'text-lg font-medium text-slate-900 pr-4' : 'text-lg font-medium text-slate-100 pr-4';
+  const faqChevronClass = isLight
+    ? 'h-5 w-5 text-slate-500 flex-shrink-0 transition-transform'
+    : 'h-5 w-5 text-slate-400 flex-shrink-0 transition-transform';
+  const faqAnswerClass = isLight ? 'pt-2 text-slate-700 leading-relaxed' : 'pt-2 text-slate-300 leading-relaxed';
 
   const router = useRouter();
   const [user, setUser] = useState<{ firstName: string; lastName?: string } | null>(null);
@@ -64,6 +129,7 @@ export default function Support() {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState(false);
+  const [openFaqIndex, setOpenFaqIndex] = useState<number | null>(null);
 
   useEffect(() => {
     fetch('/api/auth/session')
@@ -346,7 +412,13 @@ export default function Support() {
           <ul className={helpListClass}>
             <li className="flex items-start gap-2">
               <span className={helpBulletClass}>•</span>
-              <span>Check our <button type="button" onClick={() => router.push('/faq')} className={helpLinkClass}>FAQ page</button> for common questions</span>
+              <span>
+                Check the{' '}
+                <a href="#faq" className={helpLinkClass}>
+                  questions below
+                </a>{' '}
+                for common answers
+              </span>
             </li>
             <li className="flex items-start gap-2">
               <span className={helpBulletClass}>•</span>
@@ -358,6 +430,37 @@ export default function Support() {
             </li>
           </ul>
         </div>
+
+        <section id="faq" className="mt-12 scroll-mt-8">
+          <h2 className={faqTitleClass}>Frequently Asked Questions</h2>
+          <div className="space-y-4">
+            {faqData.map((faq, index) => (
+              <div key={faq.question} className={faqCardClass}>
+                <button
+                  type="button"
+                  onClick={() => setOpenFaqIndex(openFaqIndex === index ? null : index)}
+                  className={faqTriggerClass}
+                  aria-expanded={openFaqIndex === index}
+                >
+                  <span className={faqQuestionClass}>{faq.question}</span>
+                  <svg
+                    className={`${faqChevronClass} ${openFaqIndex === index ? 'rotate-180' : ''}`}
+                    fill="none"
+                    stroke="currentColor"
+                    viewBox="0 0 24 24"
+                  >
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+                  </svg>
+                </button>
+                {openFaqIndex === index && (
+                  <div className="px-6 pb-5">
+                    <div className={faqAnswerClass}>{faq.answer}</div>
+                  </div>
+                )}
+              </div>
+            ))}
+          </div>
+        </section>
       </div>
     </main>
   );

@@ -4,7 +4,7 @@ import { absoluteUrl } from '@/lib/public-site';
 import { getPublicTools } from '@/lib/public-tools';
 
 export default function sitemap(): MetadataRoute.Sitemap {
-  const staticPaths = ['/', '/tools', '/pricing', '/faq', '/support', '/terms-of-service', '/privacy-policy'];
+  const staticPaths = ['/', '/tools', '/pricing', '/support', '/terms-of-service', '/privacy-policy'];
 
   const staticEntries: MetadataRoute.Sitemap = staticPaths.map((path) => ({
     url: absoluteUrl(path),

@@ -3152,6 +3152,8 @@ Repair-record files only. Flatten receipt, warranty, and pictures into one store
 - No paperclip on Items, categories, or Export.
 - The cross-category export tab is named **Export**.
 
+**Add control exception (intentional):** Repair History keeps the filled **+ Add New Repair** button and the inline Add New Repair History Item workflow. Do not convert this add workflow to the section-plus and add-modal pattern to satisfy `UX-ADD-002`.
+
 ### Event Budget Planner
 
 Event files and expense files. Do not attach files to vendors, categories, types, category-budget rows, or vendor-split rows (splits are deleted and re-inserted on every expense save).
@@ -3177,6 +3179,8 @@ Meal files only. Do not attach files to weekly plans, day-slot assignments, item
 - No paperclip on plans, day cards, meal picker, grocery/shopping modal, Items, Meal Types, or Print.
 - “Create Shopping List” uses the reversible in-app confirm.
 
+**Desktop list exception (intentional):** The Meals list stays a table on desktop, with Name, Type, Duration, Difficulty, Rating, and Actions. This is the exception for `UX-LST-003` at desktop widths. Narrow widths still follow `UX-RSP-003` and must not rely on horizontal page scrolling.
+
 ### Shopping List
 
 List files only. Do not attach files to master items, line items, Print, the Items tab, or the dashboard pin.
@@ -3201,6 +3205,8 @@ Goal files and update files. Do not attach files to categories, phases, tasks, t
 - Render `AttachmentModal` after the Update history and Edit Goal modals. The Attachment overlay uses **`z-[60]`** when it stacks on those modals.
 - No paperclip on categories, phase/task rows, dashboard pin, or reminder controls.
 
+**Add control exception (intentional):** Goals Tracking keeps the filled **+ Add Goal** button and the inline New Goal card. Do not convert this tool to a section-title plus and add modal to satisfy `UX-ADD-002`.
+
 ### Healthcare Appointments & History
 
 Appointment files only. The existing `tools_hcah_documents` store is the attachment store. Do not attach files to family-member headers or the provider text field.
@@ -3214,6 +3220,10 @@ Appointment files only. The existing `tools_hcah_documents` store is the attachm
 - No paperclip on family-member chips, Report/Export, or the dashboard pin.
 - Family-member selection uses the header card pattern (“Select family member”).
 
+**Add control exception (intentional):** Healthcare Appointments & History keeps the filled **+ Add Appointment** button and the inline New upcoming appointment card. Do not convert this add workflow to the section-plus and add-modal pattern to satisfy `UX-ADD-002`.
+
+**Row action exception (intentional):** Appointment rows may keep the text **Add to HSA** action. Do not replace it with an icon-only control to satisfy `UX-LST-001`. Paperclip, edit, and delete stay in their current order.
+
 ### Pet Care Schedule
 
 Pet files, Documents-tab files, veterinary contacts, vaccinations, and appointments. Do not attach files to food, care plan, or notes. Those children are still deleted and re-inserted on every pet save.
@@ -3226,6 +3236,8 @@ Pet files, Documents-tab files, veterinary contacts, vaccinations, and appointme
 - No paperclip on Food, Care Plan, Notes, Export, or the dashboard pin.
 - Pet selection uses the header card pattern (“Select your Pet”).
 - The cross-category export tab is named **Export**.
+
+**Add control exception (intentional):** Pet Care Schedule keeps the current inline New Pet creation workflow. Do not convert pet creation to an add modal to satisfy `UX-ADD-002`.
 
 ### Calendar Events
 
@@ -3262,6 +3274,12 @@ Address files only (`tools_ab_address_attachments`, bucket `address-book`, path 
 - No paperclip on the Tags tab, tag chips, Add/Edit tag, or Tag History.
 
 **Add placement exception (intentional):** Address Book keeps the Search and tag-filter area before **+ Add New Address**. Do not move the add button above Search to satisfy the generic `UX-ADD-001` placement rule.
+
+### To Do List
+
+**Add control exception (intentional):** To Do List keeps the filled **+ Add Task** button and the inline New task card. Do not convert this add workflow to a section-title plus and add modal to satisfy `UX-ADD-002`.
+
+**Desktop list exception (intentional):** The task list stays a table on desktop. This is the exception for `UX-LST-003` at desktop widths. Narrow widths still follow `UX-RSP-003`. The desktop-table exception does not allow clipped row actions or horizontal page scrolling on mobile.
 
 ---
 

@@ -13,6 +13,7 @@ import {
   isPdfAttachment,
   type AttachmentItem,
 } from '@/lib/attachments';
+import { formatDisplayDate as formatPaddedDisplayDate } from '@/lib/format-display-date';
 
 type NoteTag = {
   id: string;
@@ -131,10 +132,15 @@ const localCalendarDate = (date = new Date()) => {
   return `${y}-${m}-${day}`;
 };
 
-const formatLocalCalendarDate = (dateStr: string) => {
+const formatPdfDate = (dateStr: string) => {
   const match = /^(\d{4})-(\d{2})-(\d{2})/.exec(dateStr);
   if (!match) return dateStr;
   return new Date(Number(match[1]), Number(match[2]) - 1, Number(match[3])).toLocaleDateString();
+};
+
+const formatLocalCalendarDate = (dateStr: string) => {
+  if (!dateStr) return '';
+  return formatPaddedDisplayDate(dateStr) || dateStr;
 };
 
 function formatReportDate(date: Date): string {
@@ -1715,7 +1721,7 @@ export function NotesTool({ toolId }: NotesToolProps) {
           addText(`Tags: ${tagNames.join(', ')}`, 9, false, 8);
         }
         if (note.createdDate) {
-          addText(`Created: ${formatLocalCalendarDate(note.createdDate)}`, 9, false, 8);
+          addText(`Created: ${formatPdfDate(note.createdDate)}`, 9, false, 8);
         }
         if (note.requiresPasswordForView) {
           addText('Password protected: Yes', 9, false, 8);
@@ -1723,7 +1729,7 @@ export function NotesTool({ toolId }: NotesToolProps) {
           addText(note.note.trim(), 9, false, 8);
         }
         if (!note.isActive && note.dateInactivated) {
-          addText(`Date inactivated: ${formatLocalCalendarDate(note.dateInactivated)}`, 9, false, 8);
+          addText(`Date inactivated: ${formatPdfDate(note.dateInactivated)}`, 9, false, 8);
         }
         yPos += 3;
       };
@@ -2556,10 +2562,10 @@ export function NotesTool({ toolId }: NotesToolProps) {
                           </div>
                           <div className="flex flex-wrap gap-x-4 gap-y-1 text-xs text-slate-400">
                             <span>
-                              <span className="text-slate-500">Created:</span> {new Date(note.createdDate).toLocaleDateString()}
+                              <span className="text-slate-500">Created:</span> {formatLocalCalendarDate(note.createdDate)}
                             </span>
                             <span>
-                              <span className="text-slate-500">Inactivated:</span> {note.dateInactivated ? new Date(note.dateInactivated).toLocaleDateString() : 'N/A'}
+                              <span className="text-slate-500">Inactivated:</span> {note.dateInactivated ? formatLocalCalendarDate(note.dateInactivated) : 'N/A'}
                             </span>
                           </div>
                           <div className="mt-2">

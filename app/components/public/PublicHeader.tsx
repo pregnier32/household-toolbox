@@ -59,7 +59,7 @@ export function PublicHeader() {
             <Link href="/pricing" className={menuLinkClass}>
               Pricing
             </Link>
-            <Link href="/faq" className={menuLinkClass}>
+            <Link href="/support#faq" className={menuLinkClass}>
               FAQ
             </Link>
             <Link href="/support" className={menuLinkClass}>

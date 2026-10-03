@@ -13,6 +13,7 @@ import {
   isPdfAttachment,
   type AttachmentItem,
 } from '@/lib/attachments';
+import { formatDisplayDate as formatPaddedDisplayDate } from '@/lib/format-display-date';
 
 type Category = {
   id: string;
@@ -127,7 +128,7 @@ function generateId(): string {
     : `id-${Date.now()}-${Math.random().toString(36).slice(2, 9)}`;
 }
 
-function formatDateForDisplay(isoDate: string): string {
+function formatPdfDate(isoDate: string): string {
   if (!isoDate) return '';
   const [y, m, d] = isoDate.split('-');
   if (!m || !d) return isoDate;
@@ -135,6 +136,11 @@ function formatDateForDisplay(isoDate: string): string {
   const day = parseInt(d, 10);
   const year = y || '';
   return `${month}/${day}/${year}`;
+}
+
+function formatDateForDisplay(isoDate: string): string {
+  if (!isoDate) return '';
+  return formatPaddedDisplayDate(isoDate);
 }
 
 function formatReportDate(date: Date): string {
@@ -1042,7 +1048,7 @@ export function ToDoListTool({ toolId }: ToDoListToolProps) {
         ];
         if (task.dueDate) {
           taskLines.push({
-            text: `Due date: ${formatDateForDisplay(task.dueDate)}`,
+            text: `Due date: ${formatPdfDate(task.dueDate)}`,
             fontSize: 9,
             isBold: false,
             indent: 8,
@@ -1067,7 +1073,7 @@ export function ToDoListTool({ toolId }: ToDoListToolProps) {
         (task.attachments || []).forEach((file) => {
           const fileName = file.name?.trim();
           if (!fileName) return;
-          const dateLabel = task.dueDate ? formatDateForDisplay(task.dueDate) : '';
+          const dateLabel = task.dueDate ? formatPdfDate(task.dueDate) : '';
           attachmentRefs.push(
             dateLabel
               ? `${category.name} — ${taskLabel} — ${dateLabel} — ${fileName}`
@@ -1777,7 +1783,7 @@ export function ToDoListTool({ toolId }: ToDoListToolProps) {
 
             {/* Task list: grid with headers */}
             {!isAddingTask && (
-              <div className="overflow-x-auto">
+              <div className="min-w-0 md:overflow-x-auto">
                 {filteredAndSortedTasks.length === 0 ? (
                   tasksForCategory.length > 0 ? (
                     <p className="text-slate-400 text-center py-8 text-sm">
@@ -1785,8 +1791,8 @@ export function ToDoListTool({ toolId }: ToDoListToolProps) {
                     </p>
                   ) : null
                 ) : (
-                  <table className="w-full min-w-[500px]">
-                    <thead>
+                  <table className="w-full border-collapse max-md:block md:min-w-[500px]">
+                    <thead className="max-md:hidden">
                       <tr className={isLight ? 'border-b border-slate-300' : 'border-b border-slate-700'}>
                         <th className={isLight ? 'text-left text-xs font-semibold uppercase tracking-wider text-slate-600 py-3 px-2' : 'text-left text-xs font-semibold uppercase tracking-wider text-slate-400 py-3 px-2'}>Name</th>
                         <th className={isLight ? 'text-left text-xs font-semibold uppercase tracking-wider text-slate-600 py-3 px-2' : 'text-left text-xs font-semibold uppercase tracking-wider text-slate-400 py-3 px-2'}>Due Date</th>
@@ -1795,25 +1801,28 @@ export function ToDoListTool({ toolId }: ToDoListToolProps) {
                         <th className={`${isLight ? 'w-36 text-right text-xs font-semibold uppercase tracking-wider text-slate-600 py-3 px-2' : 'w-36 text-right text-xs font-semibold uppercase tracking-wider text-slate-400 py-3 px-2'} print-only-hidden`}>Actions</th>
                       </tr>
                     </thead>
-                    <tbody>
+                    <tbody className="max-md:block">
                       {filteredAndSortedTasks.map((task) => (
                         <tr
                           key={task.id}
-                          className={isLight ? 'border-b border-slate-200 hover:bg-slate-50 transition-colors' : 'border-b border-slate-800 hover:bg-slate-800/30 transition-colors'}
+                          className={isLight ? 'border-b border-slate-200 transition-colors hover:bg-slate-50 max-md:mb-3 max-md:block max-md:rounded-lg max-md:border max-md:border-slate-200 max-md:p-3 md:table-row' : 'border-b border-slate-800 transition-colors hover:bg-slate-800/30 max-md:mb-3 max-md:block max-md:rounded-lg max-md:border max-md:border-slate-700 max-md:p-3 md:table-row'}
                         >
-                          <td className="py-3 px-2">
-                            <div className="flex items-center gap-2 min-w-0">
-                              <div className={`${isLight ? 'font-medium text-slate-900' : 'font-medium text-slate-100'}${task.status === 'Completed' ? ' line-through' : ''}`}>{task.taskName}</div>
+                          <td className="block px-2 py-3 md:table-cell">
+                            <div className={`mb-1 text-xs font-semibold uppercase tracking-wider md:hidden ${isLight ? 'text-slate-500' : 'text-slate-400'}`}>Name</div>
+                            <div className="flex min-w-0 items-center gap-2">
+                              <div className={`break-words ${isLight ? 'font-medium text-slate-900' : 'font-medium text-slate-100'}${task.status === 'Completed' ? ' line-through' : ''}`}>{task.taskName}</div>
                               {task.addToDashboard && <OnCalendarChip isLight={isLight} />}
                             </div>
                             {task.notes && (
-                              <div className={isLight ? 'text-xs text-slate-600 mt-0.5 line-clamp-2' : 'text-xs text-slate-400 mt-0.5 line-clamp-2'}>{task.notes}</div>
+                              <div className={isLight ? 'mt-0.5 line-clamp-2 break-words text-xs text-slate-600' : 'mt-0.5 line-clamp-2 break-words text-xs text-slate-400'}>{task.notes}</div>
                             )}
                           </td>
-                          <td className={isLight ? 'py-3 px-2 text-sm text-slate-700' : 'py-3 px-2 text-sm text-slate-300'}>
+                          <td className={isLight ? 'block px-2 py-1 text-sm text-slate-700 md:table-cell md:py-3' : 'block px-2 py-1 text-sm text-slate-300 md:table-cell md:py-3'}>
+                            <span className={`mr-2 text-xs font-semibold uppercase tracking-wider md:hidden ${isLight ? 'text-slate-500' : 'text-slate-400'}`}>Due date</span>
                             {task.dueDate ? formatDateForDisplay(task.dueDate) : '—'}
                           </td>
-                          <td className="py-3 px-2">
+                          <td className="block px-2 py-1 md:table-cell md:py-3">
+                            <div className={`mb-1 text-xs font-semibold uppercase tracking-wider md:hidden ${isLight ? 'text-slate-500' : 'text-slate-400'}`}>Priority</div>
                             <select
                               value={task.priority}
                               onChange={(e) => updateTaskPriority(task.id, e.target.value as Priority)}
@@ -1826,7 +1835,8 @@ export function ToDoListTool({ toolId }: ToDoListToolProps) {
                             </select>
                             <span className="todo-print-status-text">{task.priority}</span>
                           </td>
-                          <td className="py-3 px-2">
+                          <td className="block px-2 py-1 md:table-cell md:py-3">
+                            <div className={`mb-1 text-xs font-semibold uppercase tracking-wider md:hidden ${isLight ? 'text-slate-500' : 'text-slate-400'}`}>Status</div>
                             <select
                               value={task.status}
                               onChange={(e) => updateTaskStatus(task.id, e.target.value as TaskStatus)}
@@ -1839,8 +1849,9 @@ export function ToDoListTool({ toolId }: ToDoListToolProps) {
                             </select>
                             <span className="todo-print-status-text">{task.status}</span>
                           </td>
-                          <td className="py-3 px-2 text-right print-only-hidden">
-                            <div className="flex items-center justify-end gap-1">
+                          <td className="block px-2 py-2 text-right print-only-hidden md:table-cell md:py-3">
+                            <div className={`mb-1 text-left text-xs font-semibold uppercase tracking-wider md:hidden ${isLight ? 'text-slate-500' : 'text-slate-400'}`}>Actions</div>
+                            <div className="flex flex-wrap items-center justify-end gap-1">
                               <AttachmentButton
                                 count={task.attachments?.length || 0}
                                 onClick={() => setAttachmentModal(task.id)}

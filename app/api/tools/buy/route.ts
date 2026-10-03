@@ -3,14 +3,16 @@ import { getHouseholdDataSession } from '@/lib/session';
 import { supabaseServer } from '@/lib/supabaseServer';
 import { ensureToolEntitlement, toolOffersTrial } from '@/lib/user-tool-entitlements';
 
-function purchaseMessage(trialGranted: boolean, isReturning: boolean): string {
-  if (trialGranted) {
-    return '7-day free trial started. You will not be charged until after 7 days.';
-  }
-  if (isReturning) {
-    return 'Tool added. Your 7-day trial for this tool was already used, so billing starts with this purchase.';
-  }
-  return 'Tool purchased successfully';
+async function purchaseMessage(userId: string, toolId: string, trialGranted: boolean): Promise<string> {
+  if (trialGranted) return '7-day free trial started. No payment is required to start.';
+  const { getAccountPricingState } = await import('@/lib/load-account-pricing');
+  const { formatCents } = await import('@/lib/account-pricing');
+  const state = await getAccountPricingState(userId, new Date());
+  const tool = state?.tools.find((item) => item.toolId === toolId);
+  if (!tool || tool.accessLabel === 'Included') return 'This tool is included with your account.';
+  if (tool.accessLabel === 'Free Through Promotion') return 'This tool is free through a promotion.';
+  if (tool.accessLabel === 'Free Trial') return '7-day free trial started. No payment is required to start.';
+  return `This tool is expected to cost ${formatCents(tool.shelfPriceCents)} per month. Payment setup will be required later. No payment is collected now.`;
 }
 
 async function recordEntitlement(userId: string, tool: { id: string; name: string; price: number }) {
@@ -108,7 +110,7 @@ export async function POST(request: NextRequest) {
 
       const entitlement = await recordEntitlement(user.id, tool);
       return NextResponse.json({
-        message: purchaseMessage(false, true),
+        message: await purchaseMessage(user.id, toolId, false),
         userTool: updatedUserTool,
         trialGranted: false,
         trialUsed: entitlement.trialUsed,
@@ -141,7 +143,7 @@ export async function POST(request: NextRequest) {
 
     return NextResponse.json(
       {
-        message: purchaseMessage(entitlement.trialGranted, !entitlement.isFirstStart),
+        message: await purchaseMessage(user.id, toolId, entitlement.trialGranted),
         userTool: newUserTool,
         trialGranted: entitlement.trialGranted,
         trialUsed: entitlement.trialUsed,

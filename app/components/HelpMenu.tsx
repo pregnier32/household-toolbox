@@ -69,7 +69,7 @@ export function HelpMenu({ className = '' }: HelpMenuProps) {
             <button
               type="button"
               onClick={() => {
-                router.push('/faq');
+                router.push('/support#faq');
                 setIsOpen(false);
               }}
               className={menuItemClass}

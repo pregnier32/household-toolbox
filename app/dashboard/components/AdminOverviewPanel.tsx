@@ -4,7 +4,7 @@ import { useEffect, useState } from 'react';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts';
 
 export function AdminOverviewPanel() {
-  const [activeUserCount, setActiveUserCount] = useState<number | null>(null);
+  const [adminStatusCount, setAdminStatusCount] = useState<number | null>(null);
   const [guestUserCount, setGuestUserCount] = useState<number | null>(null);
   const [activeTrialToolsCount, setActiveTrialToolsCount] = useState<number | null>(null);
   const [avgToolsPerAdmin, setAvgToolsPerAdmin] = useState<number | null>(null);
@@ -22,7 +22,7 @@ export function AdminOverviewPanel() {
     fetch('/api/admin/stats')
       .then((res) => res.json())
       .then((data) => {
-        if (data.activeUserCount !== undefined) setActiveUserCount(data.activeUserCount);
+        if (data.adminStatusCount !== undefined) setAdminStatusCount(data.adminStatusCount);
         if (data.guestUserCount !== undefined) setGuestUserCount(data.guestUserCount);
         if (data.activeTrialToolsCount !== undefined) setActiveTrialToolsCount(data.activeTrialToolsCount);
         if (data.avgToolsPerAdmin !== undefined) setAvgToolsPerAdmin(data.avgToolsPerAdmin);
@@ -47,20 +47,20 @@ export function AdminOverviewPanel() {
       <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
         <div className="rounded-2xl border border-slate-800 bg-slate-900/70 p-6">
           <p className="mb-2 text-2xl">👥</p>
-          <h3 className="mb-2 text-sm font-semibold text-slate-100">Active Users</h3>
+          <h3 className="mb-2 text-sm font-semibold text-slate-100">Admin Users</h3>
           {isLoadingStats ? (
             <p className="text-xs text-slate-400">Loading...</p>
           ) : (
             <>
               <p className="mb-1 text-3xl font-semibold text-emerald-400">
-                {activeUserCount !== null ? activeUserCount : '—'}
+                {adminStatusCount !== null ? adminStatusCount : '—'}
               </p>
-              <p className="mb-4 text-xs text-slate-400">Users with active status</p>
+              <p className="mb-4 text-xs text-slate-400">Users with admin status</p>
               <div className="border-t border-slate-800 pt-3">
                 <p className="mb-1 text-2xl font-semibold text-purple-400">
                   {guestUserCount !== null ? guestUserCount : '—'}
                 </p>
-                <p className="text-xs text-slate-400">Guest users</p>
+                <p className="text-xs text-slate-400">Users with guest status</p>
               </div>
             </>
           )}
