@@ -14,6 +14,18 @@ import {
 } from './account-pricing';
 import { draftAccountNotices, type NoticeDraft } from './account-notice-drafts';
 import type { CustomerPlanBenefit, CustomerPlanSource } from './customer-plan-preview';
+import {
+  assignmentsAsOf,
+  billingDateLabel,
+  billingHeading,
+  billingSchedule,
+  describeBillingCycle,
+  periodRecordsToTools,
+  scheduledRemovalNote,
+  trialStatusNote,
+  type BillingCycleSnapshot,
+  type PeriodToolRecord,
+} from './billing-cycle';
 import { formatDisplayDate } from './format-display-date';
 
 export type PreviewAccess = 'unauthorized' | 'forbidden' | null;
@@ -68,6 +80,37 @@ export type CustomerPlanPayload = {
   paymentMethod: string;
   paymentSetupWouldBeNeeded: boolean;
   notice: { title: string; body: string } | null;
+  billingCycle?: CustomerBillingCycle | null;
+};
+
+export type CustomerBillingCycle = {
+  nextBillingDate: string;
+  estimatedNextBill: string;
+  nextBillingAt: string;
+};
+
+export type BillingCyclePreview = {
+  anniversaryDay: number;
+  firstBillingAt: string;
+  previousBillingAt: string | null;
+  nextBillingAt: string;
+  actualNextBillingAt: string;
+  periodStart: string | null;
+  periodEnd: string | null;
+  currentExpectedMonthly: string;
+  currentPeriodAmount: string;
+  estimatedNextAmount: string;
+  trialTools: { name: string; note: string }[];
+  scheduledRemovals: { name: string; note: string }[];
+  nextPromotionCodes: string[];
+  nextFreeSlots: number;
+  nextBill: {
+    heading: string;
+    lines: { name: string; status: string; amount: string }[];
+    regularMonthly: string;
+    promotions: string;
+    estimated: string;
+  };
 };
 
 export type BillingPreviewPayload = {
@@ -136,6 +179,7 @@ export type BillingPreviewPayload = {
   actualNotices: PreviewNotice[];
   events: { at: string; labels: string[]; before: string; after: string }[];
   customerPlan: CustomerPlanPayload;
+  cycle: BillingCyclePreview | null;
 };
 
 function personName(person: PreviewPerson): string {
@@ -197,6 +241,8 @@ export function assembleBillingPreview(args: {
   toolNames: Map<string, string>;
   actualAt: Date;
   simulatedAt: Date;
+  signupAt?: string | null;
+  frozenPeriodTools?: PeriodToolRecord[] | null;
 }): BillingPreviewPayload {
   const state = calculateAccountPricing(args.input, args.simulatedAt);
   const drafts = draftAccountNotices(args.input, args.simulatedAt);
@@ -230,6 +276,12 @@ export function assembleBillingPreview(args: {
     source: sourceFor(assignment.source),
   }));
   const firstDraft = drafts[0];
+  const cyclePlan = args.signupAt
+    ? buildCycleCustomerStatement(args.input, args.signupAt, args.simulatedAt, args.frozenPeriodTools ?? null)
+    : null;
+  const cycle = args.signupAt
+    ? buildBillingCyclePreview(args.input, args.signupAt, args.simulatedAt, args.actualAt, args.frozenPeriodTools ?? null)
+    : null;
 
   return {
     actualAt: args.actualAt.toISOString(),
@@ -321,9 +373,10 @@ export function assembleBillingPreview(args: {
         addedAt: tool.ownedAt,
         price: formatCents(toolListCents(tool)),
       })),
-      statement: buildCustomerStatement(args.input, state),
+      statement: cyclePlan?.statement ?? buildCustomerStatement(args.input, state),
       benefits,
       currentMonthly: formatCents(state.effectiveMonthlyCents),
+      billingCycle: cyclePlan?.billingCycle ?? null,
       upcoming: next && upcomingState ? { at: next.toISOString().slice(0, 10), amount: formatCents(upcomingState.effectiveMonthlyCents) } : null,
       storageUsed: storageLabel(state.storageUsedBytes),
       storageAllowance: storageLabel(state.effectiveStorageBytes),
@@ -331,6 +384,7 @@ export function assembleBillingPreview(args: {
       paymentSetupWouldBeNeeded: state.paymentSetupWouldBeNeeded,
       notice: firstDraft ? { title: firstDraft.title, body: firstDraft.body } : null,
     },
+    cycle,
   };
 }
 
@@ -347,6 +401,7 @@ export type PlanStatementRow = {
   detail: string | null;
   amount: string | null;
   benefitId: string | null;
+  note?: string | null;
 };
 
 export function toolListCents(tool: Pick<ToolPricingResult, 'shelfPriceCents' | 'catalogPriceCents'>): number {
@@ -367,9 +422,14 @@ function statementAmount(cents: number): string {
   return formatMonthlyCents(cents);
 }
 
-export function buildCustomerStatement(input: AccountPricingInput, state: AccountPricingState): PlanStatementRow[] {
+export function buildCustomerStatement(
+  input: AccountPricingInput,
+  state: AccountPricingState,
+  options?: { trialDisplay?: 'credit' | 'zero'; notes?: Map<string, string> },
+): PlanStatementRow[] {
   const rows: PlanStatementRow[] = [];
   const adjustments: PlanStatementRow[] = [];
+  const zeroTrials = options?.trialDisplay === 'zero';
   const tools = state.tools
     .slice()
     .sort((left, right) => left.name.localeCompare(right.name, undefined, { sensitivity: 'base' }) || left.toolId.localeCompare(right.toolId));
@@ -377,15 +437,17 @@ export function buildCustomerStatement(input: AccountPricingInput, state: Accoun
   let toolSum = 0;
   for (const tool of tools) {
     const cents = toolListCents(tool);
-    toolSum += cents;
+    const hideCharge = zeroTrials && tool.inTrial;
+    if (!hideCharge) toolSum += cents;
     const added = formatDisplayDate(tool.ownedAt);
     rows.push({
       id: `tool-${tool.toolId}`,
       kind: 'tool',
       label: tool.name,
       detail: added ? `Added ${added}` : null,
-      amount: statementAmount(cents),
+      amount: hideCharge ? '$0' : statementAmount(cents),
       benefitId: null,
+      note: options?.notes?.get(tool.toolId) ?? null,
     });
   }
 
@@ -404,7 +466,7 @@ export function buildCustomerStatement(input: AccountPricingInput, state: Accoun
   rows.push({
     id: 'before',
     kind: 'subtotal',
-    label: 'Monthly cost before promotions',
+    label: 'Regular monthly cost',
     detail: null,
     amount: formatMonthlyCents(before),
     benefitId: null,
@@ -432,7 +494,7 @@ export function buildCustomerStatement(input: AccountPricingInput, state: Accoun
 
   for (const tool of tools) {
     const cents = toolListCents(tool);
-    if (!tool.inTrial || cents <= 0) continue;
+    if (zeroTrials || !tool.inTrial || cents <= 0) continue;
     reductions += cents;
     const days = tool.daysRemaining;
     adjustments.push({
@@ -503,4 +565,141 @@ export function buildCustomerStatement(input: AccountPricingInput, state: Accoun
     benefitId: null,
   });
   return rows;
+}
+
+function nextBillStatus(tool: BillingCycleSnapshot['next']['tools'][number]): { status: string; amount: string } {
+  if (tool.inTrial) {
+    const days = tool.daysRemaining;
+    const left = days == null ? 'in trial' : days === 1 ? '1 day remaining on billing date' : `${days} days remaining on billing date`;
+    return { status: `Free Trial — ${left}`, amount: '$0' };
+  }
+  if (tool.freeSlotCovered) return { status: 'Free Slot', amount: '$0' };
+  if (tool.specificPromotionCovered || tool.accountPromotionCovered) return { status: 'Free through promotion', amount: '$0' };
+  if (tool.expectedMonthlyCents > 0) return { status: 'Billable', amount: formatCents(tool.expectedMonthlyCents) };
+  return { status: 'Included', amount: '$0' };
+}
+
+export function buildCycleCustomerStatement(
+  input: AccountPricingInput,
+  signupAt: string,
+  effectiveAt: Date,
+  frozen: PeriodToolRecord[] | null,
+): { statement: PlanStatementRow[]; snapshot: BillingCycleSnapshot; billingCycle: CustomerBillingCycle } {
+  const snapshot = describeBillingCycle(input, signupAt, effectiveAt, frozen);
+  const notes = new Map<string, string>();
+  for (const tool of snapshot.current.tools) {
+    if (tool.inTrial) notes.set(tool.toolId, trialStatusNote(tool.daysRemaining, tool.trialEndsAt));
+  }
+  for (const record of snapshot.periodRecords) {
+    if (record.scheduledRemoval) notes.set(record.toolId, scheduledRemovalNote(snapshot.schedule.nextBillingAt));
+  }
+  for (const tool of snapshot.period?.tools ?? []) {
+    if (!tool.inTrial || notes.has(tool.toolId)) continue;
+    const live = snapshot.current.tools.find((item) => item.toolId === tool.toolId);
+    notes.set(tool.toolId, live?.inTrial
+      ? trialStatusNote(live.daysRemaining, live.trialEndsAt)
+      : `Free trial ended — first bill ${billingDateLabel(snapshot.schedule.nextBillingAt)}`);
+  }
+
+  const periodInput: AccountPricingInput = snapshot.period && snapshot.schedule.periodStart
+    ? {
+      ...input,
+      tools: periodRecordsToTools(snapshot.periodRecords),
+      assignments: assignmentsAsOf(input.assignments, new Date(snapshot.schedule.periodStart)),
+    }
+    : { ...input, tools: [] };
+  const statement = buildCustomerStatement(periodInput, snapshot.period ?? calculateAccountPricing(periodInput, effectiveAt), {
+    trialDisplay: 'zero',
+    notes,
+  });
+
+  const storageRow = statement.find((row) => row.kind === 'storage');
+  if (storageRow) {
+    storageRow.label = snapshot.current.baseStorageBytes > STORAGE_FREE_BYTES ? 'Paid Acct' : 'Free Acct';
+    storageRow.detail = `${storageLabel(snapshot.current.storageUsedBytes)} of ${storageLabel(snapshot.current.effectiveStorageBytes)}`;
+  }
+
+  const seen = new Set(snapshot.periodRecords.map((record) => record.toolId));
+  const extras: PlanStatementRow[] = input.tools
+    .filter((tool) => !seen.has(tool.toolId))
+    .sort((left, right) => left.name.localeCompare(right.name, undefined, { sensitivity: 'base' }))
+    .map((tool) => {
+      const live = snapshot.current.tools.find((item) => item.toolId === tool.toolId);
+      const added = formatDisplayDate(tool.ownedAt);
+      return {
+        id: `upcoming-${tool.toolId}`,
+        kind: 'tool' as const,
+        label: tool.name,
+        detail: added ? `Added ${added}` : null,
+        amount: '$0',
+        benefitId: null,
+        note: live?.inTrial
+          ? trialStatusNote(live.daysRemaining, live.trialEndsAt)
+          : `First bill ${billingDateLabel(snapshot.schedule.nextBillingAt)}`,
+      };
+    });
+  const storageAt = statement.findIndex((row) => row.id === 'section-storage');
+  if (extras.length > 0 && storageAt >= 0) statement.splice(storageAt, 0, ...extras);
+
+  const storageCents = Math.round(Math.max(0, input.storageAddonGb) * STORAGE_ADDON_MONTHLY_CENTS);
+  return {
+    statement,
+    snapshot,
+    billingCycle: {
+      nextBillingDate: billingDateLabel(snapshot.schedule.nextBillingAt),
+      estimatedNextBill: formatCents(snapshot.next.effectiveMonthlyCents + storageCents),
+      nextBillingAt: snapshot.schedule.nextBillingAt,
+    },
+  };
+}
+
+export function buildBillingCyclePreview(
+  input: AccountPricingInput,
+  signupAt: string,
+  simulatedAt: Date,
+  actualAt: Date,
+  frozen: PeriodToolRecord[] | null,
+): BillingCyclePreview {
+  const built = buildCycleCustomerStatement(input, signupAt, simulatedAt, frozen);
+  const snapshot = built.snapshot;
+  const actualNext = billingSchedule(signupAt, actualAt).nextBillingAt;
+  const storageCents = Math.round(Math.max(0, input.storageAddonGb) * STORAGE_ADDON_MONTHLY_CENTS);
+  const scheduled = snapshot.periodRecords.filter((record) => record.scheduledRemoval);
+  const lines = snapshot.next.tools
+    .slice()
+    .sort((left, right) => left.name.localeCompare(right.name, undefined, { sensitivity: 'base' }))
+    .map((tool) => ({ name: tool.name, ...nextBillStatus(tool) }));
+  for (const record of scheduled) {
+    if (lines.some((line) => line.name === record.name)) continue;
+    lines.push({ name: record.name, status: 'Scheduled for removal before next cycle', amount: '$0' });
+  }
+  return {
+    anniversaryDay: snapshot.schedule.anchor.anniversaryDay,
+    firstBillingAt: snapshot.schedule.anchor.firstBillingAt,
+    previousBillingAt: snapshot.schedule.previousBillingAt,
+    nextBillingAt: snapshot.schedule.nextBillingAt,
+    actualNextBillingAt: actualNext,
+    periodStart: snapshot.schedule.periodStart,
+    periodEnd: snapshot.schedule.periodEnd,
+    currentExpectedMonthly: formatCents(snapshot.current.effectiveMonthlyCents),
+    currentPeriodAmount: formatCents((snapshot.period?.effectiveMonthlyCents ?? 0) + storageCents),
+    estimatedNextAmount: formatCents(snapshot.next.effectiveMonthlyCents + storageCents),
+    trialTools: snapshot.current.tools.filter((tool) => tool.inTrial).map((tool) => ({
+      name: tool.name,
+      note: trialStatusNote(tool.daysRemaining, tool.trialEndsAt),
+    })),
+    scheduledRemovals: scheduled.map((record) => ({
+      name: record.name,
+      note: scheduledRemovalNote(snapshot.schedule.nextBillingAt),
+    })),
+    nextPromotionCodes: snapshot.next.activePromotions.map((promo) => promo.publicCode || promo.displayName),
+    nextFreeSlots: snapshot.next.freeSlots,
+    nextBill: {
+      heading: billingHeading(snapshot.schedule.nextBillingAt),
+      lines,
+      regularMonthly: formatCents(snapshot.next.billableSubtotalCents),
+      promotions: formatCents(snapshot.next.discountValueCents),
+      estimated: formatCents(snapshot.next.effectiveMonthlyCents),
+    },
+  };
 }

@@ -8813,6 +8813,38 @@ export type Database = {
           },
         ]
       }
+      billing_periods: {
+        Row: {
+          created_at: string
+          id: string
+          period_start: string
+          tools: Json
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          period_start: string
+          tools?: Json
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          period_start?: string
+          tools?: Json
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "billing_periods_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "users"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       users: {
         Row: {
           account_type: string

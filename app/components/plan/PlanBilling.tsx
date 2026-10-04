@@ -29,6 +29,7 @@ type PlanPayload = {
   paymentMethod: string;
   paymentSetupWouldBeNeeded: boolean;
   notice: { title: string; body: string } | null;
+  billingCycle?: { nextBillingDate: string; estimatedNextBill: string; nextBillingAt: string } | null;
 };
 
 export function PlanBilling({
@@ -152,7 +153,7 @@ export function PlanBilling({
   const accountLabel = plan.accountType === 'business' ? 'Business' : 'Personal';
   const loadedStatement = plan.statement ?? [];
   const statement: PlanStatementRow[] = [];
-  let sawTools = loadedStatement.some((row) => row.kind === 'section' && row.label === 'Tools');
+  const sawTools = loadedStatement.some((row) => row.kind === 'section' && row.label === 'Tools');
   let sawStorage = loadedStatement.some((row) => row.kind === 'section' && row.label === 'Storage');
   if (!sawTools) statement.push({ id: 'section-tools', kind: 'section', label: 'Tools', detail: null, amount: null, benefitId: null });
   for (const row of loadedStatement) {
@@ -266,6 +267,7 @@ export function PlanBilling({
                     <tr key={row.id} className={rowClass}>
                       <td className={`py-3 pr-6 ${indented ? 'py-3 pl-12' : 'px-6'}`}>
                         <span className={labelClass}>{row.label}</span>
+                        {row.note && <div className={`mt-1 text-xs ${isLight ? 'text-slate-600' : 'text-slate-400'}`}>{row.note}</div>}
                       </td>
                       <td className={`px-6 py-3 text-center ${cellMutedClass}`}>
                         {row.detail}
@@ -286,6 +288,21 @@ export function PlanBilling({
             </table>
           </div>
         </div>
+
+        {plan.billingCycle && (
+          <div className={`mt-4 grid gap-3 sm:grid-cols-2 ${isLight ? 'text-slate-800' : 'text-slate-200'}`}>
+            <p>
+              <span className={isLight ? 'text-sm text-slate-600' : 'text-sm text-slate-400'}>Next billing date</span>
+              <br />
+              <span className="text-base font-semibold">{plan.billingCycle.nextBillingDate}</span>
+            </p>
+            <p>
+              <span className={isLight ? 'text-sm text-slate-600' : 'text-sm text-slate-400'}>Estimated next bill</span>
+              <br />
+              <span className="text-base font-semibold">{plan.billingCycle.estimatedNextBill}</span>
+            </p>
+          </div>
+        )}
 
         <p className={pageSubtitleClass}>
           {monthlyTotal === '$0/month'

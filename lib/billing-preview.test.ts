@@ -150,7 +150,7 @@ test('the customer statement lists tools alphabetically, then storage, promotion
     'Charlie',
     'Storage',
     'Paid Acct',
-    'Monthly cost before promotions',
+    'Regular monthly cost',
     'Promotions',
     'NEWUSER2',
     'Monthly cost',

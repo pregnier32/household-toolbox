@@ -17,6 +17,7 @@ type UserTool = {
     name: string;
     tool_tip: string | null;
   } | null;
+  removalNotice?: string | null;
 };
 
 export default function MyToolsPage() {
@@ -420,6 +421,9 @@ export default function MyToolsPage() {
             <p className={`${modalBodyClass} mb-4`}>
               Export this tool to PDF from the tool itself before you continue. Removing it will not create a backup.
             </p>
+            {removeTool.removalNotice && (
+              <p className={`${modalBodyClass} mb-4`}>{removeTool.removalNotice}</p>
+            )}
             <label className={checkboxLabelClass}>
               <input
                 type="checkbox"

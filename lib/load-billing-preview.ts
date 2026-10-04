@@ -1,5 +1,7 @@
 import { supabaseServer } from '@/lib/supabaseServer';
 import { loadAccountPricingInputs } from '@/lib/load-account-pricing';
+import { billingSchedule } from '@/lib/billing-cycle';
+import { loadFrozenPeriod, loadSignupAt } from '@/lib/billing-period-store';
 import { assembleBillingPreview, type BillingPreviewPayload, type PreviewNotice, type PreviewPerson } from '@/lib/billing-preview';
 
 type UserRow = {
@@ -44,6 +46,14 @@ export async function loadBillingPreview(openedUserId: string, simulatedAt: Date
   const opened = rows.find((row) => row.id === openedUserId);
   const billing = rows.find((row) => row.id === billingUserId);
   if (!opened || !billing) return null;
+  const signupAt = await loadSignupAt(billingUserId);
+  let frozen = null;
+  if (signupAt) {
+    const schedule = billingSchedule(signupAt, simulatedAt);
+    if (schedule.periodStart) {
+      frozen = (await loadFrozenPeriod(billingUserId, schedule.periodStart)).frozen;
+    }
+  }
   const toolNames = new Map((catalog.data ?? []).map((tool) => [tool.id, tool.name]));
   const actualNotices: PreviewNotice[] = (notices.data ?? []).map((notice) => ({
     id: notice.id,
@@ -61,5 +71,7 @@ export async function loadBillingPreview(openedUserId: string, simulatedAt: Date
     toolNames,
     actualAt,
     simulatedAt,
+    signupAt,
+    frozenPeriodTools: frozen,
   });
 }

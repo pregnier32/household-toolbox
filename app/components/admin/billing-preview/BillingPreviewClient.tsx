@@ -7,6 +7,7 @@ import { useTheme } from '@/app/components/AppThemeProvider';
 import { discountAdminStyles } from '@/app/components/admin/discount-codes/styles';
 import { PlanBilling } from '@/app/components/plan/PlanBilling';
 import { formatPreviewInstant, shiftPreviewDate } from '@/lib/account-pricing';
+import { billingDateLabel, dayBeforeLabel } from '@/lib/billing-cycle';
 import type { BillingPreviewPayload } from '@/lib/billing-preview';
 import { formatDisplayDate } from '@/lib/format-display-date';
 
@@ -138,6 +139,19 @@ export function BillingPreviewClient({
               {shortcut.label}
             </button>
           ))}
+          {preview?.cycle && (
+            <button
+              type="button"
+              className={styles.secondaryButton}
+              onClick={() => {
+                const next = new URLSearchParams(search.toString());
+                next.set('effectiveAt', preview.cycle!.actualNextBillingAt);
+                replaceQuery(next);
+              }}
+            >
+              Next Billing Date
+            </button>
+          )}
           <label className={`text-sm ${styles.muted}`}>
             Custom Date
             <input
@@ -185,8 +199,62 @@ export function BillingPreviewClient({
                   </div>
                 ))}
               </div>
-              <p className={`mt-3 ${styles.muted}`}>Payment setup means the account would need payment once billing exists. It does not mean a card is missing.</p>
+              <p className={`mt-3 ${styles.muted}`}>Payment setup means the account would need payment once billing exists. It does not mean a card is missing. Current expected monthly cost is the live configuration. The current billing-period amount was set at the last anniversary and does not change mid-cycle.</p>
             </section>
+
+            {preview.cycle && (
+              <section>
+                <h2 className={styles.sectionTitle}>Billing cycle</h2>
+                <div className="mt-4 grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+                  {[
+                    ['Billing anniversary', `Day ${preview.cycle.anniversaryDay}`],
+                    ['First billing date', billingDateLabel(preview.cycle.firstBillingAt)],
+                    ['Previous billing date', preview.cycle.previousBillingAt ? billingDateLabel(preview.cycle.previousBillingAt) : 'Not yet'],
+                    ['Next billing date', billingDateLabel(preview.cycle.nextBillingAt)],
+                    ['Current billing period', preview.cycle.periodStart && preview.cycle.periodEnd ? `${billingDateLabel(preview.cycle.periodStart)} – ${dayBeforeLabel(preview.cycle.periodEnd)}` : 'Not yet'],
+                    ['Current expected monthly cost', preview.cycle.currentExpectedMonthly],
+                    ['Current billing-period amount', preview.cycle.currentPeriodAmount],
+                    ['Estimated next billing amount', preview.cycle.estimatedNextAmount],
+                    ['Free slots at next billing', String(preview.cycle.nextFreeSlots)],
+                    ['Promotions at next billing', preview.cycle.nextPromotionCodes.join(', ') || 'None'],
+                  ].map(([label, value]) => (
+                    <div key={label} className={card}>
+                      <p className={`text-xs font-medium uppercase tracking-wide ${isLight ? 'text-slate-500' : 'text-slate-400'}`}>{label}</p>
+                      <p className={`mt-2 text-lg font-semibold ${isLight ? 'text-slate-900' : 'text-slate-50'}`}>{value}</p>
+                    </div>
+                  ))}
+                </div>
+                <p className={`mt-3 ${styles.muted}`}>Trials: {preview.cycle.trialTools.map((tool) => `${tool.name} (${tool.note})`).join('; ') || 'None'}</p>
+                <p className={`mt-1 ${styles.muted}`}>Scheduled for removal: {preview.cycle.scheduledRemovals.map((tool) => `${tool.name} (${tool.note})`).join('; ') || 'None'}</p>
+                <h3 className={`mt-6 ${styles.sectionTitle}`}>{preview.cycle.nextBill.heading}</h3>
+                <div className={`mt-4 ${styles.tableWrap}`}>
+                  <table className="w-full">
+                    <thead className={styles.tableHead}>
+                      <tr>
+                        {['Tool', 'Status', 'Amount'].map((heading) => (
+                          <th key={heading} className={styles.tableHeadCell}>{heading}</th>
+                        ))}
+                      </tr>
+                    </thead>
+                    <tbody className={styles.tableBody}>
+                      {preview.cycle.nextBill.lines.map((line) => (
+                        <tr key={line.name} className={styles.row}>
+                          <td className={`px-4 py-3 ${styles.primaryText}`}>{line.name}</td>
+                          <td className={`px-4 py-3 ${styles.bodyText}`}>{line.status}</td>
+                          <td className={`px-4 py-3 ${styles.bodyText}`}>{line.amount}</td>
+                        </tr>
+                      ))}
+                      {preview.cycle.nextBill.lines.length === 0 && (
+                        <tr><td className={`px-4 py-3 ${styles.muted}`} colSpan={3}>No tools on the next bill.</td></tr>
+                      )}
+                    </tbody>
+                  </table>
+                </div>
+                <p className={`mt-3 ${styles.bodyText}`}>Regular monthly cost: {preview.cycle.nextBill.regularMonthly}</p>
+                <p className={styles.bodyText}>Promotions: {preview.cycle.nextBill.promotions}</p>
+                <p className={styles.bodyText}>Estimated billing amount: {preview.cycle.nextBill.estimated}</p>
+              </section>
+            )}
 
             <section>
               <h2 className={styles.sectionTitle}>Tools</h2>

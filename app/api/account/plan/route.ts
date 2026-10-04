@@ -2,7 +2,9 @@ import { NextResponse } from 'next/server';
 import { getHouseholdDataSession } from '@/lib/session';
 import { supabaseServer } from '@/lib/supabaseServer';
 import { formatCents } from '@/lib/account-pricing';
-import { buildCustomerStatement, toolListCents } from '@/lib/billing-preview';
+import { buildCycleCustomerStatement, buildCustomerStatement, toolListCents } from '@/lib/billing-preview';
+import { billingSchedule } from '@/lib/billing-cycle';
+import { loadFrozenPeriod, loadSignupAt, materializeBillingPeriod } from '@/lib/billing-period-store';
 import { formatStorageBytes } from '@/lib/user-storage';
 import { getAccountPricingProjection } from '@/lib/load-account-pricing';
 import { persistAccountNotices } from '@/lib/promotion-service';
@@ -72,6 +74,22 @@ export async function GET() {
       };
     });
     const state = projection.current;
+    const signupAt = await loadSignupAt(user.id);
+    let statement = buildCustomerStatement(projection.input, state);
+    let billingCycle = null;
+    if (signupAt) {
+      const schedule = billingSchedule(signupAt, now);
+      let frozen = null;
+      if (schedule.periodStart) {
+        const loaded = await loadFrozenPeriod(user.id, schedule.periodStart);
+        frozen = loaded.available && !loaded.frozen
+          ? await materializeBillingPeriod(projection.input, signupAt, now)
+          : loaded.frozen;
+      }
+      const cycle = buildCycleCustomerStatement(projection.input, signupAt, now, frozen);
+      statement = cycle.statement;
+      billingCycle = cycle.billingCycle;
+    }
     return NextResponse.json({
       accountType: state.accountType,
       freeSlots: state.freeSlots,
@@ -85,7 +103,8 @@ export async function GET() {
         addedAt: tool.ownedAt,
         price: formatCents(toolListCents(tool)),
       })),
-      statement: buildCustomerStatement(projection.input, state),
+      statement,
+      billingCycle,
       benefits,
       currentMonthly: formatCents(state.effectiveMonthlyCents),
       upcoming: projection.upcoming ? {

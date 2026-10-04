@@ -9,7 +9,7 @@
     "lint": "eslint",
     "supabase:types": "npx supabase gen types typescript --linked > src/types/supabase.ts",
     "auth:test-import": "node --experimental-strip-types scripts/test-supabase-auth-import.ts",
-    "test:pricing": "npx --yes tsx --test lib/account-pricing.test.ts lib/account-notice-drafts.test.ts lib/default-account-entitlements.test.ts lib/billing-preview.test.ts"
+    "test:pricing": "npx --yes tsx --test lib/account-pricing.test.ts lib/account-notice-drafts.test.ts lib/default-account-entitlements.test.ts lib/billing-preview.test.ts lib/billing-cycle.test.ts"
   },
   "dependencies": {
     "@supabase/ssr": "^0.12.7",

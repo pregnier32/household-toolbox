@@ -2,6 +2,9 @@ import { NextRequest, NextResponse } from 'next/server';
 import { getHouseholdDataSession } from '@/lib/session';
 import { supabaseServer } from '@/lib/supabaseServer';
 import { deleteUserTool } from '@/lib/user-data-deletion';
+import { loadAccountPricingInputs } from '@/lib/load-account-pricing';
+import { billingSchedule, removalNoticeForTool } from '@/lib/billing-cycle';
+import { commitToolRemoval, loadFrozenPeriod, loadSignupAt } from '@/lib/billing-period-store';
 
 type EmbeddedTool = {
   id: string;
@@ -58,11 +61,25 @@ export async function GET() {
       }, { status: 500 });
     }
 
+    const signupAt = await loadSignupAt(user.id);
+    const pricing = signupAt ? (await loadAccountPricingInputs([user.id])).get(user.id) : undefined;
+    const now = new Date();
+    const schedule = signupAt ? billingSchedule(signupAt, now) : null;
+    const frozen = signupAt && pricing && schedule?.periodStart
+      ? (await loadFrozenPeriod(user.id, schedule.periodStart)).frozen
+      : null;
     return NextResponse.json({
-      tools: sortOwnedTools(userTools || []).map((row) => ({
-        ...row,
-        tools: asOwnedTool(row.tools),
-      })),
+      tools: sortOwnedTools(userTools || []).map((row) => {
+        const owned = asOwnedTool(row.tools);
+        const removalNotice = signupAt && pricing && owned
+          ? removalNoticeForTool(pricing, signupAt, now, owned.id, frozen)
+          : null;
+        return {
+          ...row,
+          tools: owned,
+          removalNotice,
+        };
+      }),
     });
   } catch (error) {
     console.error('Error in my-tools API:', error);
@@ -100,6 +117,10 @@ export async function DELETE(request: NextRequest) {
     if (fetchError || !userTool) {
       return NextResponse.json({ error: 'Tool not found or access denied' }, { status: 404 });
     }
+
+    const signupAt = await loadSignupAt(user.id);
+    const pricing = signupAt ? (await loadAccountPricingInputs([user.id])).get(user.id) : undefined;
+    if (signupAt && pricing) await commitToolRemoval(pricing, signupAt, new Date(), userTool.tool_id);
 
     const deleted = await deleteUserTool(user.id, userTool.tool_id);
 
