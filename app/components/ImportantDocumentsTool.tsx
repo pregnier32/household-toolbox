@@ -1953,7 +1953,7 @@ export function ImportantDocumentsTool({ toolId }: ImportantDocumentsToolProps) 
       {/* Header */}
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div className="min-w-0">
-          <h2 className={titleClass}>Important Documents</h2>
+          <h2 className={`${titleClass} break-words`}>Important Documents</h2>
           <p className={descClass}>
             Upload, tag, and manage your important documents
           </p>
@@ -1973,7 +1973,7 @@ export function ImportantDocumentsTool({ toolId }: ImportantDocumentsToolProps) 
 
       {/* Tabs */}
       <div className={tabStripClass}>
-        <div className="flex gap-2">
+        <div className="flex min-w-0 flex-wrap gap-2">
           {[
             { id: 'documents', label: 'Documents' },
             { id: 'tags', label: 'Tags' }
@@ -1981,7 +1981,7 @@ export function ImportantDocumentsTool({ toolId }: ImportantDocumentsToolProps) 
             <button
               key={tab.id}
               onClick={() => setActiveTab(tab.id as 'documents' | 'tags')}
-              className={`px-4 py-2 text-sm font-medium transition-colors ${
+              className={`max-w-full break-words px-4 py-2 text-sm font-medium transition-colors ${
                 activeTab === tab.id ? tabActiveClass : tabInactiveClass
               }`}
             >

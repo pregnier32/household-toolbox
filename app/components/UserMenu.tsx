@@ -122,7 +122,7 @@ export function UserMenu({ userName, onSignOut }: UserMenuProps) {
   return (
     <div className="relative" ref={menuRef}>
       <button type="button" onClick={() => setIsOpen(!isOpen)} className={triggerClass}>
-        <span>{userName}</span>
+        <span className="max-w-[7.5rem] truncate sm:max-w-[12rem]">{userName}</span>
         <WhatsNewDot visible={hasUnreadReleaseNotes} />
         <svg
           className={`h-4 w-4 transition-transform ${isOpen ? 'rotate-180' : ''}`}

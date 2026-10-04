@@ -1137,8 +1137,8 @@ export function ToDoListTool({ toolId }: ToDoListToolProps) {
   };
 
   return (
-    <div className="space-y-6">
-      <div className="flex items-start justify-between gap-3">
+    <div className="min-w-0 space-y-6">
+      <div className="flex min-w-0 flex-wrap items-start justify-between gap-3">
         <div>
           <h1 className={titleClass}>To Do List</h1>
           <p className={descClass}>
@@ -1783,7 +1783,7 @@ export function ToDoListTool({ toolId }: ToDoListToolProps) {
 
             {/* Task list: grid with headers */}
             {!isAddingTask && (
-              <div className="min-w-0 md:overflow-x-auto">
+              <div className="min-w-0 max-w-full md:overflow-x-auto">
                 {filteredAndSortedTasks.length === 0 ? (
                   tasksForCategory.length > 0 ? (
                     <p className="text-slate-400 text-center py-8 text-sm">
@@ -1791,8 +1791,8 @@ export function ToDoListTool({ toolId }: ToDoListToolProps) {
                     </p>
                   ) : null
                 ) : (
-                  <table className="w-full border-collapse max-md:block md:min-w-[500px]">
-                    <thead className="max-md:hidden">
+                  <table className="block w-full max-w-full border-collapse md:table md:min-w-[500px]">
+                    <thead className="hidden md:table-header-group">
                       <tr className={isLight ? 'border-b border-slate-300' : 'border-b border-slate-700'}>
                         <th className={isLight ? 'text-left text-xs font-semibold uppercase tracking-wider text-slate-600 py-3 px-2' : 'text-left text-xs font-semibold uppercase tracking-wider text-slate-400 py-3 px-2'}>Name</th>
                         <th className={isLight ? 'text-left text-xs font-semibold uppercase tracking-wider text-slate-600 py-3 px-2' : 'text-left text-xs font-semibold uppercase tracking-wider text-slate-400 py-3 px-2'}>Due Date</th>
@@ -1801,11 +1801,11 @@ export function ToDoListTool({ toolId }: ToDoListToolProps) {
                         <th className={`${isLight ? 'w-36 text-right text-xs font-semibold uppercase tracking-wider text-slate-600 py-3 px-2' : 'w-36 text-right text-xs font-semibold uppercase tracking-wider text-slate-400 py-3 px-2'} print-only-hidden`}>Actions</th>
                       </tr>
                     </thead>
-                    <tbody className="max-md:block">
+                    <tbody className="block md:table-row-group">
                       {filteredAndSortedTasks.map((task) => (
                         <tr
                           key={task.id}
-                          className={isLight ? 'border-b border-slate-200 transition-colors hover:bg-slate-50 max-md:mb-3 max-md:block max-md:rounded-lg max-md:border max-md:border-slate-200 max-md:p-3 md:table-row' : 'border-b border-slate-800 transition-colors hover:bg-slate-800/30 max-md:mb-3 max-md:block max-md:rounded-lg max-md:border max-md:border-slate-700 max-md:p-3 md:table-row'}
+                          className={isLight ? 'mb-3 block rounded-lg border border-slate-200 p-3 transition-colors hover:bg-slate-50 md:mb-0 md:table-row md:rounded-none md:border-0 md:border-b md:p-0' : 'mb-3 block rounded-lg border border-slate-700 p-3 transition-colors hover:bg-slate-800/30 md:mb-0 md:table-row md:rounded-none md:border-0 md:border-b md:border-slate-800 md:p-0'}
                         >
                           <td className="block px-2 py-3 md:table-cell">
                             <div className={`mb-1 text-xs font-semibold uppercase tracking-wider md:hidden ${isLight ? 'text-slate-500' : 'text-slate-400'}`}>Name</div>
@@ -1826,7 +1826,7 @@ export function ToDoListTool({ toolId }: ToDoListToolProps) {
                             <select
                               value={task.priority}
                               onChange={(e) => updateTaskPriority(task.id, e.target.value as Priority)}
-                              className={`${isLight ? 'rounded-md border border-slate-300 bg-white px-2 py-1 text-sm text-slate-800 focus:border-emerald-500/50 focus:outline-none focus:ring-1 focus:ring-emerald-500/50' : 'rounded-md border border-slate-600 bg-slate-800 px-2 py-1 text-sm text-slate-200 focus:border-emerald-500/50 focus:outline-none focus:ring-1 focus:ring-emerald-500/50'} print-only-hidden`}
+                              className={`${isLight ? 'max-w-full rounded-md border border-slate-300 bg-white px-2 py-1 text-sm text-slate-800 focus:border-emerald-500/50 focus:outline-none focus:ring-1 focus:ring-emerald-500/50' : 'max-w-full rounded-md border border-slate-600 bg-slate-800 px-2 py-1 text-sm text-slate-200 focus:border-emerald-500/50 focus:outline-none focus:ring-1 focus:ring-emerald-500/50'} print-only-hidden`}
                               aria-label={`Update priority for ${task.taskName}`}
                             >
                               {PRIORITIES.map((p) => (
@@ -1840,7 +1840,7 @@ export function ToDoListTool({ toolId }: ToDoListToolProps) {
                             <select
                               value={task.status}
                               onChange={(e) => updateTaskStatus(task.id, e.target.value as TaskStatus)}
-                              className={`${isLight ? 'rounded-md border border-slate-300 bg-white px-2 py-1 text-sm text-slate-800 focus:border-emerald-500/50 focus:outline-none focus:ring-1 focus:ring-emerald-500/50' : 'rounded-md border border-slate-600 bg-slate-800 px-2 py-1 text-sm text-slate-200 focus:border-emerald-500/50 focus:outline-none focus:ring-1 focus:ring-emerald-500/50'} print-only-hidden`}
+                              className={`${isLight ? 'max-w-full rounded-md border border-slate-300 bg-white px-2 py-1 text-sm text-slate-800 focus:border-emerald-500/50 focus:outline-none focus:ring-1 focus:ring-emerald-500/50' : 'max-w-full rounded-md border border-slate-600 bg-slate-800 px-2 py-1 text-sm text-slate-200 focus:border-emerald-500/50 focus:outline-none focus:ring-1 focus:ring-emerald-500/50'} print-only-hidden`}
                               aria-label={`Update status for ${task.taskName}`}
                             >
                               {STATUSES.map((s) => (

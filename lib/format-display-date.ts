@@ -11,7 +11,10 @@ export function formatDisplayDate(value: string | Date | null | undefined): stri
     const day = String(value.getDate()).padStart(2, '0');
     return `${month}/${day}/${value.getFullYear()}`;
   }
-  const match = /^(\d{4})-(\d{2})-(\d{2})/.exec(value.trim());
-  if (!match) return value;
-  return `${match[2]}/${match[3]}/${match[1]}`;
+  const trimmed = value.trim();
+  const match = /^(\d{4})-(\d{2})-(\d{2})/.exec(trimmed);
+  if (match) return `${match[2]}/${match[3]}/${match[1]}`;
+  const slash = /^(\d{1,2})\/(\d{1,2})\/(\d{4})$/.exec(trimmed);
+  if (!slash) return value;
+  return `${slash[1].padStart(2, '0')}/${slash[2].padStart(2, '0')}/${slash[3]}`;
 }

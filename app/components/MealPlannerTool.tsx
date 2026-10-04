@@ -959,7 +959,7 @@ export function MealPlannerTool({ toolId }: MealPlannerToolProps) {
     return (
       <tr
         key={meal.id}
-        className={`text-sm transition-colors max-md:mb-3 max-md:block max-md:rounded-lg max-md:border max-md:p-3 md:table-row ${
+        className={`block text-sm transition-colors max-md:mb-3 max-md:rounded-lg max-md:border max-md:p-3 md:table-row ${
           isLight
             ? 'border-b border-slate-200 bg-white hover:bg-slate-50 max-md:border-slate-200'
             : 'border-b border-slate-700/50 bg-slate-800/50 hover:bg-slate-800 max-md:border-slate-700'
@@ -1943,9 +1943,8 @@ export function MealPlannerTool({ toolId }: MealPlannerToolProps) {
               }}
             />
             <div
-              className="meal-plan-full-print"
+              className="meal-plan-full-print hidden"
               aria-hidden
-              style={{ position: 'absolute', left: '-9999px', width: '1px', height: '1px', overflow: 'hidden' }}
             >
               <div className="print-meal-plan">
                 <h2 className="print-title" style={{ margin: 0, fontSize: '18px', fontWeight: 700 }}>
@@ -1977,8 +1976,8 @@ export function MealPlannerTool({ toolId }: MealPlannerToolProps) {
         return typeof document !== 'undefined' ? createPortal(fullPrintContent, document.body) : null;
       })()}
 
-      <div className="space-y-6">
-      <div className="flex items-start justify-between gap-3">
+      <div className="min-w-0 space-y-6">
+      <div className="flex flex-wrap items-start justify-between gap-3">
         <div>
           <h2 className={titleClass}>Meal Planner</h2>
           <p className={descClass}>
@@ -2001,7 +2000,7 @@ export function MealPlannerTool({ toolId }: MealPlannerToolProps) {
 
       {/* Tabs */}
       <div className={tabStripClass}>
-        <div className="flex gap-2">
+        <div className="flex min-w-0 flex-wrap gap-2">
           {[
             { id: 'meal-plan', label: 'Meal Plan' },
             { id: 'meals', label: 'Meals' },
@@ -2011,7 +2010,7 @@ export function MealPlannerTool({ toolId }: MealPlannerToolProps) {
             <button
               key={tab.id}
               onClick={() => setActiveTab(tab.id as typeof activeTab)}
-              className={`px-4 py-2 text-sm font-medium transition-colors ${
+              className={`max-w-full break-words px-4 py-2 text-sm font-medium transition-colors ${
                 activeTab === tab.id ? tabActiveClass : tabInactiveClass
               }`}
             >
@@ -2719,8 +2718,8 @@ export function MealPlannerTool({ toolId }: MealPlannerToolProps) {
             <div className="space-y-6">
               <div className="rounded-2xl border border-slate-800 bg-slate-900/70 p-6">
                 <h3 className="text-lg font-semibold text-slate-50 mb-4">Active Meals</h3>
-                <div className="flex flex-wrap gap-3 mb-4">
-                  <div className="flex items-center gap-2">
+                <div className="mb-4 flex min-w-0 max-w-full flex-wrap gap-3">
+                  <div className="flex min-w-0 max-w-full items-center gap-2">
                     <span className={`text-xs font-medium ${isLight ? 'text-slate-600' : 'text-slate-400'}`}>Type</span>
                     <select
                       value={mealFilterType}
@@ -2764,9 +2763,9 @@ export function MealPlannerTool({ toolId }: MealPlannerToolProps) {
                     </select>
                   </div>
                 </div>
-                <div className={`rounded-lg overflow-hidden ${isLight ? 'border border-slate-200' : 'border border-slate-700'}`}>
-                  <table className="w-full border-collapse max-md:block md:table-fixed">
-                    <thead className="max-md:hidden">
+                <div className={`min-w-0 max-w-full overflow-hidden rounded-lg ${isLight ? 'border border-slate-200' : 'border border-slate-700'}`}>
+                  <table className="block w-full max-w-full border-collapse md:table md:table-fixed">
+                    <thead className="hidden md:table-header-group">
                       <tr
                         className={`text-xs font-semibold uppercase tracking-wider ${
                           isLight
@@ -2782,7 +2781,7 @@ export function MealPlannerTool({ toolId }: MealPlannerToolProps) {
                         <th className="px-3 py-2 text-right w-[10%]">Actions</th>
                       </tr>
                     </thead>
-                    <tbody className="max-md:block">
+                    <tbody className="block md:table-row-group">
                       {filteredActiveMeals.length === 0 ? (
                         <tr>
                           <td colSpan={6} className="px-3 py-6 text-slate-500 text-sm text-center">
@@ -2819,12 +2818,12 @@ export function MealPlannerTool({ toolId }: MealPlannerToolProps) {
                   </svg>
                 </button>
                 {inactiveMealsExpanded && (
-                  <div className="mt-4 rounded-lg border border-slate-700 overflow-hidden">
+                  <div className="mt-4 min-w-0 max-w-full overflow-hidden rounded-lg border border-slate-700">
                     {inactiveMealsList.length === 0 ? (
                       <p className="text-slate-500 text-sm py-4 px-3">No inactive meals.</p>
                     ) : (
-                      <table className="w-full border-collapse max-md:block md:table-fixed">
-                        <thead className="max-md:hidden">
+                      <table className="block w-full max-w-full border-collapse md:table md:table-fixed">
+                        <thead className="hidden md:table-header-group">
                           <tr
                             className={`text-xs font-semibold uppercase tracking-wider ${
                               isLight
@@ -2840,7 +2839,7 @@ export function MealPlannerTool({ toolId }: MealPlannerToolProps) {
                             <th className="px-3 py-2 text-right w-[10%]">Actions</th>
                           </tr>
                         </thead>
-                        <tbody className="max-md:block">
+                        <tbody className="block md:table-row-group">
                           {filteredInactiveMeals.map((meal) => renderMealRow(meal, false))}
                         </tbody>
                       </table>
@@ -3462,9 +3461,8 @@ export function MealPlannerTool({ toolId }: MealPlannerToolProps) {
               }}
             />
             <div
-              className="meal-plan-cart-print"
+              className="meal-plan-cart-print hidden"
               aria-hidden
-              style={{ position: 'absolute', left: '-9999px', width: '1px', height: '1px', overflow: 'hidden' }}
             >
               <div className="print-title mb-2 text-lg font-semibold">
                 {plan.name} — {formatPdfDate(plan.startDate)}

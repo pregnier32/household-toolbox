@@ -184,15 +184,15 @@ export default function Dashboard() {
   const goalsToolId = tools.find((t) => t.name === 'Goals Tracking')?.id ?? null;
 
   return (
-    <main className="min-h-screen bg-slate-950 text-slate-100">
+    <main className="min-h-screen min-w-0 bg-slate-950 text-slate-100">
       <GoalsProvider goalsToolId={goalsToolId}>
         <header className={`${navChromeBorderClass} bg-slate-900/50`}>
-          <div className="mx-auto flex max-w-7xl items-center justify-between px-4 py-4 sm:px-6 lg:px-8">
-            <div className="relative flex items-center">
-              <SideLogo priority />
+          <div className="mx-auto flex max-w-7xl min-w-0 flex-wrap items-center justify-between gap-3 px-4 py-4 sm:px-6 lg:px-8">
+            <div className="relative flex min-w-0 items-center">
+              <SideLogo priority className="h-auto w-auto max-w-[9.5rem] sm:max-w-[12.5rem]" />
             </div>
 
-            <div className="flex items-center gap-3">
+            <div className="flex min-w-0 items-center gap-3">
               {isSuperAdmin && (
                 <AdminMenu
                   onOverviewClick={() => {
@@ -210,7 +210,7 @@ export default function Dashboard() {
         </header>
 
         <div className={`${navChromeBorderClass} bg-slate-950`}>
-          <div className="mx-auto flex max-w-7xl px-4 sm:px-6 lg:px-8">
+          <div className="mx-auto flex min-w-0 max-w-7xl flex-wrap px-4 sm:px-6 lg:px-8">
             <button
               onClick={() => {
                 setActiveTab('tools');
@@ -250,7 +250,7 @@ export default function Dashboard() {
 
         {activeTab === 'tools' && openedToolIds.size > 0 && (
           <div className={`${navChromeBorderClass} bg-slate-950`}>
-            <div className="mx-auto flex max-w-7xl px-4 sm:px-6 lg:px-8">
+            <div className="mx-auto flex min-w-0 max-w-7xl flex-wrap px-4 sm:px-6 lg:px-8">
               <button
                 onClick={() => setActiveToolId(null)}
                 className={`px-4 py-2 text-sm font-medium transition-colors ${
@@ -262,10 +262,10 @@ export default function Dashboard() {
               {tools
                 .filter((t) => t.isOwned === true && openedToolIds.has(t.id))
                 .map((tool) => (
-                  <div key={tool.id} className="group relative">
+                  <div key={tool.id} className="group relative min-w-0 max-w-full">
                     <button
                       onClick={() => setActiveToolId(tool.id)}
-                      className={`px-4 py-2 text-sm font-medium transition-colors ${
+                      className={`max-w-full px-4 py-2 text-left text-sm font-medium break-words transition-colors ${
                         activeToolId === tool.id ? tabActiveClass : tabInactiveClass
                       }`}
                     >
@@ -297,7 +297,7 @@ export default function Dashboard() {
           </div>
         )}
 
-        <div className="mx-auto max-w-7xl px-4 py-8 sm:px-6 lg:px-8">
+        <div className="mx-auto min-w-0 max-w-7xl px-4 py-8 sm:px-6 lg:px-8">
           {activeTab === 'tools' && (
             <ToolboxPanel
               tools={tools}

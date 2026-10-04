@@ -1277,41 +1277,47 @@ export function GoalsTrackingTool({ toolId }: GoalsTrackingToolProps) {
     if (editingGoal) promptMarkCompletedIfReached100(prevPercent, nextPercent, editingGoal.status);
   };
 
-  // Escape to close modals
+  // Close the topmost Goals dialog. A stacked child (attachments, export,
+  // complete prompt, delete confirm) must win over Edit Goal.
+  const dismissTopGoalLayer = () => {
+    if (attachmentModal) return;
+    if (showExportPopup) {
+      if (!isExportingPdf) setShowExportPopup(false);
+      return;
+    }
+    if (completePrompt) {
+      cancelMarkGoalCompleted();
+      return;
+    }
+    if (deleteConfirmGoalId) {
+      setDeleteConfirmGoalId(null);
+      setDeleteGoalConfirmText('');
+      return;
+    }
+    if (deleteConfirmCategoryId) {
+      setDeleteConfirmCategoryId(null);
+      setDeleteConfirmText('');
+      return;
+    }
+    if (editingGoalId) {
+      cancelEditingGoal();
+      return;
+    }
+    setMenuOpenCategoryId(null);
+    if (showAllUpdatesGoalId) setShowAllUpdatesGoalId(null);
+    if (editingCategoryId) cancelEditingCategory();
+  };
+  const dismissTopGoalLayerRef = useRef(dismissTopGoalLayer);
+  dismissTopGoalLayerRef.current = dismissTopGoalLayer;
+
   useEffect(() => {
     const onKeyDown = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') {
-        if (attachmentModal) return;
-        if (showExportPopup) {
-          if (!isExportingPdf) setShowExportPopup(false);
-          return;
-        }
-        if (editingGoalId) {
-          cancelEditingGoal();
-          return;
-        }
-        setMenuOpenCategoryId(null);
-        if (showAllUpdatesGoalId) setShowAllUpdatesGoalId(null);
-        if (deleteConfirmCategoryId) {
-          setDeleteConfirmCategoryId(null);
-          setDeleteConfirmText('');
-        }
-        if (completePrompt) {
-          cancelMarkGoalCompleted();
-          return;
-        }
-        if (deleteConfirmGoalId) {
-          setDeleteConfirmGoalId(null);
-          setDeleteGoalConfirmText('');
-        }
-        if (editingCategoryId) {
-          cancelEditingCategory();
-        }
-      }
+      if (e.key !== 'Escape') return;
+      dismissTopGoalLayerRef.current();
     };
     window.addEventListener('keydown', onKeyDown);
     return () => window.removeEventListener('keydown', onKeyDown);
-  }, [attachmentModal, showExportPopup, isExportingPdf, deleteConfirmCategoryId, deleteConfirmGoalId, showAllUpdatesGoalId, editingCategoryId, editingGoalId, completePrompt]);
+  }, []);
 
   const savedGoalForAttachments =
     attachmentModal?.kind === 'goal' && attachmentModal.id !== 'add'
@@ -2342,8 +2348,17 @@ export function GoalsTrackingTool({ toolId }: GoalsTrackingToolProps) {
 
           {/* Edit goal modal */}
           {editingGoalId && editingGoal && (
-            <div className={modalBackdropClass}>
-              <div className={modalCardClass}>
+            <div
+              className={modalBackdropClass}
+              onKeyDown={(e) => {
+                if (e.key !== 'Escape') return;
+                if (attachmentModal || showExportPopup || completePrompt || deleteConfirmGoalId) return;
+                e.preventDefault();
+                e.stopPropagation();
+                cancelEditingGoal();
+              }}
+            >
+              <div className={modalCardClass} role="dialog" aria-modal="true" aria-label="Edit Goal">
                 <div className="flex items-center justify-between mb-4">
                   <h3 className={modalTitleClass}>Edit Goal</h3>
                   <div className="flex items-center gap-2">

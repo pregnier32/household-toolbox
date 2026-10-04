@@ -2618,8 +2618,8 @@ export function PetCareScheduleTool({ toolId }: PetCareScheduleToolProps) {
   );
 
   return (
-    <div className="space-y-6">
-      <div className="flex items-start justify-between gap-3">
+    <div className="min-w-0 space-y-6">
+      <div className="flex min-w-0 flex-wrap items-start justify-between gap-3">
         <div>
           <h2 className={titleClass}>Pet Care Schedule</h2>
           <p className={descClass}>
@@ -2759,7 +2759,7 @@ export function PetCareScheduleTool({ toolId }: PetCareScheduleToolProps) {
                 >
                   <button
                     onClick={() => selectPet(pet.id)}
-                    className={`px-4 py-3 rounded-lg border transition-all duration-200 min-w-[120px] relative ${
+                    className={`relative max-w-full min-w-[120px] rounded-lg border px-4 py-3 transition-all duration-200 ${
                       selectedPetId === pet.id
                         ? 'shadow-lg'
                         : 'hover:border-slate-600'
@@ -2772,7 +2772,7 @@ export function PetCareScheduleTool({ toolId }: PetCareScheduleToolProps) {
                       color: pet.card_color || '#10b981',
                     }}
                   >
-                    <div className="font-medium text-center">{pet.name}</div>
+                    <div className="break-words px-8 text-center font-medium">{pet.name}</div>
                     <div className={isLight ? 'text-xs text-center text-slate-600 mt-0.5' : 'text-xs text-center text-slate-300 mt-0.5 opacity-80'}>
                       {pet.custom_pet_type || pet.pet_type || '—'}
                     </div>
@@ -3026,13 +3026,13 @@ export function PetCareScheduleTool({ toolId }: PetCareScheduleToolProps) {
         <>
 
           {selectedPet && (
-            <h3 className={isLight ? 'break-words text-lg font-semibold text-slate-900' : 'break-words text-lg font-semibold text-slate-100'}>
+            <h3 className={isLight ? 'w-full min-w-0 break-words text-lg font-semibold text-slate-900' : 'w-full min-w-0 break-words text-lg font-semibold text-slate-100'}>
               {selectedPet.name}
             </h3>
           )}
           {/* Navigation Tabs */}
-          <div className={tabStripClass}>
-            <div className="flex flex-wrap gap-2">
+          <div className={`${tabStripClass} min-w-0`}>
+            <div className="flex min-w-0 flex-wrap gap-2">
               {/* Regular Tabs */}
               {[
                 { id: 'info', label: 'Pet Info' },
@@ -3047,7 +3047,7 @@ export function PetCareScheduleTool({ toolId }: PetCareScheduleToolProps) {
                 <button
                   key={tab.id}
                   onClick={() => setActiveSection(tab.id)}
-                  className={`px-4 py-2 text-sm font-medium transition-colors whitespace-nowrap ${
+                  className={`max-w-full px-4 py-2 text-sm font-medium transition-colors ${
                     activeSection === tab.id ? tabActiveClass : tabInactiveClass
                   }`}
                 >
@@ -3061,9 +3061,9 @@ export function PetCareScheduleTool({ toolId }: PetCareScheduleToolProps) {
       {activeSection === 'info' && (
         <div className="space-y-6">
           <div className={cardClass}>
-            <div className="flex items-center justify-between mb-4">
+            <div className="mb-4 flex min-w-0 flex-wrap items-center justify-between gap-3">
               <h3 className={isLight ? 'text-lg font-semibold text-slate-900' : 'text-lg font-semibold text-slate-50'}>Basic Information</h3>
-              <div className="flex items-center gap-3">
+              <div className="flex min-w-0 flex-wrap items-center gap-3">
                 {selectedPet && (
                   <span className="text-sm text-slate-400">
                     Editing: <span className="text-emerald-400 font-medium">{selectedPet.name}</span>
