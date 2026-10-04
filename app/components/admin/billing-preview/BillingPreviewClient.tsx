@@ -126,7 +126,7 @@ export function BillingPreviewClient({
               <p className="text-sm">Account: {preview ? (preview.accountType === 'business' ? 'Business' : 'Personal') : '—'}</p>
               <p className="text-sm">Test Account: {preview ? (preview.isTestAccount ? 'Yes' : 'No') : '—'}</p>
             </div>
-            <button type="button" className={styles.secondaryButton} onClick={() => router.push(`/dashboard/admin/users/${userId}`)}>
+            <button type="button" className={styles.secondaryButton} onClick={() => router.push('/dashboard/admin/users')}>
               Exit Preview
             </button>
           </div>

@@ -8,6 +8,8 @@
  * the database is still empty.
  */
 
+import { formatDisplayDate } from '@/lib/format-display-date';
+
 export const EOL_UI_DRAFT_STORAGE_KEY = 'ht-eol-planner-ui-draft';
 
 export const EOL_TOOL_TITLE = 'End of Life Planner';
@@ -895,7 +897,7 @@ export function todayIso(): string {
   return `${year}-${month}-${day}`;
 }
 
-/** Display dates as M/D/YYYY. Inputs stay type="date" / ISO internally. */
+/** Unpadded M/D/YYYY for PDF and print only. On-screen dates use formatDisplayDate. */
 export function formatDateDisplay(isoDate: string | null | undefined): string {
   if (!isoDate) return '—';
   const [year, month, day] = isoDate.split('T')[0].split('-');
@@ -906,9 +908,12 @@ export function formatDateDisplay(isoDate: string | null | undefined): string {
 export function formatDateTimeDisplay(iso: string | null | undefined): string {
   if (!iso) return '—';
   const date = new Date(iso);
-  if (Number.isNaN(date.getTime())) return formatDateDisplay(iso);
-  const month = date.getMonth() + 1;
-  const day = date.getDate();
+  if (Number.isNaN(date.getTime())) {
+    const padded = formatDisplayDate(iso);
+    return padded || iso;
+  }
+  const month = String(date.getMonth() + 1).padStart(2, '0');
+  const day = String(date.getDate()).padStart(2, '0');
   const year = date.getFullYear();
   let hours = date.getHours();
   const minutes = String(date.getMinutes()).padStart(2, '0');

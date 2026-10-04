@@ -91,16 +91,23 @@ export function AttachmentModal({
     };
     window.addEventListener('keydown', handleEscape);
 
+    const applyStorage = (data: { storage?: StorageSummary } | null) => {
+      if (!data?.storage?.usedLabel || !data.storage.limitLabel) return false;
+      setStorage({
+        usedBytes: data.storage.usedBytes,
+        limitBytes: data.storage.limitBytes,
+        usedLabel: data.storage.usedLabel,
+        limitLabel: data.storage.limitLabel,
+      });
+      return true;
+    };
+
     fetch('/api/account/storage?refresh=1')
       .then((res) => (res.ok ? res.json() : null))
-      .then((data) => {
-        if (!data?.storage) return;
-        setStorage({
-          usedBytes: data.storage.usedBytes,
-          limitBytes: data.storage.limitBytes,
-          usedLabel: data.storage.usedLabel,
-          limitLabel: data.storage.limitLabel,
-        });
+      .then(async (data) => {
+        if (applyStorage(data)) return;
+        const cached = await fetch('/api/account/storage');
+        applyStorage(cached.ok ? await cached.json() : null);
       })
       .catch(() => setStorage(null));
 
@@ -324,13 +331,11 @@ export function AttachmentModal({
           )}
         </div>
 
-        {storage && (
-          <div className={`border-t px-5 py-3 ${isLight ? 'border-slate-200' : 'border-slate-800'}`}>
-            <p className={mutedClass}>
-              Storage used: {storage.usedLabel} of {storage.limitLabel}.
-            </p>
-          </div>
-        )}
+        <div className={`shrink-0 border-t px-5 py-3 ${isLight ? 'border-slate-200' : 'border-slate-800'}`}>
+          <p className={mutedClass}>
+            Storage used: {storage ? `${storage.usedLabel} of ${storage.limitLabel}` : '…'}
+          </p>
+        </div>
       </div>
     </div>
   );

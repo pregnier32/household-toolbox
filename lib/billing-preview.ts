@@ -1,14 +1,20 @@
 import {
+  STORAGE_FREE_BYTES,
+  applyPricingDiscounts,
   calculateAccountPricing,
   formatCents,
+  isAssignmentActive,
   nextPricingInstant,
   parsePreviewEffectiveAt,
   upcomingBillingEvents,
   type AccountPricingInput,
+  type AccountPricingState,
   type PricingAssignmentInput,
+  type ToolPricingResult,
 } from './account-pricing';
 import { draftAccountNotices, type NoticeDraft } from './account-notice-drafts';
 import type { CustomerPlanBenefit, CustomerPlanSource } from './customer-plan-preview';
+import { formatDisplayDate } from './format-display-date';
 
 export type PreviewAccess = 'unauthorized' | 'forbidden' | null;
 
@@ -52,7 +58,8 @@ export type CustomerPlanPayload = {
   freeSlots: number;
   freeSlotsUsed: number;
   freeSlotsRemaining: number;
-  tools: { id: string; name: string; label: string; amount: string | null }[];
+  tools: { id: string; name: string; label: string; amount: string | null; addedAt: string | null; price: string }[];
+  statement: PlanStatementRow[];
   benefits: CustomerPlanBenefit[];
   currentMonthly: string;
   upcoming: { at: string; amount: string } | null;
@@ -311,7 +318,10 @@ export function assembleBillingPreview(args: {
           ? `Free Trial — ${tool.daysRemaining} day${tool.daysRemaining === 1 ? '' : 's'} remaining`
           : tool.accessLabel,
         amount: tool.billable ? formatCents(tool.expectedMonthlyCents) : null,
+        addedAt: tool.ownedAt,
+        price: formatCents(toolListCents(tool)),
       })),
+      statement: buildCustomerStatement(args.input, state),
       benefits,
       currentMonthly: formatCents(state.effectiveMonthlyCents),
       upcoming: next && upcomingState ? { at: next.toISOString().slice(0, 10), amount: formatCents(upcomingState.effectiveMonthlyCents) } : null,
@@ -326,4 +336,171 @@ export function assembleBillingPreview(args: {
 
 export function simulatedInstant(raw: string | null | undefined, now = new Date()): Date | null {
   return parsePreviewEffectiveAt(raw, now);
+}
+
+const STORAGE_ADDON_MONTHLY_CENTS = 100;
+
+export type PlanStatementRow = {
+  id: string;
+  kind: 'section' | 'tool' | 'storage' | 'subtotal' | 'adjustment' | 'total';
+  label: string;
+  detail: string | null;
+  amount: string | null;
+  benefitId: string | null;
+};
+
+export function toolListCents(tool: Pick<ToolPricingResult, 'shelfPriceCents' | 'catalogPriceCents'>): number {
+  if (tool.shelfPriceCents > 0) return tool.shelfPriceCents;
+  return Math.max(0, tool.catalogPriceCents);
+}
+
+export function formatMonthlyCents(cents: number): string {
+  const negative = cents < 0;
+  const abs = Math.abs(Math.round(cents));
+  const dollars = abs / 100;
+  const body = Number.isInteger(dollars) ? `$${dollars}` : formatCents(abs);
+  return `${negative ? '-' : ''}${body}/month`;
+}
+
+function statementAmount(cents: number): string {
+  if (cents === 0) return 'Included';
+  return formatMonthlyCents(cents);
+}
+
+export function buildCustomerStatement(input: AccountPricingInput, state: AccountPricingState): PlanStatementRow[] {
+  const rows: PlanStatementRow[] = [];
+  const adjustments: PlanStatementRow[] = [];
+  const tools = state.tools
+    .slice()
+    .sort((left, right) => left.name.localeCompare(right.name, undefined, { sensitivity: 'base' }) || left.toolId.localeCompare(right.toolId));
+  rows.push({ id: 'section-tools', kind: 'section', label: 'Tools', detail: null, amount: null, benefitId: null });
+  let toolSum = 0;
+  for (const tool of tools) {
+    const cents = toolListCents(tool);
+    toolSum += cents;
+    const added = formatDisplayDate(tool.ownedAt);
+    rows.push({
+      id: `tool-${tool.toolId}`,
+      kind: 'tool',
+      label: tool.name,
+      detail: added ? `Added ${added}` : null,
+      amount: statementAmount(cents),
+      benefitId: null,
+    });
+  }
+
+  const storageCents = Math.round(Math.max(0, input.storageAddonGb) * STORAGE_ADDON_MONTHLY_CENTS);
+  rows.push({ id: 'section-storage', kind: 'section', label: 'Storage', detail: null, amount: null, benefitId: null });
+  rows.push({
+    id: 'storage',
+    kind: 'storage',
+    label: state.baseStorageBytes > STORAGE_FREE_BYTES ? 'Paid Acct' : 'Free Acct',
+    detail: `${storageLabel(state.storageUsedBytes)} of ${storageLabel(state.effectiveStorageBytes)}`,
+    amount: statementAmount(storageCents),
+    benefitId: null,
+  });
+
+  const before = toolSum + storageCents;
+  rows.push({
+    id: 'before',
+    kind: 'subtotal',
+    label: 'Monthly cost before promotions',
+    detail: null,
+    amount: formatMonthlyCents(before),
+    benefitId: null,
+  });
+
+  let reductions = 0;
+  const listed = new Set<string>();
+  const assignmentById = new Map(input.assignments.map((assignment) => [assignment.id, assignment]));
+  const pushPromotion = (id: string, centsOff: number) => {
+    const assignment = assignmentById.get(id);
+    const promo = state.activePromotions.find((item) => item.id === id);
+    if (!assignment || !promo || listed.has(id)) return;
+    listed.add(id);
+    reductions += centsOff;
+    const benefit = benefitText(assignment, new Map(state.tools.map((tool) => [tool.toolId, tool.name])));
+    adjustments.push({
+      id: `promo-${id}`,
+      kind: 'adjustment',
+      label: assignment.publicCode || assignment.displayName,
+      detail: assignment.customerDescription.trim() || benefit,
+      amount: statementAmount(-centsOff),
+      benefitId: id,
+    });
+  };
+
+  for (const tool of tools) {
+    const cents = toolListCents(tool);
+    if (!tool.inTrial || cents <= 0) continue;
+    reductions += cents;
+    const days = tool.daysRemaining;
+    adjustments.push({
+      id: `trial-${tool.toolId}`,
+      kind: 'adjustment',
+      label: `${tool.name} free trial`,
+      detail: days == null ? 'Free trial' : days === 1 ? '1 day remaining' : `${days} days remaining`,
+      amount: formatMonthlyCents(-cents),
+      benefitId: null,
+    });
+  }
+
+  const slotEligible = state.tools
+    .filter((tool) => toolListCents(tool) > 0 && !tool.inTrial && !tool.specificPromotionCovered)
+    .sort((left, right) => left.ownedAt.localeCompare(right.ownedAt) || left.toolId.localeCompare(right.toolId));
+  let cursor = 0;
+  const slottedIds = new Set<string>();
+  const takeSlotCents = (count: number) => {
+    const slice = slotEligible.slice(cursor, cursor + Math.max(0, count));
+    cursor += slice.length;
+    for (const tool of slice) slottedIds.add(tool.toolId);
+    return slice.reduce((sum, tool) => sum + toolListCents(tool), 0);
+  };
+  const baseline = state.diagnostics.slotBaseline;
+  if (baseline) pushPromotion(baseline.id, takeSlotCents(baseline.slotCount));
+  for (const slot of state.diagnostics.additionalSlots) pushPromotion(slot.id, takeSlotCents(slot.slotCount));
+  for (const promo of state.activePromotions) {
+    if (promo.benefitType !== 'free_tool_slots' || listed.has(promo.id)) continue;
+    pushPromotion(promo.id, 0);
+  }
+
+  const claimed = new Set<string>();
+  for (const promo of state.activePromotions) {
+    if (promo.benefitType !== 'specific_tools') continue;
+    let cents = 0;
+    for (const tool of state.tools) {
+      if (!promo.toolIds.includes(tool.toolId) || claimed.has(tool.toolId)) continue;
+      if (!tool.specificPromotionCovered || tool.inTrial) continue;
+      claimed.add(tool.toolId);
+      cents += toolListCents(tool);
+    }
+    pushPromotion(promo.id, cents);
+  }
+
+  const billableListCents = state.tools.reduce((sum, tool) => {
+    if (tool.inTrial || tool.specificPromotionCovered || slottedIds.has(tool.toolId)) return sum;
+    return sum + toolListCents(tool);
+  }, 0);
+  const active = input.assignments.filter((assignment) => isAssignmentActive(assignment, new Date(state.effectiveAt)));
+  for (const step of applyPricingDiscounts(billableListCents, active).discountSteps) {
+    pushPromotion(step.id, step.discountCents);
+  }
+  for (const promo of state.activePromotions) {
+    if (!listed.has(promo.id)) pushPromotion(promo.id, 0);
+  }
+
+  if (adjustments.length > 0) {
+    rows.push({ id: 'section-promotions', kind: 'section', label: 'Promotions', detail: null, amount: null, benefitId: null });
+    rows.push(...adjustments);
+  }
+
+  rows.push({
+    id: 'total',
+    kind: 'total',
+    label: 'Monthly cost',
+    detail: null,
+    amount: formatMonthlyCents(before - reductions),
+    benefitId: null,
+  });
+  return rows;
 }

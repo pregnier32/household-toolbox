@@ -9,7 +9,7 @@ import {
   type PricingAssignmentInput,
   type PricingToolInput,
 } from './account-pricing';
-import { assembleBillingPreview, previewAccess } from './billing-preview';
+import { assembleBillingPreview, buildCustomerStatement, previewAccess } from './billing-preview';
 
 const NOW = new Date('2026-10-03T15:00:00.000Z');
 
@@ -126,4 +126,80 @@ test('preview access is limited to a superadmin and drafts are not written', () 
   assert.equal(preview.simulatedNotices.some((notice) => notice.kind === 'trial_ending'), true);
   assert.equal(preview.actualNotices.length, 0);
   assert.equal(input.assignments.length, 0);
+});
+
+test('the customer statement lists tools alphabetically, then storage, promotions, and the new total', () => {
+  const input = account({
+    storageUsedBytes: 50 * 1024 * 1024,
+    storageAddonGb: 1,
+    tools: [
+      tool({ toolId: 'c', name: 'Charlie', shelfPriceCents: 200, ownedAt: '2026-09-03T00:00:00.000Z' }),
+      tool({ toolId: 'a', name: 'Alpha', shelfPriceCents: 200, ownedAt: '2026-09-01T00:00:00.000Z' }),
+      tool({ toolId: 'b', name: 'Bravo', shelfPriceCents: 200, ownedAt: '2026-09-02T00:00:00.000Z' }),
+    ],
+    assignments: [
+      assignment({ id: 'slots', benefitType: 'free_tool_slots', slotMode: 'total', slotCount: 2, displayName: 'New member', publicCode: 'NEWUSER2' }),
+    ],
+  });
+  const state = calculateAccountPricing(input, NOW);
+  const rows = buildCustomerStatement(input, state);
+  assert.deepEqual(rows.map((row) => row.label), [
+    'Tools',
+    'Alpha',
+    'Bravo',
+    'Charlie',
+    'Storage',
+    'Paid Acct',
+    'Monthly cost before promotions',
+    'Promotions',
+    'NEWUSER2',
+    'Monthly cost',
+  ]);
+  assert.equal(rows[1].amount, '$2/month');
+  assert.equal(rows[2].amount, '$2/month');
+  assert.equal(rows[2].detail, 'Added 09/02/2026');
+  assert.equal(rows[5].detail, '50 MB of 2.00 GB');
+  assert.equal(rows[5].amount, '$1/month');
+  assert.equal(rows[6].amount, '$7/month');
+  assert.equal(rows[8].detail, 'Benefit');
+  assert.equal(rows[8].amount, '-$4/month');
+  assert.equal(rows[9].amount, '$3/month');
+  assert.equal(assembleBillingPreview({
+    input,
+    opened: { id: 'user-1', email: 'a@example.com', firstName: 'Ada', lastName: null },
+    billing: { id: 'user-1', email: 'a@example.com', firstName: 'Ada', lastName: null },
+    notices: [],
+    toolNames: new Map(),
+    actualAt: NOW,
+    simulatedAt: NOW,
+  }).customerPlan.statement.find((row) => row.kind === 'total')?.amount, '$3/month');
+
+  const catalogOnly = account({
+    tools: [tool({ toolId: 'meal', name: 'Meal Planner', shelfPriceCents: 0, catalogPriceCents: 200 })],
+  });
+  const catalogRows = buildCustomerStatement(catalogOnly, calculateAccountPricing(catalogOnly, NOW));
+  assert.equal(catalogRows.find((row) => row.kind === 'tool')?.amount, '$2/month');
+  assert.equal(catalogRows.find((row) => row.kind === 'storage')?.label, 'Free Acct');
+  assert.equal(catalogRows[catalogRows.length - 1].amount, '$2/month');
+});
+
+test('promotion discounts use the displayed tool price when the ownership price is zero', () => {
+  const input = account({
+    tools: [
+      tool({ toolId: 'c', name: 'Charlie', shelfPriceCents: 0, catalogPriceCents: 200, ownedAt: '2026-09-03T00:00:00.000Z' }),
+      tool({ toolId: 'a', name: 'Alpha', shelfPriceCents: 0, catalogPriceCents: 200, ownedAt: '2026-09-01T00:00:00.000Z' }),
+      tool({ toolId: 'b', name: 'Bravo', shelfPriceCents: 0, catalogPriceCents: 200, ownedAt: '2026-09-02T00:00:00.000Z' }),
+    ],
+    assignments: [
+      assignment({ id: 'slots', benefitType: 'free_tool_slots', slotMode: 'total', slotCount: 2, publicCode: 'HHTB-USER-2FREE', customerDescription: 'Account includes 2 free tools.' }),
+      assignment({ id: 'admin', benefitType: 'percent_100', publicCode: 'HHTB-SITE-ADMIN', customerDescription: 'Website owner and testing accounts.' }),
+    ],
+  });
+  const rows = buildCustomerStatement(input, calculateAccountPricing(input, NOW));
+  assert.equal(rows.find((row) => row.label === 'HHTB-USER-2FREE')?.detail, 'Account includes 2 free tools.');
+  assert.equal(rows.find((row) => row.label === 'HHTB-SITE-ADMIN')?.detail, 'Website owner and testing accounts.');
+  assert.equal(rows.find((row) => row.label === 'HHTB-USER-2FREE')?.amount, '-$4/month');
+  assert.equal(rows.find((row) => row.label === 'HHTB-SITE-ADMIN')?.amount, '-$2/month');
+  assert.equal(rows.find((row) => row.kind === 'total')?.amount, '$0/month');
+  assert.equal(rows.find((row) => row.kind === 'subtotal')?.amount, '$6/month');
 });

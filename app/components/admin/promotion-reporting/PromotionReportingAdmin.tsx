@@ -1004,7 +1004,7 @@ function CustomerDetail({
   if (!row) return <EmptyNote styles={styles} text="No partner attribution yet." />;
   const campaign = campaigns.find((item) => item.name === row.campaign);
   const partner = partners.find((item) => item.name === row.partner);
-  const manageHref = `/dashboard/admin/users/${row.id}?name=${encodeURIComponent(row.name)}&email=${encodeURIComponent(row.email)}`;
+  const billingHref = `/dashboard/admin/users/${row.id}/view?view=plan`;
   return (
     <div className="space-y-6">
       <button type="button" className={styles.backLink} onClick={onBack}>← Customers</button>
@@ -1014,8 +1014,8 @@ function CustomerDetail({
           <p className={styles.muted}>{row.email}</p>
         </div>
         <div className="flex flex-wrap gap-2">
-          <a className={styles.primaryButton} href={manageHref}>Manage Discounts & Entitlements</a>
-          <button type="button" className={styles.secondaryButton} disabled>Open Billing Preview — Coming Later</button>
+          <a className={styles.primaryButton} href="/dashboard/admin/users">User Management</a>
+          <a className={styles.secondaryButton} href={billingHref}>Preview Plan and Billing</a>
         </div>
       </div>
       <section className={styles.preview}>

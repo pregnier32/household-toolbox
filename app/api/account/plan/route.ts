@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server';
 import { getHouseholdDataSession } from '@/lib/session';
 import { supabaseServer } from '@/lib/supabaseServer';
 import { formatCents } from '@/lib/account-pricing';
+import { buildCustomerStatement, toolListCents } from '@/lib/billing-preview';
 import { formatStorageBytes } from '@/lib/user-storage';
 import { getAccountPricingProjection } from '@/lib/load-account-pricing';
 import { persistAccountNotices } from '@/lib/promotion-service';
@@ -81,7 +82,10 @@ export async function GET() {
         name: tool.name,
         label: tool.inTrial && tool.daysRemaining != null ? `Free Trial — ${tool.daysRemaining} day${tool.daysRemaining === 1 ? '' : 's'} remaining` : tool.accessLabel,
         amount: tool.billable ? formatCents(tool.expectedMonthlyCents) : null,
+        addedAt: tool.ownedAt,
+        price: formatCents(toolListCents(tool)),
       })),
+      statement: buildCustomerStatement(projection.input, state),
       benefits,
       currentMonthly: formatCents(state.effectiveMonthlyCents),
       upcoming: projection.upcoming ? {

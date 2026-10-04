@@ -11,6 +11,7 @@ import { useTheme } from './AppThemeProvider';
 import { useAppNotice } from './AppNotice';
 import { AttachmentButton } from './AttachmentButton';
 import { AttachmentModal } from './AttachmentModal';
+import { formatDisplayDate } from '@/lib/format-display-date';
 import { ExportPdfIconButton } from './ExportPdfIconButton';
 import {
   canPreviewAttachment,
@@ -93,7 +94,6 @@ import {
   EolPlan,
   EolPlanData,
   EolRelationship,
-  formatDateDisplay,
   formatDateTimeDisplay,
   appendPlanHistory,
   HOME_PROVIDER_TYPES,
@@ -419,9 +419,9 @@ function FamilyMemberList(props: {
         selectClass={props.selectClass}
         labelClass={props.labelClass}
       />
-      <div className="overflow-x-auto">
-        <table className="w-full min-w-[36rem] table-fixed text-sm">
-          <thead>
+      <div className="min-w-0 max-w-full">
+        <table className="block w-full max-w-full text-sm md:table md:min-w-[36rem] md:table-fixed">
+          <thead className="hidden md:table-header-group">
             <tr className={`${props.mutedTextClass} border-b ${props.listDividerClass} text-left text-xs font-semibold uppercase tracking-wide`}>
               <th className="py-2 pr-3 font-semibold">Name</th>
               <th className="py-2 pr-3 font-semibold">Contact Info</th>
@@ -431,7 +431,7 @@ function FamilyMemberList(props: {
               </th>
             </tr>
           </thead>
-          <tbody>
+          <tbody className="block md:table-row-group">
             {members.length === 0 ? (
               <tr>
                 <td colSpan={4} className={`${props.mutedTextClass} py-4`}>
@@ -446,12 +446,21 @@ function FamilyMemberList(props: {
               </tr>
             ) : (
               visibleMembers.map((person) => (
-                <tr key={person.id} className={`border-t ${props.listDividerClass}`}>
-                  <td className={`truncate py-2.5 pr-3 font-medium ${props.bodyTextClass}`}>{person.name || 'Untitled'}</td>
-                  <td className={`truncate py-2.5 pr-3 ${props.bodyTextClass}`}>{person.contactInfo || '—'}</td>
-                  <td className={`truncate py-2.5 pr-3 ${props.bodyTextClass}`}>{person.relationship || '—'}</td>
-                  <td className="py-2.5">
-                    <div className="flex justify-end gap-2">
+                <tr key={person.id} className={`mb-3 block rounded-lg border p-3 md:mb-0 md:table-row md:rounded-none md:border-x-0 md:border-b-0 md:p-0 md:border-t ${props.listDividerClass}`}>
+                  <td className={`block break-words py-1 font-medium md:table-cell md:truncate md:py-2.5 md:pr-3 ${props.bodyTextClass}`}>
+                    <span className={`mb-1 block text-xs font-semibold uppercase tracking-wide md:hidden ${props.mutedTextClass}`}>Name</span>
+                    {person.name || 'Untitled'}
+                  </td>
+                  <td className={`block break-words py-1 md:table-cell md:truncate md:py-2.5 md:pr-3 ${props.bodyTextClass}`}>
+                    <span className={`mb-1 block text-xs font-semibold uppercase tracking-wide md:hidden ${props.mutedTextClass}`}>Contact Info</span>
+                    {person.contactInfo || '—'}
+                  </td>
+                  <td className={`block break-words py-1 md:table-cell md:truncate md:py-2.5 md:pr-3 ${props.bodyTextClass}`}>
+                    <span className={`mb-1 block text-xs font-semibold uppercase tracking-wide md:hidden ${props.mutedTextClass}`}>Relationship</span>
+                    {person.relationship || '—'}
+                  </td>
+                  <td className="block py-2 md:table-cell md:py-2.5">
+                    <div className="flex flex-wrap justify-end gap-2 [&>button]:shrink-0">
                       <button
                         type="button"
                         className={props.rowIconSecondaryClass}
@@ -726,21 +735,21 @@ function RecordTableList<T extends { id: string }>(props: {
         selectClass={props.selectClass}
         labelClass={props.labelClass}
       />
-      <div className="overflow-x-auto">
-        <table className="w-full min-w-[40rem] table-fixed text-sm">
-          <thead>
+      <div className="min-w-0 max-w-full">
+        <table className="block w-full max-w-full text-sm md:table md:min-w-[40rem] md:table-fixed">
+          <thead className="hidden md:table-header-group">
             <tr className={`${props.mutedTextClass} border-b ${props.listDividerClass} text-left text-xs font-semibold uppercase tracking-wide`}>
               {props.columns.map((column) => (
                 <th key={column.label} className="py-2 pr-3 font-semibold">
                   {column.label}
                 </th>
               ))}
-              <th className={`${props.onOpenAttachments ? 'w-36' : 'w-28'} py-2 text-right font-semibold`}>
+              <th className={`${props.onOpenAttachments && props.onInactivate ? 'w-48' : props.onOpenAttachments || props.onInactivate ? 'w-40' : 'w-28'} py-2 text-right font-semibold`}>
                 <span className="sr-only">Actions</span>
               </th>
             </tr>
           </thead>
-          <tbody>
+          <tbody className="block md:table-row-group">
             {props.records.length === 0 ? (
               <tr>
                 <td colSpan={props.columns.length + 1} className={`${props.mutedTextClass} py-4`}>
@@ -755,17 +764,18 @@ function RecordTableList<T extends { id: string }>(props: {
               </tr>
             ) : (
               visibleRecords.map((item) => (
-                <tr key={item.id} className={`border-t ${props.listDividerClass}`}>
+                <tr key={item.id} className={`mb-3 block rounded-lg border p-3 md:mb-0 md:table-row md:rounded-none md:border-x-0 md:border-b-0 md:p-0 md:border-t ${props.listDividerClass}`}>
                   {props.columns.map((column) => (
                     <td
                       key={column.label}
-                      className={`truncate py-2.5 pr-3 ${column.emphasize ? `font-medium ${props.bodyTextClass}` : props.bodyTextClass}`}
+                      className={`block break-words py-1 md:table-cell md:truncate md:py-2.5 md:pr-3 ${column.emphasize ? `font-medium ${props.bodyTextClass}` : props.bodyTextClass}`}
                     >
+                      <span className={`mb-1 block text-xs font-semibold uppercase tracking-wide md:hidden ${props.mutedTextClass}`}>{column.label}</span>
                       {column.value(item) || '—'}
                     </td>
                   ))}
-                  <td className="py-2.5">
-                    <div className="flex justify-end gap-2">
+                  <td className="block py-2 md:table-cell md:py-2.5">
+                    <div className="flex flex-wrap justify-end gap-2 [&>button]:shrink-0">
                       {props.onOpenAttachments ? (
                         <AttachmentButton
                           count={props.attachmentCount?.(item) ?? 0}
@@ -2513,7 +2523,7 @@ export function EndOfLifePlannerTool({ toolId }: EndOfLifePlannerToolProps) {
         { label: 'Name', value: (item) => item.name, emphasize: true },
         { label: 'Type', value: (item) => item.documentType },
         { label: 'Location', value: (item) => item.physicalLocation },
-        { label: 'Expiration', value: (item) => (item.expirationDate ? formatDateDisplay(item.expirationDate) : '') },
+        { label: 'Expiration', value: (item) => (item.expirationDate ? formatDisplayDate(item.expirationDate) : '') },
       ]}
       emptyText="No document notes added yet."
       addTitle="Add Document"
@@ -3069,7 +3079,7 @@ export function EndOfLifePlannerTool({ toolId }: EndOfLifePlannerToolProps) {
         { label: 'Title', value: (item) => item.title, emphasize: true },
         { label: 'Category', value: (item) => item.category },
         { label: 'Location', value: (item) => item.location },
-        { label: 'Date', value: (item) => (item.importantDate ? formatDateDisplay(item.importantDate) : '') },
+        { label: 'Date', value: (item) => (item.importantDate ? formatDisplayDate(item.importantDate) : '') },
       ]}
       emptyText="No custom records added yet."
       addTitle="Add Custom Record"
@@ -3342,7 +3352,7 @@ export function EndOfLifePlannerTool({ toolId }: EndOfLifePlannerToolProps) {
   };
 
   return (
-    <div className="space-y-6">
+    <div className="min-w-0 space-y-6">
       <div className="flex items-start justify-between gap-3">
         <div>
           <h2 className={titleClass}>{EOL_TOOL_TITLE}</h2>
@@ -3426,7 +3436,7 @@ export function EndOfLifePlannerTool({ toolId }: EndOfLifePlannerToolProps) {
                         </label>
                         <input id="edit-color" type="color" value={editColor} onChange={(event) => setEditColor(event.target.value)} className="h-8 w-14 rounded border border-slate-400 cursor-pointer" />
                       </div>
-                      <p className={helperClass}>Created {formatDateDisplay(plan.dateCreated.split('T')[0])} · Last updated {formatDateTimeDisplay(plan.lastUpdated)}</p>
+                      <p className={helperClass}>Created {formatDisplayDate(plan.dateCreated.split('T')[0])} · Last updated {formatDateTimeDisplay(plan.lastUpdated)}</p>
                       <div className="flex gap-2">
                         <button type="button" onClick={savePlanEdit} disabled={!editName.trim() || !editPersonName.trim()} className={primaryButtonClass}>
                           Save

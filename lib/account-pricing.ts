@@ -24,6 +24,7 @@ export type PricingToolInput = {
   toolId: string;
   name: string;
   shelfPriceCents: number;
+  catalogPriceCents?: number;
   ownedAt: string;
   trialStartedAt: string | null;
   trialUsed: boolean;
@@ -75,6 +76,7 @@ export type ToolPricingResult = {
   toolId: string;
   name: string;
   shelfPriceCents: number;
+  catalogPriceCents: number;
   ownedAt: string;
   inTrial: boolean;
   trialStartedAt: string | null;
@@ -395,6 +397,7 @@ export function calculateAccountPricing(input: AccountPricingInput, effectiveAt:
       toolId: tool.toolId,
       name: tool.name,
       shelfPriceCents: tool.shelfPriceCents,
+      catalogPriceCents: tool.catalogPriceCents ?? tool.shelfPriceCents,
       ownedAt: tool.ownedAt,
       inTrial,
       trialStartedAt: tool.trialStartedAt,

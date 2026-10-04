@@ -9,12 +9,9 @@ import { completeSignOut } from '@/lib/client-sign-out';
 
 type UserTool = {
   id: string;
-  price: number;
   status: string;
   created_at: string;
   updated_at: string | null;
-  accessLabel?: string;
-  expectedAmount?: string | null;
   tools: {
     id: string;
     name: string;
@@ -74,10 +71,6 @@ export default function MyToolsPage() {
     ? 'inline-flex items-center rounded-full bg-slate-200 px-2 py-0.5 text-xs font-medium text-slate-700'
     : 'inline-flex items-center rounded-full bg-slate-500/20 px-2 py-0.5 text-xs font-medium text-slate-300';
 
-  const priceClass = isLight
-    ? 'text-right text-sm font-medium text-emerald-700'
-    : 'text-right text-sm font-medium text-emerald-400';
-
   const removeButtonClass = isLight
     ? 'rounded bg-red-600 px-3 py-1 text-xs font-semibold text-white transition-colors hover:bg-red-700 disabled:opacity-50'
     : 'rounded bg-red-600 px-3 py-1 text-xs font-semibold text-white transition-colors hover:bg-red-500 disabled:opacity-50';
@@ -105,16 +98,6 @@ export default function MyToolsPage() {
   const confirmDangerButtonClass =
     'rounded-lg bg-red-600 px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-red-700 disabled:cursor-not-allowed disabled:opacity-50';
 
-  const totalBoxClass = isLight
-    ? 'rounded-lg border border-emerald-200 bg-emerald-50 p-6'
-    : 'rounded-lg border border-emerald-500/50 bg-emerald-500/10 p-6';
-
-  const totalTitleClass = isLight ? 'text-lg font-semibold text-slate-900' : 'text-lg font-semibold text-slate-50';
-
-  const totalAmountClass = isLight ? 'text-3xl font-semibold text-emerald-800' : 'text-3xl font-semibold text-emerald-400';
-
-  const totalPerMonthClass = isLight ? 'text-xs text-slate-500 mt-1' : 'text-xs text-slate-400 mt-1';
-
   const browseToolsButtonClass = isLight
     ? 'mt-4 rounded-lg bg-emerald-500 px-4 py-2.5 text-sm font-semibold text-slate-950 transition-colors hover:bg-emerald-400 focus:outline-none focus:ring-2 focus:ring-emerald-500/50 focus:ring-offset-2 focus:ring-offset-white'
     : 'mt-4 rounded-lg bg-emerald-500 px-4 py-2.5 text-sm font-semibold text-slate-950 transition-colors hover:bg-emerald-400 focus:outline-none focus:ring-2 focus:ring-emerald-500/50 focus:ring-offset-2 focus:ring-offset-slate-900';
@@ -128,7 +111,6 @@ export default function MyToolsPage() {
   const loadingHintClass = isLight ? 'text-slate-600' : 'text-slate-400';
 
   const [tools, setTools] = useState<UserTool[]>([]);
-  const [expectedMonthlyCost, setExpectedMonthlyCost] = useState('$0.00');
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
@@ -177,7 +159,6 @@ export default function MyToolsPage() {
         (a.tools?.name || '').localeCompare(b.tools?.name || '', undefined, { sensitivity: 'base' })
       );
       setTools(sorted);
-      setExpectedMonthlyCost(data.expectedMonthlyCost || '$0.00');
       setIsLoading(false);
     } catch (err) {
       console.error('Error loading tools:', err);
@@ -197,13 +178,6 @@ export default function MyToolsPage() {
     } catch {
       return '—';
     }
-  };
-
-  const formatCurrency = (amount: number) => {
-    return new Intl.NumberFormat('en-US', {
-      style: 'currency',
-      currency: 'USD',
-    }).format(amount);
   };
 
   const daysOwnedLabel = (createdAt: string) => {
@@ -275,8 +249,6 @@ export default function MyToolsPage() {
     }
   };
 
-  const totalMonthlyCost = expectedMonthlyCost;
-
   if (isLoading) {
     return (
       <main className="min-h-screen bg-slate-950 text-slate-100">
@@ -328,21 +300,7 @@ export default function MyToolsPage() {
       <div className="mx-auto max-w-7xl px-4 py-8 sm:px-6 lg:px-8">
         <div className="mb-6">
           <h1 className={pageTitleClass}>My Tools</h1>
-          <p className={pageSubtitleClass}>
-            View and manage your active tools.
-            {user && user.householdRole !== 'user' && (
-              <>
-                {' '}
-                <button
-                  type="button"
-                  onClick={() => router.push('/dashboard/plan/access')}
-                  className={isLight ? 'font-medium text-emerald-800 underline-offset-2 hover:underline' : 'font-medium text-emerald-300 underline-offset-2 hover:underline'}
-                >
-                  Preview how free tools and trials will look
-                </button>
-              </>
-            )}
-          </p>
+          <p className={pageSubtitleClass}>View and manage your active tools.</p>
         </div>
 
         {/* Error Message */}
@@ -385,9 +343,6 @@ export default function MyToolsPage() {
                         Activated Date
                       </th>
                       <th className={thRightClass}>
-                        Monthly Cost
-                      </th>
-                      <th className={thRightClass}>
                         Actions
                       </th>
                     </tr>
@@ -413,12 +368,6 @@ export default function MyToolsPage() {
                           <td className={`px-6 py-4 ${cellMutedClass}`}>
                             {formatDate(tool.created_at)}
                           </td>
-                          <td className={`px-6 py-4 ${priceClass}`}>
-                            <div>{tool.accessLabel || formatCurrency(Number(tool.price))}</div>
-                            {tool.expectedAmount && tool.status === 'active' && (
-                              <div className={cellMutedClass}>{tool.expectedAmount}</div>
-                            )}
-                          </td>
                           <td className="px-6 py-4 text-right">
                             {user?.householdRole === 'user' ? (
                               <span className={cellMutedClass}>Admin only</span>
@@ -439,23 +388,6 @@ export default function MyToolsPage() {
                     })}
                   </tbody>
                 </table>
-              </div>
-            </div>
-
-            {/* Total Monthly Cost */}
-            <div className={totalBoxClass}>
-              <div className="flex items-center justify-between">
-                <div className="flex-1">
-                  <h3 className={totalTitleClass}>Expected Monthly Cost</h3>
-                </div>
-                <div className="flex items-end">
-                  <div className="text-right">
-                    <p className={totalAmountClass}>
-                      {totalMonthlyCost}
-                    </p>
-                    <p className={totalPerMonthClass}>per month</p>
-                  </div>
-                </div>
               </div>
             </div>
           </>

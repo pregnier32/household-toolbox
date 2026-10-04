@@ -3121,6 +3121,8 @@ Five file stores on list rows that already had a place for scans. Do not attach 
 
 “Archive Plan” uses the reversible in-app confirm, not typed delete.
 
+**Desktop list exception (intentional):** Repeatable record lists stay multi-column tables on desktop. This is the exception for `UX-LST-003` at desktop widths. Narrow widths still follow `UX-RSP-003`. The desktop-table exception does not allow clipped titles, clipped row actions, or horizontal scrolling on mobile.
+
 ### HSA Tracker
 
 Expense receipts only. Do not attach files to accounts, deposits, Summary KPIs, or Reports.

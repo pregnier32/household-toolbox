@@ -4,6 +4,7 @@ import { Fragment, useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { SideLogo } from '../../../components/SideLogo';
 import { useTheme } from '../../../components/AppThemeProvider';
+import { UserDiscountCodesDialog } from '../../../components/admin/user-discounts/UserDiscountCodesDialog';
 
 type LinkedAccount = {
   email: string;
@@ -93,6 +94,7 @@ export default function UsersPage() {
     : 'inline-flex rounded-full bg-red-500/20 px-2 py-1 text-xs font-medium text-red-300';
   const actionViewClass = isLight ? 'text-blue-700 hover:text-blue-800 transition-colors' : 'text-blue-400 hover:text-blue-300 transition-colors';
   const actionDiscountClass = isLight ? 'text-amber-700 hover:text-amber-800 transition-colors' : 'text-amber-400 hover:text-amber-300 transition-colors';
+  const actionPreviewClass = isLight ? 'text-sky-700 hover:text-sky-800 transition-colors' : 'text-sky-400 hover:text-sky-300 transition-colors';
   const actionEditClass = isLight ? 'text-emerald-700 hover:text-emerald-800 transition-colors' : 'text-emerald-400 hover:text-emerald-300 transition-colors';
   const actionDeleteClass = isLight
     ? 'text-red-700 hover:text-red-800 transition-colors disabled:cursor-not-allowed disabled:opacity-50'
@@ -159,6 +161,7 @@ export default function UsersPage() {
   const [deletePhrase, setDeletePhrase] = useState('');
   const [yesPhrase, setYesPhrase] = useState('');
   const [isDeleting, setIsDeleting] = useState(false);
+  const [discountUser, setDiscountUser] = useState<{ id: string; name: string } | null>(null);
   const [toolsModal, setToolsModal] = useState<{ isOpen: boolean; userId: string | null; userName: string }>({
     isOpen: false,
     userId: null,
@@ -817,16 +820,26 @@ export default function UsersPage() {
                             <div className="flex items-center gap-2">
                               <button
                                 onClick={() => {
-                                  const name = `${tableUser.first_name} ${tableUser.last_name || ''}`.trim();
-                                  const params = new URLSearchParams({ name, email: tableUser.email });
-                                  router.push(`/dashboard/admin/users/${tableUser.id}?${params.toString()}`);
+                                  const name = `${tableUser.first_name} ${tableUser.last_name || ''}`.trim() || tableUser.email;
+                                  setDiscountUser({ id: tableUser.id, name });
                                 }}
                                 className={actionDiscountClass}
-                                title="Discounts and entitlements"
-                                aria-label={`Discounts and entitlements for ${tableUser.first_name}`}
+                                title="Discount codes"
+                                aria-label={`Discount codes for ${tableUser.first_name}`}
                               >
                                 <svg className="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 7h.01M7 3h5c.512 0 1.024.195 1.414.586l7 7a2 2 0 010 2.828l-7 7a2 2 0 01-2.828 0l-7-7A1.994 1.994 0 013 12V7a4 4 0 014-4z" />
+                                </svg>
+                              </button>
+                              <button
+                                onClick={() => router.push(`/dashboard/admin/users/${tableUser.id}/view?view=plan`)}
+                                className={actionPreviewClass}
+                                title="Preview Plan and Billing"
+                                aria-label={`Preview Plan and Billing for ${tableUser.first_name}`}
+                              >
+                                <svg className="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+                                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
                                 </svg>
                               </button>
                               <button
@@ -889,6 +902,14 @@ export default function UsersPage() {
           {searchQuery && ` matching "${searchQuery}"`}
         </div>
       </div>
+
+      {discountUser && (
+        <UserDiscountCodesDialog
+          userId={discountUser.id}
+          userName={discountUser.name}
+          onClose={() => setDiscountUser(null)}
+        />
+      )}
 
       {/* User Tools Modal */}
       {toolsModal.isOpen && (

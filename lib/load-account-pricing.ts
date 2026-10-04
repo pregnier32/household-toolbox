@@ -164,11 +164,13 @@ export async function loadAccountPricingInputs(userIds: string[]): Promise<Map<s
       tools: (ownedByUser.get(user.id) ?? []).map((row) => {
         const catalog = one(row.tools);
         const trial = trials.get(row.tool_id);
-        const shelf = row.price == null ? Number(catalog?.price ?? 0) : Number(row.price);
+        const catalogPrice = Number(catalog?.price ?? 0);
+        const shelf = row.price == null ? catalogPrice : Number(row.price);
         return {
           toolId: row.tool_id,
           name: catalog?.name || 'Tool',
           shelfPriceCents: dollarsToCents(shelf),
+          catalogPriceCents: dollarsToCents(catalogPrice),
           ownedAt: row.created_at,
           trialStartedAt: trial?.trial_started_at ?? null,
           trialUsed: Boolean(trial?.trial_used),
