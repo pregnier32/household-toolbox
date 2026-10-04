@@ -32,7 +32,6 @@ type ShoppingListRecord = {
   date: string;
   items: ShoppingListItemRef[];
   isActive: boolean;
-  showOnDashboard?: boolean;
   createdAt?: string;
   updatedAt?: string;
   attachments: { id: string; name: string; size: number; type: string }[];
@@ -50,11 +49,7 @@ type ShoppingListToolProps = {
 
 function formatPdfDate(isoDate: string): string {
   if (!isoDate) return '';
-  const d = new Date(isoDate);
-  const m = d.getMonth() + 1;
-  const day = d.getDate();
-  const y = d.getFullYear();
-  return `${m}/${day}/${y}`;
+  return formatPaddedDisplayDate(isoDate) || isoDate;
 }
 
 function formatDateDisplay(isoDate: string): string {
@@ -119,13 +114,12 @@ function formatLineItemLabel(ref: ShoppingListItemRef, fallbackName = ''): strin
 }
 
 function formatLocalCalendarDate(dateStr: string): string {
-  const match = /^(\d{4})-(\d{2})-(\d{2})/.exec(dateStr);
-  if (!match) return dateStr;
-  return new Date(Number(match[1]), Number(match[2]) - 1, Number(match[3])).toLocaleDateString();
+  if (!dateStr) return '';
+  return formatPaddedDisplayDate(dateStr) || dateStr;
 }
 
 function formatReportDate(date: Date): string {
-  return date.toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' });
+  return formatPaddedDisplayDate(date);
 }
 
 function sortListsNewestFirst(lists: ShoppingListRecord[]): ShoppingListRecord[] {
@@ -172,14 +166,14 @@ export function ShoppingListTool({ toolId }: ShoppingListToolProps) {
     ? 'w-full max-w-lg rounded-2xl border border-slate-200 bg-white p-6 shadow-2xl mx-4 max-h-[90vh] flex flex-col'
     : 'w-full max-w-lg rounded-2xl border border-slate-800 bg-slate-900 p-6 shadow-2xl mx-4 max-h-[90vh] flex flex-col';
   const rowIconSecondaryClass = isLight
-    ? 'inline-flex h-9 w-9 items-center justify-center rounded-lg border border-slate-300 bg-white text-slate-700 hover:bg-slate-100 transition-colors'
-    : 'inline-flex h-9 w-9 items-center justify-center rounded-lg border border-slate-700 bg-slate-900/60 text-slate-300 hover:border-slate-500 hover:text-slate-100 transition-colors';
+    ? 'inline-flex min-h-11 min-w-11 items-center justify-center rounded-lg border border-slate-300 bg-white text-slate-700 hover:bg-slate-100 transition-colors'
+    : 'inline-flex min-h-11 min-w-11 items-center justify-center rounded-lg border border-slate-700 bg-slate-900/60 text-slate-300 hover:border-slate-500 hover:text-slate-100 transition-colors';
   const rowIconEmeraldClass = isLight
-    ? 'inline-flex h-9 w-9 items-center justify-center rounded-lg border border-emerald-300 bg-emerald-50 text-emerald-700 hover:bg-emerald-100 transition-colors'
-    : 'inline-flex h-9 w-9 items-center justify-center rounded-lg border border-emerald-500/50 bg-emerald-500/10 text-emerald-300 hover:bg-emerald-500/20 transition-colors';
+    ? 'inline-flex min-h-11 min-w-11 items-center justify-center rounded-lg border border-emerald-300 bg-emerald-50 text-emerald-700 hover:bg-emerald-100 transition-colors'
+    : 'inline-flex min-h-11 min-w-11 items-center justify-center rounded-lg border border-emerald-500/50 bg-emerald-500/10 text-emerald-300 hover:bg-emerald-500/20 transition-colors';
   const rowIconDangerClass = isLight
-    ? 'inline-flex h-9 w-9 items-center justify-center rounded-lg border border-red-300 bg-red-50 text-red-700 hover:bg-red-100 transition-colors'
-    : 'inline-flex h-9 w-9 items-center justify-center rounded-lg border border-red-500/50 bg-red-500/10 text-red-300 hover:bg-red-500/20 transition-colors';
+    ? 'inline-flex min-h-11 min-w-11 items-center justify-center rounded-lg border border-red-300 bg-red-50 text-red-700 hover:bg-red-100 transition-colors'
+    : 'inline-flex min-h-11 min-w-11 items-center justify-center rounded-lg border border-red-500/50 bg-red-500/10 text-red-300 hover:bg-red-500/20 transition-colors';
   const labelClass = isLight ? 'block text-xs font-medium text-slate-700 mb-1.5' : 'block text-xs font-medium text-slate-300 mb-1.5';
   const splitPanelClass = isLight
     ? 'flex gap-0 rounded-lg border border-slate-300 bg-slate-50 max-h-64 overflow-hidden'
@@ -237,6 +231,7 @@ export function ShoppingListTool({ toolId }: ShoppingListToolProps) {
 
   // Create new list
   const [isCreatingList, setIsCreatingList] = useState(false);
+  const [isSavingList, setIsSavingList] = useState(false);
   const [newListName, setNewListName] = useState('');
   const [newListDate, setNewListDate] = useState(new Date().toISOString().split('T')[0]);
   const [newListItems, setNewListItems] = useState<ShoppingListItemRef[]>([]);
@@ -296,7 +291,6 @@ export function ShoppingListTool({ toolId }: ShoppingListToolProps) {
           name: string;
           date: string;
           isActive: boolean;
-          showOnDashboard?: boolean;
           createdAt?: string;
           updatedAt?: string;
           items: { itemId: string; name: string; category?: string; isChecked?: boolean; quantity?: number | null; unit?: string | null }[];
@@ -313,7 +307,6 @@ export function ShoppingListTool({ toolId }: ShoppingListToolProps) {
             unit: item.unit ?? '',
           })),
           isActive: l.isActive,
-          showOnDashboard: l.showOnDashboard,
           createdAt: l.createdAt ?? '',
           updatedAt: l.updatedAt ?? '',
           attachments: l.attachments ?? [],
@@ -612,6 +605,7 @@ export function ShoppingListTool({ toolId }: ShoppingListToolProps) {
 
   const createList = async () => {
     if (!newListName.trim() || !toolId) return;
+    setIsSavingList(true);
     try {
       const res = await fetch(API_BASE, {
         method: 'POST',
@@ -655,6 +649,8 @@ export function ShoppingListTool({ toolId }: ShoppingListToolProps) {
       await fetchLists();
     } catch (e) {
       console.error('Create list error:', e);
+    } finally {
+      setIsSavingList(false);
     }
   };
 
@@ -750,6 +746,7 @@ export function ShoppingListTool({ toolId }: ShoppingListToolProps) {
     const list = shoppingLists.find((l) => l.id === editingListId);
     const name = editingListName.trim() || list?.name || '';
     const date = editingListDate;
+    setIsSavingList(true);
     try {
       const res = await fetch('/api/tools/shopping-list', {
         method: 'POST',
@@ -772,6 +769,8 @@ export function ShoppingListTool({ toolId }: ShoppingListToolProps) {
       await fetchLists();
     } catch (e) {
       console.error('Update list error:', e);
+    } finally {
+      setIsSavingList(false);
     }
   };
 
@@ -1361,10 +1360,10 @@ export function ShoppingListTool({ toolId }: ShoppingListToolProps) {
                 </button>
                 <button
                   onClick={createList}
-                  disabled={!newListName.trim()}
+                  disabled={!newListName.trim() || isSavingList}
                   className={primaryButtonClass}
                 >
-                  Create List
+                  {isSavingList ? 'Saving...' : 'Create List'}
                 </button>
               </div>
             </div>
@@ -1511,9 +1510,10 @@ export function ShoppingListTool({ toolId }: ShoppingListToolProps) {
                         </button>
                         <button
                           onClick={saveEditingList}
-                          className="px-3 py-1.5 rounded bg-emerald-500 text-slate-950 text-sm font-medium hover:bg-emerald-400"
+                          disabled={isSavingList}
+                          className="px-3 py-1.5 rounded bg-emerald-500 text-slate-950 text-sm font-medium hover:bg-emerald-400 disabled:cursor-not-allowed disabled:opacity-50"
                         >
-                          Save
+                          {isSavingList ? 'Saving...' : 'Save'}
                         </button>
                       </div>
                     </div>
@@ -1761,9 +1761,10 @@ export function ShoppingListTool({ toolId }: ShoppingListToolProps) {
                         </button>
                         <button
                           onClick={saveEditingList}
-                          className="px-3 py-1.5 rounded bg-emerald-500 text-slate-950 text-sm font-medium hover:bg-emerald-400"
+                          disabled={isSavingList}
+                          className="px-3 py-1.5 rounded bg-emerald-500 text-slate-950 text-sm font-medium hover:bg-emerald-400 disabled:cursor-not-allowed disabled:opacity-50"
                         >
-                          Save
+                          {isSavingList ? 'Saving...' : 'Save'}
                         </button>
                       </div>
                     </div>
@@ -2133,7 +2134,7 @@ export function ShoppingListTool({ toolId }: ShoppingListToolProps) {
                       Categories
                     </h3>
                     {categories.length === 0 ? (
-                      <p className="text-slate-500 text-sm px-2 py-4">No categories yet. Add an item to create one.</p>
+                      <p className="text-slate-500 text-sm px-2 py-4">No categories yet. Click + to add one.</p>
                     ) : (
                       <nav className="space-y-0.5" aria-label="Item categories">
                         {categories.map((cat) => (
@@ -2529,6 +2530,7 @@ export function ShoppingListTool({ toolId }: ShoppingListToolProps) {
 
       <AttachmentModal
         open={attachmentModal !== null}
+        stacked={viewListId !== null}
         onClose={closeAttachmentModal}
         previewItem={viewPreview}
         title={

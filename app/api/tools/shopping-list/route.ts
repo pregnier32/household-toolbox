@@ -348,19 +348,12 @@ async function insertShoppingList(
     name: name.trim(),
     list_date: listDate || new Date().toISOString().split('T')[0],
     is_active: true,
-    show_on_dashboard: false,
   };
-  let { data: list, error: listError } = await supabaseServer
+  const { data: list, error: listError } = await supabaseServer
     .from('tools_sl_lists')
     .insert(payload)
     .select()
     .single();
-  if (listError && isMissingColumnError(listError) && /show_on_dashboard/.test(listError.message ?? '')) {
-    const { show_on_dashboard: _show, ...withoutDashboard } = payload;
-    const retry = await supabaseServer.from('tools_sl_lists').insert(withoutDashboard).select().single();
-    list = retry.data;
-    listError = retry.error;
-  }
   return { list, listError };
 }
 
@@ -409,36 +402,6 @@ export async function GET(request: NextRequest) {
   }
 
   try {
-    if (resource === 'dashboard') {
-      const { data: lists, error } = await supabaseServer
-        .from('tools_sl_lists')
-        .select('id, name, list_date')
-        .eq('user_id', user.id)
-        .eq('tool_id', toolId)
-        .eq('show_on_dashboard', true)
-        .eq('is_active', true);
-
-      if (error) {
-        console.error('Error fetching dashboard lists:', error);
-        return NextResponse.json({ error: 'Failed to fetch lists' }, { status: 500 });
-      }
-
-      const summaries: { listId: string; name: string; date: string; itemCount: number }[] = [];
-      for (const list of lists || []) {
-        const { count } = await supabaseServer
-          .from('tools_sl_list_items')
-          .select('id', { count: 'exact', head: true })
-          .eq('list_id', list.id);
-        summaries.push({
-          listId: list.id,
-          name: list.name,
-          date: list.list_date,
-          itemCount: count ?? 0,
-        });
-      }
-      return NextResponse.json({ summaries });
-    }
-
     if (resource === 'items' || !resource) {
       const { data: userItems, error: itemsError } = await supabaseServer
         .from('tools_sl_items')
@@ -479,7 +442,7 @@ export async function GET(request: NextRequest) {
     if (resource === 'lists') {
       const { data: lists, error: listsError } = await supabaseServer
         .from('tools_sl_lists')
-        .select('id, name, list_date, is_active, show_on_dashboard, created_at, updated_at')
+        .select('id, name, list_date, is_active, created_at, updated_at')
         .eq('user_id', user.id)
         .eq('tool_id', toolId)
         .order('list_date', { ascending: false });
@@ -494,7 +457,6 @@ export async function GET(request: NextRequest) {
         name: string;
         date: string;
         isActive: boolean;
-        showOnDashboard: boolean;
         createdAt: string;
         updatedAt: string;
         items: { itemId: string; name: string; category: string; isChecked: boolean; quantity: number | null; unit: string | null }[];
@@ -511,7 +473,6 @@ export async function GET(request: NextRequest) {
           name: list.name,
           date: list.list_date,
           isActive: !!list.is_active,
-          showOnDashboard: !!list.show_on_dashboard,
           createdAt: list.created_at ?? '',
           updatedAt: list.updated_at ?? '',
           items,
@@ -633,7 +594,6 @@ export async function POST(request: NextRequest) {
           date: verify.list_date,
           isActive: true,
           toolId: listToolId,
-          showOnDashboard: false,
           items: savedItems,
           attachments: [],
         },
@@ -736,7 +696,7 @@ export async function POST(request: NextRequest) {
       }
       const { error } = await supabaseServer
         .from('tools_sl_lists')
-        .update({ is_active: false, show_on_dashboard: false })
+        .update({ is_active: false })
         .eq('id', listId)
         .eq('user_id', user.id)
         .eq('tool_id', toolId);
@@ -783,23 +743,6 @@ export async function POST(request: NextRequest) {
         .update({ is_checked: !!isChecked })
         .eq('list_id', listId)
         .eq('item_id', itemId);
-      if (error) {
-        return NextResponse.json({ error: error.message }, { status: 500 });
-      }
-      return NextResponse.json({ success: true });
-    }
-
-    if (action === 'setShowOnDashboard') {
-      const { listId, showOnDashboard } = body as { listId: string; showOnDashboard: boolean };
-      if (!listId) {
-        return NextResponse.json({ error: 'List ID is required' }, { status: 400 });
-      }
-      const { error } = await supabaseServer
-        .from('tools_sl_lists')
-        .update({ show_on_dashboard: !!showOnDashboard })
-        .eq('id', listId)
-        .eq('user_id', user.id)
-        .eq('tool_id', toolId);
       if (error) {
         return NextResponse.json({ error: error.message }, { status: 500 });
       }

@@ -61,9 +61,7 @@ type RepairHistoryToolProps = {
 
 /** Parse YYYY-MM-DD as a local calendar day (avoids UTC midnight shifting the displayed day). */
 function formatPdfDate(dateStr: string): string {
-  const match = /^(\d{4})-(\d{2})-(\d{2})/.exec(dateStr);
-  if (!match) return dateStr;
-  return new Date(Number(match[1]), Number(match[2]) - 1, Number(match[3])).toLocaleDateString();
+  return formatPaddedDisplayDate(dateStr) || dateStr;
 }
 
 function formatLocalCalendarDate(dateStr: string): string {
@@ -72,7 +70,7 @@ function formatLocalCalendarDate(dateStr: string): string {
 }
 
 function formatReportDate(date: Date): string {
-  return date.toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' });
+  return formatPaddedDisplayDate(date);
 }
 
 function mapApiRecord(r: any): HistoryRecord {
@@ -436,11 +434,11 @@ export function RepairHistoryTool({ toolId }: RepairHistoryToolProps) {
     ? 'rounded-2xl border border-slate-200 bg-white p-6 max-w-md w-full mx-4 shadow-xl'
     : 'rounded-2xl border border-slate-800 bg-slate-900 p-6 max-w-md w-full mx-4';
   const rowIconEmeraldClass = isLight
-    ? 'inline-flex items-center justify-center rounded-lg border-2 border-emerald-700 bg-white p-2 text-emerald-700 transition-colors hover:bg-emerald-50 hover:text-emerald-900'
-    : 'inline-flex items-center justify-center rounded-lg border-2 border-emerald-500/50 bg-slate-800/50 p-2 text-emerald-300 transition-colors hover:border-emerald-400 hover:bg-emerald-500/20';
+    ? 'inline-flex min-h-11 min-w-11 items-center justify-center rounded-lg border-2 border-emerald-700 bg-white p-2 text-emerald-700 transition-colors hover:bg-emerald-50 hover:text-emerald-900'
+    : 'inline-flex min-h-11 min-w-11 items-center justify-center rounded-lg border-2 border-emerald-500/50 bg-slate-800/50 p-2 text-emerald-300 transition-colors hover:border-emerald-400 hover:bg-emerald-500/20';
   const rowIconDangerClass = isLight
-    ? 'inline-flex items-center justify-center rounded-lg border-2 border-red-300 bg-white p-2 text-red-700 transition-colors hover:bg-red-50 hover:border-red-400'
-    : 'inline-flex items-center justify-center rounded-lg border-2 border-red-500/50 bg-slate-800/50 p-2 text-red-400 transition-colors hover:border-red-400 hover:bg-red-500/20';
+    ? 'inline-flex min-h-11 min-w-11 items-center justify-center rounded-lg border-2 border-red-300 bg-white p-2 text-red-700 transition-colors hover:bg-red-50 hover:border-red-400'
+    : 'inline-flex min-h-11 min-w-11 items-center justify-center rounded-lg border-2 border-red-500/50 bg-slate-800/50 p-2 text-red-400 transition-colors hover:border-red-400 hover:bg-red-500/20';
   const checkboxClass = isLight
     ? 'w-5 h-5 rounded border-slate-400 bg-white text-emerald-600 focus:ring-emerald-500 focus:ring-offset-white'
     : 'w-5 h-5 rounded border-slate-600 bg-slate-700 text-emerald-500 focus:ring-emerald-500 focus:ring-offset-slate-800';

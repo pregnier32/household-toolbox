@@ -20,8 +20,8 @@ export function ExportPdfIconButton({
       onClick={onClick}
       className={
         isLight
-          ? 'shrink-0 p-2 rounded-lg text-emerald-700 transition-colors hover:bg-emerald-100 hover:text-emerald-900'
-          : 'shrink-0 p-2 rounded-lg text-emerald-400 transition-colors hover:bg-emerald-500/10 hover:text-emerald-300'
+          ? 'inline-flex min-h-11 min-w-11 shrink-0 items-center justify-center rounded-lg p-2 text-emerald-700 transition-colors hover:bg-emerald-100 hover:text-emerald-900'
+          : 'inline-flex min-h-11 min-w-11 shrink-0 items-center justify-center rounded-lg p-2 text-emerald-400 transition-colors hover:bg-emerald-500/10 hover:text-emerald-300'
       }
       title={title}
       aria-label={title}

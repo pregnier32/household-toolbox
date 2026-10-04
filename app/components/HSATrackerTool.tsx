@@ -23,8 +23,7 @@ function generateId(): string {
 
 function formatPdfDate(isoDate: string): string {
   if (!isoDate) return '';
-  const [y, m, d] = isoDate.split('-');
-  return `${Number(m)}/${Number(d)}/${y}`;
+  return formatPaddedDisplayDate(isoDate) || isoDate;
 }
 
 function formatDateForDisplay(isoDate: string): string {
@@ -43,7 +42,7 @@ function formatMoney(n: number): string {
 }
 
 function formatReportDate(date: Date): string {
-  return date.toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' });
+  return formatPaddedDisplayDate(date);
 }
 
 function hsaReportFileSlug(accountName: string): string {
@@ -325,12 +324,12 @@ export function HSATrackerTool({ toolId }: HSATrackerToolProps) {
 
   const rowIconEmeraldClass =
     resolvedTheme === 'light'
-      ? 'inline-flex items-center justify-center rounded-lg border-2 border-emerald-700 bg-white p-2 text-emerald-700 transition-colors hover:bg-emerald-50 hover:text-emerald-900 focus:outline-none focus:ring-2 focus:ring-emerald-500/50 focus:ring-offset-2 focus:ring-offset-white'
-      : 'inline-flex items-center justify-center rounded-lg border-2 border-emerald-500/50 bg-slate-800/50 p-2 text-emerald-300 transition-colors hover:border-emerald-400 hover:bg-emerald-500/20 focus:outline-none focus:ring-2 focus:ring-emerald-500/50 focus:ring-offset-2 focus:ring-offset-slate-900';
+      ? 'inline-flex min-h-11 min-w-11 items-center justify-center rounded-lg border-2 border-emerald-700 bg-white p-2 text-emerald-700 transition-colors hover:bg-emerald-50 hover:text-emerald-900 focus:outline-none focus:ring-2 focus:ring-emerald-500/50 focus:ring-offset-2 focus:ring-offset-white'
+      : 'inline-flex min-h-11 min-w-11 items-center justify-center rounded-lg border-2 border-emerald-500/50 bg-slate-800/50 p-2 text-emerald-300 transition-colors hover:border-emerald-400 hover:bg-emerald-500/20 focus:outline-none focus:ring-2 focus:ring-emerald-500/50 focus:ring-offset-2 focus:ring-offset-slate-900';
   const rowIconDangerClass =
     resolvedTheme === 'light'
-      ? 'inline-flex items-center justify-center rounded-lg border-2 border-red-300 bg-white p-2 text-red-700 transition-colors hover:bg-red-50 hover:border-red-400 focus:outline-none focus:ring-2 focus:ring-red-500/40 focus:ring-offset-2 focus:ring-offset-white'
-      : 'inline-flex items-center justify-center rounded-lg border-2 border-red-500/50 bg-slate-800/50 p-2 text-red-400 transition-colors hover:border-red-400 hover:bg-red-500/20 focus:outline-none focus:ring-2 focus:ring-red-500/50 focus:ring-offset-2 focus:ring-offset-slate-900';
+      ? 'inline-flex min-h-11 min-w-11 items-center justify-center rounded-lg border-2 border-red-300 bg-white p-2 text-red-700 transition-colors hover:bg-red-50 hover:border-red-400 focus:outline-none focus:ring-2 focus:ring-red-500/40 focus:ring-offset-2 focus:ring-offset-white'
+      : 'inline-flex min-h-11 min-w-11 items-center justify-center rounded-lg border-2 border-red-500/50 bg-slate-800/50 p-2 text-red-400 transition-colors hover:border-red-400 hover:bg-red-500/20 focus:outline-none focus:ring-2 focus:ring-red-500/50 focus:ring-offset-2 focus:ring-offset-slate-900';
   const successAlertClass = isLight
     ? 'rounded-lg px-4 py-2 text-sm bg-emerald-50 text-emerald-900 border border-emerald-200'
     : 'rounded-lg px-4 py-2 text-sm bg-emerald-500/20 text-emerald-300';
@@ -551,6 +550,7 @@ export function HSATrackerTool({ toolId }: HSATrackerToolProps) {
   };
 
   const [isAddingDeposit, setIsAddingDeposit] = useState(false);
+  const [isSavingRecord, setIsSavingRecord] = useState(false);
   const [editingDepositId, setEditingDepositId] = useState<string | null>(null);
   const [depositForm, setDepositForm] = useState({
     name: '',
@@ -738,6 +738,15 @@ export function HSATrackerTool({ toolId }: HSATrackerToolProps) {
     }
     setDeleteConfirmAccountId(null);
     setDeleteConfirmText('');
+  };
+
+  const runSaving = async (work: () => Promise<void>) => {
+    setIsSavingRecord(true);
+    try {
+      await work();
+    } finally {
+      setIsSavingRecord(false);
+    }
   };
 
   const saveDeposit = async () => {
@@ -1632,11 +1641,11 @@ export function HSATrackerTool({ toolId }: HSATrackerToolProps) {
                   <div className="flex items-center gap-2">
                     <button
                       type="button"
-                      onClick={saveAccountEdit}
-                      disabled={!editingAccountName.trim()}
+                      onClick={() => void runSaving(saveAccountEdit)}
+                      disabled={!editingAccountName.trim() || isSavingRecord}
                       className={primaryButtonXsClass}
                     >
-                      Save
+                      {isSavingRecord ? 'Saving...' : 'Save'}
                     </button>
                     <button type="button" onClick={() => setEditingAccountId(null)} className={secondaryButtonSmClass}>
                       Cancel
@@ -1757,8 +1766,8 @@ export function HSATrackerTool({ toolId }: HSATrackerToolProps) {
                 className={`h-10 w-14 rounded cursor-pointer ${isLight ? 'border border-slate-300' : 'border border-slate-600'}`}
               />
             </div>
-            <button type="button" onClick={saveNewAccount} disabled={!newAccountName.trim()} className={primaryButtonClass}>
-              Create
+            <button type="button" onClick={() => void runSaving(saveNewAccount)} disabled={!newAccountName.trim() || isSavingRecord} className={primaryButtonClass}>
+              {isSavingRecord ? 'Saving...' : 'Create'}
             </button>
             <button
               type="button"
@@ -2103,8 +2112,8 @@ export function HSATrackerTool({ toolId }: HSATrackerToolProps) {
                     )}
                   </div>
                   <div className="flex gap-2 mt-4">
-                    <button type="button" onClick={saveDeposit} className={primaryButtonClass}>
-                      {editingDepositId ? 'Save changes' : 'Add deposit'}
+                    <button type="button" onClick={() => void runSaving(saveDeposit)} disabled={isSavingRecord} className={primaryButtonClass}>
+                      {isSavingRecord ? 'Saving...' : editingDepositId ? 'Save changes' : 'Add deposit'}
                     </button>
                     <button
                       type="button"
@@ -2124,7 +2133,7 @@ export function HSATrackerTool({ toolId }: HSATrackerToolProps) {
               <div className="space-y-3">
                 {depositListEmpty ? (
                   <div className={cardClass}>
-                    <p className={`${mutedSmallClass} text-center py-6`}>No deposits yet. Add one to get started.</p>
+                    <p className={`${mutedSmallClass} text-center py-6`}>No deposits found. Add one to get started!</p>
                   </div>
                 ) : (
                   sortedDeposits.map((d) => (
@@ -2362,8 +2371,8 @@ export function HSATrackerTool({ toolId }: HSATrackerToolProps) {
                     </div>
                   </div>
                   <div className="flex gap-2 mt-4">
-                    <button type="button" onClick={saveExpense} className={primaryButtonClass}>
-                      {editingExpenseId ? 'Save changes' : 'Add expense'}
+                    <button type="button" onClick={() => void runSaving(saveExpense)} disabled={isSavingRecord} className={primaryButtonClass}>
+                      {isSavingRecord ? 'Saving...' : editingExpenseId ? 'Save changes' : 'Add expense'}
                     </button>
                     <button
                       type="button"
@@ -2379,7 +2388,7 @@ export function HSATrackerTool({ toolId }: HSATrackerToolProps) {
               <div className="space-y-3">
                 {expenseListEmpty ? (
                   <div className={cardClass}>
-                    <p className={`${mutedSmallClass} text-center py-6`}>No expenses yet. Add one to get started.</p>
+                    <p className={`${mutedSmallClass} text-center py-6`}>No expenses found. Add one to get started!</p>
                   </div>
                 ) : (
                   sortedExpenses.map((ex) => {

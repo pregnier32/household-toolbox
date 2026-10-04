@@ -62,8 +62,8 @@ export function AppNoticeProvider({ children }: { children: React.ReactNode }) {
               onClick={clearNotice}
               className={
                 isLight
-                  ? 'rounded-md p-1 text-slate-500 hover:bg-black/5 hover:text-slate-800'
-                  : 'rounded-md p-1 text-slate-300 hover:bg-white/10 hover:text-white'
+                  ? 'inline-flex min-h-11 min-w-11 shrink-0 items-center justify-center rounded-md text-slate-500 hover:bg-black/5 hover:text-slate-800'
+                  : 'inline-flex min-h-11 min-w-11 shrink-0 items-center justify-center rounded-md text-slate-300 hover:bg-white/10 hover:text-white'
               }
               aria-label="Dismiss notice"
               title="Dismiss notice"

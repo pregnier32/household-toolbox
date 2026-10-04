@@ -19,20 +19,22 @@ export function AttachmentButton({
   const isLight = resolvedTheme === 'light';
   const hasFiles = count > 0;
 
+  const accessibleName = ariaLabel || (hasFiles ? `Attachments, ${count} file${count === 1 ? '' : 's'}` : 'Add attachments');
   const buttonClass = hasFiles
     ? isLight
-      ? 'relative inline-flex h-10 w-10 items-center justify-center rounded-lg border-2 border-emerald-700 bg-white text-emerald-700 transition-colors hover:bg-emerald-50 hover:text-emerald-900 focus:outline-none focus:ring-2 focus:ring-emerald-500/50 focus:ring-offset-2 focus:ring-offset-white disabled:cursor-not-allowed disabled:opacity-50'
-      : 'relative inline-flex h-10 w-10 items-center justify-center rounded-lg border-2 border-emerald-500/50 bg-slate-800/50 text-emerald-300 transition-colors hover:border-emerald-400 hover:bg-emerald-500/20 focus:outline-none focus:ring-2 focus:ring-emerald-500/50 focus:ring-offset-2 focus:ring-offset-slate-900 disabled:cursor-not-allowed disabled:opacity-50'
+      ? 'relative inline-flex min-h-11 min-w-11 items-center justify-center rounded-lg border-2 border-emerald-700 bg-white text-emerald-700 transition-colors hover:bg-emerald-50 hover:text-emerald-900 focus:outline-none focus:ring-2 focus:ring-emerald-500/50 focus:ring-offset-2 focus:ring-offset-white disabled:cursor-not-allowed disabled:opacity-50'
+      : 'relative inline-flex min-h-11 min-w-11 items-center justify-center rounded-lg border-2 border-emerald-500/50 bg-slate-800/50 text-emerald-300 transition-colors hover:border-emerald-400 hover:bg-emerald-500/20 focus:outline-none focus:ring-2 focus:ring-emerald-500/50 focus:ring-offset-2 focus:ring-offset-slate-900 disabled:cursor-not-allowed disabled:opacity-50'
     : isLight
-      ? 'relative inline-flex h-10 w-10 items-center justify-center rounded-lg border-2 border-slate-400 bg-slate-100 text-slate-700 transition-colors hover:bg-slate-200 hover:text-slate-900 focus:outline-none focus:ring-2 focus:ring-slate-400/40 focus:ring-offset-2 focus:ring-offset-white disabled:cursor-not-allowed disabled:opacity-50'
-      : 'relative inline-flex h-10 w-10 items-center justify-center rounded-lg border-2 border-slate-600 bg-slate-800 text-slate-200 transition-colors hover:bg-slate-700 focus:outline-none focus:ring-2 focus:ring-slate-500/50 focus:ring-offset-2 focus:ring-offset-slate-900 disabled:cursor-not-allowed disabled:opacity-50';
+      ? 'relative inline-flex min-h-11 min-w-11 items-center justify-center rounded-lg border-2 border-slate-400 bg-slate-100 text-slate-700 transition-colors hover:bg-slate-200 hover:text-slate-900 focus:outline-none focus:ring-2 focus:ring-slate-400/40 focus:ring-offset-2 focus:ring-offset-white disabled:cursor-not-allowed disabled:opacity-50'
+      : 'relative inline-flex min-h-11 min-w-11 items-center justify-center rounded-lg border-2 border-slate-600 bg-slate-800 text-slate-200 transition-colors hover:bg-slate-700 focus:outline-none focus:ring-2 focus:ring-slate-500/50 focus:ring-offset-2 focus:ring-offset-slate-900 disabled:cursor-not-allowed disabled:opacity-50';
 
   return (
     <button
       type="button"
       onClick={onClick}
       disabled={disabled}
-      aria-label={ariaLabel || (hasFiles ? `Attachments, ${count} file${count === 1 ? '' : 's'}` : 'Add attachments')}
+      aria-label={accessibleName}
+      title={accessibleName}
       className={buttonClass}
     >
       <svg className="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">

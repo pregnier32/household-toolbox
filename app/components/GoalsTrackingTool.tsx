@@ -69,7 +69,6 @@ export type Goal = {
   priority: Priority;
   status: GoalStatus;
   percentComplete: number;
-  showOnDashboard: boolean;
   reminderDays: number | null;
   lastUpdateDate: string | null;
   useTaskProgressForPercent: boolean;
@@ -100,8 +99,7 @@ function generateId(): string {
 
 function formatPdfDate(isoDate: string): string {
   if (!isoDate) return '';
-  const [y, m, d] = isoDate.split('-');
-  return `${Number(m)}/${Number(d)}/${y}`;
+  return formatPaddedDisplayDate(isoDate) || isoDate;
 }
 
 function formatDateForDisplay(isoDate: string): string {
@@ -110,7 +108,7 @@ function formatDateForDisplay(isoDate: string): string {
 }
 
 function formatReportDate(date: Date): string {
-  return date.toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' });
+  return formatPaddedDisplayDate(date);
 }
 
 function compareGoalsForExport(a: Goal, b: Goal): number {
@@ -416,8 +414,8 @@ export function GoalsTrackingTool({ toolId }: GoalsTrackingToolProps) {
   const bodyMutedClass = isLight ? 'text-sm text-slate-600' : 'text-sm text-slate-500';
   const bodyTextClass = isLight ? 'text-sm text-slate-700' : 'text-sm text-slate-300';
   const editGoalIconClass = isLight
-    ? 'inline-flex items-center justify-center rounded-lg border-2 border-emerald-700 bg-white p-2 text-emerald-700 transition-colors hover:bg-emerald-50 hover:text-emerald-900 focus:outline-none focus:ring-2 focus:ring-emerald-500/50 focus:ring-offset-2 focus:ring-offset-white'
-    : 'inline-flex items-center justify-center rounded-lg border-2 border-emerald-500/50 bg-slate-800/50 p-2 text-emerald-300 transition-colors hover:border-emerald-400 hover:bg-emerald-500/20 focus:outline-none focus:ring-2 focus:ring-emerald-500/50 focus:ring-offset-2 focus:ring-offset-slate-900';
+    ? 'inline-flex min-h-11 min-w-11 items-center justify-center rounded-lg border-2 border-emerald-700 bg-white p-2 text-emerald-700 transition-colors hover:bg-emerald-50 hover:text-emerald-900 focus:outline-none focus:ring-2 focus:ring-emerald-500/50 focus:ring-offset-2 focus:ring-offset-white'
+    : 'inline-flex min-h-11 min-w-11 items-center justify-center rounded-lg border-2 border-emerald-500/50 bg-slate-800/50 p-2 text-emerald-300 transition-colors hover:border-emerald-400 hover:bg-emerald-500/20 focus:outline-none focus:ring-2 focus:ring-emerald-500/50 focus:ring-offset-2 focus:ring-offset-slate-900';
   const iconGhostClass = isLight
     ? 'rounded p-0.5 text-slate-600 hover:bg-slate-200 hover:text-slate-900 transition-colors'
     : 'rounded p-0.5 text-slate-400 hover:bg-slate-700 hover:text-slate-200 transition-colors';
@@ -898,7 +896,6 @@ export function GoalsTrackingTool({ toolId }: GoalsTrackingToolProps) {
         priority: newGoal.priority,
         status: newGoal.status,
         percentComplete: 0,
-        showOnDashboard: false,
         reminderDays: null,
         lastUpdateDate: null,
         useTaskProgressForPercent: false,
@@ -950,7 +947,6 @@ export function GoalsTrackingTool({ toolId }: GoalsTrackingToolProps) {
         priority: editingGoal.priority,
         status,
         percentComplete: editingGoal.percentComplete,
-        showOnDashboard: false,
         reminderDays: editingGoal.reminderDays,
         useTaskProgressForPercent: editingGoal.useTaskProgressForPercent,
         addToDashboard: editingGoal.addToDashboard === true && Boolean(editingGoal.targetDate),
@@ -2934,6 +2930,7 @@ export function GoalsTrackingTool({ toolId }: GoalsTrackingToolProps) {
 
       <AttachmentModal
         open={attachmentModal !== null}
+        stacked={Boolean(editingGoalId || showAllUpdatesGoalId)}
         onClose={closeAttachmentModal}
         previewItem={viewPreview}
         title={modalTitle}

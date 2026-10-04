@@ -1,3 +1,4 @@
+import { createHash } from 'crypto';
 import { NextRequest, NextResponse } from 'next/server';
 import { getHouseholdDataSession } from '@/lib/session';
 import { supabaseServer } from '@/lib/supabaseServer';
@@ -8,6 +9,19 @@ import { assertCanStoreBytes, isStorageLimitError, refreshUserStorageUsage } fro
 const MAX_FILE_SIZE = 10 * 1024 * 1024; // 10MB in bytes
 const SALT_ROUNDS = 10; // For password hashing
 const DOCUMENT_BUCKET = 'important-documents';
+
+function publicFileFields(fileUrl: string | null | undefined) {
+  const hasFile = Boolean(fileUrl);
+  return {
+    has_file: hasFile,
+    file_group: hasFile && fileUrl ? createHash('sha256').update(fileUrl).digest('hex').slice(0, 16) : null,
+  };
+}
+
+function withoutStorageUrl<T extends { file_url?: string | null }>(doc: T) {
+  const { file_url, ...rest } = doc;
+  return { ...rest, ...publicFileFields(file_url) };
+}
 
 function extractStoragePath(fileUrl: string | null | undefined): string | null {
   if (!fileUrl) return null;
@@ -77,7 +91,7 @@ export async function GET(request: NextRequest) {
 
       return NextResponse.json({
         document: {
-          ...document,
+          ...withoutStorageUrl(document),
           tags: tagIds,
           securityQuestions: securityQuestions?.map(sq => ({ questionId: sq.question_id })) || []
         }
@@ -130,13 +144,16 @@ export async function GET(request: NextRequest) {
 
     // A document owns a file only when a stored URL is present. A leftover filename
     // without that URL is not an attachment.
-    const documentsWithTags = documents?.map(doc => ({
-      ...doc,
-      file_name: doc.file_url ? doc.file_name : null,
-      file_size: doc.file_url ? doc.file_size : null,
-      file_type: doc.file_url ? doc.file_type : null,
-      tags: documentTagsMap[doc.id] || []
-    })) || [];
+    const documentsWithTags = documents?.map(doc => {
+      const publicDoc = withoutStorageUrl(doc);
+      return {
+        ...publicDoc,
+        file_name: doc.file_url ? doc.file_name : null,
+        file_size: doc.file_url ? doc.file_size : null,
+        file_type: doc.file_url ? doc.file_type : null,
+        tags: documentTagsMap[doc.id] || [],
+      };
+    }) || [];
 
     return NextResponse.json({
       documents: documentsWithTags,
@@ -510,7 +527,7 @@ export async function POST(request: NextRequest) {
         }
       }
 
-      return NextResponse.json({ document: newDocument });
+      return NextResponse.json({ document: withoutStorageUrl(newDocument) });
     } else {
       // Update existing document
       const updateData: any = {
@@ -589,7 +606,7 @@ export async function POST(request: NextRequest) {
           .insert(securityQuestionInserts);
       }
 
-      return NextResponse.json({ document: updatedDocument });
+      return NextResponse.json({ document: withoutStorageUrl(updatedDocument) });
     }
   } catch (error: any) {
     console.error('Error in POST /api/tools/important-documents:', error);

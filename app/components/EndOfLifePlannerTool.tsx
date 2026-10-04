@@ -435,7 +435,7 @@ function FamilyMemberList(props: {
             {members.length === 0 ? (
               <tr>
                 <td colSpan={4} className={`${props.mutedTextClass} py-4`}>
-                  No family members added yet. Next step: Add family member.
+                  No family members yet. Click + to add one.
                 </td>
               </tr>
             ) : visibleMembers.length === 0 ? (
@@ -980,14 +980,14 @@ export function EndOfLifePlannerTool({ toolId }: EndOfLifePlannerToolProps) {
     ? 'w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900 placeholder-slate-500 focus:border-red-500/50 focus:outline-none focus:ring-1 focus:ring-red-500/50 mb-4'
     : 'w-full rounded-lg border border-slate-700 bg-slate-900/70 px-3 py-2 text-sm text-slate-100 placeholder-slate-500 focus:border-red-500/50 focus:outline-none focus:ring-1 focus:ring-red-500/50 mb-4';
   const rowIconEmeraldClass = isLight
-    ? 'inline-flex items-center justify-center rounded-lg border-2 border-emerald-700 bg-white p-2 text-emerald-700 transition-colors hover:bg-emerald-50 hover:text-emerald-900 focus:outline-none focus:ring-2 focus:ring-emerald-500/50 focus:ring-offset-2 focus:ring-offset-white'
-    : 'inline-flex items-center justify-center rounded-lg border-2 border-emerald-500/50 bg-slate-800/50 p-2 text-emerald-300 transition-colors hover:border-emerald-400 hover:bg-emerald-500/20 focus:outline-none focus:ring-2 focus:ring-emerald-500/50 focus:ring-offset-2 focus:ring-offset-slate-900';
+    ? 'inline-flex min-h-11 min-w-11 items-center justify-center rounded-lg border-2 border-emerald-700 bg-white p-2 text-emerald-700 transition-colors hover:bg-emerald-50 hover:text-emerald-900 focus:outline-none focus:ring-2 focus:ring-emerald-500/50 focus:ring-offset-2 focus:ring-offset-white'
+    : 'inline-flex min-h-11 min-w-11 items-center justify-center rounded-lg border-2 border-emerald-500/50 bg-slate-800/50 p-2 text-emerald-300 transition-colors hover:border-emerald-400 hover:bg-emerald-500/20 focus:outline-none focus:ring-2 focus:ring-emerald-500/50 focus:ring-offset-2 focus:ring-offset-slate-900';
   const rowIconSecondaryClass = isLight
-    ? 'inline-flex items-center justify-center rounded-lg border-2 border-slate-400 bg-slate-100 p-2 text-slate-700 transition-colors hover:bg-slate-200 hover:text-slate-900 focus:outline-none focus:ring-2 focus:ring-slate-400/40 focus:ring-offset-2 focus:ring-offset-white'
-    : 'inline-flex items-center justify-center rounded-lg border-2 border-slate-600 bg-slate-800 p-2 text-slate-200 transition-colors hover:bg-slate-700 focus:outline-none focus:ring-2 focus:ring-slate-500/50 focus:ring-offset-2 focus:ring-offset-slate-900';
+    ? 'inline-flex min-h-11 min-w-11 items-center justify-center rounded-lg border-2 border-slate-400 bg-slate-100 p-2 text-slate-700 transition-colors hover:bg-slate-200 hover:text-slate-900 focus:outline-none focus:ring-2 focus:ring-slate-400/40 focus:ring-offset-2 focus:ring-offset-white'
+    : 'inline-flex min-h-11 min-w-11 items-center justify-center rounded-lg border-2 border-slate-600 bg-slate-800 p-2 text-slate-200 transition-colors hover:bg-slate-700 focus:outline-none focus:ring-2 focus:ring-slate-500/50 focus:ring-offset-2 focus:ring-offset-slate-900';
   const rowIconDangerClass = isLight
-    ? 'inline-flex items-center justify-center rounded-lg border-2 border-red-300 bg-white p-2 text-red-700 transition-colors hover:bg-red-50 hover:border-red-400 focus:outline-none focus:ring-2 focus:ring-red-500/40 focus:ring-offset-2 focus:ring-offset-white'
-    : 'inline-flex items-center justify-center rounded-lg border-2 border-red-500/50 bg-slate-800/50 p-2 text-red-400 transition-colors hover:border-red-400 hover:bg-red-500/20 focus:outline-none focus:ring-2 focus:ring-red-500/50 focus:ring-offset-2 focus:ring-offset-slate-900';
+    ? 'inline-flex min-h-11 min-w-11 items-center justify-center rounded-lg border-2 border-red-300 bg-white p-2 text-red-700 transition-colors hover:bg-red-50 hover:border-red-400 focus:outline-none focus:ring-2 focus:ring-red-500/40 focus:ring-offset-2 focus:ring-offset-white'
+    : 'inline-flex min-h-11 min-w-11 items-center justify-center rounded-lg border-2 border-red-500/50 bg-slate-800/50 p-2 text-red-400 transition-colors hover:border-red-400 hover:bg-red-500/20 focus:outline-none focus:ring-2 focus:ring-red-500/50 focus:ring-offset-2 focus:ring-offset-slate-900';
   const iconButtonClass = isLight
     ? 'rounded-lg p-2 text-slate-500 hover:bg-slate-100 hover:text-slate-900 transition-colors'
     : 'rounded-lg p-2 text-slate-400 hover:bg-slate-800 hover:text-slate-200 transition-colors';
@@ -1789,14 +1789,16 @@ export function EndOfLifePlannerTool({ toolId }: EndOfLifePlannerToolProps) {
               }}
               className={
                 isLight
-                  ? 'rounded p-0.5 text-slate-400 transition-colors hover:bg-slate-100 hover:text-slate-700'
-                  : 'rounded p-0.5 text-slate-500 transition-colors hover:bg-slate-800 hover:text-slate-200'
+                  ? 'inline-flex min-h-11 min-w-11 items-center justify-center rounded text-slate-600 transition-colors hover:bg-slate-100 hover:text-slate-900'
+                  : 'inline-flex min-h-11 min-w-11 items-center justify-center rounded text-slate-500 transition-colors hover:bg-slate-800 hover:text-slate-200'
               }
               aria-label={`${title} options`}
               title={`${title} options`}
             >
-              <svg className="h-4 w-4" fill="currentColor" viewBox="0 0 24 24" aria-hidden>
-                <path d={ICON.dots} />
+              <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden>
+                <circle cx="12" cy="5" r="1" strokeWidth="2" />
+                <circle cx="12" cy="12" r="1" strokeWidth="2" />
+                <circle cx="12" cy="19" r="1" strokeWidth="2" />
               </svg>
             </button>
             {menuOpenSubsectionId === menuId ? (
@@ -2432,7 +2434,7 @@ export function EndOfLifePlannerTool({ toolId }: EndOfLifePlannerToolProps) {
         { label: 'Phone', value: (item) => item.phone },
         { label: 'Email', value: (item) => item.email },
       ]}
-      emptyText="No contacts added yet."
+      emptyText="No contacts yet. Click + to add one."
       addTitle="Add Contact"
       editTitle="Edit Contact"
       itemLabel="contact"
@@ -2464,7 +2466,7 @@ export function EndOfLifePlannerTool({ toolId }: EndOfLifePlannerToolProps) {
         { label: 'Location', value: (item) => item.location },
         { label: 'Username', value: (item) => item.username },
       ]}
-      emptyText="No devices added yet."
+      emptyText="No devices yet. Click + to add one."
       addTitle="Add Device"
       editTitle="Edit Device"
       itemLabel="device"
@@ -2492,7 +2494,7 @@ export function EndOfLifePlannerTool({ toolId }: EndOfLifePlannerToolProps) {
         { label: 'Username', value: (item) => item.username },
         { label: 'Website', value: (item) => item.website },
       ]}
-      emptyText="No online accounts added yet."
+      emptyText="No online accounts yet. Click + to add one."
       addTitle="Add Online Account"
       editTitle="Edit Online Account"
       itemLabel="online account"
@@ -2525,7 +2527,7 @@ export function EndOfLifePlannerTool({ toolId }: EndOfLifePlannerToolProps) {
         { label: 'Location', value: (item) => item.physicalLocation },
         { label: 'Expiration', value: (item) => (item.expirationDate ? formatDisplayDate(item.expirationDate) : '') },
       ]}
-      emptyText="No document notes added yet."
+      emptyText="No document notes yet. Click + to add one."
       addTitle="Add Document"
       editTitle="Edit Document"
       itemLabel="document"
@@ -2564,7 +2566,7 @@ export function EndOfLifePlannerTool({ toolId }: EndOfLifePlannerToolProps) {
         { label: 'Policy #', value: (item) => item.policyNumber },
         { label: 'Beneficiary', value: (item) => item.beneficiary },
       ]}
-      emptyText="No policies added yet."
+      emptyText="No policies yet. Click + to add one."
       addTitle="Add Policy"
       editTitle="Edit Policy"
       itemLabel="policy"
@@ -2594,7 +2596,7 @@ export function EndOfLifePlannerTool({ toolId }: EndOfLifePlannerToolProps) {
         { label: 'Owner(s)', value: (item) => item.owners },
         { label: 'Last 4', value: (item) => lastFourDisplay(item.lastFour) },
       ]}
-      emptyText="No bank accounts added yet."
+      emptyText="No bank accounts yet. Click + to add one."
       addTitle="Add Bank Account"
       editTitle="Edit Bank Account"
       itemLabel="bank account"
@@ -2621,7 +2623,7 @@ export function EndOfLifePlannerTool({ toolId }: EndOfLifePlannerToolProps) {
         { label: 'Owner', value: (item) => item.owner },
         { label: 'Beneficiaries', value: (item) => item.beneficiaries },
       ]}
-      emptyText="No investment accounts added yet."
+      emptyText="No investment accounts yet. Click + to add one."
       addTitle="Add Investment Account"
       editTitle="Edit Investment Account"
       itemLabel="investment account"
@@ -2648,7 +2650,7 @@ export function EndOfLifePlannerTool({ toolId }: EndOfLifePlannerToolProps) {
         { label: 'Last 4', value: (item) => lastFourDisplay(item.lastFour) },
         { label: 'Cardholder', value: (item) => item.primaryHolder },
       ]}
-      emptyText="No credit cards added yet."
+      emptyText="No credit cards yet. Click + to add one."
       addTitle="Add Credit Card"
       editTitle="Edit Credit Card"
       itemLabel="credit card"
@@ -2675,7 +2677,7 @@ export function EndOfLifePlannerTool({ toolId }: EndOfLifePlannerToolProps) {
         { label: 'Balance', value: (item) => item.approximateBalance },
         { label: 'Payment', value: (item) => item.monthlyPayment },
       ]}
-      emptyText="No debts added yet."
+      emptyText="No debts yet. Click + to add one."
       addTitle="Add Debt"
       editTitle="Edit Debt"
       itemLabel="debt"
@@ -2702,7 +2704,7 @@ export function EndOfLifePlannerTool({ toolId }: EndOfLifePlannerToolProps) {
         { label: 'Deposited', value: (item) => item.depositedWhere },
         { label: 'Contact', value: (item) => item.contact },
       ]}
-      emptyText="No income sources added yet."
+      emptyText="No income sources yet. Click + to add one."
       addTitle="Add Income Source"
       editTitle="Edit Income Source"
       itemLabel="income source"
@@ -2729,7 +2731,7 @@ export function EndOfLifePlannerTool({ toolId }: EndOfLifePlannerToolProps) {
         { label: 'Amount', value: (item) => item.amount },
         { label: 'Frequency', value: (item) => item.frequency },
       ]}
-      emptyText="No recurring bills added yet."
+      emptyText="No recurring bills yet. Click + to add one."
       addTitle="Add Recurring Bill"
       editTitle="Edit Recurring Bill"
       itemLabel="recurring bill"
@@ -2756,7 +2758,7 @@ export function EndOfLifePlannerTool({ toolId }: EndOfLifePlannerToolProps) {
         { label: 'Account', value: (item) => item.accountReference },
         { label: 'Contact', value: (item) => item.contact },
       ]}
-      emptyText="No utilities added yet."
+      emptyText="No utilities yet. Click + to add one."
       addTitle="Add Utility"
       editTitle="Edit Utility"
       itemLabel="utility"
@@ -2783,7 +2785,7 @@ export function EndOfLifePlannerTool({ toolId }: EndOfLifePlannerToolProps) {
         { label: 'Contact', value: (item) => item.contact },
         { label: 'Account', value: (item) => item.accountReference },
       ]}
-      emptyText="No service providers added yet."
+      emptyText="No service providers yet. Click + to add one."
       addTitle="Add Service Provider"
       editTitle="Edit Service Provider"
       itemLabel="service provider"
@@ -2814,7 +2816,7 @@ export function EndOfLifePlannerTool({ toolId }: EndOfLifePlannerToolProps) {
         { label: 'Insurance', value: (item) => item.insurance },
         { label: 'Title', value: (item) => item.titleLocation },
       ]}
-      emptyText="No vehicles added yet."
+      emptyText="No vehicles yet. Click + to add one."
       addTitle="Add Vehicle"
       editTitle="Edit Vehicle"
       itemLabel="vehicle"
@@ -2840,7 +2842,7 @@ export function EndOfLifePlannerTool({ toolId }: EndOfLifePlannerToolProps) {
         { label: 'Priority', value: (item) => item.priority },
         { label: 'Responsible', value: (item) => item.personResponsible },
       ]}
-      emptyText="No next steps added yet."
+      emptyText="No next steps yet. Click + to add one."
       addTitle="Add Step"
       editTitle="Edit Step"
       itemLabel="step"
@@ -2897,7 +2899,7 @@ export function EndOfLifePlannerTool({ toolId }: EndOfLifePlannerToolProps) {
         { label: 'Location', value: (item) => item.location },
         { label: 'Description', value: (item) => item.description },
       ]}
-      emptyText="No personal items added yet."
+      emptyText="No personal items yet. Click + to add one."
       addTitle="Add Personal Item"
       editTitle="Edit Personal Item"
       itemLabel="personal item"
@@ -2949,7 +2951,7 @@ export function EndOfLifePlannerTool({ toolId }: EndOfLifePlannerToolProps) {
         { label: 'Type', value: (item) => item.letterType },
         { label: 'Visibility', value: (item) => item.visibility },
       ]}
-      emptyText="No letters added yet."
+      emptyText="No letters yet. Click + to add one."
       addTitle="Add Letter"
       editTitle="Edit Letter"
       itemLabel="letter"
@@ -3081,7 +3083,7 @@ export function EndOfLifePlannerTool({ toolId }: EndOfLifePlannerToolProps) {
         { label: 'Location', value: (item) => item.location },
         { label: 'Date', value: (item) => (item.importantDate ? formatDisplayDate(item.importantDate) : '') },
       ]}
-      emptyText="No custom records added yet."
+      emptyText="No custom records yet. Click + to add one."
       addTitle="Add Custom Record"
       editTitle="Edit Custom Record"
       itemLabel="custom record"

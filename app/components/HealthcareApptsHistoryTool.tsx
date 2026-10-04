@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useEffect, useRef } from 'react';
+import { formatDisplayDate } from '@/lib/format-display-date';
 import { useTheme } from './AppThemeProvider';
 import { useAppNotice } from './AppNotice';
 import { AttachmentButton } from './AttachmentButton';
@@ -139,7 +140,7 @@ function formatDateDisplay(dateStr: string): string {
 }
 
 function formatReportDate(date: Date): string {
-  return date.toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' });
+  return formatDisplayDate(date);
 }
 
 function localCalendarDayIso(date = new Date()): string {
@@ -339,11 +340,11 @@ export function HealthcareApptsHistoryTool({ toolId }: HealthcareApptsHistoryToo
     ? 'w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900 placeholder-slate-500 focus:border-red-500/50 focus:outline-none focus:ring-1 focus:ring-red-500/50 mb-4'
     : 'w-full rounded-lg border border-slate-700 bg-slate-900/70 px-3 py-2 text-sm text-slate-100 placeholder-slate-500 focus:border-red-500/50 focus:outline-none focus:ring-1 focus:ring-red-500/50 mb-4';
   const rowIconEmeraldClass = isLight
-    ? 'inline-flex items-center justify-center rounded-lg border-2 border-emerald-700 bg-white p-2 text-emerald-700 transition-colors hover:bg-emerald-50 hover:text-emerald-900 focus:outline-none focus:ring-2 focus:ring-emerald-500/50 focus:ring-offset-2 focus:ring-offset-white'
-    : 'inline-flex items-center justify-center rounded-lg border-2 border-emerald-500/50 bg-slate-800/50 p-2 text-emerald-300 transition-colors hover:border-emerald-400 hover:bg-emerald-500/20 focus:outline-none focus:ring-2 focus:ring-emerald-500/50 focus:ring-offset-2 focus:ring-offset-slate-900';
+    ? 'inline-flex min-h-11 min-w-11 items-center justify-center rounded-lg border-2 border-emerald-700 bg-white p-2 text-emerald-700 transition-colors hover:bg-emerald-50 hover:text-emerald-900 focus:outline-none focus:ring-2 focus:ring-emerald-500/50 focus:ring-offset-2 focus:ring-offset-white'
+    : 'inline-flex min-h-11 min-w-11 items-center justify-center rounded-lg border-2 border-emerald-500/50 bg-slate-800/50 p-2 text-emerald-300 transition-colors hover:border-emerald-400 hover:bg-emerald-500/20 focus:outline-none focus:ring-2 focus:ring-emerald-500/50 focus:ring-offset-2 focus:ring-offset-slate-900';
   const rowIconDangerClass = isLight
-    ? 'inline-flex items-center justify-center rounded-lg border-2 border-red-300 bg-white p-2 text-red-700 transition-colors hover:bg-red-50 hover:border-red-400 focus:outline-none focus:ring-2 focus:ring-red-500/40 focus:ring-offset-2 focus:ring-offset-white'
-    : 'inline-flex items-center justify-center rounded-lg border-2 border-red-500/50 bg-slate-800/50 p-2 text-red-400 transition-colors hover:border-red-400 hover:bg-red-500/20 focus:outline-none focus:ring-2 focus:ring-red-500/50 focus:ring-offset-2 focus:ring-offset-slate-900';
+    ? 'inline-flex min-h-11 min-w-11 items-center justify-center rounded-lg border-2 border-red-300 bg-white p-2 text-red-700 transition-colors hover:bg-red-50 hover:border-red-400 focus:outline-none focus:ring-2 focus:ring-red-500/40 focus:ring-offset-2 focus:ring-offset-white'
+    : 'inline-flex min-h-11 min-w-11 items-center justify-center rounded-lg border-2 border-red-500/50 bg-slate-800/50 p-2 text-red-400 transition-colors hover:border-red-400 hover:bg-red-500/20 focus:outline-none focus:ring-2 focus:ring-red-500/50 focus:ring-offset-2 focus:ring-offset-slate-900';
   const successAlertClass = isLight
     ? 'rounded-lg px-4 py-2 text-sm bg-emerald-50 text-emerald-900 border border-emerald-200'
     : 'rounded-lg px-4 py-2 text-sm bg-emerald-500/20 text-emerald-300';
@@ -1400,7 +1401,7 @@ export function HealthcareApptsHistoryTool({ toolId }: HealthcareApptsHistoryToo
                         ? 'flex-1 px-2 py-1 rounded text-xs font-semibold text-white bg-emerald-600 hover:bg-emerald-500 disabled:opacity-50 disabled:cursor-not-allowed'
                         : 'flex-1 px-2 py-1 rounded bg-emerald-500 text-slate-950 text-xs font-medium hover:bg-emerald-400 disabled:opacity-50 disabled:cursor-not-allowed'}
                     >
-                      Save
+                      {isSaving ? 'Saving...' : 'Save'}
                     </button>
                     <button
                       onClick={cancelEditingHeader}
@@ -1561,7 +1562,7 @@ export function HealthcareApptsHistoryTool({ toolId }: HealthcareApptsHistoryToo
               disabled={!newHeaderName.trim() || isSaving}
               className={primaryButtonClass}
             >
-              Create
+              {isSaving ? 'Saving...' : 'Create'}
             </button>
             <button
               onClick={() => setIsCreatingNewHeader(false)}
@@ -1884,7 +1885,7 @@ export function HealthcareApptsHistoryTool({ toolId }: HealthcareApptsHistoryToo
                       disabled={isSaving}
                       className={primaryButtonClass}
                     >
-                      Save record
+                      {isSaving ? 'Saving...' : 'Save record'}
                     </button>
                   </div>
                 </div>
@@ -2054,7 +2055,7 @@ export function HealthcareApptsHistoryTool({ toolId }: HealthcareApptsHistoryToo
                       disabled={isSaving}
                       className={primaryButtonClass}
                     >
-                      Save changes
+                      {isSaving ? 'Saving...' : 'Save changes'}
                     </button>
                   </div>
                 </div>

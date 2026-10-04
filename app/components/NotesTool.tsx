@@ -133,9 +133,7 @@ const localCalendarDate = (date = new Date()) => {
 };
 
 const formatPdfDate = (dateStr: string) => {
-  const match = /^(\d{4})-(\d{2})-(\d{2})/.exec(dateStr);
-  if (!match) return dateStr;
-  return new Date(Number(match[1]), Number(match[2]) - 1, Number(match[3])).toLocaleDateString();
+  return formatPaddedDisplayDate(dateStr) || dateStr;
 };
 
 const formatLocalCalendarDate = (dateStr: string) => {
@@ -144,7 +142,7 @@ const formatLocalCalendarDate = (dateStr: string) => {
 };
 
 function formatReportDate(date: Date): string {
-  return date.toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' });
+  return formatPaddedDisplayDate(date);
 }
 
 function pickDefaultNoteId(notes: Note[], includeHistory: boolean): string {
@@ -197,14 +195,14 @@ export function NotesTool({ toolId }: NotesToolProps) {
     ? 'bg-white rounded-2xl border border-slate-200 p-6 max-w-2xl w-full mx-4 max-h-[90vh] overflow-y-auto shadow-xl'
     : 'bg-slate-800 rounded-2xl border border-slate-700 p-6 max-w-2xl w-full mx-4 max-h-[90vh] overflow-y-auto';
   const rowIconEmeraldClass = isLight
-    ? 'inline-flex items-center justify-center rounded-lg border-2 border-emerald-700 bg-white p-2 text-emerald-700 transition-colors hover:bg-emerald-50 hover:text-emerald-900'
-    : 'inline-flex items-center justify-center rounded-lg border-2 border-emerald-500/50 bg-slate-800/50 p-2 text-emerald-300 transition-colors hover:border-emerald-400 hover:bg-emerald-500/20';
+    ? 'inline-flex min-h-11 min-w-11 items-center justify-center rounded-lg border-2 border-emerald-700 bg-white p-2 text-emerald-700 transition-colors hover:bg-emerald-50 hover:text-emerald-900'
+    : 'inline-flex min-h-11 min-w-11 items-center justify-center rounded-lg border-2 border-emerald-500/50 bg-slate-800/50 p-2 text-emerald-300 transition-colors hover:border-emerald-400 hover:bg-emerald-500/20';
   const rowIconSecondaryClass = isLight
-    ? 'inline-flex items-center justify-center rounded-lg border-2 border-slate-400 bg-slate-100 p-2 text-slate-700 transition-colors hover:bg-slate-200 hover:text-slate-900'
-    : 'inline-flex items-center justify-center rounded-lg border-2 border-slate-600 bg-slate-800 p-2 text-slate-200 transition-colors hover:bg-slate-700';
+    ? 'inline-flex min-h-11 min-w-11 items-center justify-center rounded-lg border-2 border-slate-400 bg-slate-100 p-2 text-slate-700 transition-colors hover:bg-slate-200 hover:text-slate-900'
+    : 'inline-flex min-h-11 min-w-11 items-center justify-center rounded-lg border-2 border-slate-600 bg-slate-800 p-2 text-slate-200 transition-colors hover:bg-slate-700';
   const rowIconDangerClass = isLight
-    ? 'inline-flex items-center justify-center rounded-lg border-2 border-red-300 bg-white p-2 text-red-700 transition-colors hover:bg-red-50 hover:border-red-400'
-    : 'inline-flex items-center justify-center rounded-lg border-2 border-red-500/50 bg-slate-800/50 p-2 text-red-400 transition-colors hover:border-red-400 hover:bg-red-500/20';
+    ? 'inline-flex min-h-11 min-w-11 items-center justify-center rounded-lg border-2 border-red-300 bg-white p-2 text-red-700 transition-colors hover:bg-red-50 hover:border-red-400'
+    : 'inline-flex min-h-11 min-w-11 items-center justify-center rounded-lg border-2 border-red-500/50 bg-slate-800/50 p-2 text-red-400 transition-colors hover:border-red-400 hover:bg-red-500/20';
   const tagChipActiveClass = isLight
     ? 'px-1.5 py-0.5 rounded text-xs font-medium border border-emerald-300 bg-emerald-50 text-emerald-800'
     : 'px-1.5 py-0.5 rounded text-xs font-medium bg-emerald-500/20 text-emerald-300';
@@ -290,6 +288,7 @@ export function NotesTool({ toolId }: NotesToolProps) {
   const [showConfirmNewPassword, setShowConfirmNewPassword] = useState(false);
   const [passwordResetStep, setPasswordResetStep] = useState<'questions' | 'reset'>('questions');
   const [showExportPopup, setShowExportPopup] = useState(false);
+  const [lockedPdfPrompt, setLockedPdfPrompt] = useState<string | null>(null);
   const [exportAllNotes, setExportAllNotes] = useState(true);
   const [exportNoteId, setExportNoteId] = useState('');
   const [includeHistory, setIncludeHistory] = useState(false);
@@ -411,13 +410,18 @@ export function NotesTool({ toolId }: NotesToolProps) {
 
   useEffect(() => {
     const onKeyDown = (e: KeyboardEvent) => {
-      if (e.key === 'Escape' && showExportPopup && !isExportingPdf) {
+      if (e.key !== 'Escape') return;
+      if (lockedPdfPrompt) {
+        setLockedPdfPrompt(null);
+        return;
+      }
+      if (showExportPopup && !isExportingPdf) {
         setShowExportPopup(false);
       }
     };
     window.addEventListener('keydown', onKeyDown);
     return () => window.removeEventListener('keydown', onKeyDown);
-  }, [showExportPopup, isExportingPdf]);
+  }, [showExportPopup, isExportingPdf, lockedPdfPrompt]);
 
   // Filter notes based on search and tag filter
   const filteredNotes = notes.filter(note => {
@@ -1560,7 +1564,7 @@ export function NotesTool({ toolId }: NotesToolProps) {
     }
   };
 
-  const exportToPDF = async () => {
+  const exportToPDF = async (confirmedLocked = false) => {
     if (isExportingPdf) return;
     const chosenNote = notes.find((note) => note.id === exportNoteId) ?? null;
     if (!exportAllNotes && !chosenNote) {
@@ -1595,12 +1599,12 @@ export function NotesTool({ toolId }: NotesToolProps) {
       }
 
       const lockedCount = exportedRecords.filter((note) => note.requiresPasswordForView).length;
-      if (lockedCount > 0) {
+      if (lockedCount > 0 && !confirmedLocked) {
         const lockedLabel = lockedCount === 1 ? '1 password-protected note' : `${lockedCount} password-protected notes`;
-        const proceed = window.confirm(
+        setLockedPdfPrompt(
           `This export includes ${lockedLabel}. Locked note bodies will be omitted. Continue?`,
         );
-        if (!proceed) return;
+        return;
       }
 
       const selectedTagNames = exportTagIds
@@ -2819,6 +2823,36 @@ export function NotesTool({ toolId }: NotesToolProps) {
         </div>
       )}
 
+      {lockedPdfPrompt && (
+        <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/50 p-4">
+          <div className={modalCardClass} role="dialog" aria-modal="true" aria-labelledby="notes-locked-export-title">
+            <h3 id="notes-locked-export-title" className={`${sectionTitleClass} mb-2`}>
+              Export password-protected notes?
+            </h3>
+            <p className={`${descClass} mb-4`}>{lockedPdfPrompt}</p>
+            <div className="flex gap-3">
+              <button
+                type="button"
+                onClick={() => {
+                  setLockedPdfPrompt(null);
+                  void exportToPDF(true);
+                }}
+                className={`flex-1 ${primaryButtonClass}`}
+              >
+                Continue
+              </button>
+              <button
+                type="button"
+                onClick={() => setLockedPdfPrompt(null)}
+                className={secondaryButtonClass}
+              >
+                Cancel
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Delete Confirmation Modal */}
       {showExportPopup && (
         <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
@@ -3440,11 +3474,7 @@ export function NotesTool({ toolId }: NotesToolProps) {
                   Created Date:
                 </span>
                 <span className="text-slate-100 text-base ml-2">
-                  {new Date(viewNoteModal.createdDate).toLocaleDateString('en-US', {
-                    year: 'numeric',
-                    month: 'long',
-                    day: 'numeric'
-                  })}
+                  {formatPaddedDisplayDate(viewNoteModal.createdDate)}
                 </span>
               </div>
               <div>
@@ -3504,6 +3534,7 @@ export function NotesTool({ toolId }: NotesToolProps) {
 
       <AttachmentModal
         open={attachmentModal !== null}
+        stacked={viewNoteModal !== null}
         onClose={() => {
           setAttachmentModal(null);
           setViewPreview(null);

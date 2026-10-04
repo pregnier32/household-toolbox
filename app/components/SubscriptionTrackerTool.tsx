@@ -227,14 +227,11 @@ function formatLocalDate(isoDate: string): string {
 }
 
 function formatPdfDate(isoDate: string): string {
-  const match = /^(\d{4})-(\d{2})-(\d{2})/.exec(isoDate);
-  if (!match) return isoDate;
-  const date = new Date(Number(match[1]), Number(match[2]) - 1, Number(match[3]));
-  return Number.isNaN(date.getTime()) ? isoDate : date.toLocaleDateString();
+  return formatDisplayDate(isoDate) || isoDate;
 }
 
 function formatReportDate(date: Date): string {
-  return date.toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' });
+  return formatDisplayDate(date);
 }
 
 function localCalendarDayIso(date = new Date()): string {
@@ -331,16 +328,17 @@ export function SubscriptionTrackerTool({ toolId }: SubscriptionTrackerToolProps
     ? 'px-4 py-2 rounded-lg border-2 border-slate-400 bg-slate-100 text-slate-800 hover:bg-slate-200 transition-colors'
     : 'px-4 py-2 rounded-lg border border-slate-700 bg-slate-800 text-slate-200 hover:bg-slate-700 transition-colors';
   const rowIconEmeraldClass = isLight
-    ? 'inline-flex items-center justify-center rounded-lg border-2 border-emerald-700 bg-white p-2 text-emerald-700 transition-colors hover:bg-emerald-50 hover:text-emerald-900'
-    : 'inline-flex items-center justify-center rounded-lg border-2 border-emerald-500/50 bg-slate-800/50 p-2 text-emerald-300 transition-colors hover:border-emerald-400 hover:bg-emerald-500/20';
+    ? 'inline-flex min-h-11 min-w-11 items-center justify-center rounded-lg border-2 border-emerald-700 bg-white p-2 text-emerald-700 transition-colors hover:bg-emerald-50 hover:text-emerald-900'
+    : 'inline-flex min-h-11 min-w-11 items-center justify-center rounded-lg border-2 border-emerald-500/50 bg-slate-800/50 p-2 text-emerald-300 transition-colors hover:border-emerald-400 hover:bg-emerald-500/20';
   const rowIconSecondaryClass = isLight
-    ? 'inline-flex items-center justify-center rounded-lg border-2 border-slate-400 bg-slate-100 p-2 text-slate-700 transition-colors hover:bg-slate-200 hover:text-slate-900'
-    : 'inline-flex items-center justify-center rounded-lg border-2 border-slate-600 bg-slate-800 p-2 text-slate-200 transition-colors hover:bg-slate-700';
+    ? 'inline-flex min-h-11 min-w-11 items-center justify-center rounded-lg border-2 border-slate-400 bg-slate-100 p-2 text-slate-700 transition-colors hover:bg-slate-200 hover:text-slate-900'
+    : 'inline-flex min-h-11 min-w-11 items-center justify-center rounded-lg border-2 border-slate-600 bg-slate-800 p-2 text-slate-200 transition-colors hover:bg-slate-700';
   const rowIconDangerClass = isLight
-    ? 'inline-flex items-center justify-center rounded-lg border-2 border-red-300 bg-white p-2 text-red-700 transition-colors hover:bg-red-50 hover:border-red-400'
-    : 'inline-flex items-center justify-center rounded-lg border-2 border-red-500/50 bg-slate-800/50 p-2 text-red-400 transition-colors hover:border-red-400 hover:bg-red-500/20';
+    ? 'inline-flex min-h-11 min-w-11 items-center justify-center rounded-lg border-2 border-red-300 bg-white p-2 text-red-700 transition-colors hover:bg-red-50 hover:border-red-400'
+    : 'inline-flex min-h-11 min-w-11 items-center justify-center rounded-lg border-2 border-red-500/50 bg-slate-800/50 p-2 text-red-400 transition-colors hover:border-red-400 hover:bg-red-500/20';
   const [subscriptions, setSubscriptions] = useState<Subscription[]>([]);
   const [isLoading, setIsLoading] = useState(false);
+  const [isSavingForm, setIsSavingForm] = useState(false);
   const [showExportPopup, setShowExportPopup] = useState(false);
   const [exportAllSubscriptions, setExportAllSubscriptions] = useState(false);
   const [exportSubscriptionId, setExportSubscriptionId] = useState('');
@@ -660,6 +658,7 @@ export function SubscriptionTrackerTool({ toolId }: SubscriptionTrackerToolProps
     }
 
     setIsLoading(true);
+    setIsSavingForm(true);
     try {
       const subscriptionData = {
         name: newSubscription.name.trim(),
@@ -720,6 +719,7 @@ export function SubscriptionTrackerTool({ toolId }: SubscriptionTrackerToolProps
       showError('Error adding subscription. Please try again.');
     } finally {
       setIsLoading(false);
+      setIsSavingForm(false);
     }
   };
 
@@ -786,6 +786,7 @@ export function SubscriptionTrackerTool({ toolId }: SubscriptionTrackerToolProps
     }
 
     setIsLoading(true);
+    setIsSavingForm(true);
     try {
       const subscriptionData = {
         name: editingSubscription.name.trim(),
@@ -825,6 +826,7 @@ export function SubscriptionTrackerTool({ toolId }: SubscriptionTrackerToolProps
       showError('Error updating subscription. Please try again.');
     } finally {
       setIsLoading(false);
+      setIsSavingForm(false);
     }
   };
 
@@ -1531,6 +1533,7 @@ export function SubscriptionTrackerTool({ toolId }: SubscriptionTrackerToolProps
                   <button
                     onClick={addSubscription}
                     disabled={
+                      isSavingForm ||
                       !newSubscription.name.trim() || 
                       !newSubscription.amount || 
                       (!showCustomCategory && !newSubscription.category) || 
@@ -1539,7 +1542,7 @@ export function SubscriptionTrackerTool({ toolId }: SubscriptionTrackerToolProps
                     }
                     className={primaryButtonClass}
                   >
-                    Add Subscription
+                    {isSavingForm ? 'Saving...' : 'Add Subscription'}
                   </button>
                   <button
                     onClick={() => {
@@ -1796,6 +1799,7 @@ export function SubscriptionTrackerTool({ toolId }: SubscriptionTrackerToolProps
                           <button
                             onClick={saveEdit}
                             disabled={
+                              isSavingForm ||
                               !editingSubscription.name.trim() || 
                               !editingSubscription.amount || 
                               (!showCustomCategoryEdit && !editingSubscription.category) || 
@@ -1804,7 +1808,7 @@ export function SubscriptionTrackerTool({ toolId }: SubscriptionTrackerToolProps
                             }
                             className="px-4 py-2.5 rounded-lg bg-emerald-500 text-slate-950 font-semibold hover:bg-emerald-400 transition-colors focus:outline-none focus:ring-2 focus:ring-emerald-500/50 focus:ring-offset-2 focus:ring-offset-slate-900 disabled:cursor-not-allowed disabled:opacity-50"
                           >
-                            Save
+                            {isSavingForm ? 'Saving...' : 'Save'}
                           </button>
                           <button
                             onClick={cancelEditing}

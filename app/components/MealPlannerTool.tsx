@@ -207,11 +207,7 @@ function parseLocalDate(isoDate: string): Date {
 /** Unpadded M/D/YYYY for print and PDF only. */
 function formatPdfDate(isoDate: string): string {
   if (!isoDate) return '';
-  const d = parseLocalDate(isoDate);
-  const m = d.getMonth() + 1;
-  const day = d.getDate();
-  const y = d.getFullYear();
-  return `${m}/${day}/${y}`;
+  return formatPaddedDisplayDate(isoDate) || isoDate;
 }
 
 function formatDateDisplay(isoDate: string): string {
@@ -220,7 +216,7 @@ function formatDateDisplay(isoDate: string): string {
 }
 
 function formatReportDate(date: Date): string {
-  return date.toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' });
+  return formatPaddedDisplayDate(date);
 }
 
 function todayIso(): string {
@@ -307,14 +303,14 @@ export function MealPlannerTool({ toolId }: MealPlannerToolProps) {
     : 'border-b-2 border-emerald-500 text-emerald-300';
   const tabInactiveClass = isLight ? 'text-slate-600 hover:text-slate-900' : 'text-slate-400 hover:text-slate-300';
   const rowIconEmeraldClass = isLight
-    ? 'inline-flex items-center justify-center rounded-lg border-2 border-emerald-700 bg-white p-2 text-emerald-700 transition-colors hover:bg-emerald-50 hover:text-emerald-900'
-    : 'inline-flex items-center justify-center rounded-lg border-2 border-emerald-500/50 bg-slate-800/50 p-2 text-emerald-300 transition-colors hover:border-emerald-400 hover:bg-emerald-500/20';
+    ? 'inline-flex min-h-11 min-w-11 items-center justify-center rounded-lg border-2 border-emerald-700 bg-white p-2 text-emerald-700 transition-colors hover:bg-emerald-50 hover:text-emerald-900'
+    : 'inline-flex min-h-11 min-w-11 items-center justify-center rounded-lg border-2 border-emerald-500/50 bg-slate-800/50 p-2 text-emerald-300 transition-colors hover:border-emerald-400 hover:bg-emerald-500/20';
   const rowIconSecondaryClass = isLight
-    ? 'inline-flex items-center justify-center rounded-lg border-2 border-slate-400 bg-slate-100 p-2 text-slate-700 transition-colors hover:bg-slate-200 hover:text-slate-900'
-    : 'inline-flex items-center justify-center rounded-lg border-2 border-slate-600 bg-slate-800 p-2 text-slate-200 transition-colors hover:bg-slate-700';
+    ? 'inline-flex min-h-11 min-w-11 items-center justify-center rounded-lg border-2 border-slate-400 bg-slate-100 p-2 text-slate-700 transition-colors hover:bg-slate-200 hover:text-slate-900'
+    : 'inline-flex min-h-11 min-w-11 items-center justify-center rounded-lg border-2 border-slate-600 bg-slate-800 p-2 text-slate-200 transition-colors hover:bg-slate-700';
   const rowIconDangerClass = isLight
-    ? 'inline-flex items-center justify-center rounded-lg border-2 border-red-300 bg-white p-2 text-red-700 transition-colors hover:bg-red-50 hover:border-red-400'
-    : 'inline-flex items-center justify-center rounded-lg border-2 border-red-500/50 bg-slate-800/50 p-2 text-red-400 transition-colors hover:border-red-400 hover:bg-red-500/20';
+    ? 'inline-flex min-h-11 min-w-11 items-center justify-center rounded-lg border-2 border-red-300 bg-white p-2 text-red-700 transition-colors hover:bg-red-50 hover:border-red-400'
+    : 'inline-flex min-h-11 min-w-11 items-center justify-center rounded-lg border-2 border-red-500/50 bg-slate-800/50 p-2 text-red-400 transition-colors hover:border-red-400 hover:bg-red-500/20';
   const modalCardClass = isLight
     ? 'rounded-2xl border border-slate-200 bg-white p-6 max-w-md w-full mx-4 shadow-2xl'
     : 'rounded-2xl border border-slate-800 bg-slate-900 p-6 max-w-md w-full mx-4';
@@ -457,6 +453,7 @@ export function MealPlannerTool({ toolId }: MealPlannerToolProps) {
   const addMasterItem = async () => {
     const cat = (isCreatingNewCategory ? newItemCategory.trim() : newItemCategory) || '';
     if (!newItemName.trim() || !cat || !toolId) return;
+    setIsSavingMeal(true);
     try {
       const res = await fetch(API_BASE, {
         method: 'POST',
@@ -476,6 +473,8 @@ export function MealPlannerTool({ toolId }: MealPlannerToolProps) {
       setIsCreatingNewCategory(false);
     } catch (e) {
       console.error('Add item error:', e);
+    } finally {
+      setIsSavingMeal(false);
     }
   };
 
@@ -598,6 +597,7 @@ export function MealPlannerTool({ toolId }: MealPlannerToolProps) {
 
   // --- Meals tab state ---
   const [isAddingMeal, setIsAddingMeal] = useState(false);
+  const [isSavingMeal, setIsSavingMeal] = useState(false);
   const [editingMealId, setEditingMealId] = useState<string | null>(null);
   const [mealForm, setMealForm] = useState({
     name: '',
@@ -672,6 +672,7 @@ export function MealPlannerTool({ toolId }: MealPlannerToolProps) {
       showError('Scale must be a number greater than 0.');
       return;
     }
+    setIsSavingMeal(true);
     try {
       if (editingMealId) {
         const res = await fetch(API_BASE, {
@@ -740,6 +741,8 @@ export function MealPlannerTool({ toolId }: MealPlannerToolProps) {
       setIngredientSearch('');
     } catch (e) {
       console.error('Save meal error:', e);
+    } finally {
+      setIsSavingMeal(false);
     }
   };
 
@@ -1225,6 +1228,7 @@ export function MealPlannerTool({ toolId }: MealPlannerToolProps) {
       showError(LEFTOVER_ONLY_ALERT);
       return;
     }
+    setIsSavingMeal(true);
     try {
       const res = await fetch(API_BASE, {
         method: 'POST',
@@ -1251,6 +1255,8 @@ export function MealPlannerTool({ toolId }: MealPlannerToolProps) {
       setIsCreatingPlan(false);
     } catch (e) {
       console.error('Create plan error:', e);
+    } finally {
+      setIsSavingMeal(false);
     }
   };
 
@@ -2104,12 +2110,12 @@ export function MealPlannerTool({ toolId }: MealPlannerToolProps) {
                   >
                     Cancel
                   </button>
-                  <button
+                    <button
                     onClick={addMasterItem}
-                    disabled={!newItemName.trim() || !(isCreatingNewCategory ? newItemCategory.trim() : newItemCategory)}
+                    disabled={isSavingMeal || !newItemName.trim() || !(isCreatingNewCategory ? newItemCategory.trim() : newItemCategory)}
                     className={primaryButtonClass}
                   >
-                    Save Item
+                    {isSavingMeal ? 'Saving...' : 'Save Item'}
                   </button>
                 </div>
               </div>
@@ -2706,10 +2712,10 @@ export function MealPlannerTool({ toolId }: MealPlannerToolProps) {
                 </button>
                 <button
                   onClick={saveMeal}
-                  disabled={!mealForm.name.trim()}
+                  disabled={!mealForm.name.trim() || isSavingMeal}
                   className="rounded-lg bg-emerald-500 px-4 py-2.5 text-sm font-semibold text-slate-950 hover:bg-emerald-400 focus:outline-none focus:ring-2 focus:ring-emerald-500/50 focus:ring-offset-2 focus:ring-offset-slate-900 disabled:opacity-50 disabled:cursor-not-allowed"
                 >
-                  {editingMealId ? 'Save Changes' : 'Save Meal'}
+                  {isSavingMeal ? 'Saving...' : editingMealId ? 'Save Changes' : 'Save Meal'}
                 </button>
               </div>
             </div>
@@ -2940,10 +2946,10 @@ export function MealPlannerTool({ toolId }: MealPlannerToolProps) {
                 </button>
                 <button
                   onClick={createPlan}
-                  disabled={!newPlanName.trim()}
+                  disabled={isSavingMeal || !newPlanName.trim()}
                   className="rounded-lg bg-emerald-500 px-4 py-2.5 text-sm font-semibold text-slate-950 hover:bg-emerald-400 focus:outline-none focus:ring-2 focus:ring-emerald-500/50 focus:ring-offset-2 focus:ring-offset-slate-900 disabled:opacity-50 disabled:cursor-not-allowed"
                 >
-                  Create Plan
+                  {isSavingMeal ? 'Saving...' : 'Create Plan'}
                 </button>
               </div>
             </div>

@@ -19,7 +19,6 @@ type Category = {
   id: string;
   name: string;
   card_color: string;
-  showOnDashboard: boolean;
 };
 
 type Priority = 'Low' | 'Medium' | 'High';
@@ -130,12 +129,7 @@ function generateId(): string {
 
 function formatPdfDate(isoDate: string): string {
   if (!isoDate) return '';
-  const [y, m, d] = isoDate.split('-');
-  if (!m || !d) return isoDate;
-  const month = parseInt(m, 10);
-  const day = parseInt(d, 10);
-  const year = y || '';
-  return `${month}/${day}/${year}`;
+  return formatPaddedDisplayDate(isoDate) || isoDate;
 }
 
 function formatDateForDisplay(isoDate: string): string {
@@ -144,7 +138,7 @@ function formatDateForDisplay(isoDate: string): string {
 }
 
 function formatReportDate(date: Date): string {
-  return date.toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' });
+  return formatPaddedDisplayDate(date);
 }
 
 function sortCategoriesByName(categories: Category[]): Category[] {
@@ -233,11 +227,11 @@ export function ToDoListTool({ toolId }: ToDoListToolProps) {
     ? 'w-full px-4 py-2 text-left text-sm text-red-600 hover:bg-red-50 flex items-center gap-2'
     : 'w-full px-4 py-2 text-left text-sm text-red-400 hover:bg-slate-700 flex items-center gap-2';
   const rowIconEmeraldClass = isLight
-    ? 'inline-flex items-center justify-center rounded-lg border-2 border-emerald-700 bg-white p-1.5 text-emerald-700 hover:bg-emerald-50 transition-colors'
-    : 'inline-flex items-center justify-center rounded-lg border-2 border-emerald-500/50 bg-slate-800/50 p-1.5 text-emerald-300 hover:bg-emerald-500/20 transition-colors';
+    ? 'inline-flex min-h-11 min-w-11 items-center justify-center rounded-lg border-2 border-emerald-700 bg-white p-1.5 text-emerald-700 hover:bg-emerald-50 transition-colors'
+    : 'inline-flex min-h-11 min-w-11 items-center justify-center rounded-lg border-2 border-emerald-500/50 bg-slate-800/50 p-1.5 text-emerald-300 hover:bg-emerald-500/20 transition-colors';
   const rowIconDangerClass = isLight
-    ? 'inline-flex items-center justify-center rounded-lg border-2 border-red-300 bg-white p-1.5 text-red-700 hover:bg-red-50 transition-colors'
-    : 'inline-flex items-center justify-center rounded-lg border-2 border-red-500/50 bg-slate-800/50 p-1.5 text-red-400 hover:bg-red-500/20 transition-colors';
+    ? 'inline-flex min-h-11 min-w-11 items-center justify-center rounded-lg border-2 border-red-300 bg-white p-1.5 text-red-700 hover:bg-red-50 transition-colors'
+    : 'inline-flex min-h-11 min-w-11 items-center justify-center rounded-lg border-2 border-red-500/50 bg-slate-800/50 p-1.5 text-red-400 hover:bg-red-500/20 transition-colors';
   const [categories, setCategories] = useState<Category[]>([]);
   const [isLoadingCategories, setIsLoadingCategories] = useState(true);
   const [selectedCategoryId, setSelectedCategoryId] = useState<string | null>(null);
@@ -1295,7 +1289,7 @@ export function ToDoListTool({ toolId }: ToDoListToolProps) {
               disabled={!newCategoryName.trim() || isSaving}
               className={primaryButtonClass}
             >
-              Create
+              {isSaving ? 'Saving...' : 'Create'}
             </button>
             <button
               onClick={() => {
@@ -1352,7 +1346,7 @@ export function ToDoListTool({ toolId }: ToDoListToolProps) {
                 disabled={!editingCategoryName.trim() || isSaving}
                 className={primaryButtonClass}
               >
-                Save
+                {isSaving ? 'Saving...' : 'Save'}
               </button>
               <button
                 onClick={cancelEditingCategory}
@@ -1642,7 +1636,7 @@ export function ToDoListTool({ toolId }: ToDoListToolProps) {
                   disabled={!newTask.taskName.trim() || isSaving}
                   className={primaryButtonClass}
                 >
-                  Save task
+                  {isSaving ? 'Saving...' : 'Save task'}
                 </button>
                 <button
                   onClick={cancelAddingTask}
@@ -1769,7 +1763,7 @@ export function ToDoListTool({ toolId }: ToDoListToolProps) {
                     disabled={isSaving}
                     className={primaryButtonClass}
                   >
-                    Save
+                    {isSaving ? 'Saving...' : 'Save'}
                   </button>
                   <button
                     onClick={cancelEditingTask}

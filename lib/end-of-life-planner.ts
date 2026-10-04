@@ -897,12 +897,10 @@ export function todayIso(): string {
   return `${year}-${month}-${day}`;
 }
 
-/** Unpadded M/D/YYYY for PDF and print only. On-screen dates use formatDisplayDate. */
+/** Zero-padded MM/DD/YYYY for PDF and print. On-screen dates use formatDisplayDate directly. */
 export function formatDateDisplay(isoDate: string | null | undefined): string {
   if (!isoDate) return '—';
-  const [year, month, day] = isoDate.split('T')[0].split('-');
-  if (!year || !month || !day) return isoDate;
-  return `${Number(month)}/${Number(day)}/${year}`;
+  return formatDisplayDate(isoDate) || isoDate;
 }
 
 export function formatDateTimeDisplay(iso: string | null | undefined): string {

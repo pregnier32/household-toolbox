@@ -33,6 +33,7 @@ type AttachmentModalProps = {
   maxFiles?: number;
   busy?: boolean;
   readOnly?: boolean;
+  stacked?: boolean;
 };
 
 export function AttachmentModal({
@@ -48,6 +49,7 @@ export function AttachmentModal({
   maxFiles,
   busy = false,
   readOnly = false,
+  stacked = false,
 }: AttachmentModalProps) {
   const { resolvedTheme } = useTheme();
   const isLight = resolvedTheme === 'light';
@@ -191,7 +193,7 @@ export function AttachmentModal({
 
   return (
     <div
-      className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4 backdrop-blur-sm"
+      className={`fixed inset-0 ${stacked ? 'z-[60]' : 'z-50'} flex items-center justify-center bg-black/60 p-4 backdrop-blur-sm`}
       onClick={onClose}
     >
       <div className={cardClass} onClick={(event) => event.stopPropagation()} role="dialog" aria-modal="true" aria-labelledby="attachment-modal-title">
@@ -206,7 +208,7 @@ export function AttachmentModal({
                 : `${files.length} file${files.length === 1 ? '' : 's'} attached.`}
             </p>
           </div>
-          <button type="button" onClick={onClose} className={closeClass} aria-label="Close attachments">
+          <button type="button" onClick={onClose} className={closeClass} aria-label="Close attachments" title="Close attachments">
             <svg className="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
             </svg>

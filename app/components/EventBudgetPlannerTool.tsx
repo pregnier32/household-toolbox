@@ -97,10 +97,7 @@ function todayIso(): string {
 
 function formatPdfDate(isoDate: string): string {
   if (!isoDate) return 'N/A';
-  const parts = isoDate.split('T')[0].split('-');
-  if (parts.length !== 3) return isoDate;
-  const [year, month, day] = parts;
-  return `${Number(month)}/${Number(day)}/${year}`;
+  return formatPaddedDisplayDate(isoDate) || isoDate;
 }
 
 function formatDisplayDate(isoDate: string): string {
@@ -109,7 +106,7 @@ function formatDisplayDate(isoDate: string): string {
 }
 
 function formatReportDate(date: Date): string {
-  return date.toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' });
+  return formatPaddedDisplayDate(date);
 }
 
 function formatCurrency(amount: number): string {
@@ -436,14 +433,14 @@ export function EventBudgetPlannerTool({ toolId }: EventBudgetPlannerToolProps) 
     ? 'w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900 placeholder-slate-500 focus:border-red-500/50 focus:outline-none focus:ring-1 focus:ring-red-500/50 mb-4'
     : 'w-full rounded-lg border border-slate-700 bg-slate-900/70 px-3 py-2 text-sm text-slate-100 placeholder-slate-500 focus:border-red-500/50 focus:outline-none focus:ring-1 focus:ring-red-500/50 mb-4';
   const rowIconEmeraldClass = isLight
-    ? 'inline-flex items-center justify-center rounded-lg border-2 border-emerald-700 bg-white p-2 text-emerald-700 transition-colors hover:bg-emerald-50 hover:text-emerald-900 focus:outline-none focus:ring-2 focus:ring-emerald-500/50 focus:ring-offset-2 focus:ring-offset-white'
-    : 'inline-flex items-center justify-center rounded-lg border-2 border-emerald-500/50 bg-slate-800/50 p-2 text-emerald-300 transition-colors hover:border-emerald-400 hover:bg-emerald-500/20 focus:outline-none focus:ring-2 focus:ring-emerald-500/50 focus:ring-offset-2 focus:ring-offset-slate-900';
+    ? 'inline-flex min-h-11 min-w-11 items-center justify-center rounded-lg border-2 border-emerald-700 bg-white p-2 text-emerald-700 transition-colors hover:bg-emerald-50 hover:text-emerald-900 focus:outline-none focus:ring-2 focus:ring-emerald-500/50 focus:ring-offset-2 focus:ring-offset-white'
+    : 'inline-flex min-h-11 min-w-11 items-center justify-center rounded-lg border-2 border-emerald-500/50 bg-slate-800/50 p-2 text-emerald-300 transition-colors hover:border-emerald-400 hover:bg-emerald-500/20 focus:outline-none focus:ring-2 focus:ring-emerald-500/50 focus:ring-offset-2 focus:ring-offset-slate-900';
   const rowIconSecondaryClass = isLight
-    ? 'inline-flex items-center justify-center rounded-lg border-2 border-slate-400 bg-slate-100 p-2 text-slate-700 transition-colors hover:bg-slate-200 hover:text-slate-900 focus:outline-none focus:ring-2 focus:ring-slate-400/40 focus:ring-offset-2 focus:ring-offset-white'
-    : 'inline-flex items-center justify-center rounded-lg border-2 border-slate-600 bg-slate-800 p-2 text-slate-200 transition-colors hover:bg-slate-700 focus:outline-none focus:ring-2 focus:ring-slate-500/50 focus:ring-offset-2 focus:ring-offset-slate-900';
+    ? 'inline-flex min-h-11 min-w-11 items-center justify-center rounded-lg border-2 border-slate-400 bg-slate-100 p-2 text-slate-700 transition-colors hover:bg-slate-200 hover:text-slate-900 focus:outline-none focus:ring-2 focus:ring-slate-400/40 focus:ring-offset-2 focus:ring-offset-white'
+    : 'inline-flex min-h-11 min-w-11 items-center justify-center rounded-lg border-2 border-slate-600 bg-slate-800 p-2 text-slate-200 transition-colors hover:bg-slate-700 focus:outline-none focus:ring-2 focus:ring-slate-500/50 focus:ring-offset-2 focus:ring-offset-slate-900';
   const rowIconDangerClass = isLight
-    ? 'inline-flex items-center justify-center rounded-lg border-2 border-red-300 bg-white p-2 text-red-700 transition-colors hover:bg-red-50 hover:border-red-400 focus:outline-none focus:ring-2 focus:ring-red-500/40 focus:ring-offset-2 focus:ring-offset-white'
-    : 'inline-flex items-center justify-center rounded-lg border-2 border-red-500/50 bg-slate-800/50 p-2 text-red-400 transition-colors hover:border-red-400 hover:bg-red-500/20 focus:outline-none focus:ring-2 focus:ring-red-500/50 focus:ring-offset-2 focus:ring-offset-slate-900';
+    ? 'inline-flex min-h-11 min-w-11 items-center justify-center rounded-lg border-2 border-red-300 bg-white p-2 text-red-700 transition-colors hover:bg-red-50 hover:border-red-400 focus:outline-none focus:ring-2 focus:ring-red-500/40 focus:ring-offset-2 focus:ring-offset-white'
+    : 'inline-flex min-h-11 min-w-11 items-center justify-center rounded-lg border-2 border-red-500/50 bg-slate-800/50 p-2 text-red-400 transition-colors hover:border-red-400 hover:bg-red-500/20 focus:outline-none focus:ring-2 focus:ring-red-500/50 focus:ring-offset-2 focus:ring-offset-slate-900';
   const mutedTextClass = isLight ? 'text-slate-600' : 'text-slate-400';
   const bodyTextClass = isLight ? 'text-slate-900' : 'text-slate-100';
   const subTextClass = isLight ? 'text-slate-600 text-sm' : 'text-slate-400 text-sm';
@@ -1974,7 +1971,7 @@ export function EventBudgetPlannerTool({ toolId }: EventBudgetPlannerToolProps) 
           )}
 
           {editingEvent.categoryBudgets.length === 0 ? (
-            <p className={`${mutedTextClass} text-center py-6`}>No categories added yet. Add a category budget to start tracking expenses.</p>
+            <p className={`${mutedTextClass} text-center py-6`}>No categories found. Add one to get started!</p>
           ) : (
             <div className="space-y-4">
               {editingEvent.categoryBudgets.map((cb) => {
@@ -2769,7 +2766,7 @@ export function EventBudgetPlannerTool({ toolId }: EventBudgetPlannerToolProps) 
                 )}
               </div>
             ) : (
-              <p className={`text-center py-8 ${mutedTextClass}`}>No categories yet. Add one to get started!</p>
+              <p className={`text-center py-8 ${mutedTextClass}`}>No categories found. Add one to get started!</p>
             )}
           </div>
         </div>
@@ -2920,7 +2917,7 @@ export function EventBudgetPlannerTool({ toolId }: EventBudgetPlannerToolProps) 
                 ))}
               </div>
             ) : (
-              <p className={`text-center py-8 ${mutedTextClass}`}>No vendors yet. Add one to get started!</p>
+              <p className={`text-center py-8 ${mutedTextClass}`}>No vendors found. Add one to get started!</p>
             )}
           </div>
         </div>
@@ -2997,7 +2994,7 @@ export function EventBudgetPlannerTool({ toolId }: EventBudgetPlannerToolProps) 
                 )}
               </div>
             ) : (
-              <p className={`text-center py-8 ${mutedTextClass}`}>No types yet. Add one to get started!</p>
+              <p className={`text-center py-8 ${mutedTextClass}`}>No types found. Add one to get started!</p>
             )}
           </div>
         </div>
@@ -3468,6 +3465,7 @@ export function EventBudgetPlannerTool({ toolId }: EventBudgetPlannerToolProps) 
 
       <AttachmentModal
         open={attachmentModal !== null}
+        stacked={expenseModal !== null}
         onClose={closeAttachmentModal}
         previewItem={viewPreview}
         title={modalTitle}

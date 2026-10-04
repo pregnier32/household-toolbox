@@ -1,4 +1,5 @@
 import type { jsPDF } from 'jspdf';
+import { formatDisplayDate } from '@/lib/format-display-date';
 import {
   EOL_BUILT_IN_TABS,
   MY_WISHES_QUESTIONS,
@@ -1336,7 +1337,7 @@ function renderPdf(
   pdf.setFontSize(10);
   pdf.setFont('helvetica', 'normal');
   pdf.setTextColor(colors.muted[0], colors.muted[1], colors.muted[2]);
-  const generated = generatedAt.toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' });
+  const generated = formatDisplayDate(generatedAt);
   pdf.text(`Generated on: ${generated}`, margin, yPos);
   yPos += 6;
   for (const line of pdf.splitTextToSize(subtitle, contentWidth) as string[]) {

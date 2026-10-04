@@ -28,7 +28,8 @@ type Document = {
   uploadedDate: string;
   effectiveDate: string | null;
   note: string | null;
-  fileUrl: string | null;
+  hasFile: boolean;
+  fileGroup: string | null;
   fileName: string | null;
   fileSize: number | null;
   fileType: string | null;
@@ -92,13 +93,11 @@ function parseLocalDate(isoDate: string): Date | null {
 }
 
 function formatPdfLocalDate(isoDate: string): string {
-  const d = parseLocalDate(isoDate);
-  return d ? d.toLocaleDateString() : isoDate;
+  return formatPaddedDisplayDate(isoDate) || isoDate;
 }
 
 function formatPdfUploadedDate(isoDate: string): string {
-  const d = new Date(isoDate);
-  return Number.isNaN(d.getTime()) ? isoDate : d.toLocaleDateString();
+  return formatPaddedDisplayDate(isoDate) || isoDate;
 }
 
 function formatLocalDate(isoDate: string): string {
@@ -112,12 +111,11 @@ function formatUploadedDate(isoDate: string): string {
 }
 
 function formatLocalDateLong(isoDate: string): string {
-  const d = parseLocalDate(isoDate);
-  return d ? d.toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' }) : isoDate;
+  return formatPaddedDisplayDate(isoDate) || isoDate;
 }
 
 function formatReportGeneratedAt(date: Date): string {
-  const datePart = date.toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' });
+  const datePart = formatPaddedDisplayDate(date);
   const timePart = date.toLocaleTimeString('en-US', {
     hour: 'numeric',
     minute: '2-digit',
@@ -144,15 +142,14 @@ function documentsForExport<T extends { tags: string[]; isActive: boolean; docum
   };
 }
 
-function ownedAttachmentFileName(doc: Pick<Document, 'fileName' | 'fileUrl'>): string | null {
-  const fileUrl = doc.fileUrl?.trim();
+function ownedAttachmentFileName(doc: Pick<Document, 'fileName' | 'hasFile'>): string | null {
   const fileName = doc.fileName?.trim();
-  if (!fileUrl || !fileName) return null;
+  if (!doc.hasFile || !fileName) return null;
   return fileName;
 }
 
 function importantDocumentAttachmentLines(allDocuments: Document[], exportedDocuments: Document[]): string[] {
-  const ownerIdByUrl = new Map<string, string>();
+  const ownerIdByGroup = new Map<string, string>();
   const ranked = [...allDocuments].sort((a, b) => {
     const aKey = a.createdAt || a.dateAdded || '';
     const bKey = b.createdAt || b.dateAdded || '';
@@ -162,17 +159,17 @@ function importantDocumentAttachmentLines(allDocuments: Document[], exportedDocu
   });
 
   ranked.forEach((doc) => {
-    const fileUrl = doc.fileUrl?.trim();
-    if (!fileUrl || !ownedAttachmentFileName(doc)) return;
-    if (!ownerIdByUrl.has(fileUrl)) ownerIdByUrl.set(fileUrl, doc.id);
+    const fileGroup = doc.fileGroup?.trim();
+    if (!fileGroup || !ownedAttachmentFileName(doc)) return;
+    if (!ownerIdByGroup.has(fileGroup)) ownerIdByGroup.set(fileGroup, doc.id);
   });
 
   const lines: string[] = [];
   exportedDocuments.forEach((doc) => {
     const fileName = ownedAttachmentFileName(doc);
-    const fileUrl = doc.fileUrl?.trim();
-    if (!fileName || !fileUrl) return;
-    if (ownerIdByUrl.get(fileUrl) !== doc.id) return;
+    const fileGroup = doc.fileGroup?.trim();
+    if (!fileName || !fileGroup) return;
+    if (ownerIdByGroup.get(fileGroup) !== doc.id) return;
     lines.push(`${doc.documentName.trim() || 'Document'} — ${fileName}`);
   });
   return lines;
@@ -254,14 +251,14 @@ export function ImportantDocumentsTool({ toolId }: ImportantDocumentsToolProps) 
     ? 'w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900 placeholder-slate-500 focus:border-red-500/50 focus:outline-none focus:ring-1 focus:ring-red-500/50 mb-4'
     : 'w-full rounded-lg border border-slate-700 bg-slate-900/70 px-3 py-2 text-sm text-slate-100 placeholder-slate-500 focus:border-red-500/50 focus:outline-none focus:ring-1 focus:ring-red-500/50 mb-4';
   const rowIconEmeraldClass = isLight
-    ? 'inline-flex items-center justify-center rounded-lg border-2 border-emerald-700 bg-white p-2 text-emerald-700 transition-colors hover:bg-emerald-50 hover:text-emerald-900 focus:outline-none focus:ring-2 focus:ring-emerald-500/50 focus:ring-offset-2 focus:ring-offset-white'
-    : 'inline-flex items-center justify-center rounded-lg border-2 border-emerald-500/50 bg-slate-800/50 p-2 text-emerald-300 transition-colors hover:border-emerald-400 hover:bg-emerald-500/20 focus:outline-none focus:ring-2 focus:ring-emerald-500/50 focus:ring-offset-2 focus:ring-offset-slate-900';
+    ? 'inline-flex min-h-11 min-w-11 items-center justify-center rounded-lg border-2 border-emerald-700 bg-white p-2 text-emerald-700 transition-colors hover:bg-emerald-50 hover:text-emerald-900 focus:outline-none focus:ring-2 focus:ring-emerald-500/50 focus:ring-offset-2 focus:ring-offset-white'
+    : 'inline-flex min-h-11 min-w-11 items-center justify-center rounded-lg border-2 border-emerald-500/50 bg-slate-800/50 p-2 text-emerald-300 transition-colors hover:border-emerald-400 hover:bg-emerald-500/20 focus:outline-none focus:ring-2 focus:ring-emerald-500/50 focus:ring-offset-2 focus:ring-offset-slate-900';
   const rowIconSecondaryClass = isLight
-    ? 'inline-flex items-center justify-center rounded-lg border-2 border-slate-400 bg-slate-100 p-2 text-slate-700 transition-colors hover:bg-slate-200 hover:text-slate-900 focus:outline-none focus:ring-2 focus:ring-slate-400/40 focus:ring-offset-2 focus:ring-offset-white'
-    : 'inline-flex items-center justify-center rounded-lg border-2 border-slate-600 bg-slate-800 p-2 text-slate-200 transition-colors hover:bg-slate-700 focus:outline-none focus:ring-2 focus:ring-slate-500/50 focus:ring-offset-2 focus:ring-offset-slate-900';
+    ? 'inline-flex min-h-11 min-w-11 items-center justify-center rounded-lg border-2 border-slate-400 bg-slate-100 p-2 text-slate-700 transition-colors hover:bg-slate-200 hover:text-slate-900 focus:outline-none focus:ring-2 focus:ring-slate-400/40 focus:ring-offset-2 focus:ring-offset-white'
+    : 'inline-flex min-h-11 min-w-11 items-center justify-center rounded-lg border-2 border-slate-600 bg-slate-800 p-2 text-slate-200 transition-colors hover:bg-slate-700 focus:outline-none focus:ring-2 focus:ring-slate-500/50 focus:ring-offset-2 focus:ring-offset-slate-900';
   const rowIconDangerClass = isLight
-    ? 'inline-flex items-center justify-center rounded-lg border-2 border-red-300 bg-white p-2 text-red-700 transition-colors hover:bg-red-50 hover:border-red-400 focus:outline-none focus:ring-2 focus:ring-red-500/40 focus:ring-offset-2 focus:ring-offset-white'
-    : 'inline-flex items-center justify-center rounded-lg border-2 border-red-500/50 bg-slate-800/50 p-2 text-red-400 transition-colors hover:border-red-400 hover:bg-red-500/20 focus:outline-none focus:ring-2 focus:ring-red-500/50 focus:ring-offset-2 focus:ring-offset-slate-900';
+    ? 'inline-flex min-h-11 min-w-11 items-center justify-center rounded-lg border-2 border-red-300 bg-white p-2 text-red-700 transition-colors hover:bg-red-50 hover:border-red-400 focus:outline-none focus:ring-2 focus:ring-red-500/40 focus:ring-offset-2 focus:ring-offset-white'
+    : 'inline-flex min-h-11 min-w-11 items-center justify-center rounded-lg border-2 border-red-500/50 bg-slate-800/50 p-2 text-red-400 transition-colors hover:border-red-400 hover:bg-red-500/20 focus:outline-none focus:ring-2 focus:ring-red-500/50 focus:ring-offset-2 focus:ring-offset-slate-900';
 
   const [documents, setDocuments] = useState<Document[]>([]);
   const [tags, setTags] = useState<DocumentTag[]>([]);
@@ -399,7 +396,8 @@ export function ImportantDocumentsTool({ toolId }: ImportantDocumentsToolProps) 
             uploadedDate: doc.uploaded_date,
             effectiveDate: doc.effective_date,
             note: doc.note,
-            fileUrl: doc.file_url,
+            hasFile: Boolean(doc.has_file),
+            fileGroup: doc.file_group || null,
             fileName: doc.file_name,
             fileSize: doc.file_size,
             fileType: doc.file_type,
@@ -575,7 +573,8 @@ export function ImportantDocumentsTool({ toolId }: ImportantDocumentsToolProps) 
             uploadedDate: doc.uploaded_date,
             effectiveDate: doc.effective_date,
             note: doc.note,
-            fileUrl: doc.file_url,
+            hasFile: Boolean(doc.has_file),
+            fileGroup: doc.file_group || null,
             fileName: doc.file_name,
             fileSize: doc.file_size,
             fileType: doc.file_type,
@@ -720,7 +719,8 @@ export function ImportantDocumentsTool({ toolId }: ImportantDocumentsToolProps) 
             uploadedDate: doc.uploaded_date,
             effectiveDate: doc.effective_date,
             note: doc.note,
-            fileUrl: doc.file_url,
+            hasFile: Boolean(doc.has_file),
+            fileGroup: doc.file_group || null,
             fileName: doc.file_name,
             fileSize: doc.file_size,
             fileType: doc.file_type,
@@ -777,7 +777,8 @@ export function ImportantDocumentsTool({ toolId }: ImportantDocumentsToolProps) 
             uploadedDate: doc.uploaded_date,
             effectiveDate: doc.effective_date,
             note: doc.note,
-            fileUrl: doc.file_url,
+            hasFile: Boolean(doc.has_file),
+            fileGroup: doc.file_group || null,
             fileName: doc.file_name,
             fileSize: doc.file_size,
             fileType: doc.file_type,
@@ -833,7 +834,8 @@ export function ImportantDocumentsTool({ toolId }: ImportantDocumentsToolProps) 
             uploadedDate: doc.uploaded_date,
             effectiveDate: doc.effective_date,
             note: doc.note,
-            fileUrl: doc.file_url,
+            hasFile: Boolean(doc.has_file),
+            fileGroup: doc.file_group || null,
             fileName: doc.file_name,
             fileSize: doc.file_size,
             fileType: doc.file_type,
@@ -889,7 +891,8 @@ export function ImportantDocumentsTool({ toolId }: ImportantDocumentsToolProps) 
             uploadedDate: doc.uploaded_date,
             effectiveDate: doc.effective_date,
             note: doc.note,
-            fileUrl: doc.file_url,
+            hasFile: Boolean(doc.has_file),
+            fileGroup: doc.file_group || null,
             fileName: doc.file_name,
             fileSize: doc.file_size,
             fileType: doc.file_type,
@@ -1269,7 +1272,7 @@ export function ImportantDocumentsTool({ toolId }: ImportantDocumentsToolProps) 
   };
 
   const handleDownload = async (doc: Document): Promise<boolean> => {
-    if (!doc.fileUrl) {
+    if (!doc.hasFile) {
       showError('No file available for download.');
       return false;
     }
@@ -1291,7 +1294,7 @@ export function ImportantDocumentsTool({ toolId }: ImportantDocumentsToolProps) 
   };
 
   const handleViewDocument = async (doc: Document) => {
-    if (!doc.fileUrl) {
+    if (!doc.hasFile) {
       showError('No file available to view.');
       return;
     }
@@ -1324,7 +1327,7 @@ export function ImportantDocumentsTool({ toolId }: ImportantDocumentsToolProps) 
     }
   };
 
-  const documentHasAttachment = (doc: Document) => Boolean(doc.fileUrl || doc.fileName);
+  const documentHasAttachment = (doc: Document) => Boolean(doc.hasFile || doc.fileName);
 
   const savedDocumentToAttachment = (doc: Document): AttachmentItem[] => {
     if (!documentHasAttachment(doc)) return [];
@@ -1334,7 +1337,7 @@ export function ImportantDocumentsTool({ toolId }: ImportantDocumentsToolProps) 
         name: doc.fileName || 'Attachment',
         size: doc.fileSize || 0,
         type: doc.fileType || '',
-        url: doc.fileUrl,
+        url: undefined,
       },
     ];
   };
@@ -1350,7 +1353,8 @@ export function ImportantDocumentsTool({ toolId }: ImportantDocumentsToolProps) 
       uploadedDate: doc.uploaded_date,
       effectiveDate: doc.effective_date,
       note: doc.note,
-      fileUrl: doc.file_url,
+      hasFile: Boolean(doc.has_file),
+      fileGroup: doc.file_group || null,
       fileName: doc.file_name,
       fileSize: doc.file_size,
       fileType: doc.file_type,
@@ -1571,7 +1575,7 @@ export function ImportantDocumentsTool({ toolId }: ImportantDocumentsToolProps) 
     }
 
     const doc = documents.find(d => d.id === downloadPasswordModalId);
-    if (!doc || !doc.fileUrl) {
+    if (!doc || !doc.hasFile) {
       setDownloadPasswordError('Document not found.');
       return;
     }
@@ -1689,10 +1693,11 @@ export function ImportantDocumentsTool({ toolId }: ImportantDocumentsToolProps) 
             uploadedDate: doc.uploaded_date,
             effectiveDate: doc.effective_date,
             note: doc.note,
-            fileUrl: doc.file_url || null,
-            fileName: doc.file_url ? doc.file_name : null,
-            fileSize: doc.file_url ? doc.file_size : null,
-            fileType: doc.file_url ? doc.file_type : null,
+            hasFile: Boolean(doc.has_file),
+            fileGroup: doc.file_group || null,
+            fileName: doc.has_file ? doc.file_name : null,
+            fileSize: doc.has_file ? doc.file_size : null,
+            fileType: doc.has_file ? doc.file_type : null,
             tags: doc.tags || [],
             isActive: doc.is_active !== false,
             dateAdded: doc.date_added,
@@ -3104,11 +3109,7 @@ export function ImportantDocumentsTool({ toolId }: ImportantDocumentsToolProps) 
               <div>
                 <span className={viewFieldLabelClass}>Uploaded Date:</span>
                 <span className={`${viewFieldValueClass} ml-2`}>
-                  {new Date(viewingDocument.uploadedDate).toLocaleDateString('en-US', {
-                    year: 'numeric',
-                    month: 'long',
-                    day: 'numeric'
-                  })}
+                  {formatPaddedDisplayDate(viewingDocument.uploadedDate)}
                 </span>
               </div>
               {viewingDocument.effectiveDate && (
@@ -3123,11 +3124,7 @@ export function ImportantDocumentsTool({ toolId }: ImportantDocumentsToolProps) 
                 <div>
                   <span className={viewFieldLabelClass}>Inactivated:</span>
                   <span className={`${viewFieldValueClass} ml-2`}>
-                    {new Date(viewingDocument.dateInactivated).toLocaleDateString('en-US', {
-                      year: 'numeric',
-                      month: 'long',
-                      day: 'numeric'
-                    })}
+                    {formatPaddedDisplayDate(viewingDocument.dateInactivated)}
                   </span>
                 </div>
               )}

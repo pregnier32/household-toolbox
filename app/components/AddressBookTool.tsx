@@ -85,14 +85,7 @@ function emptyAddressForm(): AddressFormState {
 
 function formatPdfDate(isoDate: string | undefined): string {
   if (!isoDate) return 'N/A';
-  const parts = isoDate.split('T')[0].split('-');
-  if (parts.length !== 3) {
-    const d = new Date(isoDate);
-    if (Number.isNaN(d.getTime())) return isoDate;
-    return d.toLocaleDateString('en-US', { month: 'numeric', day: 'numeric', year: 'numeric' });
-  }
-  const [year, month, day] = parts;
-  return `${Number(month)}/${Number(day)}/${year}`;
+  return formatPaddedDisplayDate(isoDate) || isoDate;
 }
 
 function formatDisplayDate(isoDate: string | undefined): string {
@@ -177,7 +170,7 @@ function formatMailingBlock(record: AddressRecord): string[] {
 }
 
 function formatReportDate(date: Date): string {
-  return date.toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' });
+  return formatPaddedDisplayDate(date);
 }
 
 type AddressBookToolProps = {
@@ -222,14 +215,14 @@ export function AddressBookTool({ toolId }: AddressBookToolProps) {
     ? 'bg-white rounded-2xl border border-slate-200 p-6 max-w-2xl w-full mx-4 max-h-[90vh] overflow-y-auto shadow-xl'
     : 'bg-slate-800 rounded-2xl border border-slate-700 p-6 max-w-2xl w-full mx-4 max-h-[90vh] overflow-y-auto';
   const rowIconEmeraldClass = isLight
-    ? 'inline-flex items-center justify-center rounded-lg border-2 border-emerald-700 bg-white p-2 text-emerald-700 transition-colors hover:bg-emerald-50 hover:text-emerald-900'
-    : 'inline-flex items-center justify-center rounded-lg border-2 border-emerald-500/50 bg-slate-800/50 p-2 text-emerald-300 transition-colors hover:border-emerald-400 hover:bg-emerald-500/20';
+    ? 'inline-flex min-h-11 min-w-11 items-center justify-center rounded-lg border-2 border-emerald-700 bg-white p-2 text-emerald-700 transition-colors hover:bg-emerald-50 hover:text-emerald-900'
+    : 'inline-flex min-h-11 min-w-11 items-center justify-center rounded-lg border-2 border-emerald-500/50 bg-slate-800/50 p-2 text-emerald-300 transition-colors hover:border-emerald-400 hover:bg-emerald-500/20';
   const rowIconSecondaryClass = isLight
-    ? 'inline-flex items-center justify-center rounded-lg border-2 border-slate-400 bg-slate-100 p-2 text-slate-700 transition-colors hover:bg-slate-200 hover:text-slate-900'
-    : 'inline-flex items-center justify-center rounded-lg border-2 border-slate-600 bg-slate-800 p-2 text-slate-200 transition-colors hover:bg-slate-700';
+    ? 'inline-flex min-h-11 min-w-11 items-center justify-center rounded-lg border-2 border-slate-400 bg-slate-100 p-2 text-slate-700 transition-colors hover:bg-slate-200 hover:text-slate-900'
+    : 'inline-flex min-h-11 min-w-11 items-center justify-center rounded-lg border-2 border-slate-600 bg-slate-800 p-2 text-slate-200 transition-colors hover:bg-slate-700';
   const rowIconDangerClass = isLight
-    ? 'inline-flex items-center justify-center rounded-lg border-2 border-red-300 bg-white p-2 text-red-700 transition-colors hover:bg-red-50 hover:border-red-400'
-    : 'inline-flex items-center justify-center rounded-lg border-2 border-red-500/50 bg-slate-800/50 p-2 text-red-400 transition-colors hover:border-red-400 hover:bg-red-500/20';
+    ? 'inline-flex min-h-11 min-w-11 items-center justify-center rounded-lg border-2 border-red-300 bg-white p-2 text-red-700 transition-colors hover:bg-red-50 hover:border-red-400'
+    : 'inline-flex min-h-11 min-w-11 items-center justify-center rounded-lg border-2 border-red-500/50 bg-slate-800/50 p-2 text-red-400 transition-colors hover:border-red-400 hover:bg-red-500/20';
   const tagChipActiveClass = isLight
     ? 'px-1.5 py-0.5 rounded text-xs font-medium border border-emerald-300 bg-emerald-50 text-emerald-800'
     : 'px-1.5 py-0.5 rounded text-xs font-medium bg-emerald-500/20 text-emerald-300';
@@ -2437,6 +2430,7 @@ export function AddressBookTool({ toolId }: AddressBookToolProps) {
 
       <AttachmentModal
         open={attachmentModal !== null}
+        stacked={viewAddressModal !== null}
         onClose={closeAttachmentModal}
         previewItem={viewPreview}
         title={

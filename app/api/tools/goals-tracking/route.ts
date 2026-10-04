@@ -70,7 +70,6 @@ function mapGoalRow(
     priority: string;
     status: string;
     percent_complete: number;
-    show_on_dashboard: boolean;
     reminder_days: number | null;
     last_update_date: string | null;
     use_task_progress_for_percent: boolean;
@@ -88,7 +87,6 @@ function mapGoalRow(
     priority: g.priority as 'High' | 'Medium' | 'Low',
     status: g.status as 'Not Started' | 'In Progress' | 'Delayed' | 'Completed',
     percentComplete: g.percent_complete ?? 0,
-    showOnDashboard: !!g.show_on_dashboard,
     reminderDays: g.reminder_days ?? null,
     lastUpdateDate: g.last_update_date ?? null,
     useTaskProgressForPercent: !!g.use_task_progress_for_percent,
@@ -456,7 +454,6 @@ export async function POST(request: NextRequest) {
           priority,
           status,
           percentComplete,
-          showOnDashboard,
           reminderDays,
           useTaskProgressForPercent,
           addToDashboard,
@@ -468,7 +465,6 @@ export async function POST(request: NextRequest) {
           priority?: string;
           status?: string;
           percentComplete?: number;
-          showOnDashboard?: boolean;
           reminderDays?: number | null;
           useTaskProgressForPercent?: boolean;
           addToDashboard?: boolean;
@@ -483,7 +479,6 @@ export async function POST(request: NextRequest) {
         if (priority !== undefined) updates.priority = priority;
         if (status !== undefined) updates.status = status;
         if (percentComplete !== undefined) updates.percent_complete = percentComplete;
-        if (showOnDashboard !== undefined) updates.show_on_dashboard = showOnDashboard;
         if (reminderDays !== undefined) updates.reminder_days = reminderDays;
         if (useTaskProgressForPercent !== undefined) updates.use_task_progress_for_percent = useTaskProgressForPercent;
         const { data, error } = await supabaseServer

@@ -115,7 +115,6 @@ async function copyDefaultsToUser(userId: string, toolId: string) {
         tool_id: toolId,
         name: d.name,
         card_color: d.card_color,
-        show_on_dashboard: false,
       }))
     )
     .select();
@@ -143,33 +142,6 @@ export async function GET(request: NextRequest) {
   }
 
   try {
-    if (resource === 'dashboard') {
-      const { data: categories } = await supabaseServer
-        .from('tools_tdl_categories')
-        .select('id, name')
-        .eq('user_id', user.id)
-        .eq('tool_id', toolId)
-        .eq('show_on_dashboard', true);
-
-      if (!categories?.length) {
-        return NextResponse.json({ items: [] });
-      }
-
-      const items: { categoryName: string; taskNames: string[] }[] = [];
-      for (const cat of categories) {
-        const { data: tasks } = await supabaseServer
-          .from('tools_tdl_tasks')
-          .select('task_name')
-          .eq('category_id', cat.id)
-          .neq('status', 'Completed');
-        items.push({
-          categoryName: cat.name,
-          taskNames: (tasks || []).map((t) => t.task_name),
-        });
-      }
-      return NextResponse.json({ items });
-    }
-
     if (resource === 'categories' || !resource) {
       const seeded = await copyDefaultsToUser(user.id, toolId);
       const { data: categories, error } = await supabaseServer
@@ -186,11 +158,10 @@ export async function GET(request: NextRequest) {
 
       const list = categories?.length ? categories : seeded;
       return NextResponse.json({
-        categories: list.map((c: { id: string; name: string; card_color: string | null; show_on_dashboard: boolean }) => ({
+        categories: list.map((c: { id: string; name: string; card_color: string | null }) => ({
           id: c.id,
           name: c.name,
           card_color: c.card_color || '#10b981',
-          showOnDashboard: !!c.show_on_dashboard,
         })),
       });
     }
@@ -266,7 +237,6 @@ export async function POST(request: NextRequest) {
             tool_id: toolId,
             name: name.trim(),
             card_color: card_color || '#10b981',
-            show_on_dashboard: false,
           })
           .select()
           .single();
@@ -279,17 +249,15 @@ export async function POST(request: NextRequest) {
             id: data.id,
             name: data.name,
             card_color: data.card_color || '#10b981',
-            showOnDashboard: !!data.show_on_dashboard,
           },
         });
       }
 
       if (action === 'update') {
-        const { categoryId, name, card_color, show_on_dashboard } = body as {
+        const { categoryId, name, card_color } = body as {
           categoryId: string;
           name?: string;
           card_color?: string;
-          show_on_dashboard?: boolean;
         };
         if (!categoryId) {
           return NextResponse.json({ error: 'Category ID is required' }, { status: 400 });
@@ -297,7 +265,6 @@ export async function POST(request: NextRequest) {
         const updates: Record<string, unknown> = {};
         if (name !== undefined) updates.name = name.trim();
         if (card_color !== undefined) updates.card_color = card_color;
-        if (show_on_dashboard !== undefined) updates.show_on_dashboard = show_on_dashboard;
         const { data, error } = await supabaseServer
           .from('tools_tdl_categories')
           .update(updates)
@@ -315,7 +282,6 @@ export async function POST(request: NextRequest) {
             id: data.id,
             name: data.name,
             card_color: data.card_color || '#10b981',
-            showOnDashboard: !!data.show_on_dashboard,
           },
         });
       }
