@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { getHouseholdDataSession } from '@/lib/session';
 import { supabaseServer } from '@/lib/supabaseServer';
 import { ensureToolEntitlement, toolOffersTrial } from '@/lib/user-tool-entitlements';
+import { ownershipShelfPrice } from '@/lib/ownership-price';
 
 async function purchaseMessage(userId: string, toolId: string, trialGranted: boolean): Promise<string> {
   if (trialGranted) return '7-day free trial started. No payment is required to start.';
@@ -52,6 +53,7 @@ export async function POST(request: NextRequest) {
       console.error('Error fetching tool:', toolError);
       return NextResponse.json({ error: 'Tool not found' }, { status: 404 });
     }
+    const shelfPrice = ownershipShelfPrice(tool.price, body?.price);
 
     // Check if tool is available for purchase
     // Custom tools cannot be purchased directly - they must be assigned by admin
@@ -96,7 +98,7 @@ export async function POST(request: NextRequest) {
         .from('users_tools')
         .update({
           status: 'active',
-          price: tool.price,
+          price: shelfPrice,
           updated_at: new Date().toISOString(),
         })
         .eq('id', existingUserTool.id)
@@ -124,7 +126,7 @@ export async function POST(request: NextRequest) {
       user_id: user.id,
       tool_id: toolId,
       status: 'active',
-      price: tool.price,
+      price: shelfPrice,
     };
 
     const { data: newUserTool, error: insertError } = await supabaseServer

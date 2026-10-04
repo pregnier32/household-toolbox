@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 import type { AccountPricingInput, PricingAssignmentInput, PricingToolInput } from './account-pricing';
-import { buildCycleCustomerStatement } from './billing-preview';
+import { buildBillingCyclePreview, buildCycleCustomerStatement } from './billing-preview';
 import {
   anniversaryInstant,
   billingDateLabel,
@@ -10,6 +10,7 @@ import {
   describeBillingCycle,
   isPaidCommitment,
   paidRemovalMessage,
+  planToolRemoval,
   removalNoticeForTool,
   toPeriodRecord,
   trialStatusNote,
@@ -302,4 +303,31 @@ test('removing a paid tool after billing does not reduce the current period', ()
   assert.equal(line?.amount, '$2/month');
   assert.match(line?.note || '', /Scheduled for removal/);
   assert.match(line?.note || '', /November 15, 2026/);
+});
+
+test('tools that share a display name stay separate by tool id', () => {
+  const shared = {
+    name: 'Family Chores',
+    ownedAt: '2026-09-01T15:00:00.000Z',
+    trialUsed: true,
+    trialStartedAt: '2026-09-01T15:00:00.000Z',
+  };
+  const first = tool({ toolId: 'chores-a', ...shared });
+  const second = tool({ toolId: 'chores-b', ...shared });
+  const input = account({ tools: [first, second] });
+  const when = new Date('2026-10-20T15:00:00.000Z');
+  const plan = planToolRemoval(input, SIGNUP, when, 'chores-a', null);
+  assert.equal(plan.kind, 'schedule');
+  if (plan.kind !== 'schedule') return;
+  assert.equal(plan.tools.find((record) => record.toolId === 'chores-a')?.scheduledRemoval, true);
+  assert.equal(plan.tools.find((record) => record.toolId === 'chores-b')?.scheduledRemoval, false);
+  const preview = buildBillingCyclePreview(input, SIGNUP, when, when, plan.tools);
+  const lines = preview.nextBill.lines.filter((line) => line.name === 'Family Chores');
+  assert.equal(lines.length, 2);
+  assert.deepEqual(lines.map((line) => line.toolId).sort(), ['chores-a', 'chores-b']);
+  assert.equal(lines.find((line) => line.toolId === 'chores-a')?.status, 'Scheduled for removal before next cycle');
+  assert.equal(lines.find((line) => line.toolId === 'chores-a')?.amount, '$0');
+  assert.equal(lines.find((line) => line.toolId === 'chores-b')?.status, 'Billable');
+  assert.equal(lines.find((line) => line.toolId === 'chores-b')?.amount, '$2.00');
+  assert.equal(preview.nextBill.lines.filter((line) => line.toolId === 'chores-b').length, 1);
 });

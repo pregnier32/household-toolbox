@@ -3015,7 +3015,7 @@ export function NotesTool({ toolId }: NotesToolProps) {
               <div className="flex gap-3 pt-2">
                 <button
                   type="button"
-                  onClick={() => { void exportToPDF(); }}
+                  onClick={() => { void exportToPDF(false); }}
                   disabled={
                     isExportingPdf
                     || (!exportAllNotes && !exportNoteId)

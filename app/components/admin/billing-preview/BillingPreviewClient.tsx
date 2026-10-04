@@ -238,7 +238,7 @@ export function BillingPreviewClient({
                     </thead>
                     <tbody className={styles.tableBody}>
                       {preview.cycle.nextBill.lines.map((line) => (
-                        <tr key={line.name} className={styles.row}>
+                        <tr key={line.toolId} className={styles.row}>
                           <td className={`px-4 py-3 ${styles.primaryText}`}>{line.name}</td>
                           <td className={`px-4 py-3 ${styles.bodyText}`}>{line.status}</td>
                           <td className={`px-4 py-3 ${styles.bodyText}`}>{line.amount}</td>

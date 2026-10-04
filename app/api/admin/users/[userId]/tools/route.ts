@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { getSession } from '@/lib/session';
 import { supabaseServer } from '@/lib/supabaseServer';
 import { ensureToolEntitlement, toolOffersTrial } from '@/lib/user-tool-entitlements';
+import { ownershipShelfPrice } from '@/lib/ownership-price';
 
 // GET - Fetch tools for a specific user (admin only)
 export async function GET(
@@ -209,6 +210,7 @@ export async function POST(
     if (toolError || !tool) {
       return NextResponse.json({ error: 'Tool not found' }, { status: 404 });
     }
+    const shelfPrice = ownershipShelfPrice(tool.price, body?.price);
 
     // Check if user already has this tool
     const { data: existingUserTool, error: checkError } = await supabaseServer
@@ -231,7 +233,7 @@ export async function POST(
           .from('users_tools')
           .update({
             status: 'active',
-            price: tool.price,
+            price: shelfPrice,
             updated_at: new Date().toISOString(),
           })
           .eq('id', existingUserTool.id)
@@ -271,7 +273,7 @@ export async function POST(
       user_id: userId,
       tool_id: toolId,
       status: 'active',
-      price: tool.price,
+      price: shelfPrice,
     };
 
     const { data: newUserTool, error: insertError } = await supabaseServer

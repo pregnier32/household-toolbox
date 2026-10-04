@@ -4,7 +4,8 @@ import { supabaseServer } from '@/lib/supabaseServer';
 import { deleteUserTool } from '@/lib/user-data-deletion';
 import { loadAccountPricingInputs } from '@/lib/load-account-pricing';
 import { billingSchedule, removalNoticeForTool } from '@/lib/billing-cycle';
-import { commitToolRemoval, loadFrozenPeriod, loadSignupAt } from '@/lib/billing-period-store';
+import { dropUncommittedPeriodTool, loadFrozenPeriod, loadRemovalPlan, loadSignupAt, persistScheduledRemoval } from '@/lib/billing-period-store';
+import { BillingCommitmentError, deleteAfterBillingCommitment, TOOL_REMOVAL_PRESERVATION_ERROR } from '@/lib/billing-tool-removal';
 
 type EmbeddedTool = {
   id: string;
@@ -118,11 +119,44 @@ export async function DELETE(request: NextRequest) {
       return NextResponse.json({ error: 'Tool not found or access denied' }, { status: 404 });
     }
 
-    const signupAt = await loadSignupAt(user.id);
-    const pricing = signupAt ? (await loadAccountPricingInputs([user.id])).get(user.id) : undefined;
-    if (signupAt && pricing) await commitToolRemoval(pricing, signupAt, new Date(), userTool.tool_id);
+    const now = new Date();
+    let removal: Awaited<ReturnType<typeof loadRemovalPlan>> | null = null;
+    try {
+      const signupAt = await loadSignupAt(user.id);
+      const pricing = signupAt ? (await loadAccountPricingInputs([user.id])).get(user.id) : undefined;
+      removal = signupAt && pricing
+        ? await loadRemovalPlan(pricing, signupAt, now, userTool.tool_id)
+        : null;
+    } catch (error) {
+      console.error('Tool removal stopped before data deletion:', error);
+      return NextResponse.json({ error: TOOL_REMOVAL_PRESERVATION_ERROR }, { status: 503 });
+    }
+    if (removal?.plan.kind === 'uncommitted' && removal.plan.dropToolId && removal.periodStart) {
+      try {
+        await dropUncommittedPeriodTool(user.id, removal.periodStart, removal.plan.dropToolId);
+      } catch (error) {
+        console.error('Non-paid billing snapshot cleanup failed; tool deletion will continue.', error);
+      }
+    }
 
-    const deleted = await deleteUserTool(user.id, userTool.tool_id);
+    let deleted;
+    try {
+      deleted = await deleteAfterBillingCommitment({
+        plan: removal?.plan ?? { kind: 'schedule', tools: [] },
+        toolId: userTool.tool_id,
+        preserve: async () => {
+          if (!removal || removal.plan.kind !== 'schedule' || !removal.periodStart || !removal.canPersist) {
+            throw new BillingCommitmentError();
+          }
+          await persistScheduledRemoval(user.id, removal.periodStart, removal.plan.tools, userTool.tool_id);
+        },
+        deleteData: () => deleteUserTool(user.id, userTool.tool_id),
+      });
+    } catch (error) {
+      if (!(error instanceof BillingCommitmentError)) throw error;
+      console.error('Tool removal stopped before data deletion:', error);
+      return NextResponse.json({ error: error.message }, { status: 503 });
+    }
 
     // Drop current ownership only. user_tool_entitlements stays so a later
     // re-buy cannot start another 7-day trial.

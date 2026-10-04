@@ -106,7 +106,7 @@ export type BillingCyclePreview = {
   nextFreeSlots: number;
   nextBill: {
     heading: string;
-    lines: { name: string; status: string; amount: string }[];
+    lines: { toolId: string; name: string; status: string; amount: string }[];
     regularMonthly: string;
     promotions: string;
     estimated: string;
@@ -667,11 +667,13 @@ export function buildBillingCyclePreview(
   const scheduled = snapshot.periodRecords.filter((record) => record.scheduledRemoval);
   const lines = snapshot.next.tools
     .slice()
-    .sort((left, right) => left.name.localeCompare(right.name, undefined, { sensitivity: 'base' }))
-    .map((tool) => ({ name: tool.name, ...nextBillStatus(tool) }));
+    .sort((left, right) => left.name.localeCompare(right.name, undefined, { sensitivity: 'base' }) || left.toolId.localeCompare(right.toolId))
+    .map((tool) => ({ toolId: tool.toolId, name: tool.name, ...nextBillStatus(tool) }));
+  const listed = new Set(lines.map((line) => line.toolId));
   for (const record of scheduled) {
-    if (lines.some((line) => line.name === record.name)) continue;
-    lines.push({ name: record.name, status: 'Scheduled for removal before next cycle', amount: '$0' });
+    if (listed.has(record.toolId)) continue;
+    listed.add(record.toolId);
+    lines.push({ toolId: record.toolId, name: record.name, status: 'Scheduled for removal before next cycle', amount: '$0' });
   }
   return {
     anniversaryDay: snapshot.schedule.anchor.anniversaryDay,

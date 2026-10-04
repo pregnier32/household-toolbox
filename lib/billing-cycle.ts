@@ -241,6 +241,39 @@ export function paidRemovalMessage(toolName: string, nextBillingAt: string): str
   return `${toolName} is included in your billing period through ${dayBeforeLabel(nextBillingAt)}. Removing it now stops it from being included in your ${billingDateLabel(nextBillingAt)} billing cycle. Your current billing-period charge will not be prorated or refunded.`;
 }
 
+export type ToolRemovalPlan =
+  | { kind: 'uncommitted'; dropToolId: string | null; tools: PeriodToolRecord[] }
+  | { kind: 'schedule'; tools: PeriodToolRecord[] };
+
+/**
+ * A paid commitment is judged from ownership at the period start, not from a
+ * snapshot that might be missing. Snapshot rows are then updated by tool id.
+ */
+export function planToolRemoval(
+  input: AccountPricingInput,
+  signupAt: string,
+  effectiveAt: Date,
+  toolId: string,
+  frozen: PeriodToolRecord[] | null,
+): ToolRemovalPlan {
+  const judged = describeBillingCycle(input, signupAt, effectiveAt, null);
+  const priced = judged.period?.tools.find((tool) => tool.toolId === toolId);
+  if (!priced || !isPaidCommitment(priced)) {
+    const base = frozen ?? [];
+    return {
+      kind: 'uncommitted',
+      dropToolId: base.some((record) => record.toolId === toolId) ? toolId : null,
+      tools: base.filter((record) => record.toolId !== toolId),
+    };
+  }
+  const base = frozen ?? judged.periodRecords;
+  const current = base.find((record) => record.toolId === toolId)
+    ?? judged.periodRecords.find((record) => record.toolId === toolId);
+  const rest = base.filter((record) => record.toolId !== toolId);
+  if (!current) return { kind: 'schedule', tools: rest };
+  return { kind: 'schedule', tools: [...rest, { ...current, scheduledRemoval: true }] };
+}
+
 export function removalNoticeForTool(
   input: AccountPricingInput,
   signupAt: string,

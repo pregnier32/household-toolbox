@@ -1,4 +1,5 @@
 import { supabaseServer } from '@/lib/supabaseServer';
+import { keptOwnershipShelf } from '@/lib/ownership-price';
 import {
   calculateAccountPricing,
   dollarsToCents,
@@ -165,7 +166,7 @@ export async function loadAccountPricingInputs(userIds: string[]): Promise<Map<s
         const catalog = one(row.tools);
         const trial = trials.get(row.tool_id);
         const catalogPrice = Number(catalog?.price ?? 0);
-        const shelf = row.price == null ? catalogPrice : Number(row.price);
+        const shelf = keptOwnershipShelf(row.price, catalogPrice);
         return {
           toolId: row.tool_id,
           name: catalog?.name || 'Tool',

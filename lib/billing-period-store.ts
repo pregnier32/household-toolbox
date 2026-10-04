@@ -3,12 +3,13 @@ import type { Json } from '@/src/types/supabase';
 import type { AccountPricingInput } from './account-pricing';
 import {
   billingSchedule,
-  describeBillingCycle,
-  isPaidCommitment,
+  planToolRemoval,
   toPeriodRecord,
   toolsOwnedBy,
   type PeriodToolRecord,
+  type ToolRemovalPlan,
 } from './billing-cycle';
+import { BillingCommitmentError } from './billing-tool-removal';
 
 export type PeriodLoad = {
   available: boolean;
@@ -85,31 +86,71 @@ export async function materializeBillingPeriod(
   return tools;
 }
 
-export async function commitToolRemoval(
+async function periodRowId(userId: string, periodStart: string): Promise<string | null> {
+  const row = await supabaseServer.from('billing_periods').select('id, period_start').eq('user_id', userId);
+  if (row.error) {
+    if (missingTable(row.error)) throw new BillingCommitmentError();
+    throw row.error;
+  }
+  const target = Date.parse(periodStart);
+  return (row.data ?? []).find((item) => Date.parse(item.period_start) === target)?.id ?? null;
+}
+
+async function writePeriodTools(userId: string, periodStart: string, tools: PeriodToolRecord[], hadRow: boolean): Promise<void> {
+  if (!hadRow) {
+    const inserted = await supabaseServer.from('billing_periods').insert({
+      user_id: userId,
+      period_start: periodStart,
+      tools: tools as unknown as Json,
+    });
+    if (!inserted.error) return;
+    if (inserted.error.code !== '23505') throw inserted.error;
+  }
+  const id = await periodRowId(userId, periodStart);
+  if (!id) throw new BillingCommitmentError();
+  const updated = await supabaseServer.from('billing_periods').update({
+    tools: tools as unknown as Json,
+  }).eq('id', id).select('id');
+  if (updated.error) throw updated.error;
+  if (!updated.data?.length) throw new BillingCommitmentError();
+}
+
+export async function loadRemovalPlan(
   input: AccountPricingInput,
   signupAt: string,
   effectiveAt: Date,
   toolId: string,
-): Promise<void> {
+): Promise<{ plan: ToolRemovalPlan; periodStart: string | null; canPersist: boolean }> {
   const schedule = billingSchedule(signupAt, effectiveAt);
-  if (!schedule.periodStart) return;
-  const frozen = await materializeBillingPeriod(input, signupAt, effectiveAt);
-  if (!frozen) return;
-  const cycle = describeBillingCycle(input, signupAt, effectiveAt, frozen);
-  const priced = cycle.period?.tools.find((tool) => tool.toolId === toolId);
-  const nextTools = priced && isPaidCommitment(priced)
-    ? frozen.map((record) => record.toolId === toolId ? { ...record, scheduledRemoval: true } : record)
-    : frozen.filter((record) => record.toolId !== toolId);
-  const row = await supabaseServer.from('billing_periods').select('id, period_start').eq('user_id', input.userId);
-  if (row.error) {
-    if (missingTable(row.error)) return;
-    throw row.error;
+  if (!schedule.periodStart) {
+    return { plan: planToolRemoval(input, signupAt, effectiveAt, toolId, null), periodStart: null, canPersist: true };
   }
-  const target = Date.parse(schedule.periodStart);
-  const match = (row.data ?? []).find((item) => Date.parse(item.period_start) === target);
-  if (!match) return;
-  const updated = await supabaseServer.from('billing_periods').update({
-    tools: nextTools as unknown as Json,
-  }).eq('id', match.id);
-  if (updated.error) throw updated.error;
+  const loaded = await loadFrozenPeriod(input.userId, schedule.periodStart);
+  return {
+    plan: planToolRemoval(input, signupAt, effectiveAt, toolId, loaded.available ? loaded.frozen : null),
+    periodStart: schedule.periodStart,
+    canPersist: loaded.available,
+  };
+}
+
+export async function persistScheduledRemoval(
+  userId: string,
+  periodStart: string,
+  tools: PeriodToolRecord[],
+  toolId: string,
+): Promise<void> {
+  const existing = await loadFrozenPeriod(userId, periodStart);
+  if (!existing.available) throw new BillingCommitmentError();
+  await writePeriodTools(userId, periodStart, tools, Boolean(existing.frozen));
+  const saved = await loadFrozenPeriod(userId, periodStart);
+  const line = saved.frozen?.find((record) => record.toolId === toolId);
+  if (!saved.available || !line?.scheduledRemoval) throw new BillingCommitmentError();
+}
+
+export async function dropUncommittedPeriodTool(userId: string, periodStart: string, toolId: string): Promise<void> {
+  const existing = await loadFrozenPeriod(userId, periodStart);
+  if (!existing.available || !existing.frozen) return;
+  const tools = existing.frozen.filter((record) => record.toolId !== toolId);
+  if (tools.length === existing.frozen.length) return;
+  await writePeriodTools(userId, periodStart, tools, true);
 }
