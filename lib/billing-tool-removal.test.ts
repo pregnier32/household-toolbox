@@ -80,7 +80,7 @@ test('a tool still in its free trial can be deleted without a paid commitment', 
     ownedAt: '2026-10-10T15:00:00.000Z',
     trialStartedAt: '2026-10-10T15:00:00.000Z',
   })]);
-  const plan = planToolRemoval(input, SIGNUP, DURING_PERIOD, 'clean', null);
+  const plan = planToolRemoval(input, SIGNUP, new Date('2026-10-16T15:00:00.000Z'), 'clean', null);
   assert.equal(plan.kind, 'uncommitted');
   let preserved = false;
   let deleted = false;
@@ -95,6 +95,30 @@ test('a tool still in its free trial can be deleted without a paid commitment', 
     },
   });
   assert.equal(preserved, false);
+  assert.equal(deleted, true);
+});
+
+test('a tool whose trial ended after the billing date is a paid commitment', async () => {
+  const input = account([tool({
+    toolId: 'clean',
+    ownedAt: '2026-10-10T15:00:00.000Z',
+    trialStartedAt: '2026-10-10T15:00:00.000Z',
+  })]);
+  const plan = planToolRemoval(input, SIGNUP, DURING_PERIOD, 'clean', null);
+  assert.equal(plan.kind, 'schedule');
+  let preserved = false;
+  let deleted = false;
+  await deleteAfterBillingCommitment({
+    plan,
+    toolId: 'clean',
+    preserve: async () => {
+      preserved = true;
+    },
+    deleteData: async () => {
+      deleted = true;
+    },
+  });
+  assert.equal(preserved, true);
   assert.equal(deleted, true);
 });
 

@@ -22,7 +22,15 @@ DECLARE
   changed JSONB := '{}'::jsonb;
   detail JSONB := '{}'::jsonb;
   action_name TEXT;
+  site_promo BOOLEAN;
 BEGIN
+  site_promo := COALESCE((p_fields->>'is_site_promo')::boolean, false);
+  IF site_promo THEN
+    UPDATE public.promotions
+    SET is_site_promo = false
+    WHERE is_site_promo = true
+      AND id IS DISTINCT FROM p_promotion_id;
+  END IF;
   benefit := p_fields->>'benefit_type';
   tool_ids := COALESCE(p_tool_ids, ARRAY[]::uuid[]);
   IF benefit IS DISTINCT FROM 'specific_tools' THEN
@@ -44,7 +52,7 @@ BEGIN
       internal_name, public_code, customer_description, admin_notes, status,
       redeem_start_date, redeem_end_date, benefit_type, slot_mode, slot_count, percent_off,
       amount_cents, bonus_storage_bytes, duration_unit, duration_amount, max_redemptions,
-      per_user, eligible_users, eligible_account_type, can_stack, assignment_method,
+      per_user, eligible_users, eligible_account_type, can_stack, is_site_promo, assignment_method,
       campaign_id, partner_id, platform_code, revenue_share_percent
     ) VALUES (
       p_fields->>'internal_name',
@@ -67,6 +75,7 @@ BEGIN
       p_fields->>'eligible_users',
       p_fields->>'eligible_account_type',
       COALESCE((p_fields->>'can_stack')::boolean, false),
+      site_promo,
       p_fields->>'assignment_method',
       NULLIF(p_fields->>'campaign_id', '')::uuid,
       NULLIF(p_fields->>'partner_id', '')::uuid,
@@ -106,6 +115,7 @@ BEGIN
       eligible_users = p_fields->>'eligible_users',
       eligible_account_type = p_fields->>'eligible_account_type',
       can_stack = COALESCE((p_fields->>'can_stack')::boolean, false),
+      is_site_promo = site_promo,
       assignment_method = p_fields->>'assignment_method',
       campaign_id = NULLIF(p_fields->>'campaign_id', '')::uuid,
       partner_id = NULLIF(p_fields->>'partner_id', '')::uuid,
@@ -174,6 +184,9 @@ BEGIN
     END IF;
     IF existing.can_stack IS DISTINCT FROM COALESCE((p_fields->>'can_stack')::boolean, false) THEN
       changed := changed || jsonb_build_object('can_stack', jsonb_build_object('from', existing.can_stack, 'to', COALESCE((p_fields->>'can_stack')::boolean, false)));
+    END IF;
+    IF existing.is_site_promo IS DISTINCT FROM site_promo THEN
+      changed := changed || jsonb_build_object('is_site_promo', jsonb_build_object('from', existing.is_site_promo, 'to', site_promo));
     END IF;
     IF existing.assignment_method IS DISTINCT FROM p_fields->>'assignment_method' THEN
       changed := changed || jsonb_build_object('assignment_method', jsonb_build_object('from', existing.assignment_method, 'to', p_fields->>'assignment_method'));

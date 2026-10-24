@@ -2,11 +2,8 @@ export type DefaultPromotionShape = {
   id: string;
   publicCode: string | null;
   status: string;
-  assignmentMethod: string;
-  benefitType: string;
-  eligibleUsers: string;
+  isSitePromo: boolean;
   eligibleAccountType: string;
-  slotMode: string | null;
 };
 
 export type EnsureStatus = 'granted' | 'already_present' | 'skipped' | 'failed';
@@ -23,19 +20,17 @@ export type DefaultEntitlementDeps = {
   assign: (userId: string, promotionId: string) => Promise<{ ok: boolean; code: string }>;
 };
 
-export function isDefaultNewUserPromotion(promotion: DefaultPromotionShape | null): boolean {
-  if (!promotion) return false;
-  return promotion.publicCode?.trim().toLowerCase() === 'newuser2'
-    && promotion.status === 'active'
-    && promotion.assignmentMethod === 'automatic'
-    && promotion.benefitType === 'free_tool_slots'
-    && promotion.slotMode === 'total'
-    && promotion.eligibleUsers === 'new_users'
-    && (promotion.eligibleAccountType === 'personal' || promotion.eligibleAccountType === 'all');
+export function isSitePromo(promotion: DefaultPromotionShape | null): boolean {
+  return Boolean(promotion?.isSitePromo) && promotion?.status === 'active';
+}
+
+function accountCanReceiveSitePromo(accountType: string | null, promotion: DefaultPromotionShape): boolean {
+  if (promotion.eligibleAccountType === 'all') return true;
+  return accountType === promotion.eligibleAccountType;
 }
 
 /**
- * Repairs a missing NEWUSER2 benefit for a personal household billing admin.
+ * Grants the discount code flagged as the site promo to a new household billing account.
  * Safe to call on every session. A process cache skips repeat lookups after success.
  * A database failure is not cached, so a later session can retry.
  * Automatic grants do not write admin_actions; the assignment service only audits superadmin assignments.
@@ -49,13 +44,12 @@ export async function ensureDefaultAccountEntitlements(
   try {
     const context = await deps.loadContext(userId);
     if (!context?.isBillingOwner) return { status: 'skipped', reason: 'not_billing_owner' };
-    if (context.accountType !== 'personal') {
-      cache.add(userId);
-      return { status: 'skipped', reason: 'not_personal' };
-    }
     const promotion = await deps.loadDefaultPromotion();
-    if (!isDefaultNewUserPromotion(promotion) || !promotion) {
+    if (!isSitePromo(promotion) || !promotion) {
       return { status: 'skipped', reason: 'promotion_not_default' };
+    }
+    if (!accountCanReceiveSitePromo(context.accountType, promotion)) {
+      return { status: 'skipped', reason: 'account_type' };
     }
     if (await deps.hasAssignment(userId, promotion.id)) {
       cache.add(userId);

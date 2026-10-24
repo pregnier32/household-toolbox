@@ -65,6 +65,7 @@ export function DiscountCodeDetail({
     { label: 'Account types', value: ACCOUNT_TYPE_LABELS[code.eligibleAccountType] },
     { label: 'Combines with other discounts', value: code.canStack ? 'Yes' : 'No' },
     { label: 'Assignment', value: assignmentLabel(code.assignmentMethod) },
+    { label: 'Site promo', value: code.isSitePromo ? 'Applied to new accounts' : 'No' },
     { label: 'Partner / campaign', value: partnerCampaignLabel(code) },
     { label: 'Platform', value: platformLabel(code.platform) },
     { label: 'Revenue share', value: code.revenueSharePercent.trim() ? `${code.revenueSharePercent}% for later reporting` : 'Not set' },

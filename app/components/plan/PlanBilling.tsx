@@ -317,7 +317,6 @@ export function PlanBilling({
           <div className={modalCardClass} role="dialog" aria-modal="true" aria-labelledby="plan-benefit-title" onClick={(event) => event.stopPropagation()}>
             <h2 id="plan-benefit-title" className={modalTitleClass}>{selected.name}</h2>
             <p className={`mt-2 ${modalBodyClass}`}>{selected.description}</p>
-            <p className={`mt-2 ${modalBodyClass}`}>{selected.benefit}</p>
             <p className={`mt-2 ${modalBodyClass}`}>{customerTiming(selected, asOf)}</p>
             <p className={`mt-2 ${pageSubtitleClass}`}>{CUSTOMER_SOURCE_LABELS[selected.source]}</p>
             <button type="button" className={`mt-4 ${cancelButtonClass}`} onClick={() => setSelected(null)}>Close</button>

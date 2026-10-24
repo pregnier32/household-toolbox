@@ -4,7 +4,7 @@ import { useCallback, useEffect, useState } from 'react';
 import { useTheme } from '@/app/components/AppThemeProvider';
 import { discountAdminStyles } from '@/app/components/admin/discount-codes/styles';
 import { getDisplayStatus, type DiscountCode } from '@/lib/discount-codes';
-import { isAffectingEntitlement, type UserEntitlement } from '@/lib/user-entitlements-preview';
+import { isDiscountCodeInUse, type UserEntitlement } from '@/lib/user-entitlements-preview';
 
 export function UserDiscountCodesDialog({
   userId,
@@ -24,6 +24,8 @@ export function UserDiscountCodesDialog({
   const [error, setError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
   const [isSaving, setIsSaving] = useState(false);
+  const [pendingId, setPendingId] = useState<string | null>(null);
+  const [removingId, setRemovingId] = useState<string | null>(null);
 
   const load = useCallback(() => {
     setError(null);
@@ -35,13 +37,14 @@ export function UserDiscountCodesDialog({
         if (!entitlements.ok) throw new Error(entitlements.body.error || 'Discount codes could not be loaded.');
         if (!promotions.ok) throw new Error(promotions.body.error || 'Discount codes could not be loaded.');
         const rows = ((entitlements.body.entitlements || []) as UserEntitlement[])
-          .filter((item) => item.publicCode && isAffectingEntitlement(item))
+          .filter((item) => isDiscountCodeInUse(item))
           .sort((left, right) => left.publicCode.localeCompare(right.publicCode));
         const available = ((promotions.body.codes || []) as DiscountCode[])
           .filter((code) => getDisplayStatus(code) === 'active' && code.publicCode)
           .sort((left, right) => left.publicCode.localeCompare(right.publicCode));
         setCurrent(rows);
         setCodes(available);
+        setPendingId((pending) => (rows.some((item) => item.id === pending) ? pending : null));
         setSelectedId((currentId) => (available.some((code) => code.id === currentId) ? currentId : available[0]?.id || ''));
       })
       .catch((loadError) => {
@@ -79,7 +82,29 @@ export function UserDiscountCodesDialog({
       .finally(() => setIsSaving(false));
   };
 
-  const descriptionFor = (code: string) => codes?.find((item) => item.publicCode === code)?.customerDescription || '';
+  const codeFor = (item: UserEntitlement) => codes?.find((code) => code.id === item.promotionId) || codes?.find((code) => code.publicCode === item.publicCode);
+
+  const removeCode = (item: UserEntitlement) => {
+    setRemovingId(item.id);
+    setError(null);
+    setNotice(null);
+    fetch(`/api/admin/users/${userId}/entitlements`, {
+      method: 'DELETE',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ assignmentId: item.id }),
+    })
+      .then((response) => response.json().then((body) => ({ ok: response.ok, body })))
+      .then((result) => {
+        if (!result.ok) throw new Error(result.body.error || 'That discount code could not be removed.');
+        setNotice(`${item.publicCode} was removed.`);
+        setPendingId(null);
+        load();
+      })
+      .catch((removeError) => {
+        setError(removeError instanceof Error ? removeError.message : 'That discount code could not be removed.');
+      })
+      .finally(() => setRemovingId(null));
+  };
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4" onClick={onClose}>
@@ -109,12 +134,51 @@ export function UserDiscountCodesDialog({
           <p className={`mt-3 ${styles.note}`}>No discount codes are on this account.</p>
         ) : (
           <ul className="mt-3 space-y-2">
-            {current.map((item) => (
-              <li key={item.id} className={styles.choice}>
-                <p className={`font-mono text-sm font-semibold ${styles.primaryText}`}>{item.publicCode}</p>
-                <p className={`mt-1 ${styles.muted}`}>{descriptionFor(item.publicCode) || item.name}</p>
-              </li>
-            ))}
+            {current.map((item) => {
+              const code = codeFor(item);
+              const once = code?.perUserRedemption === 'once';
+              const pending = pendingId === item.id;
+              return (
+                <li key={item.id} className={styles.choice}>
+                  <div className="flex items-start justify-between gap-3">
+                    <div>
+                      <p className={`font-mono text-sm font-semibold ${styles.primaryText}`}>{item.publicCode}</p>
+                      <p className={`mt-1 ${styles.muted}`}>{code?.customerDescription || item.name}</p>
+                    </div>
+                    {!pending && (
+                      <button
+                        type="button"
+                        className={styles.actionMuted}
+                        disabled={isSaving || removingId != null}
+                        onClick={() => {
+                          setPendingId(item.id);
+                          setError(null);
+                          setNotice(null);
+                        }}
+                      >
+                        Remove
+                      </button>
+                    )}
+                  </div>
+                  {pending && (
+                    <div className="mt-3">
+                      <p className={styles.bodyText}>
+                        Remove {item.publicCode} from this account?
+                        {once ? ' This code can only be used once, so it cannot be added again.' : ''}
+                      </p>
+                      <div className="mt-3 flex justify-end gap-2">
+                        <button type="button" className={styles.secondaryButton} disabled={removingId === item.id} onClick={() => setPendingId(null)}>
+                          Cancel
+                        </button>
+                        <button type="button" className={styles.secondaryButton} disabled={removingId === item.id} onClick={() => removeCode(item)}>
+                          {removingId === item.id ? 'Removing...' : 'Remove code'}
+                        </button>
+                      </div>
+                    </div>
+                  )}
+                </li>
+              );
+            })}
           </ul>
         )}
 

@@ -604,6 +604,7 @@ export type Database = {
           eligible_users: string
           id: string
           internal_name: string
+          is_site_promo: boolean
           max_redemptions: number | null
           partner_id: string | null
           per_user: string
@@ -634,6 +635,7 @@ export type Database = {
           eligible_users: string
           id?: string
           internal_name: string
+          is_site_promo?: boolean
           max_redemptions?: number | null
           partner_id?: string | null
           per_user: string
@@ -664,6 +666,7 @@ export type Database = {
           eligible_users?: string
           id?: string
           internal_name?: string
+          is_site_promo?: boolean
           max_redemptions?: number | null
           partner_id?: string | null
           per_user?: string

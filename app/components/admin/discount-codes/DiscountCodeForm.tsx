@@ -415,6 +415,18 @@ export function DiscountCodeForm({
             {draft.assignmentMethod !== 'public_code' && (
               <p className={`mt-3 ${styles.hint}`}>A public code is still stored so reports can identify the promotion.</p>
             )}
+            <label className={`mt-4 flex items-start gap-2 ${styles.bodyText}`}>
+              <input
+                type="checkbox"
+                className="mt-1"
+                checked={draft.isSitePromo}
+                onChange={(event) => update({ isSitePromo: event.target.checked })}
+              />
+              <span>
+                Site promo for new accounts
+                <span className={`mt-1 block ${styles.hint}`}>New household accounts receive this code when they are created. Only one code can be the site promo. Renaming the public code does not change which code is applied.</span>
+              </span>
+            </label>
           </section>
 
           <section id="discount-campaign" className={`${styles.card} scroll-mt-6`}>

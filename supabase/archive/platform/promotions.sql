@@ -145,6 +145,7 @@ CREATE TABLE IF NOT EXISTS public.promotions (
   eligible_users TEXT NOT NULL,
   eligible_account_type TEXT NOT NULL,
   can_stack BOOLEAN NOT NULL,
+  is_site_promo BOOLEAN NOT NULL DEFAULT false,
   assignment_method TEXT NOT NULL,
   campaign_id UUID REFERENCES public.campaigns(id) ON DELETE RESTRICT,
   partner_id UUID REFERENCES public.partners(id) ON DELETE RESTRICT,

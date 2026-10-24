@@ -114,18 +114,15 @@ export async function ensureDefaultAccountEntitlements(userId: string) {
       };
     },
     loadDefaultPromotion: async () => {
-      const { data, error } = await supabaseServer.from('promotions').select('id, public_code, status, assignment_method, benefit_type, eligible_users, eligible_account_type, slot_mode').ilike('public_code', 'NEWUSER2').maybeSingle();
+      const { data, error } = await supabaseServer.from('promotions').select('id, public_code, status, is_site_promo, eligible_account_type').eq('is_site_promo', true).eq('status', 'active').maybeSingle();
       if (error) throw error;
       if (!data) return null;
       return {
         id: data.id,
         publicCode: data.public_code,
         status: data.status,
-        assignmentMethod: data.assignment_method,
-        benefitType: data.benefit_type,
-        eligibleUsers: data.eligible_users,
+        isSitePromo: data.is_site_promo,
         eligibleAccountType: data.eligible_account_type,
-        slotMode: data.slot_mode,
       };
     },
     hasAssignment: async (id, promotionId) => {
@@ -145,7 +142,7 @@ export async function ensureDefaultAccountEntitlements(userId: string) {
     }),
   }, defaultEntitlementCache);
   if (result.status === 'failed') {
-    console.error('NEWUSER2 assignment was not saved', result.reason ?? 'failed');
+    console.error('Site promo assignment was not saved', result.reason ?? 'failed');
   }
   return result;
 }
@@ -180,6 +177,7 @@ type PromotionRow = {
   eligible_users: DiscountCode['eligibleUsers'];
   eligible_account_type: DiscountCode['eligibleAccountType'];
   can_stack: boolean;
+  is_site_promo: boolean;
   assignment_method: DiscountCode['assignmentMethod'];
   campaign_id: string | null;
   partner_id: string | null;
@@ -278,6 +276,7 @@ export async function listDiscountCodes(): Promise<DiscountCode[]> {
       eligibleUsers: row.eligible_users,
       eligibleAccountType: row.eligible_account_type,
       canStack: row.can_stack,
+      isSitePromo: Boolean(row.is_site_promo),
       assignmentMethod: row.assignment_method,
       partnerName: campaign ? (partnerName.get(campaign.partner_id) || '') : (row.partner_id ? partnerName.get(row.partner_id) || '' : ''),
       platform: ((campaign?.platform_code || row.platform_code || '') as DiscountCode['platform']),
@@ -376,6 +375,7 @@ function promotionWrite(draft: DiscountCodeDraft, attribution: { campaign_id: st
     eligible_users: draft.eligibleUsers,
     eligible_account_type: draft.eligibleAccountType,
     can_stack: draft.canStack,
+    is_site_promo: draft.isSitePromo,
     assignment_method: draft.assignmentMethod,
     ...attribution,
     revenue_share_percent: share === '' ? null : Number(share),

@@ -7,6 +7,7 @@
 import {
   TRIAL_LENGTH_MS,
   calculateAccountPricing,
+  trialEndsAt,
   type AccountPricingInput,
   type AccountPricingState,
   type PricingAssignmentInput,
@@ -199,6 +200,21 @@ export function priceToolsAt(input: AccountPricingInput, tools: PricingToolInput
   }, at);
 }
 
+/**
+ * A tool that is still in its 7-day trial on the billing date is free only
+ * until that trial ends. After the trial, it is priced with the period that
+ * already started. Promotions stay as of the billing date.
+ */
+export function withTrialsEndedBy(tools: PricingToolInput[], at: Date): PricingToolInput[] {
+  const time = at.getTime();
+  return tools.map((tool) => {
+    if (!tool.trialUsed || !tool.trialStartedAt) return tool;
+    const end = Date.parse(trialEndsAt(tool.trialStartedAt));
+    if (Number.isNaN(end) || end > time) return tool;
+    return { ...tool, trialUsed: false };
+  });
+}
+
 export function isPaidCommitment(tool: ToolPricingResult): boolean {
   return tool.expectedMonthlyCents > 0;
 }
@@ -215,7 +231,11 @@ export function describeBillingCycle(
     ? []
     : frozen ?? toolsOwnedBy(input.tools, new Date(schedule.periodStart)).map((tool) => toPeriodRecord(tool));
   const period = schedule.periodStart
-    ? priceToolsAt(input, periodRecordsToTools(periodRecords), new Date(schedule.periodStart))
+    ? priceToolsAt(
+      input,
+      withTrialsEndedBy(periodRecordsToTools(periodRecords), effectiveAt),
+      new Date(schedule.periodStart),
+    )
     : null;
   const removed = new Set(periodRecords.filter((record) => record.scheduledRemoval).map((record) => record.toolId));
   const nextAt = new Date(schedule.nextBillingAt);

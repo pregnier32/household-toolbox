@@ -268,7 +268,7 @@ export function assembleBillingPreview(args: {
     id: assignment.id,
     name: assignment.displayName,
     publicCode: assignment.publicCode || '',
-    benefit: benefitText(assignment, args.toolNames),
+    benefit: '',
     description: assignment.customerDescription,
     effectiveDate: assignment.effectiveAt.slice(0, 10),
     expirationDate: assignment.expiresAt ? assignment.expiresAt.slice(0, 10) : null,

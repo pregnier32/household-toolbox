@@ -102,9 +102,70 @@ test('a tool still in trial on the billing date is not charged', () => {
   const atBill = describeBillingCycle(input, SIGNUP, new Date(FIRST_BILL), null);
   assert.equal(atBill.period?.tools[0].inTrial, true);
   assert.equal(atBill.period?.effectiveMonthlyCents, 0);
+  const stillInTrial = describeBillingCycle(input, SIGNUP, new Date('2026-10-16T15:00:00.000Z'), null);
+  assert.equal(stillInTrial.period?.effectiveMonthlyCents, 0);
   const afterTrial = describeBillingCycle(input, SIGNUP, new Date('2026-10-17T15:00:00.000Z'), null);
-  assert.equal(afterTrial.period?.effectiveMonthlyCents, 0);
+  assert.equal(afterTrial.period?.tools[0].inTrial, false);
+  assert.equal(afterTrial.period?.effectiveMonthlyCents, 200);
   assert.equal(afterTrial.next.effectiveMonthlyCents, 200);
+  const statement = buildCycleCustomerStatement(input, SIGNUP, new Date('2026-10-17T15:00:00.000Z'), null);
+  const line = statement.statement.find((row) => row.label === 'Cleaning Schedule');
+  assert.equal(line?.amount, '$2/month');
+  assert.equal(line?.note ?? null, null);
+});
+
+test('a tool added with the account shows its price once the trial ends, before the next anniversary', () => {
+  const signup = '2026-10-24T03:02:00.000Z';
+  const owned = '2026-10-24T03:32:00.000Z';
+  const plus30 = new Date('2026-11-23T03:32:00.000Z');
+  const input = account({
+    tools: [
+      tool({ toolId: 'calendar', name: 'Calendar Events', ownedAt: owned, trialUsed: true, trialStartedAt: owned }),
+      tool({ toolId: 'todos', name: 'To Do List', ownedAt: owned, trialUsed: true, trialStartedAt: owned }),
+    ],
+    assignments: [assignment({
+      id: 'two-free',
+      benefitType: 'free_tool_slots',
+      slotMode: 'total',
+      slotCount: 2,
+      publicCode: '2-FREE',
+      customerDescription: 'Account includes 2 free tools.',
+      effectiveAt: signup,
+    })],
+  });
+  const onFirstBill = describeBillingCycle(input, signup, new Date('2026-10-31T03:02:00.000Z'), null);
+  assert.equal(onFirstBill.period?.tools.every((item) => item.inTrial), true);
+  assert.equal(onFirstBill.period?.effectiveMonthlyCents, 0);
+  const cycle = describeBillingCycle(input, signup, plus30, null);
+  assert.equal(cycle.schedule.nextBillingAt.slice(0, 10), '2026-11-30');
+  assert.equal(cycle.period?.tools.every((item) => item.inTrial), false);
+  assert.equal(cycle.period?.effectiveMonthlyCents, 0);
+  const statement = buildCycleCustomerStatement(input, signup, plus30, null);
+  assert.equal(statement.statement.find((row) => row.label === 'Calendar Events')?.amount, '$2/month');
+  assert.equal(statement.statement.find((row) => row.label === 'To Do List')?.amount, '$2/month');
+  assert.equal(statement.statement.find((row) => row.label === 'Calendar Events')?.note ?? null, null);
+  assert.equal(statement.statement.find((row) => row.id === 'before')?.amount, '$4/month');
+  assert.equal(statement.statement.find((row) => row.label === '2-FREE')?.amount, '-$4/month');
+  assert.equal(statement.statement.find((row) => row.kind === 'total')?.amount, '$0/month');
+});
+
+test('a tool added after the billing date stays off this period after its trial ends', () => {
+  const input = account({
+    tools: [tool({
+      toolId: 'chores',
+      name: 'Family Chores',
+      ownedAt: '2026-10-16T15:00:00.000Z',
+      trialUsed: true,
+      trialStartedAt: '2026-10-16T15:00:00.000Z',
+    })],
+  });
+  const cycle = describeBillingCycle(input, SIGNUP, new Date('2026-10-24T15:00:00.000Z'), null);
+  assert.equal(cycle.period?.tools.length, 0);
+  assert.equal(cycle.period?.effectiveMonthlyCents, 0);
+  const statement = buildCycleCustomerStatement(input, SIGNUP, new Date('2026-10-24T15:00:00.000Z'), null);
+  const line = statement.statement.find((row) => row.label === 'Family Chores');
+  assert.equal(line?.amount, '$0');
+  assert.match(line?.note || '', /First bill/);
 });
 
 test('a tool added the day after billing has no mid-cycle charge', () => {

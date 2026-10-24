@@ -264,6 +264,7 @@ export function DiscountCodeList({
                       <button type="button" className={styles.codeLink} onClick={() => onOpen(code.id)}>
                         {code.publicCode}
                       </button>
+                      {code.isSitePromo && <div className={`mt-1 text-xs ${isLight ? 'text-emerald-700' : 'text-emerald-400'}`}>Site promo</div>}
                     </td>
                     <td className={`px-4 py-3 ${styles.primaryText}`}>{code.internalName}</td>
                     <td className={`px-4 py-3 ${styles.bodyText}`}>

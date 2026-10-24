@@ -186,6 +186,7 @@ export type DiscountCodeDraft = {
   eligibleUsers: EligibleUsers;
   eligibleAccountType: EligibleAccountType;
   canStack: boolean;
+  isSitePromo: boolean;
   assignmentMethod: AssignmentMethod;
   partnerName: string;
   platform: DiscountPlatform;
@@ -250,6 +251,7 @@ export function emptyDiscountDraft(): DiscountCodeDraft {
     eligibleUsers: 'everyone',
     eligibleAccountType: 'all',
     canStack: true,
+    isSitePromo: false,
     assignmentMethod: 'public_code',
     partnerName: '',
     platform: '',
@@ -280,6 +282,7 @@ export function draftFromCode(code: DiscountCode): DiscountCodeDraft {
     eligibleUsers: code.eligibleUsers,
     eligibleAccountType: code.eligibleAccountType,
     canStack: code.canStack,
+    isSitePromo: code.isSitePromo,
     assignmentMethod: code.assignmentMethod,
     partnerName: code.partnerName,
     platform: code.platform,
@@ -294,6 +297,7 @@ export function cloneDraftFromCode(code: DiscountCode): DiscountCodeDraft {
     ...draftFromCode(code),
     publicCode: '',
     status: 'draft',
+    isSitePromo: false,
   };
 }
 
@@ -579,8 +583,8 @@ function redemption(
   };
 }
 
-function sampleCode(partial: DiscountCodeDraft & Pick<DiscountCode, 'id' | 'createdAt' | 'updatedAt' | 'redemptionCount' | 'activeUsers' | 'expiredAssignments' | 'estimatedMonthlyDiscount' | 'redemptions'>): DiscountCode {
-  return partial;
+function sampleCode(partial: Omit<DiscountCodeDraft, 'isSitePromo'> & { isSitePromo?: boolean } & Pick<DiscountCode, 'id' | 'createdAt' | 'updatedAt' | 'redemptionCount' | 'activeUsers' | 'expiredAssignments' | 'estimatedMonthlyDiscount' | 'redemptions'>): DiscountCode {
+  return { isSitePromo: false, ...partial };
 }
 
 export function createSeedDiscountCodes(): DiscountCode[] {
@@ -606,6 +610,7 @@ export function createSeedDiscountCodes(): DiscountCode[] {
       eligibleUsers: 'new_users',
       eligibleAccountType: 'personal',
       canStack: true,
+      isSitePromo: true,
       assignmentMethod: 'automatic',
       partnerName: '',
       platform: '',

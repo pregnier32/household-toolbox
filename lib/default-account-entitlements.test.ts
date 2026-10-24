@@ -4,13 +4,10 @@ import { ensureDefaultAccountEntitlements, type DefaultEntitlementDeps, type Def
 
 const promotion: DefaultPromotionShape = {
   id: 'promo-1',
-  publicCode: 'NEWUSER2',
+  publicCode: '2-FREE',
   status: 'active',
-  assignmentMethod: 'automatic',
-  benefitType: 'free_tool_slots',
-  eligibleUsers: 'new_users',
+  isSitePromo: true,
   eligibleAccountType: 'personal',
-  slotMode: 'total',
 };
 
 function deps(partial: Partial<DefaultEntitlementDeps> & { assignments?: Set<string> }): DefaultEntitlementDeps {
@@ -29,14 +26,14 @@ function deps(partial: Partial<DefaultEntitlementDeps> & { assignments?: Set<str
   } as DefaultEntitlementDeps;
 }
 
-test('a personal billing admin missing NEWUSER2 receives one assignment', async () => {
+test('a personal billing admin missing the site promo receives one assignment', async () => {
   const assignments = new Set<string>();
   const result = await ensureDefaultAccountEntitlements('user-1', deps({ assignments }));
   assert.equal(result.status, 'granted');
   assert.equal(assignments.has('user-1'), true);
 });
 
-test('an admin who already has NEWUSER2 is not granted another', async () => {
+test('an admin who already has the site promo is not granted another', async () => {
   const assignments = new Set(['user-1']);
   let calls = 0;
   const result = await ensureDefaultAccountEntitlements('user-1', deps({
@@ -51,7 +48,7 @@ test('an admin who already has NEWUSER2 is not granted another', async () => {
   assert.equal(assignments.size, 1);
 });
 
-test('a business account is not granted NEWUSER2', async () => {
+test('a business account is not granted a personal site promo', async () => {
   let calls = 0;
   const result = await ensureDefaultAccountEntitlements('biz', deps({
     loadContext: async () => ({ accountType: 'business', isBillingOwner: true }),
@@ -64,7 +61,7 @@ test('a business account is not granted NEWUSER2', async () => {
   assert.equal(calls, 0);
 });
 
-test('an invited household member is not granted a separate NEWUSER2', async () => {
+test('an invited household member is not granted a separate site promo', async () => {
   let calls = 0;
   const result = await ensureDefaultAccountEntitlements('guest', deps({
     loadContext: async () => ({ accountType: 'personal', isBillingOwner: false }),
@@ -106,6 +103,29 @@ test('two simultaneous repairs still leave one assignment', async () => {
   assert.equal(assignments.size, 1);
   assert.equal([first.status, second.status].filter((status) => status === 'granted').length, 1);
   assert.ok([first.status, second.status].every((status) => status === 'granted' || status === 'already_present'));
+});
+
+test('a renamed site promo is still granted', async () => {
+  const assignments = new Set<string>();
+  const result = await ensureDefaultAccountEntitlements('user-1', deps({
+    assignments,
+    loadDefaultPromotion: async () => ({ ...promotion, publicCode: 'WELCOME' }),
+  }));
+  assert.equal(result.status, 'granted');
+  assert.equal(assignments.has('user-1'), true);
+});
+
+test('a code that is not flagged is not granted, even with the old name', async () => {
+  let calls = 0;
+  const result = await ensureDefaultAccountEntitlements('user-1', deps({
+    loadDefaultPromotion: async () => ({ ...promotion, publicCode: 'NEWUSER2', isSitePromo: false }),
+    assign: async () => {
+      calls += 1;
+      return { ok: true, code: 'ok' };
+    },
+  }));
+  assert.equal(result.status, 'skipped');
+  assert.equal(calls, 0);
 });
 
 test('a temporary failure leaves no assignment and a later retry can grant it', async () => {

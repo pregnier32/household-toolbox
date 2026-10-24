@@ -70,6 +70,9 @@ export type UserEntitlement = {
   source: EntitlementSource;
   effectiveDate: string;
   expirationDate: string | null;
+  /** Full assignment start. The date-only field can be the next calendar day in the evening. */
+  effectiveAt?: string | null;
+  expiresAt?: string | null;
   status: 'active' | 'removed';
   assignedAt: string;
   assignedBy: string;
@@ -186,6 +189,28 @@ export function isCurrentEntitlement(item: UserEntitlement, today = todayIsoDate
 export function isAffectingEntitlement(item: UserEntitlement, today = todayIsoDate()): boolean {
   const status = getEntitlementDisplayStatus(item, today);
   return status === 'active' || status === 'expiring_soon';
+}
+
+/** A code is in use when its assignment is already in effect, matching the bill. */
+export function isDiscountCodeInUse(
+  item: Pick<UserEntitlement, 'status' | 'publicCode' | 'effectiveAt' | 'expiresAt'> & {
+    effectiveDate?: string;
+    expirationDate?: string | null;
+  },
+  now = new Date(),
+): boolean {
+  if (item.status === 'removed' || !item.publicCode?.trim()) return false;
+  const start = Date.parse(item.effectiveAt || '');
+  if (!Number.isNaN(start)) {
+    if (start > now.getTime()) return false;
+    if (!item.expiresAt) return true;
+    const end = Date.parse(item.expiresAt);
+    return !Number.isNaN(end) && end > now.getTime();
+  }
+  const todayUtc = now.toISOString().slice(0, 10);
+  if (item.effectiveDate && item.effectiveDate > todayUtc) return false;
+  if (item.expirationDate && item.expirationDate < todayUtc) return false;
+  return true;
 }
 
 export function matchesHistoryStatus(item: UserEntitlement, filter: HistoryStatusFilter, today = todayIsoDate()): boolean {

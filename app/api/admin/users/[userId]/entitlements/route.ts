@@ -19,6 +19,13 @@ function day(value: string | null): string | null {
   return value ? value.slice(0, 10) : null;
 }
 
+/** Calendar date for a benefit that has already started. Kept on or before the viewer's local day. */
+function startedOn(value: string, now = new Date()): string {
+  const instant = Date.parse(value);
+  if (Number.isNaN(instant) || instant > now.getTime()) return value.slice(0, 10);
+  return new Date(now.getTime() - 14 * 60 * 60 * 1000).toISOString().slice(0, 10);
+}
+
 export async function GET(_request: NextRequest, context: { params: Promise<{ userId: string }> }) {
   const gate = await requireSuperadmin();
   if (gate.response) return gate.response;
@@ -63,8 +70,10 @@ export async function GET(_request: NextRequest, context: { params: Promise<{ us
       durationUnit: row.duration_unit,
       durationAmount: row.duration_amount ?? 1,
       source: row.source,
-      effectiveDate: day(row.effective_at) || row.effective_at.slice(0, 10),
+      effectiveDate: startedOn(row.effective_at),
       expirationDate: day(row.expires_at),
+      effectiveAt: row.effective_at,
+      expiresAt: row.expires_at,
       status: row.removed_at ? 'removed' : 'active',
       assignedAt: row.assigned_at,
       assignedBy: row.assigned_by_user_id ? personName.get(row.assigned_by_user_id) || 'Superadmin' : 'System',
@@ -177,12 +186,18 @@ export async function PATCH(request: NextRequest, context: { params: Promise<{ u
   }
 }
 
-export async function DELETE(request: NextRequest) {
+export async function DELETE(request: NextRequest, context: { params: Promise<{ userId: string }> }) {
   const gate = await requireSuperadmin();
   if (gate.response || !gate.user) return gate.response;
+  const { userId } = await context.params;
   try {
     const body = await request.json();
     if (!body.assignmentId) return NextResponse.json({ error: 'A benefit is required.' }, { status: 400 });
+    const existing = await supabaseServer.from('promotion_assignments').select('id, user_id').eq('id', body.assignmentId).maybeSingle();
+    if (existing.error) throw existing.error;
+    if (!existing.data || existing.data.user_id !== userId) {
+      return NextResponse.json({ error: 'That discount code is not on this account.' }, { status: 404 });
+    }
     const result = await endAssignment(gate.user.actorId, body.assignmentId, typeof body.reason === 'string' ? body.reason : '');
     if (!result.ok) return NextResponse.json({ error: result.message }, { status: 400 });
     return NextResponse.json({ ok: true });

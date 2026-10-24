@@ -63,8 +63,12 @@ export function StorePanel({
     );
   }
 
-  const availableTools = tools.filter((t) => t.status === 'available' && !t.isOwned);
-  const customTools = tools.filter((t) => t.status === 'custom');
+  const byName = (a: Tool, b: Tool) =>
+    a.name.localeCompare(b.name, undefined, { sensitivity: 'base' });
+  const availableTools = tools
+    .filter((t) => t.status === 'available' && !t.isOwned)
+    .sort(byName);
+  const customTools = tools.filter((t) => t.status === 'custom').sort(byName);
 
   return (
     <div>
