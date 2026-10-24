@@ -167,8 +167,10 @@ test('a tool added after the billing date stays off this period after its trial 
   assert.equal(cycle.period?.effectiveMonthlyCents, 0);
   const statement = buildCycleCustomerStatement(input, FIRST_BILL, new Date('2026-10-24T15:00:00.000Z'), null);
   const line = statement.statement.find((row) => row.label === 'Family Chores');
-  assert.equal(line?.amount, '$0');
+  assert.equal(line?.amount, '$2/month');
   assert.match(line?.note || '', /First bill/);
+  assert.equal(statement.statement.find((row) => row.id === 'before')?.amount, '$2/month');
+  assert.equal(statement.statement.find((row) => row.kind === 'total')?.amount, '$2/month');
 });
 
 test('a tool added the day after billing has no mid-cycle charge', () => {

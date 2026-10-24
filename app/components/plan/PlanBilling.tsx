@@ -328,7 +328,7 @@ export function PlanBilling({
                       collectedTodayCents: plan.collectedTodayCents ?? 0,
                     })}
                   >
-                    Set up payment
+                    {openingPayment ? 'Opening payment...' : (plan.paymentButtonLabel || 'Add Payment Method')}
                   </button>
                 )}
                 {plan.access.recovery.includes('manage_billing') && (plan.paymentRoute === 'portal' || plan.paymentSecondary?.route === 'portal') && (

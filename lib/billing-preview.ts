@@ -422,6 +422,14 @@ function statementAmount(cents: number): string {
   return formatMonthlyCents(cents);
 }
 
+function monthlyLabelCents(amount: string | null): number | null {
+  if (!amount?.endsWith('/month')) return null;
+  const negative = amount.startsWith('-');
+  const dollars = Number(amount.replace(/^-/, '').replace('$', '').replace('/month', ''));
+  if (!Number.isFinite(dollars)) return null;
+  return Math.round(dollars * 100) * (negative ? -1 : 1);
+}
+
 export function buildCustomerStatement(
   input: AccountPricingInput,
   state: AccountPricingState,
@@ -620,26 +628,41 @@ export function buildCycleCustomerStatement(
   }
 
   const seen = new Set(snapshot.periodRecords.map((record) => record.toolId));
+  let addedToolCents = 0;
   const extras: PlanStatementRow[] = input.tools
     .filter((tool) => !seen.has(tool.toolId))
     .sort((left, right) => left.name.localeCompare(right.name, undefined, { sensitivity: 'base' }))
     .map((tool) => {
       const live = snapshot.current.tools.find((item) => item.toolId === tool.toolId);
       const added = formatDisplayDate(tool.ownedAt);
+      const cents = toolListCents({
+        shelfPriceCents: tool.shelfPriceCents,
+        catalogPriceCents: tool.catalogPriceCents ?? tool.shelfPriceCents,
+      });
+      const inTrial = Boolean(live?.inTrial);
+      if (!inTrial) addedToolCents += cents;
       return {
         id: `upcoming-${tool.toolId}`,
         kind: 'tool' as const,
         label: tool.name,
         detail: added ? `Added ${added}` : null,
-        amount: '$0',
+        amount: inTrial ? '$0' : statementAmount(cents),
         benefitId: null,
-        note: live?.inTrial
-          ? trialStatusNote(live.daysRemaining, live.trialEndsAt)
+        note: inTrial
+          ? trialStatusNote(live?.daysRemaining ?? null, live?.trialEndsAt ?? null)
           : `First bill ${billingDateLabel(snapshot.schedule.nextBillingAt)}`,
       };
     });
   const storageAt = statement.findIndex((row) => row.id === 'section-storage');
   if (extras.length > 0 && storageAt >= 0) statement.splice(storageAt, 0, ...extras);
+  if (addedToolCents > 0) {
+    for (const id of ['before', 'total']) {
+      const row = statement.find((item) => item.id === id);
+      const current = monthlyLabelCents(row?.amount ?? null);
+      if (!row || current == null) continue;
+      row.amount = formatMonthlyCents(current + addedToolCents);
+    }
+  }
 
   const storageCents = Math.round(Math.max(0, input.storageAddonGb) * STORAGE_ADDON_MONTHLY_CENTS);
   const openedToday = snapshot.schedule.hasStarted
