@@ -6,7 +6,7 @@ const linkClass =
 export function PublicFooter() {
   return (
     <footer className="border-t border-slate-800 pt-8 text-sm">
-      <div className="grid gap-8 sm:grid-cols-3">
+      <div className="grid gap-8 sm:grid-cols-2 lg:grid-cols-4">
         <div>
           <p className="text-xs font-semibold uppercase tracking-[0.16em] text-slate-300">Product</p>
           <ul className="mt-3 space-y-2">
@@ -49,6 +49,33 @@ export function PublicFooter() {
               <Link href="/" className={linkClass}>
                 Create Account
               </Link>
+            </li>
+          </ul>
+        </div>
+        <div>
+          <p className="text-xs font-semibold uppercase tracking-[0.16em] text-slate-300">Follow</p>
+          <ul className="mt-3 space-y-2">
+            <li>
+              <a
+                href="https://www.facebook.com/householdtoolbox"
+                target="_blank"
+                rel="noopener noreferrer"
+                aria-label="HouseholdToolbox on Facebook"
+                className={linkClass}
+              >
+                Facebook
+              </a>
+            </li>
+            <li>
+              <a
+                href="https://www.instagram.com/householdtoolbox/"
+                target="_blank"
+                rel="noopener noreferrer"
+                aria-label="HouseholdToolbox on Instagram"
+                className={linkClass}
+              >
+                Instagram
+              </a>
             </li>
           </ul>
         </div>

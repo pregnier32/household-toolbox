@@ -26,10 +26,14 @@ export default function Page() {
     {
       '@context': 'https://schema.org',
       '@type': 'Organization',
-      name: PUBLIC_SITE_NAME,
+      name: 'HouseholdToolbox',
       url: siteUrl,
       email: 'support@householdtoolbox.com',
       logo: absoluteUrl('/images/logo/Logo_Side_Black.png'),
+      sameAs: [
+        'https://www.facebook.com/householdtoolbox',
+        'https://www.instagram.com/householdtoolbox/',
+      ],
     },
   ];
 

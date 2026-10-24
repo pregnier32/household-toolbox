@@ -74,13 +74,6 @@ export function HomePage({ explore }: { explore?: ReactNode }) {
               Dates you pin from those tools show up on one dashboard calendar.               Files stay
               on the record they belong to, and you can export a PDF when you want a copy.
             </p>
-
-            {/* Coming Soon Message */}
-            <div className="mt-8 inline-flex items-center rounded-lg border border-emerald-400/30 bg-emerald-400/10 px-6 py-4">
-              <p className="text-lg font-semibold text-emerald-200">
-                Coming in 2026
-              </p>
-            </div>
           </div>
 
           {/* Right side "card" - Sign In/Sign Up */}
