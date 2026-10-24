@@ -42,6 +42,7 @@ type PlanPayload = {
     buttonLabel: string;
   } | null;
   subscriptionStatus?: string | null;
+  cancellation?: { message: string | null; accessEndsLabel: string | null } | null;
   paymentSetupWouldBeNeeded: boolean;
   access?: {
     locked: boolean;
@@ -454,9 +455,12 @@ export function PlanBilling({
               </p>
             )}
             <p>
-              <span className={isLight ? 'text-sm text-slate-600' : 'text-sm text-slate-400'}>Monthly renewal</span>
+              <span className={isLight ? 'text-sm text-slate-600' : 'text-sm text-slate-400'}>{plan.cancellation?.accessEndsLabel ? 'Access ends' : 'Monthly renewal'}</span>
               <br />
-              <span className="text-base font-semibold">{plan.billingCycle.renewalAmount ?? plan.billingCycle.estimatedNextBill} on {plan.billingCycle.renewalDate ?? plan.billingCycle.nextBillingDate}</span>
+              <span className="text-base font-semibold">
+                {plan.cancellation?.accessEndsLabel
+                  ?? `${plan.billingCycle.renewalAmount ?? plan.billingCycle.estimatedNextBill} on ${plan.billingCycle.renewalDate ?? plan.billingCycle.nextBillingDate}`}
+              </span>
             </p>
           </div>
         )}
@@ -466,6 +470,9 @@ export function PlanBilling({
             <p>{loadError}</p>
             <button type="button" className={`mt-3 ${primaryButtonClass}`} onClick={() => { setLoadError(null); load(); }}>Try again</button>
           </div>
+        )}
+        {plan.cancellation?.message && (
+          <p className={`mt-4 ${noticeClass}`}>{plan.cancellation.message}</p>
         )}
         <p className={`mt-4 ${pageSubtitleClass}`}>
           {plan.paymentExplanation

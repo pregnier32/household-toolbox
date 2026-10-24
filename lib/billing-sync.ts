@@ -12,8 +12,9 @@ import {
   type PaymentExpectation,
   type PaymentWorkflow,
 } from '@/lib/billing-payment-workflow';
+import { deletionBlocksBilling } from '@/lib/billing-closure';
 import { claimBillingLock, releaseBillingLock, withBillingLock } from '@/lib/billing-lock';
-import { replaceSubscriptionPrice, subscriptionItemId, subscriptionPeriodEnd } from '@/lib/billing-subscription';
+import { replaceSubscriptionPrice, subscriptionBillingPatch, subscriptionItemId, subscriptionPeriodEnd, supplementalBlockedByCancellation } from '@/lib/billing-subscription';
 import {
   listOpenOperations,
   listStoredInvoices,
@@ -114,6 +115,7 @@ async function ensureCustomer(stripe: Stripe, userId: string, account: BillingAc
 }
 
 export async function syncRecurringPrice(userId: string, account: BillingAccountRow, nextAmountCents: number): Promise<void> {
+  if (await deletionBlocksBilling(userId)) return;
   if (!account.stripe_subscription_id || account.synced_amount_cents === nextAmountCents) return;
   if (account.subscription_status === 'canceled' || account.subscription_status === 'incomplete_expired') return;
   const stripe = stripeServer();
@@ -134,13 +136,16 @@ export async function syncRecurringPrice(userId: string, account: BillingAccount
   let stripeDone = operation.status === 'stripe_succeeded';
   try {
     if (!stripeDone) {
-      const updated = await replaceSubscriptionPrice(stripe, current.id, itemId, priceId, anchor, key);
+      const updated = await replaceSubscriptionPrice(stripe, current.id, itemId, priceId, anchor, key, current.cancel_at);
+      const cancellation = subscriptionBillingPatch(updated);
       await markOperationStripeSucceeded(operation.id, updated.id, {
         priceId,
         previousAnchor: anchor,
         nextAmountCents,
         periodEnd: subscriptionPeriodEnd(updated),
         itemId: subscriptionItemId(updated),
+        cancelAtPeriodEnd: cancellation.cancel_at_period_end,
+        effectiveAt: cancellation.current_period_end,
       });
       stripeDone = true;
     }
@@ -151,7 +156,10 @@ export async function syncRecurringPrice(userId: string, account: BillingAccount
       synced_amount_cents: nextAmountCents,
       stripe_subscription_item_id: typeof payload.itemId === 'string' ? payload.itemId : itemId,
       billing_cycle_anchor: new Date(anchor * 1000).toISOString(),
-      current_period_end: periodEnd ? new Date(periodEnd * 1000).toISOString() : account.current_period_end,
+      current_period_end: typeof payload.effectiveAt === 'string'
+        ? payload.effectiveAt
+        : periodEnd ? new Date(periodEnd * 1000).toISOString() : account.current_period_end,
+      ...(typeof payload.cancelAtPeriodEnd === 'boolean' ? { cancel_at_period_end: payload.cancelAtPeriodEnd } : {}),
     });
     await markOperationCompleted(operation.id);
   } catch (error) {
@@ -179,6 +187,7 @@ export async function createSupplementalInvoice(input: {
   role?: 'supplemental' | 'replacement';
   replacesInvoiceId?: string | null;
 }): Promise<void> {
+  if (await deletionBlocksBilling(input.userId)) return;
   const role = input.role ?? 'supplemental';
   const key = input.replacesInvoiceId
     ? `replace:${input.replacesInvoiceId}:${input.amountCents}`
@@ -484,15 +493,43 @@ async function finishSucceededOperation(operation: BillingOperation): Promise<vo
       } : {}),
       synced_amount_cents: amount,
       billing_cycle_anchor: anchor ? new Date(anchor * 1000).toISOString() : null,
-      current_period_end: periodEnd ? new Date(periodEnd * 1000).toISOString() : null,
+      current_period_end: typeof payload.effectiveAt === 'string'
+        ? payload.effectiveAt
+        : periodEnd ? new Date(periodEnd * 1000).toISOString() : null,
       stripe_subscription_item_id: typeof payload.itemId === 'string' ? payload.itemId : undefined,
+      ...(typeof payload.cancelAtPeriodEnd === 'boolean' ? { cancel_at_period_end: payload.cancelAtPeriodEnd } : {}),
     });
   }
   await markOperationCompleted(operation.id);
 }
 
+/** Reads the live subscription and stores a scheduled cancel_at. Does not change Stripe. */
+export async function refreshSubscriptionCancellation(userId: string): Promise<void> {
+  const account = await loadBillingAccount(userId);
+  if (!account?.stripe_subscription_id) return;
+  const stripe = stripeServer();
+  let subscription: Stripe.Subscription;
+  try {
+    subscription = await stripe.subscriptions.retrieve(account.stripe_subscription_id);
+  } catch (error) {
+    console.error('Subscription cancellation could not be read', error instanceof Error ? error.message : 'unknown');
+    return;
+  }
+  if (subscription.livemode) return;
+  const observedAt = Math.floor(Date.now() / 1000);
+  await saveBillingAccount(userId, {
+    ...subscriptionBillingPatch(subscription),
+    subscription_event_created: Math.max(account.subscription_event_created ?? 0, observedAt),
+  });
+}
+
+export async function syncSubscriptionFromStripe(userId: string): Promise<void> {
+  await withBillingLock(userId, () => refreshSubscriptionCancellation(userId));
+}
+
 export async function syncAccountBilling(userId: string, now = new Date()): Promise<void> {
   await withBillingLock(userId, async () => {
+    if (await deletionBlocksBilling(userId)) return;
     await recoverBillingOperations(userId);
     const snapshot = await loadChargeSnapshot(userId, now);
     if (!snapshot) return;
@@ -503,15 +540,18 @@ export async function syncAccountBilling(userId: string, now = new Date()): Prom
     }
     const refreshed = await loadBillingAccount(userId);
     await refreshSavedPaymentMethod(userId);
-    if (refreshed?.stripe_subscription_id) await syncRecurringPrice(userId, refreshed, snapshot.nextAmountCents);
+    await refreshSubscriptionCancellation(userId);
+    const priced = await loadBillingAccount(userId);
+    if (priced?.stripe_subscription_id) await syncRecurringPrice(userId, priced, snapshot.nextAmountCents);
     const invoices = await listStoredInvoices(userId);
-    await collectGap(userId, refreshed ?? account, snapshot, invoices);
+    await collectGap(userId, priced ?? refreshed ?? account, snapshot, invoices);
     await saveBillingAccount(userId, { last_reconciled_at: now.toISOString() });
   });
 }
 
 async function collectGap(userId: string, account: BillingAccountRow | null, snapshot: ChargeSnapshot, invoices: LedgerInvoice[]): Promise<void> {
   if (!account?.stripe_customer_id || !snapshot.periodStart) return;
+  if (supplementalBlockedByCancellation(snapshot.periodStart, account.current_period_end, account.cancel_at_period_end)) return;
   if (supplementalInvoiceBlocked({
     subscriptionStatus: account.subscription_status,
     billingCycleAnchor: account.billing_cycle_anchor,
@@ -537,6 +577,7 @@ export async function createAnchoredSubscription(input: {
   anchor: number;
   nextAmountCents: number;
 }): Promise<void> {
+  if (await deletionBlocksBilling(input.userId)) throw new Error('Account deletion is in progress.');
   if (input.anchor <= Math.floor(Date.now() / 1000)) throw new Error('The next billing date is not in the future.');
   const stripe = stripeServer();
   const existing = await stripe.subscriptions.list({ customer: input.customerId, status: 'all', limit: 20 });
@@ -544,15 +585,9 @@ export async function createAnchoredSubscription(input: {
   if (live) {
     const account = await loadBillingAccount(input.userId);
     if (account?.stripe_subscription_id !== live.id) {
-      const periodEnd = subscriptionPeriodEnd(live);
       await saveBillingAccount(input.userId, {
         stripe_customer_id: input.customerId,
-        stripe_subscription_id: live.id,
-        stripe_subscription_item_id: subscriptionItemId(live),
-        subscription_status: live.status,
-        billing_cycle_anchor: new Date(live.billing_cycle_anchor * 1000).toISOString(),
-        current_period_end: periodEnd ? new Date(periodEnd * 1000).toISOString() : null,
-        synced_amount_cents: live.items.data[0]?.price.unit_amount ?? input.nextAmountCents,
+        ...subscriptionBillingPatch(live),
       });
     }
     return;
@@ -730,6 +765,9 @@ export async function beginPayment(
   expected: PaymentExpectation | null,
 ): Promise<PaymentResult> {
   return withBillingLock(userId, async () => {
+    if (await deletionBlocksBilling(userId)) {
+      return { url: null, kind: 'stale', explanation: 'Account deletion is in progress.' };
+    }
     const snapshot = await loadChargeSnapshot(userId);
     const account = await loadBillingAccount(userId);
     let workflow = await workflowFor(userId, account, snapshot);
@@ -763,14 +801,9 @@ export async function beginPayment(
       const existing = await stripe.subscriptions.list({ customer: account.stripe_customer_id, status: 'all', limit: 20 });
       const openSubscription = existing.data.find((subscription) => LIVE_SUBSCRIPTION.has(subscription.status));
       if (openSubscription && openSubscription.status !== 'incomplete') {
-        const periodEnd = subscriptionPeriodEnd(openSubscription);
         await saveBillingAccount(userId, {
           stripe_customer_id: account.stripe_customer_id,
-          stripe_subscription_id: openSubscription.id,
-          stripe_subscription_item_id: subscriptionItemId(openSubscription),
-          subscription_status: openSubscription.status,
-          billing_cycle_anchor: new Date(openSubscription.billing_cycle_anchor * 1000).toISOString(),
-          current_period_end: periodEnd ? new Date(periodEnd * 1000).toISOString() : null,
+          ...subscriptionBillingPatch(openSubscription),
         });
         if (!expected) {
           return { url: await openPortal(account.stripe_customer_id, origin), kind: 'portal', explanation: workflow.explanation };

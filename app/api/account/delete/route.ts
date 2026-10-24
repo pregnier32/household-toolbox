@@ -2,7 +2,16 @@ import { NextResponse } from 'next/server';
 import { getSession, clearStaleLegacySessionCookie } from '@/lib/session';
 import { supabaseServer } from '@/lib/supabaseServer';
 import { createSupabaseAuthServerClient } from '@/lib/supabaseAuthServer';
+import { BillingDeletionPendingError } from '@/lib/billing-account-deletion';
+import { deletionStatusForUser } from '@/lib/billing-closure';
 import { deleteUserAndAssociatedData } from '@/lib/user-data-deletion';
+
+export async function GET() {
+  const user = await getSession();
+  if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+  const status = await deletionStatusForUser(user.householdRole === 'user' ? user.actorId : user.id);
+  return NextResponse.json(status);
+}
 
 export async function DELETE() {
   const user = await getSession();
@@ -61,6 +70,9 @@ export async function DELETE() {
     await clearStaleLegacySessionCookie();
     return NextResponse.json({ success: true, message: 'Account and all associated data deleted successfully' });
   } catch (error) {
+    if (error instanceof BillingDeletionPendingError) {
+      return NextResponse.json({ error: error.message, pending: true }, { status: 503 });
+    }
     console.error('Error deleting own account:', error);
     return NextResponse.json({ error: 'Failed to delete account' }, { status: 500 });
   }

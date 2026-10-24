@@ -1,6 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getSession } from '@/lib/session';
 import { supabaseServer } from '@/lib/supabaseServer';
+import { BillingDeletionPendingError } from '@/lib/billing-account-deletion';
+import { prepareBillingClosure } from '@/lib/billing-closure';
 import { delete_user, delete_user_tools, listLinkedGuestAccounts } from '@/lib/user-data-deletion';
 
 type LinkedAccount = {
@@ -267,9 +269,13 @@ export async function DELETE(request: NextRequest) {
     }
 
     try {
+      await prepareBillingClosure(id);
       await delete_user_tools(id);
       await delete_user(id);
     } catch (deleteError) {
+      if (deleteError instanceof BillingDeletionPendingError) {
+        return NextResponse.json({ error: deleteError.message, pending: true }, { status: 503 });
+      }
       console.error('Error deleting user and associated data:', deleteError);
       return NextResponse.json({ error: 'Failed to delete user' }, { status: 500 });
     }

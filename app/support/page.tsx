@@ -59,7 +59,7 @@ const faqData: FAQItem[] = [
   {
     question: 'What happens if I close my account?',
     answer:
-      'Remove your tools in My Tools, then delete the account from your profile. Deleting the account deletes the account, the tool records tied to it, and the uploaded files tied to it. You can also email support@householdtoolbox.com and ask us to delete the account.',
+      'Remove your tools in My Tools, then delete the account from your profile. Deleting the account permanently removes the account, the tool records tied to it, and the uploaded files tied to it, and it stops that account\'s subscription immediately. This is not a cancellation at the end of the billing period. A balance already issued remains owed. You can also email support@householdtoolbox.com and ask us to delete the account.',
   },
 ];
 

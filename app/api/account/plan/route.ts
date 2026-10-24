@@ -13,7 +13,8 @@ import { listStoredInvoices, loadBillingAccount } from '@/lib/billing-store';
 import { loadChargeSnapshot } from '@/lib/billing-amount';
 import { describePaymentWorkflow } from '@/lib/billing-payment-workflow';
 import { describePaymentMethod } from '@/lib/billing-card';
-import { syncSavedPaymentMethod } from '@/lib/billing-sync';
+import { syncSavedPaymentMethod, syncSubscriptionFromStripe } from '@/lib/billing-sync';
+import { describeCancellationNotice } from '@/lib/billing-subscription';
 import { loadToolAccessPolicy } from '@/lib/billing-access';
 import type { CustomerPlanBenefit, CustomerPlanSource } from '@/lib/customer-plan-preview';
 
@@ -75,6 +76,9 @@ export async function GET() {
       billingCycle = cycle.billingCycle;
     }
     const cardSync = await syncSavedPaymentMethod(user.id).catch(() => null);
+    await syncSubscriptionFromStripe(user.id).catch((error: unknown) => {
+      console.error('Subscription cancellation could not be synchronized', error instanceof Error ? error.message : 'unknown');
+    });
     const account = await loadBillingAccount(user.id);
     const snapshot = await loadChargeSnapshot(user.id, now);
     const paymentMethodStatus = cardSync?.state
@@ -139,6 +143,10 @@ export async function GET() {
       outstandingInvoiceCents: payment.outstandingInvoiceCents,
       paymentSecondary: payment.secondary,
       subscriptionStatus: account?.subscription_status ?? null,
+      cancellation: describeCancellationNotice({
+        scheduled: Boolean(account?.cancel_at_period_end),
+        effectiveAt: account?.cancel_at_period_end ? account.current_period_end : null,
+      }),
       paymentSetupWouldBeNeeded: state.paymentSetupWouldBeNeeded,
       access: await loadToolAccessPolicy(user.id, now).then((policy) => ({
         locked: policy.locked,

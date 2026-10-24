@@ -281,6 +281,15 @@ export default function Profile() {
     }
 
     await loadOwnedToolCount();
+    try {
+      const pending = await fetch('/api/account/delete');
+      const pendingData = await pending.json();
+      if (pending.ok && pendingData.pending && typeof pendingData.message === 'string') {
+        setError(pendingData.message);
+      }
+    } catch {
+      setError('Account deletion status could not be checked. You can try again.');
+    }
     setDeleteStep('warn');
   };
 
@@ -628,8 +637,8 @@ export default function Profile() {
             <h2 className="text-lg font-semibold text-slate-100 mb-2">Delete Account</h2>
             <p className="mb-4 text-sm text-slate-400">
               {user?.householdRole === 'user'
-                ? 'Permanently delete your login. Household tools and records stay with the household.'
-                : 'Permanently delete your profile and remaining account data. You must remove every tool from My Tools first.'}
+                ? 'Permanently delete your login. Household tools, files, and the household subscription stay. A personal subscription billed to your login stops immediately, and a balance already issued on it remains owed.'
+                : 'Permanently delete your account and its data. You must remove every tool from My Tools first. The subscription stops immediately. This is not a cancellation at the end of the billing period. A balance already issued remains owed.'}
             </p>
             <button
               type="button"
@@ -661,8 +670,8 @@ export default function Profile() {
               </p>
               <p className={warningTextClass}>
                 {user?.householdRole === 'user'
-                  ? 'You will lose access to this household. Tools, records, and files stay with the household.'
-                  : 'Before you can delete your profile, go to My Tools and Remove every tool. That permanently deletes each tool\'s records and documents. After that, deleting your account cannot be undone.'}
+                  ? 'You will lose access to this household. Tools, records, and files stay with the household. The household subscription is not canceled. If a personal subscription is still billed to your login, it stops immediately, and a balance already issued on it remains owed.'
+                  : 'Before you can delete your account, go to My Tools and Remove every tool. That permanently deletes each tool\'s records and documents. Deleting the account then permanently removes the account and its data, and the subscription stops immediately. This is not a cancellation at the end of the billing period. A balance already issued remains owed.'}
               </p>
             </div>
             {user?.householdRole !== 'user' && ownedToolCount > 0 ? (
@@ -710,8 +719,8 @@ export default function Profile() {
                   />
                   <span>
                     {user?.householdRole === 'user'
-                      ? 'I understand my login will be deleted and household records will stay.'
-                      : 'I have removed all tools and I understand there is no undo.'}
+                      ? 'I understand my login will be deleted, household records and the household subscription will stay, and any personal subscription billed to me stops immediately.'
+                      : 'I have removed all tools. I understand the account and its data will be permanently removed, the subscription stops immediately, and a balance already issued remains owed.'}
                   </span>
                 </label>
                 <p className={`${modalBodyClass} mb-2`}>
@@ -766,8 +775,10 @@ export default function Profile() {
               <p className={warningTitleClass}>Last chance to keep this account.</p>
               <p className={warningTextClass}>
                 {guestConfirmRequired
-                  ? `Your profile, remaining account data, and every guest account attached to your profile will be permanently removed: ${linkedGuests.map(guestLabel).join(', ')}. This cannot be undone.`
-                  : 'Your profile and all remaining account data will be permanently removed. This cannot be undone.'}
+                  ? `Your account, its data, and every guest account attached to your profile will be permanently removed: ${linkedGuests.map(guestLabel).join(', ')}. The subscription stops immediately. This is not a cancellation at the end of the billing period. A balance already issued remains owed. This cannot be undone.`
+                  : user?.householdRole === 'user'
+                    ? 'Your login will be permanently removed. Household tools and the household subscription stay. A personal subscription billed to your login stops immediately, and a balance already issued on it remains owed. This cannot be undone.'
+                    : 'Your account and its data will be permanently removed, and the subscription stops immediately. This is not a cancellation at the end of the billing period. A balance already issued remains owed. This cannot be undone.'}
               </p>
             </div>
             <label className={checkboxLabelClass}>
@@ -779,8 +790,10 @@ export default function Profile() {
               />
               <span>
                 {guestConfirmRequired
-                  ? 'I agree to remove all guest accounts attached to my profile, along with this account.'
-                  : 'I understand that all data for this account will be permanently removed.'}
+                  ? 'I agree to remove all guest accounts attached to my profile, along with this account. The subscription stops immediately, and a balance already issued remains owed.'
+                  : user?.householdRole === 'user'
+                    ? 'I understand my login will be permanently removed and the household subscription will stay.'
+                    : 'I understand the account and its data will be permanently removed, the subscription stops immediately, and a balance already issued remains owed.'}
               </span>
             </label>
             <p className={`${modalBodyClass} mb-2`}>

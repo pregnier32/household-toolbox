@@ -2,10 +2,11 @@ import type Stripe from 'stripe';
 import { loadChargeSnapshot } from '@/lib/billing-amount';
 import { finalizedRenewalAction, renewalDraftMayBeCorrected } from '@/lib/billing-ledger';
 import { withBillingLock } from '@/lib/billing-lock';
-import { subscriptionItemId, subscriptionPeriodEnd } from '@/lib/billing-subscription';
+import { subscriptionBillingPatch, subscriptionEventApplies } from '@/lib/billing-subscription';
 import { clearPaymentAttention, loadBillingAccount, saveBillingAccount } from '@/lib/billing-store';
 import { reconcileCustomerPayments, rememberCheckoutIntent, rememberInvoicePaymentState } from '@/lib/billing-payment-state';
 import { loadToolAccessPolicy } from '@/lib/billing-access';
+import { deletionBlocksBilling, deletionBlocksCustomer, deletionUserForCustomer, recordDeletionInvoice, settleDeletionCheckout, suppressRevivedSubscription } from '@/lib/billing-closure';
 import { createAnchoredSubscription, createSupplementalInvoice, recordCheckoutSessionPayment, recordStripeInvoice, refreshSavedPaymentMethod, settleUnintendedSubscriptionUpdate, syncSavedPaymentMethod } from '@/lib/billing-sync';
 import { supabaseServer } from '@/lib/supabaseServer';
 import { stripeServer } from '@/lib/stripe-server';
@@ -46,19 +47,13 @@ async function rememberCard(userId: string): Promise<void> {
 
 async function saveSubscription(userId: string, subscription: Stripe.Subscription, eventCreated: number): Promise<void> {
   const account = await loadBillingAccount(userId);
-  if (account?.subscription_event_created != null && eventCreated < account.subscription_event_created) return;
-  const ended = subscription.status === 'canceled' || subscription.status === 'incomplete_expired';
-  const periodEnd = subscriptionPeriodEnd(subscription);
+  if (!subscriptionEventApplies(account?.subscription_event_created ?? null, eventCreated)) return;
+  const patch = subscriptionBillingPatch(subscription);
   await saveBillingAccount(userId, {
     stripe_customer_id: customerId(subscription.customer),
-    stripe_subscription_id: ended ? null : subscription.id,
-    stripe_subscription_item_id: ended ? null : subscriptionItemId(subscription),
-    subscription_status: subscription.status,
-    cancel_at_period_end: subscription.cancel_at_period_end,
-    billing_cycle_anchor: new Date(subscription.billing_cycle_anchor * 1000).toISOString(),
-    current_period_end: periodEnd ? new Date(periodEnd * 1000).toISOString() : null,
+    ...patch,
     subscription_event_created: eventCreated,
-    synced_amount_cents: ended ? account?.synced_amount_cents ?? null : subscription.items.data[0]?.price?.unit_amount ?? null,
+    ...(patch.synced_amount_cents === undefined ? { synced_amount_cents: account?.synced_amount_cents ?? null } : {}),
   });
 }
 
@@ -144,9 +139,16 @@ async function processInvoice(invoice: Stripe.Invoice): Promise<void> {
 }
 
 async function processSubscription(subscription: Stripe.Subscription, eventCreated: number): Promise<void> {
+  if (subscription.livemode) return;
+  const customer = customerId(subscription.customer);
   const userId = subscription.metadata?.hhtb_user_id
     || await userIdForSubscription(subscription.id)
-    || await userIdForCustomer(customerId(subscription.customer));
+    || await userIdForCustomer(customer)
+    || (customer ? await deletionUserForCustomer(customer) : null);
+  if ((userId && await deletionBlocksBilling(userId)) || (!userId && customer && await deletionBlocksCustomer(customer))) {
+    await suppressRevivedSubscription(subscription);
+    return;
+  }
   if (!userId) return;
   await withBillingLock(userId, async () => {
     await saveSubscription(userId, subscription, eventCreated);
@@ -155,8 +157,14 @@ async function processSubscription(subscription: Stripe.Subscription, eventCreat
 }
 
 async function processCheckoutCompleted(session: Stripe.Checkout.Session, eventCreated: number): Promise<void> {
-  const userId = session.metadata?.hhtb_user_id || session.client_reference_id;
-  if (!userId || session.livemode) return;
+  if (session.livemode) return;
+  const customer = customerId(session.customer);
+  const userId = session.metadata?.hhtb_user_id || session.client_reference_id || (customer ? await deletionUserForCustomer(customer) : null);
+  if (!userId) return;
+  if (await deletionBlocksBilling(userId)) {
+    await settleDeletionCheckout(userId, session);
+    return;
+  }
   const stripe = stripeServer();
   await withBillingLock(userId, async () => {
     const customer = customerId(session.customer);
@@ -227,6 +235,22 @@ export async function processStripeEvent(event: Stripe.Event): Promise<void> {
     case 'invoice.marked_uncollectible':
     case 'invoice.voided': {
       const invoice = event.data.object as Stripe.Invoice;
+      const deletingUserId = invoice.metadata?.hhtb_user_id || await userIdForCustomer(customerId(invoice.customer));
+      if (deletingUserId && await deletionBlocksBilling(deletingUserId)) {
+        const role = invoice.metadata?.hhtb_role === 'renewal' || invoice.metadata?.hhtb_role === 'setup' || invoice.metadata?.hhtb_role === 'replacement'
+          ? invoice.metadata.hhtb_role
+          : 'supplemental';
+        await recordDeletionInvoice(deletingUserId, {
+          stripeInvoiceId: invoice.id,
+          status: knownInvoiceStatus(invoice.status),
+          amountCents: invoice.total,
+          amountPaidCents: invoice.amount_paid,
+          collectionState: null,
+          periodStart: invoice.metadata?.hhtb_period_start || null,
+          role,
+        });
+        return;
+      }
       await processInvoice(invoice);
       const userId = invoice.metadata?.hhtb_user_id || await userIdForCustomer(customerId(invoice.customer));
       if (userId && event.type === 'invoice.paid') {
@@ -247,8 +271,23 @@ export async function processStripeEvent(event: Stripe.Event): Promise<void> {
     case 'payment_intent.canceled': {
       const intent = event.data.object as Stripe.PaymentIntent;
       if (intent.livemode) return;
-      const userId = intent.metadata?.hhtb_user_id || await userIdForCustomer(customerId(intent.customer));
+      const customer = customerId(intent.customer);
+      const userId = intent.metadata?.hhtb_user_id || await userIdForCustomer(customer) || (customer ? await deletionUserForCustomer(customer) : null);
       if (!userId) return;
+      if (await deletionBlocksBilling(userId)) {
+        const paid = intent.status === 'succeeded';
+        const processing = intent.status === 'processing' || event.type === 'payment_intent.processing';
+        const failed = event.type === 'payment_intent.payment_failed' || event.type === 'payment_intent.canceled' || intent.status === 'canceled';
+        await recordDeletionInvoice(userId, {
+          stripeInvoiceId: intent.id,
+          status: paid ? 'paid' : 'open',
+          amountCents: intent.amount,
+          amountPaidCents: paid ? intent.amount_received : 0,
+          collectionState: paid ? null : processing ? 'processing' : failed ? 'failed' : event.type === 'payment_intent.requires_action' ? 'authentication_required' : null,
+          role: 'supplemental',
+        });
+        return;
+      }
       const forced = event.type === 'payment_intent.payment_failed' || event.type === 'payment_intent.canceled'
         ? 'failed' as const
         : event.type === 'payment_intent.requires_action'

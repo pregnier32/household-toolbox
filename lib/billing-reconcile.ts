@@ -1,5 +1,6 @@
 import { timingSafeEqual } from 'node:crypto';
 import { refreshHouseholdLock } from '@/lib/billing-access';
+import { resumeDeletedAuthIdentities } from '@/lib/user-data-deletion';
 import { syncAccountBilling } from '@/lib/billing-sync';
 import { listReconcileCandidates } from '@/lib/billing-store';
 import { claimStripeEvent, finishStripeEvent } from '@/lib/billing-lock';
@@ -66,6 +67,12 @@ export async function reconcileBilling(now = new Date()): Promise<{ scanned: num
   let failed = 0;
   let retriedEvents = 0;
   try {
+    try {
+      await resumeDeletedAuthIdentities();
+    } catch (error) {
+      failed += 1;
+      console.error('Deleted login cleanup could not be finished', error instanceof Error ? error.message : 'unknown');
+    }
     retriedEvents = await retryFailedEvents();
     const userIds = await listReconcileCandidates(new Date(now.getTime() - STALE_MS));
     for (const userId of userIds) {

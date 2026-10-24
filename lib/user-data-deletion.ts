@@ -1,3 +1,5 @@
+import { BillingDeletionPendingError, DELETION_FINISHING_MESSAGE } from '@/lib/billing-account-deletion';
+import { markClosureCompleted, markClosureUserDeleted, prepareBillingClosure, listUnfinishedClosures } from '@/lib/billing-closure';
 import { supabaseServer } from '@/lib/supabaseServer';
 
 type SupabaseLikeError = { message?: string; code?: string } | null;
@@ -279,6 +281,8 @@ export async function deleteUserAndAssociatedData(
   const visited = options?.visited ?? new Set<string>();
   if (visited.has(userId)) return;
   visited.add(userId);
+
+  await prepareBillingClosure(userId);
 
   const guests = (await listLinkedGuestAccounts([userId])).get(userId) ?? [];
   for (const guest of guests) {
@@ -722,7 +726,28 @@ export async function deleteUserAndAssociatedData(
 
   if (deleteUserError) throw deleteUserError;
 
-  await deleteAuthIdentity(userId);
+  await markClosureUserDeleted(userId);
+  try {
+    await deleteAuthIdentity(userId);
+    await markClosureCompleted(userId);
+  } catch {
+    throw new BillingDeletionPendingError(DELETION_FINISHING_MESSAGE);
+  }
+}
+
+export async function resumeDeletedAuthIdentities(): Promise<void> {
+  const closures = await listUnfinishedClosures();
+  for (const closure of closures) {
+    const user = await supabaseServer.from('users').select('id').eq('id', closure.userId).maybeSingle();
+    if (user.error) throw user.error;
+    if (user.data) continue;
+    try {
+      await deleteAuthIdentity(closure.userId);
+      await markClosureCompleted(closure.userId);
+    } catch {
+      console.error('Auth identity delete could not be finished after billing cleanup');
+    }
+  }
 }
 
 function isMissingAuthUser(error: { status?: number; code?: string; message?: string }): boolean {
