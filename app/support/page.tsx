@@ -34,12 +34,12 @@ const faqData: FAQItem[] = [
   {
     question: 'How much does it cost?',
     answer:
-      'Your first two tools have no monthly charge and include 200MB of storage. Each tool after that is $2 a month, and that plan includes 1GB. Extra storage is $1 a month for each additional GB. The Pricing page shows examples. A payment method is not charged today. If a paid feature is billed later, the price is shown before you confirm.',
+      'Your first two tools have no monthly charge and include 200MB of storage. Each tool after that is $2 a month, and that plan includes 1GB. Extra storage is $1 a month for each additional GB. The Pricing page shows examples. A priced tool can start a one-time 7-day trial with no payment. After the trial, a tool that is not covered by a free slot is $2 a month. Plan & Billing can collect that amount, and the price is shown before payment.',
   },
   {
     question: 'Who can see my records?',
     answer:
-      'You sign in with your own email and password, and the records stay in that account. Tools such as Healthcare Appts & History, Pet Care Schedule, and Address Book let you list family members, pets, or contacts inside the tool. We do not sell your information, and we do not use it for advertising.',
+      'You sign in with your own email and password, and the records stay in that account. The household Admin can invite up to 4 Users at no extra charge, and those Users can use the household tools and records. Tools such as Healthcare Appts & History, Pet Care Schedule, and Address Book let you list family members, pets, or contacts inside the tool. We do not sell your information, and we do not use it for advertising.',
   },
   {
     question: 'How do dates and files work?',

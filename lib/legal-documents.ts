@@ -3,7 +3,7 @@
  * Served by the public pages and /api/legal.
  */
 
-export const LEGAL_LAST_UPDATED = '2026-09-27';
+export const LEGAL_LAST_UPDATED = '2026-10-24';
 
 const h2 = (text: string) =>
   `<h2 class="text-2xl font-semibold text-slate-100 mt-8 mb-4">${text}</h2>`;
@@ -17,7 +17,7 @@ const supportEmail = '<strong class="text-emerald-400">support@householdtoolbox.
 
 export function formatLegalDate(value: string | null | undefined): string {
   const match = /^(\d{4})-(\d{2})-(\d{2})/.exec(value || '');
-  if (!match) return 'September 27, 2026';
+  if (!match) return 'October 24, 2026';
   const date = new Date(Number(match[1]), Number(match[2]) - 1, Number(match[3]));
   return date.toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' });
 }
@@ -42,7 +42,7 @@ export const TERMS_OF_SERVICE_HTML = [
     'Accept responsibility for all activities under your account',
   ]),
   p(
-    'We may suspend or terminate accounts that violate these Terms. You can delete your account from your profile after you remove your tools. Section 14 explains what happens to your information.'
+    'We may suspend or terminate accounts that violate these Terms. You can delete your account from your profile. Section 14 explains what happens to your information.'
   ),
 
   h2('3. Use of the Service'),
@@ -58,12 +58,15 @@ export const TERMS_OF_SERVICE_HTML = [
 
   h2('4. Plans and Payments'),
   p(
-    'The Service currently lets you add tools and store files within the limits shown in the product. We do not currently charge a payment method.'
+    'Your first two tools have no monthly charge and include 200MB of storage. Each tool after that is $2 a month, and that plan includes 1GB of storage. Extra storage is $1 a month for each additional GB. The household Admin can invite up to 4 Users at no extra charge, and those Users can use the household tools and records.'
   ),
-  p('If we later offer paid tools, extra storage, or other paid features:'),
+  p(
+    'A priced tool can start a one-time 7-day trial with no payment. After the trial, a tool that is not covered by a free slot is $2 a month. The price is shown before payment, and Stripe collects that amount after the household Admin confirms it.'
+  ),
+  p('For paid tools and extra storage:'),
   ul([
-    'The price, billing period, and what is included will be shown before you confirm.',
-    'We will charge a payment method only after a payment processor is connected and you authorize that charge.',
+    'The price, billing period, and what is included are shown before you confirm.',
+    'We charge a payment method only after you authorize that charge through Stripe.',
     'We may change prices. The new price will be shown before it applies to you.',
     'You may stop a paid feature or close your account from the product. Access to a paid feature ends when that feature is canceled, subject to any period already shown at checkout.',
     'Fees already charged are refundable only where the law requires a refund, unless the checkout terms say otherwise.',
@@ -104,7 +107,7 @@ export const TERMS_OF_SERVICE_HTML = [
 
   h2('9. Service Providers'),
   p(
-    'We use service providers to host the Service, store account data and files, and send account email. Their role is described in the Privacy Policy. We are not responsible for third-party websites you choose to open from outside the Service.'
+    'We use service providers to host the Service, store account data and files, send account email, and process payments. Their role is described in the Privacy Policy. We are not responsible for third-party websites you choose to open from outside the Service.'
   ),
 
   h2('10. Service Availability'),
@@ -145,9 +148,11 @@ export const TERMS_OF_SERVICE_HTML = [
 
   h2('14. Termination and Deletion'),
   p(
-    'We may suspend or terminate your access at any time for any reason, including violation of these Terms. You may delete your account from your profile after you remove your tools in My Tools.'
+    'We may suspend or terminate your access at any time for any reason, including violation of these Terms. The household Admin can delete the account from the profile after removing every tool in My Tools. An invited User can delete their login from the profile.'
   ),
-  p('When you delete your account, we delete the account, the tool records tied to it, and the uploaded files tied to it.'),
+  p(
+    'When the household Admin deletes the account, we delete the account, the tool records tied to it, and the uploaded files tied to it. When an invited User deletes their login, the household tools, records, and uploaded files stay with the household.'
+  ),
   p('When we close your account, your right to use the Service ends, and we may delete the account, tool records, and uploaded files.'),
   p(
     'We may keep limited information after an account ends when we need it for security, legal, or dispute reasons, including email we exchanged with you about support. Sections of these Terms that should reasonably survive termination will continue, including ownership of intellectual property, disclaimers, limits on liability, and indemnification.'
@@ -180,6 +185,7 @@ export const PRIVACY_POLICY_HTML = [
   h3('1.1 Information You Provide'),
   ul([
     '<strong>Account information:</strong> First name, last name, email address, and password. We store the password as a hash, so we do not keep a readable copy of it. We also store your theme preference so the Service can remember light or dark mode.',
+    '<strong>Billing information:</strong> If the household pays for tools or extra storage, we store the card brand and the last four digits of the card. Stripe processes the card number. We do not store the full card number.',
     '<strong>Password reset:</strong> If you ask to reset your password, we email you a link and store a reset token until you use it or it expires (about one hour).',
     '<strong>User Content:</strong> Information you enter into the tools. That can include schedules, tasks, lists, notes, goals, meals, and calendar events; home maintenance, cleaning, and repair records; healthcare appointments and history; HSA accounts, deposits, and expenses; subscription, event-budget, and other money records you enter; pet care and veterinary records; address-book contacts; travel logs; and end-of-life plans, including personal, financial, and wish information you choose to enter.',
     '<strong>Files:</strong> Documents, photos, and other files you upload to a tool, including files attached to important documents, healthcare records, HSA expenses, and end-of-life plans.',
@@ -199,6 +205,7 @@ export const PRIVACY_POLICY_HTML = [
   ul([
     'Provide, maintain, and protect the Service',
     'Operate the tools and files you choose to use, including exports you request',
+    'Bill for tools and extra storage the household chooses',
     'Remember your theme preference',
     'Send account email, including a welcome message and password-reset links',
     'Respond to support requests',
@@ -216,15 +223,21 @@ export const PRIVACY_POLICY_HTML = [
     '<strong>Vercel</strong> hosts the application and may process technical log data.',
     '<strong>Supabase</strong> stores account data, tool records, and uploaded files.',
     '<strong>Resend</strong> delivers account email and support messages.',
+    '<strong>Stripe</strong> processes payments for tools and extra storage. We share the billing details Stripe needs to collect a payment you confirm. We keep the card brand and last four digits on the account.',
   ]),
   p('They may use your information only to perform those services.'),
 
-  h3('3.2 Legal Requirements'),
+  h3('3.2 Household Users'),
+  p(
+    'The household Admin can invite up to 4 Users at no extra charge. Those Users can sign in and use the household tools and records.'
+  ),
+
+  h3('3.3 Legal Requirements'),
   p(
     'We may disclose information if required to comply with laws, court orders, or government requests, or to protect our rights, users, or the public.'
   ),
 
-  h3('3.3 Business Transfers'),
+  h3('3.4 Business Transfers'),
   p(
     'If Household Toolbox is involved in a merger, acquisition, or asset sale, your information may be transferred as part of the transaction.'
   ),
@@ -233,7 +246,7 @@ export const PRIVACY_POLICY_HTML = [
   h2('4. Data Retention'),
   p('We keep your account, tool records, and uploaded files while your account is active.'),
   p(
-    'You can delete your account from your profile after you remove your tools in My Tools. Deleting the account deletes the account, the tool records tied to it, and the uploaded files tied to it. You can also email us and ask us to delete your account.'
+    'The household Admin can delete the account from the profile after removing every tool in My Tools. That deletion removes the account, the tool records tied to it, and the uploaded files tied to it. An invited User can delete their login from the profile. That deletion removes the login and leaves the household tools, records, and uploaded files with the household. You can also email us and ask us to delete an account.'
   ),
   p(
     'Support messages are delivered by email and may remain in our email records after the account is deleted. We may also keep limited information when we need it to comply with the law, resolve a dispute, or enforce these terms.'
