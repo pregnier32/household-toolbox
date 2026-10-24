@@ -76,14 +76,14 @@ export async function reconcileBilling(now = new Date()): Promise<{ scanned: num
         failed += 1;
         console.error('Billing reconcile failed for an account', error instanceof Error ? error.message : 'unknown');
       }
-    }
-    await supabaseServer.from('billing_reconcile_runs').update({
       try {
         await refreshHouseholdLock(userId, now);
       } catch (error) {
         failed += 1;
         console.error('Household tool access could not be saved', error instanceof Error ? error.message : 'unknown');
       }
+    }
+    await supabaseServer.from('billing_reconcile_runs').update({
       status: failed > 0 ? 'failed' : 'completed',
       finished_at: new Date().toISOString(),
       scanned_count: scanned,
