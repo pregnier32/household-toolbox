@@ -49,7 +49,7 @@ export default function ToolsDirectoryPage() {
       <TrackPublicPageView eventName={PUBLIC_ANALYTICS_EVENTS.toolsDirectoryView} />
       <JsonLd data={structuredData} />
       <PublicHeader />
-      <div className="mx-auto max-w-6xl px-4 py-10 sm:px-6 lg:px-8">
+      <div className="mx-auto max-w-6xl px-4 pb-10 sm:px-6 lg:px-8">
         <nav aria-label="Breadcrumb" className="text-sm text-slate-400">
           <ol className="flex flex-wrap items-center gap-2">
             <li>

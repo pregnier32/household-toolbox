@@ -4,6 +4,7 @@ import { useRouter } from 'next/navigation';
 import { useEffect, useState } from 'react';
 import { UserMenu } from '../components/UserMenu';
 import { SideLogo } from '../components/SideLogo';
+import { PublicHeader } from '../components/public/PublicHeader';
 import { useTheme } from '../components/AppThemeProvider';
 import { completeSignOut } from '@/lib/client-sign-out';
 
@@ -71,9 +72,6 @@ export default function Support() {
   const headerChromeButtonClass = isLight
     ? 'flex items-center gap-2 rounded-lg px-3 py-2 text-sm font-medium text-slate-700 transition-colors hover:bg-slate-100 hover:text-slate-900'
     : 'flex items-center gap-2 rounded-lg px-3 py-2 text-sm font-medium text-slate-300 transition-colors hover:bg-slate-800 hover:text-slate-100';
-  const topNavHomeClass = isLight
-    ? 'text-slate-700 transition-colors hover:text-emerald-700'
-    : 'text-slate-300 transition-colors hover:text-emerald-300';
   const pageTitleClass = isLight ? 'text-4xl font-semibold text-slate-900 mb-4' : 'text-4xl font-semibold text-slate-50 mb-4';
   const pageSubtitleClass = isLight ? 'text-slate-600 max-w-2xl mx-auto' : 'text-slate-400 max-w-2xl mx-auto';
   const sectionLabelClass = isLight ? 'block text-sm font-medium text-slate-700 mb-4' : 'block text-sm font-medium text-slate-300 mb-4';
@@ -221,16 +219,12 @@ export default function Support() {
 
   return (
     <main className="min-h-screen bg-slate-950 text-slate-100">
-      {/* Header */}
-      <header className={headerBarClass}>
-        <div className="mx-auto flex max-w-7xl flex-wrap items-center justify-between gap-3 px-4 py-4 sm:px-6 lg:px-8">
-          <div className="flex items-center">
-            <button onClick={() => router.push('/')} className="flex items-center">
-                <SideLogo priority />
+      {user ? (
+        <header className={headerBarClass}>
+          <div className="mx-auto flex max-w-5xl flex-wrap items-center justify-between gap-4 px-4 py-10 sm:px-6 lg:px-8">
+            <button type="button" onClick={() => router.push('/')} className="flex items-center">
+              <SideLogo priority />
             </button>
-          </div>
-
-          {user ? (
             <div className="flex items-center gap-3">
               <button
                 type="button"
@@ -247,26 +241,11 @@ export default function Support() {
                 onSignOut={handleSignOut}
               />
             </div>
-          ) : (
-            <nav className="flex flex-wrap items-center justify-end gap-x-5 gap-y-2 text-sm">
-              <button
-                type="button"
-                onClick={() => router.push('/')}
-                className={topNavHomeClass}
-              >
-                Home
-              </button>
-              <button
-                type="button"
-                onClick={() => router.push('/tools')}
-                className={topNavHomeClass}
-              >
-                Tools
-              </button>
-            </nav>
-          )}
-        </div>
-      </header>
+          </div>
+        </header>
+      ) : (
+        <PublicHeader />
+      )}
 
       {/* Content */}
       <div className="mx-auto max-w-3xl px-4 py-12 sm:px-6 lg:px-8">

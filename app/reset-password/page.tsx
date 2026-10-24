@@ -4,8 +4,8 @@ import { useState, useRef, useEffect, Suspense } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import Link from 'next/link';
 import { resetPassword, hasPasswordRecoverySession } from '../actions/auth';
-import { SideLogo } from '../components/SideLogo';
 import { PasswordField } from '../components/PasswordField';
+import { PublicHeader } from '../components/public/PublicHeader';
 import { createSupabaseAuthBrowserClient } from '@/lib/supabaseAuthBrowser';
 
 function ResetPasswordForm() {
@@ -52,8 +52,9 @@ function ResetPasswordForm() {
 
   if (recoveryReady === null) {
     return (
-      <main className="min-h-screen bg-slate-950 text-slate-100">
-        <div className="mx-auto flex min-h-screen max-w-5xl flex-col px-4 py-10 sm:px-6 lg:px-8">
+      <main className="flex min-h-screen flex-col bg-slate-950 text-slate-100">
+        <PublicHeader />
+        <div className="mx-auto flex w-full max-w-5xl flex-1 flex-col px-4 pb-10 sm:px-6 lg:px-8">
           <p className="text-sm text-slate-400">Checking reset link...</p>
         </div>
       </main>
@@ -62,16 +63,9 @@ function ResetPasswordForm() {
 
   if (!recoveryReady || linkError) {
     return (
-      <main className="min-h-screen bg-slate-950 text-slate-100">
-        <div className="mx-auto flex min-h-screen max-w-5xl flex-col px-4 py-10 sm:px-6 lg:px-8">
-          <header className="mb-10 flex items-center justify-between">
-            <div className="flex items-center">
-              <Link href="/">
-                <SideLogo priority />
-              </Link>
-            </div>
-          </header>
-
+      <main className="flex min-h-screen flex-col bg-slate-950 text-slate-100">
+        <PublicHeader />
+        <div className="mx-auto flex w-full max-w-5xl flex-1 flex-col px-4 pb-10 sm:px-6 lg:px-8">
           <div className="flex flex-1 items-center justify-center">
             <div className="w-full max-w-md">
               <div className="rounded-2xl border border-slate-800 bg-slate-900/50 p-8 shadow-2xl shadow-emerald-500/10">
@@ -93,24 +87,10 @@ function ResetPasswordForm() {
   }
 
   return (
-    <main className="min-h-screen bg-slate-950 text-slate-100">
+    <main className="flex min-h-screen flex-col bg-slate-950 text-slate-100">
+      <PublicHeader />
       {/* Page wrapper */}
-      <div className="mx-auto flex min-h-screen max-w-5xl flex-col px-4 py-10 sm:px-6 lg:px-8">
-        {/* Nav */}
-        <header className="mb-10 flex items-center justify-between">
-          <div className="flex items-center">
-            <Link href="/">
-              <SideLogo priority />
-            </Link>
-          </div>
-
-          <nav className="hidden gap-6 text-sm text-slate-300 sm:flex items-center">
-            <Link href="/" className="hover:text-emerald-300">
-              Back to Home
-            </Link>
-          </nav>
-        </header>
-
+      <div className="mx-auto flex w-full max-w-5xl flex-1 flex-col px-4 pb-10 sm:px-6 lg:px-8">
         {/* Main Content */}
         <div className="flex flex-1 items-center justify-center">
           <div className="w-full max-w-md">
@@ -279,15 +259,9 @@ function ResetPasswordForm() {
 export default function ResetPassword() {
   return (
     <Suspense fallback={
-      <main className="min-h-screen bg-slate-950 text-slate-100">
-        <div className="mx-auto flex min-h-screen max-w-5xl flex-col px-4 py-10 sm:px-6 lg:px-8">
-          <header className="mb-10 flex items-center justify-between">
-            <div className="flex items-center">
-              <Link href="/">
-                <SideLogo priority />
-              </Link>
-            </div>
-          </header>
+      <main className="flex min-h-screen flex-col bg-slate-950 text-slate-100">
+        <PublicHeader />
+        <div className="mx-auto flex w-full max-w-5xl flex-1 flex-col px-4 pb-10 sm:px-6 lg:px-8">
           <div className="flex flex-1 items-center justify-center">
             <div className="w-full max-w-md">
               <div className="rounded-2xl border border-slate-800 bg-slate-900/50 p-8 shadow-2xl shadow-emerald-500/10">

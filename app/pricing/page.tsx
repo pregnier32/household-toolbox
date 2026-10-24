@@ -1,9 +1,8 @@
 'use client';
 
 import { useRouter } from 'next/navigation';
-import { HelpMenu } from '../components/HelpMenu';
-import { SideLogo } from '../components/SideLogo';
 import { PublicFooter } from '../components/public/PublicFooter';
+import { PublicHeader } from '../components/public/PublicHeader';
 
 export default function Pricing() {
   const router = useRouter();
@@ -19,38 +18,10 @@ export default function Pricing() {
 
   return (
     <main className="min-h-screen bg-slate-950 text-slate-100">
-      {/* Header */}
-      <header className="border-b border-slate-800 bg-slate-900/50">
-        <div className="mx-auto flex max-w-7xl flex-wrap items-center justify-between gap-3 px-4 py-4 sm:px-6 lg:px-8">
-          <div className="flex items-center">
-            <button
-              onClick={() => router.push('/')}
-              className="flex items-center"
-            >
-              <SideLogo priority />
-            </button>
-          </div>
-
-          <nav className="flex flex-wrap items-center justify-end gap-x-5 gap-y-2 text-sm text-slate-300">
-            <button
-              onClick={() => router.push('/')}
-              className="hover:text-emerald-300 transition-colors"
-            >
-              Home
-            </button>
-            <button
-              onClick={() => router.push('/tools')}
-              className="hover:text-emerald-300 transition-colors"
-            >
-              Tools
-            </button>
-            <HelpMenu />
-          </nav>
-        </div>
-      </header>
+      <PublicHeader />
 
       {/* Content */}
-      <div className="mx-auto max-w-4xl px-4 py-12 sm:px-6 lg:px-8">
+      <div className="mx-auto max-w-4xl px-4 pb-12 sm:px-6 lg:px-8">
         <div className="text-center mb-12">
           <p className="text-xs font-medium uppercase tracking-[0.18em] text-emerald-300">
             Simple, Transparent Pricing

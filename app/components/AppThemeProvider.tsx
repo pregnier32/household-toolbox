@@ -1,6 +1,6 @@
 'use client';
 
-import { createContext, useContext, useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { createContext, useContext, useCallback, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { usePathname } from 'next/navigation';
 
 export type ThemeMode = 'light' | 'dark';
@@ -15,8 +15,23 @@ const STORAGE_KEY = 'household-toolbox-theme';
 
 const ThemeContext = createContext<ThemeContextType | undefined>(undefined);
 
+const PUBLIC_DARK_PATHS = [
+  '/',
+  '/pricing',
+  '/tools',
+  '/support',
+  '/faq',
+  '/privacy-policy',
+  '/terms-of-service',
+  '/forgot-password',
+  '/reset-password',
+  '/invite',
+];
+
 function isForcedDarkRoute(pathname: string): boolean {
-  return pathname === '/' || pathname === '/pricing';
+  return PUBLIC_DARK_PATHS.some(
+    (path) => pathname === path || (path !== '/' && pathname.startsWith(`${path}/`))
+  );
 }
 
 function applyThemeClass(theme: ThemeMode): 'light' | 'dark' {
@@ -74,8 +89,15 @@ export function AppThemeProvider({ children }: { children: React.ReactNode }) {
     }
   }, [pathname]);
 
-  useEffect(() => {
-    syncThemeFromSession();
+  useLayoutEffect(() => {
+    if (isForcedDarkRoute(pathname)) {
+      setThemeState('dark');
+      setResolvedTheme(applyThemeClass('dark'));
+      return;
+    }
+
+    userChangedThemeRef.current = false;
+    void syncThemeFromSession();
   }, [pathname, syncThemeFromSession]);
 
   const setTheme = (nextTheme: ThemeMode) => {
@@ -93,13 +115,14 @@ export function AppThemeProvider({ children }: { children: React.ReactNode }) {
     });
   };
 
+  const routeForcesDark = isForcedDarkRoute(pathname);
   const value = useMemo(
     () => ({
-      theme,
-      resolvedTheme,
+      theme: routeForcesDark ? 'dark' : theme,
+      resolvedTheme: routeForcesDark ? 'dark' : resolvedTheme,
       setTheme,
     }),
-    [theme, resolvedTheme]
+    [routeForcesDark, theme, resolvedTheme]
   );
 
   return <ThemeContext.Provider value={value}>{children}</ThemeContext.Provider>;

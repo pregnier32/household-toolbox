@@ -3,10 +3,9 @@
 import { useState, useRef, useEffect, type ReactNode } from 'react'
 import Link from 'next/link'
 import { signUp, signIn } from '../../actions/auth'
-import { HelpMenu } from '../HelpMenu'
-import { SideLogo } from '../SideLogo'
 import { PasswordField } from '../PasswordField'
 import { PublicFooter } from './PublicFooter'
+import { PublicHeader } from './PublicHeader'
 
 export function HomePage({ explore }: { explore?: ReactNode }) {
   const [isSignUp, setIsSignUp] = useState(false);
@@ -53,29 +52,10 @@ export function HomePage({ explore }: { explore?: ReactNode }) {
     checkMaintenance();
   }, []);
   return (
-    <main className="min-h-screen bg-slate-950 text-slate-100">
+    <main className="flex min-h-screen flex-col bg-slate-950 text-slate-100">
+      <PublicHeader />
       {/* Page wrapper */}
-      <div className="mx-auto flex min-h-screen max-w-5xl flex-col px-4 py-10 sm:px-6 lg:px-8">
-        {/* Nav */}
-        <header className="mb-10 flex flex-wrap items-center justify-between gap-4">
-          <div className="flex items-center">
-            <SideLogo priority />
-          </div>
-
-          <nav aria-label="Primary" className="flex flex-wrap items-center justify-end gap-x-5 gap-y-2 text-sm text-slate-300">
-            <Link href="/tools" className="rounded-sm hover:text-emerald-300 focus:outline-none focus-visible:ring-2 focus-visible:ring-emerald-400">
-              Tools
-            </Link>
-            <a href="#features" className="rounded-sm hover:text-emerald-300 focus:outline-none focus-visible:ring-2 focus-visible:ring-emerald-400">
-              Features
-            </a>
-            <Link href="/pricing" className="rounded-sm hover:text-emerald-300 focus:outline-none focus-visible:ring-2 focus-visible:ring-emerald-400">
-              Pricing
-            </Link>
-            <HelpMenu />
-          </nav>
-        </header>
-
+      <div className="mx-auto flex w-full max-w-5xl flex-1 flex-col px-4 pb-10 sm:px-6 lg:px-8">
         {/* Hero */}
         <section className="mb-16 grid flex-1 gap-10 md:grid-cols-[minmax(0,1.4fr)_minmax(0,1fr)] md:items-center">
           <div>
