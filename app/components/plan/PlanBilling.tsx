@@ -27,6 +27,8 @@ type PlanPayload = {
   storageUsed: string;
   storageAllowance: string;
   paymentMethod: string;
+  paymentAction?: 'none' | 'setup' | 'manage';
+  subscriptionStatus?: string | null;
   paymentSetupWouldBeNeeded: boolean;
   notice: { title: string; body: string } | null;
   billingCycle?: { nextBillingDate: string; estimatedNextBill: string; nextBillingAt: string } | null;
@@ -47,6 +49,9 @@ export function PlanBilling({
   const [codeInput, setCodeInput] = useState('');
   const [formMessage, setFormMessage] = useState<{ tone: 'ok' | 'error'; title: string; detail?: string } | null>(null);
   const [selected, setSelected] = useState<CustomerPlanBenefit | null>(null);
+  const [paymentMessage, setPaymentMessage] = useState<string | null>(null);
+  const [checkoutNote, setCheckoutNote] = useState<string | null>(null);
+  const [openingPayment, setOpeningPayment] = useState(false);
 
   const headerChromeButtonClass = isLight
     ? 'flex items-center gap-2 rounded-lg px-3 py-2 text-sm font-medium text-slate-700 transition-colors hover:bg-slate-100 hover:text-slate-900'
@@ -115,6 +120,9 @@ export function PlanBilling({
   useEffect(() => {
     if (preview) return;
     load();
+    const checkout = new URLSearchParams(window.location.search).get('checkout');
+    if (checkout === 'success') setCheckoutNote('Payment setup was submitted. This page updates after Stripe confirms the result.');
+    if (checkout === 'cancel') setCheckoutNote('Payment setup was canceled.');
   }, [preview]);
 
   const asOf = preview?.asOf;
@@ -165,7 +173,6 @@ export function PlanBilling({
       ? { ...row, label: row.detail?.endsWith('of 200 MB') ? 'Free Acct' : 'Paid Acct' }
       : row);
   }
-  const monthlyTotal = statement.find((row) => row.kind === 'total')?.amount ?? '$0/month';
   const openBenefit = (id: string | null) => {
     if (!id) return;
     const match = plan.benefits.find((item) => item.id === id);
@@ -305,11 +312,41 @@ export function PlanBilling({
         )}
 
         <p className={pageSubtitleClass}>
-          {monthlyTotal === '$0/month'
-            ? 'No payment information is required while the monthly cost is $0.'
-            : 'Payment setup will be required once billing is available. No card is collected now.'}
+          {plan.paymentAction === 'manage'
+            ? `Payment method: ${plan.paymentMethod}. Subscription status: ${plan.subscriptionStatus || 'active'}.`
+            : plan.paymentAction === 'setup'
+              ? 'Set up payment when you are ready. Tools stay available before a card is saved.'
+              : (statement.find((row) => row.kind === 'total')?.amount ?? '$0.00') === '$0.00'
+                ? 'No payment information is required while the monthly cost is $0.'
+                : 'Payment setup will be required once this account is billed. Tools stay available.'}
           {plan.upcoming ? ` Upcoming ${plan.upcoming.amount} on ${formatDisplayDate(plan.upcoming.at)}.` : ''}
         </p>
+        {checkoutNote && <p className={`mt-3 ${pageSubtitleClass}`}>{checkoutNote}</p>}
+        {paymentMessage && <p className={`mt-3 ${pageSubtitleClass}`}>{paymentMessage}</p>}
+        {!preview && (plan.paymentAction === 'setup' || plan.paymentAction === 'manage') && (
+          <button
+            type="button"
+            className={`mt-4 ${primaryButtonClass}`}
+            disabled={openingPayment}
+            onClick={() => {
+              setOpeningPayment(true);
+              setPaymentMessage(null);
+              const path = plan.paymentAction === 'manage' ? '/api/stripe/portal' : '/api/stripe/checkout';
+              fetch(path, { method: 'POST' })
+                .then(async (response) => {
+                  const data = await response.json();
+                  if (!response.ok || !data.url) throw new Error(data.error || 'Payment could not be opened.');
+                  window.location.assign(data.url);
+                })
+                .catch((error: unknown) => {
+                  setPaymentMessage(error instanceof Error ? error.message : 'Payment could not be opened.');
+                  setOpeningPayment(false);
+                });
+            }}
+          >
+            {plan.paymentAction === 'manage' ? 'Manage payment' : 'Set up payment'}
+          </button>
+        )}
       </div>
 
       {selected && (

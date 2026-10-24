@@ -9,7 +9,8 @@
     "lint": "eslint",
     "supabase:types": "npx supabase gen types typescript --linked > src/types/supabase.ts",
     "auth:test-import": "node --experimental-strip-types scripts/test-supabase-auth-import.ts",
-    "test:pricing": "npx --yes tsx --test lib/account-pricing.test.ts lib/account-notice-drafts.test.ts lib/default-account-entitlements.test.ts lib/billing-preview.test.ts lib/billing-cycle.test.ts lib/billing-tool-removal.test.ts lib/ownership-price.test.ts lib/user-entitlements-preview.test.ts"
+    "test:pricing": "npx --yes tsx --test lib/account-pricing.test.ts lib/account-notice-drafts.test.ts lib/default-account-entitlements.test.ts lib/billing-preview.test.ts lib/billing-cycle.test.ts lib/billing-tool-removal.test.ts lib/ownership-price.test.ts lib/user-entitlements-preview.test.ts lib/user-tool-entitlements.test.ts",
+    "test:billing": "npx --yes tsx --test --test-concurrency=1 lib/billing-ledger.test.ts lib/billing-stripe-anchor.test.ts lib/billing-db.test.ts"
   },
   "dependencies": {
     "@supabase/ssr": "^0.12.7",
@@ -23,7 +24,8 @@
     "react": "19.2.0",
     "react-dom": "19.2.0",
     "recharts": "^3.5.1",
-    "resend": "^6.5.2"
+    "resend": "^6.5.2",
+    "stripe": "^23.0.1"
   },
   "devDependencies": {
     "@tailwindcss/postcss": "^4",

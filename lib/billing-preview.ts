@@ -392,7 +392,7 @@ export function simulatedInstant(raw: string | null | undefined, now = new Date(
   return parsePreviewEffectiveAt(raw, now);
 }
 
-const STORAGE_ADDON_MONTHLY_CENTS = 100;
+export const STORAGE_ADDON_MONTHLY_CENTS = 100;
 
 export type PlanStatementRow = {
   id: string;

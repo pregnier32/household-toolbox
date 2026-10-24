@@ -1,5 +1,7 @@
 import { supabaseServer } from '@/lib/supabaseServer';
 
+export { toolOffersTrial } from '@/lib/tool-offers-trial';
+
 export type ToolEntitlementResult = {
   isFirstStart: boolean;
   trialGranted: boolean;
@@ -9,13 +11,6 @@ export type ToolEntitlementResult = {
 
 function isMissingRelationError(error: { message?: string; code?: string } | null): boolean {
   return error?.code === '42P01' || (error?.message || '').toLowerCase().includes('does not exist');
-}
-
-export function toolOffersTrial(tool: { name?: string | null; price?: number | null }): boolean {
-  if (tool.name === 'Home Maintenance Schedule' && Number(tool.price) <= 0) {
-    return false;
-  }
-  return Number(tool.price) > 0;
 }
 
 /**

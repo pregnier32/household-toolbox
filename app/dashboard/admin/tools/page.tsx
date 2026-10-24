@@ -20,6 +20,7 @@ type Tool = {
   tool_tip: string | null;
   description: string | null;
   price: number;
+  offers_trial?: boolean;
   status: string;
   created_at: string | null;
   updated_at: string | null;
@@ -35,6 +36,7 @@ type ToolFormData = {
   short_name: string;
   description: string;
   price: string;
+  offersTrial: boolean;
   status: string;
 };
 
@@ -112,6 +114,7 @@ export default function ToolsPage() {
     short_name: '',
     description: '',
     price: '0.00',
+    offersTrial: true,
     status: 'coming_soon',
   });
   const [iconSelection, setIconSelection] = useState<string>('');
@@ -169,6 +172,7 @@ export default function ToolsPage() {
       short_name: '',
       description: '',
       price: '0.00',
+      offersTrial: true,
       status: 'coming_soon',
     });
     setIconSelection('');
@@ -185,6 +189,7 @@ export default function ToolsPage() {
       short_name: tool.short_name || '',
       description: tool.description || '',
       price: tool.price.toString(),
+      offersTrial: tool.offers_trial !== false,
       status: tool.status,
     });
     // Pre-select the existing icon if available
@@ -284,6 +289,7 @@ export default function ToolsPage() {
       toolFormData.append('short_name', formData.short_name.trim());
       toolFormData.append('description', formData.description.trim());
       toolFormData.append('price', formData.price);
+      toolFormData.append('offers_trial', formData.offersTrial ? 'true' : 'false');
       toolFormData.append('status', formData.status);
 
       const url = '/api/admin/tools';
@@ -599,6 +605,27 @@ export default function ToolsPage() {
                     />
                   </div>
 
+                  <label className="flex items-start gap-3">
+                    <input
+                      type="checkbox"
+                      checked={formData.offersTrial}
+                      onChange={(e) => setFormData({ ...formData, offersTrial: e.target.checked })}
+                      className="mt-0.5 h-4 w-4 rounded border-slate-500 text-emerald-500 focus:ring-emerald-500"
+                    />
+                    <span>
+                      <span className={isLight ? 'block text-sm font-medium text-slate-700' : 'block text-sm font-medium text-slate-300'}>
+                        7-day free trial
+                      </span>
+                      <span className={isLight ? 'mt-1 block text-xs text-slate-600' : 'mt-1 block text-xs text-slate-500'}>
+                        {Number(formData.price) > 0
+                          ? formData.offersTrial
+                            ? 'The first time a household adds this tool, they get a 7-day trial.'
+                            : 'The first time a household adds this tool, the monthly price applies.'
+                          : 'This tool is $0, so a trial is not started.'}
+                      </span>
+                    </span>
+                  </label>
+
                   <div>
                     <label className={isLight ? 'block text-sm font-medium text-slate-700 mb-1.5' : 'block text-sm font-medium text-slate-300 mb-1.5'}>
                       Status <span className="text-red-400">*</span>
@@ -777,6 +804,9 @@ export default function ToolsPage() {
                         Price
                       </th>
                       <th className={tableHeadCellClass}>
+                        Trial
+                      </th>
+                      <th className={tableHeadCellClass}>
                         Status
                       </th>
                       <th className={tableHeadCellClass}>
@@ -801,6 +831,9 @@ export default function ToolsPage() {
                       </td>
                       <td className={bodyPriceClass}>
                         ${tool.price.toFixed(2)} / month
+                      </td>
+                      <td className={bodyMutedClass}>
+                        {tool.offers_trial === false ? 'Off' : 'On'}
                       </td>
                       <td className="px-4 py-3 text-sm">
                         <span

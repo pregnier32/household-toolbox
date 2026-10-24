@@ -826,6 +826,7 @@ export type Database = {
           description: string | null
           id: string
           name: string
+          offers_trial: boolean
           price: number
           short_name: string | null
           status: string
@@ -837,6 +838,7 @@ export type Database = {
           description?: string | null
           id?: string
           name: string
+          offers_trial?: boolean
           price?: number
           short_name?: string | null
           status?: string
@@ -848,6 +850,7 @@ export type Database = {
           description?: string | null
           id?: string
           name?: string
+          offers_trial?: boolean
           price?: number
           short_name?: string | null
           status?: string

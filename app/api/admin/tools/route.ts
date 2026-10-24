@@ -83,6 +83,7 @@ export async function POST(request: NextRequest) {
     const description = formData.get('description') as string | null;
     const price = formData.get('price') as string;
     const status = formData.get('status') as string;
+    const offersTrial = formData.get('offers_trial') !== 'false';
 
     // Validate required fields
     if (!name || !status) {
@@ -152,6 +153,7 @@ export async function POST(request: NextRequest) {
         description: description.trim(),
         price: priceNum,
         status: status,
+        offers_trial: offersTrial,
       })
       .select()
       .single();
@@ -196,6 +198,7 @@ export async function PUT(request: NextRequest) {
     const description = formData.get('description') as string | null;
     const price = formData.get('price') as string | null;
     const status = formData.get('status') as string | null;
+    const offersTrial = formData.get('offers_trial') as string | null;
     const iconFile = formData.get('icon_file') as File | null;
     const iconType = formData.get('icon_type') as string | null;
 
@@ -276,6 +279,10 @@ export async function PUT(request: NextRequest) {
         );
       }
       updateData.price = priceNum;
+    }
+
+    if (offersTrial !== null) {
+      updateData.offers_trial = offersTrial !== 'false';
     }
 
     // Handle status change - require icon if status is not 'inactive'

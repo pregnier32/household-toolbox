@@ -19,6 +19,7 @@ type Tool = {
   price: number;
   status: string;
   trialEligible?: boolean;
+  offers_trial?: boolean;
   offerNote?: string | null;
   icons: {
     default?: ToolIcon;
@@ -132,9 +133,12 @@ export function ToolModal({ tool, isOpen, onClose, onBuy, isBuying = false, buyM
             {tool.status !== 'coming_soon' && tool.status !== 'custom' && (
               <div className={trialNoticeWrapClass}>
                 <p className={trialNoticeTextClass}>
-                  {tool.offerNote || (tool.trialEligible === false
-                    ? 'You already used the 7-day trial for this tool. If it is not covered, payment setup will be required later. No payment is collected now.'
-                    : '7-day free trial. No payment is required to start.')}
+                  {tool.offerNote ||
+                    (tool.offers_trial === false
+                      ? `Expected cost $${tool.price.toFixed(2)} per month. Payment setup will be required later. No payment is collected now.`
+                      : tool.trialEligible === false
+                        ? 'You already used the 7-day trial for this tool. If it is not covered, payment setup will be required later. No payment is collected now.'
+                        : '7-day free trial. No payment is required to start.')}
                 </p>
               </div>
             )}

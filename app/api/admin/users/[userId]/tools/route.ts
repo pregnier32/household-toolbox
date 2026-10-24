@@ -203,7 +203,7 @@ export async function POST(
     // Fetch the tool to get its price and status
     const { data: tool, error: toolError } = await supabaseServer
       .from('tools')
-      .select('id, name, price, status')
+      .select('id, name, price, status, offers_trial')
       .eq('id', toolId)
       .single();
 

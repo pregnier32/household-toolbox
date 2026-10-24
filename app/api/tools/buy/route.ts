@@ -16,7 +16,7 @@ async function purchaseMessage(userId: string, toolId: string, trialGranted: boo
   return `This tool is expected to cost ${formatCents(tool.shelfPriceCents)} per month. Payment setup will be required later. No payment is collected now.`;
 }
 
-async function recordEntitlement(userId: string, tool: { id: string; name: string; price: number }) {
+async function recordEntitlement(userId: string, tool: { id: string; name: string; price: number; offers_trial?: boolean | null }) {
   return ensureToolEntitlement(userId, tool.id, {
     grantTrial: toolOffersTrial(tool),
   });
@@ -45,7 +45,7 @@ export async function POST(request: NextRequest) {
     // Fetch the tool to get its price
     const { data: tool, error: toolError } = await supabaseServer
       .from('tools')
-      .select('id, name, price, status')
+      .select('id, name, price, status, offers_trial')
       .eq('id', toolId)
       .single();
 

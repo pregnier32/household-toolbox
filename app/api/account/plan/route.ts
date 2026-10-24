@@ -8,7 +8,10 @@ import { loadFrozenPeriod, loadSignupAt, materializeBillingPeriod } from '@/lib/
 import { formatStorageBytes } from '@/lib/user-storage';
 import { getAccountPricingProjection } from '@/lib/load-account-pricing';
 import { persistAccountNotices } from '@/lib/promotion-service';
+import { loadBillingAccount } from '@/lib/billing-store';
 import type { CustomerPlanBenefit, CustomerPlanSource } from '@/lib/customer-plan-preview';
+
+const LIVE_PAYMENT = new Set(['active', 'past_due', 'unpaid', 'trialing', 'paused']);
 
 function day(value: string | null): string | null {
   return value ? value.slice(0, 10) : null;
@@ -64,6 +67,15 @@ export async function GET() {
       statement = cycle.statement;
       billingCycle = cycle.billingCycle;
     }
+    const account = await loadBillingAccount(user.id);
+    const card = account?.card_brand && account.card_last4 ? `${account.card_brand} •••• ${account.card_last4}` : 'Not configured yet';
+    const total = statement.find((row) => row.kind === 'total');
+    const amountIsDue = Boolean(total?.amount && total.amount !== '$0.00') || state.paymentSetupWouldBeNeeded;
+    const paymentAction = account?.subscription_status && LIVE_PAYMENT.has(account.subscription_status)
+      ? 'manage'
+      : amountIsDue
+        ? 'setup'
+        : 'none';
     return NextResponse.json({
       accountType: state.accountType,
       freeSlots: state.freeSlots,
@@ -87,7 +99,9 @@ export async function GET() {
       } : null,
       storageUsed: formatStorageBytes(state.storageUsedBytes),
       storageAllowance: formatStorageBytes(state.effectiveStorageBytes),
-      paymentMethod: 'Not configured yet',
+      paymentMethod: card,
+      paymentAction,
+      subscriptionStatus: account?.subscription_status ?? null,
       paymentSetupWouldBeNeeded: state.paymentSetupWouldBeNeeded,
       notice: notice.data ? { title: notice.data.title, body: notice.data.body } : null,
     });
