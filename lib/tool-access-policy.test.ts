@@ -185,15 +185,15 @@ test('a confirmed payment restores access and a fresh processing payment does no
   assert.equal(currentNextBill.locked, false);
   assert.equal(currentNextBill.warning, null);
 
-  const processing = policy({
+  const openWithoutStripeResult = policy({
     tools: [PAID],
     owedNowCents: 400,
     invoices: [invoice({ updatedAt: NOW.toISOString() })],
     paymentAttemptAt: NOW.toISOString(),
   });
-  assert.equal(processing.locked, false);
-  assert.equal(processing.pending, true);
-  assert.equal(processing.reason, 'payment_processing');
+  assert.equal(openWithoutStripeResult.locked, true);
+  assert.equal(openWithoutStripeResult.pending, false);
+  assert.notEqual(openWithoutStripeResult.reason, 'payment_processing');
 
   const bankStillProcessing = policy({
     tools: [PAID],
@@ -325,5 +325,137 @@ test('the tool API denial follows the policy and a Stripe redirect does not unlo
     paymentAttemptAt: '2026-10-24T12:00:00.000Z',
   });
   assert.equal(staleAttempt.locked, true);
+  const freshAttempt = policy({
+    tools: [PAID],
+    owedNowCents: 400,
+    paymentAttemptAt: NOW.toISOString(),
+  });
+  assert.equal(freshAttempt.locked, true);
+  assert.notEqual(freshAttempt.reason, 'payment_processing');
   assert.equal(toolAccessDenial(policy({ tools: [FREE] }), 'admin'), null);
+});
+
+test('starting Checkout does not unlock unpaid tools', () => {
+  const started = policy({
+    tools: [PAID, FREE],
+    owedNowCents: 200,
+    paymentAttemptAt: NOW.toISOString(),
+    checkoutAttempt: { state: 'incomplete', amountCents: 200 },
+  });
+  assert.equal(started.locked, true);
+  assert.equal(started.pending, false);
+  assert.equal(started.reason, 'setup_required');
+  assert.equal(started.warning, null);
+  assert.match(started.adminMessage || '', /Payment of \$2\.00 is required now/);
+  assert.equal(toolAccessDenial(started, 'admin')?.status, 403);
+  assert.equal(toolAccessBlocked(started, true), started.locked);
+});
+
+test('a declined card stays locked when the customer returns', () => {
+  const declined = policy({
+    tools: [PAID, FREE],
+    owedNowCents: 200,
+    paymentAttemptAt: NOW.toISOString(),
+    checkoutAttempt: { state: 'failed', amountCents: 200 },
+    invoices: [invoice({ id: 'pi_declined', collection: 'failed', amountCents: 200 })],
+  });
+  assert.equal(declined.locked, true);
+  assert.equal(declined.reason, 'payment_failed');
+  assert.match(declined.adminMessage || '', /did not go through/);
+  assert.equal((declined.warning || '').includes('still processing'), false);
+  assert.deepEqual(declined.recovery, ['manage_billing', 'review_tools']);
+  assert.equal(toolAccessBlocked(declined, true), true);
+});
+
+test('a missing failure webhook does not open a processing grace period', () => {
+  const missing = policy({
+    tools: [PAID],
+    owedNowCents: 200,
+    paymentAttemptAt: new Date(NOW.getTime() - 60 * 1000).toISOString(),
+    alreadyLocked: true,
+    checkoutAttempt: null,
+  });
+  assert.equal(missing.locked, true);
+  assert.notEqual(missing.reason, 'payment_processing');
+  assert.equal(missing.pending, false);
+  const unknownWithSubscription = policy({
+    tools: [PAID],
+    owedNowCents: 200,
+    hasSavedPaymentMethod: true,
+    subscriptionStatus: 'active',
+    alreadyLocked: true,
+    invoices: [invoice({ collection: null, amountCents: 200 })],
+  });
+  assert.equal(unknownWithSubscription.locked, true);
+  assert.notEqual(unknownWithSubscription.reason, 'payment_processing');
+});
+
+test('a bank payment Stripe marks as processing stays distinct from a declined card', () => {
+  const bank = policy({
+    tools: [PAID],
+    owedNowCents: 200,
+    hasSavedPaymentMethod: true,
+    subscriptionStatus: 'active',
+    alreadyLocked: true,
+    invoices: [invoice({ collection: 'processing', amountCents: 200, amountPaidCents: 0 })],
+  });
+  assert.equal(bank.locked, false);
+  assert.equal(bank.pending, true);
+  assert.equal(bank.reason, 'payment_processing');
+  assert.match(bank.warning || '', /still processing with Stripe/);
+
+  const declined = policy({
+    tools: [PAID],
+    owedNowCents: 200,
+    checkoutAttempt: { state: 'failed', amountCents: 200 },
+  });
+  assert.equal(declined.locked, true);
+  assert.equal(declined.reason, 'payment_failed');
+
+  const partialProcessing = policy({
+    tools: [PAID],
+    owedNowCents: 400,
+    checkoutAttempt: { state: 'processing', amountCents: 200 },
+    invoices: [invoice({ id: 'in_partial', collection: 'processing', amountCents: 200 })],
+  });
+  assert.equal(partialProcessing.locked, true);
+  assert.notEqual(partialProcessing.reason, 'payment_processing');
+
+  const unrelated = policy({
+    tools: [PAID],
+    owedNowCents: 400,
+    invoices: [
+      invoice({ id: 'in_failed', collection: 'failed', amountCents: 200 }),
+      invoice({ id: 'in_processing', collection: 'processing', amountCents: 200 }),
+    ],
+    checkoutAttempt: { state: 'processing', amountCents: 200 },
+  });
+  assert.equal(unrelated.locked, true);
+  assert.equal(unrelated.reason, 'payment_failed');
+  assert.match(unrelated.adminMessage || '', /did not go through/);
+});
+
+test('a confirmed payment restores access and a retry is not a second failure', () => {
+  const paid = policy({
+    tools: [{ ...PAID, requiresPaymentNow: false }, FREE],
+    owedNowCents: 0,
+    hasSavedPaymentMethod: true,
+    subscriptionStatus: 'active',
+    alreadyLocked: true,
+    invoices: [invoice({ status: 'paid', amountCents: 200, amountPaidCents: 200 })],
+  });
+  assert.equal(paid.locked, false);
+  assert.equal(paid.reason, 'open');
+  assert.equal(toolAccessDenial(paid, 'admin'), null);
+  assert.equal(toolAccessBlocked(paid, true), false);
+
+  const needsConfirmation = policy({
+    tools: [PAID],
+    owedNowCents: 200,
+    checkoutAttempt: { state: 'authentication_required', amountCents: 200 },
+  });
+  assert.equal(needsConfirmation.locked, true);
+  assert.equal(needsConfirmation.reason, 'authentication_required');
+  assert.match(needsConfirmation.adminMessage || '', /confirm/);
+  assert.deepEqual(needsConfirmation.recovery, ['manage_billing', 'review_tools']);
 });

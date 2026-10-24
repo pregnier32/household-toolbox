@@ -8,10 +8,9 @@ import {
   listPaymentAttention,
   listStoredInvoices,
   loadBillingAccount,
-  newestOpenCheckoutAt,
   syncHouseholdToolAccess,
 } from './billing-store';
-import { collectionNeedsRefresh, reconcileCustomerPayments } from './billing-payment-state';
+import { collectionNeedsRefresh, reconcileCustomerPayments, reconcileOpenCheckoutAttempts } from './billing-payment-state';
 import { supabaseServer } from './supabaseServer';
 import {
   describeToolAccessPolicy,
@@ -35,6 +34,10 @@ export async function loadToolAccessPolicy(
   now = new Date(),
   options?: { requireSavedLock?: boolean },
 ): Promise<ToolAccessPolicy> {
+  const checkoutAttempt = await reconcileOpenCheckoutAttempts(userId).catch((error: unknown) => {
+    console.error('Checkout payment state could not be read', error instanceof Error ? error.message : 'unknown');
+    return null;
+  });
   const storedInvoices = await listStoredInvoices(userId);
   const needsStripe = storedInvoices.some((invoice) => (
     (invoice.status === 'open' || invoice.status === 'uncollectible')
@@ -45,12 +48,11 @@ export async function loadToolAccessPolicy(
       console.error('Stripe payment state could not be reconciled', error instanceof Error ? error.message : 'unknown');
     });
   }
-  const [snapshot, account, invoices, attention, paymentAttemptAt, pricing] = await Promise.all([
+  const [snapshot, account, invoices, attention, pricing] = await Promise.all([
     loadChargeSnapshot(userId, now),
     loadBillingAccount(userId),
     needsStripe ? listStoredInvoices(userId) : Promise.resolve(storedInvoices),
     listPaymentAttention(userId),
-    newestOpenCheckoutAt(userId),
     loadAccountPricingInputs([userId]),
   ]);
   const input = pricing.get(userId) ?? null;
@@ -83,6 +85,7 @@ export async function loadToolAccessPolicy(
   }));
   for (const note of attention) {
     if (accessInvoices.some((invoice) => invoice.id === note.invoiceId)) continue;
+    if (accessInvoices.some((invoice) => invoice.status === 'open' && invoice.collection === note.collection)) continue;
     accessInvoices.push({
       id: note.invoiceId,
       role: 'renewal',
@@ -108,8 +111,10 @@ export async function loadToolAccessPolicy(
     nextBillingAt: snapshot?.nextBillingAt ?? null,
     scheduledChargeCents: snapshot?.scheduledChargeCents ?? 0,
     scheduledChargeAt: snapshot?.scheduledChargeAt ?? null,
-    paymentAttemptAt,
+    paymentAttemptAt: null,
     trialActive,
+    checkoutAttempt,
+    alreadyLocked: Boolean(account?.tool_access_locked),
   });
   if (options?.requireSavedLock) {
     await syncHouseholdToolAccess(userId, policy.locked, policy.reason);

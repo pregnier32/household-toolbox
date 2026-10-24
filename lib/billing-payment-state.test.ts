@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import { classifyStripePayment } from './billing-payment-state';
+import { classifyStripePayment, describeCheckoutAttempt } from './billing-payment-state';
 
 const NOW = new Date('2026-10-24T15:00:00.000Z');
 
@@ -43,7 +43,14 @@ test('authentication required, failed, and overdue stay distinct', () => {
     dueAt: '2026-10-31T15:00:00.000Z',
     paymentIntentStatus: null,
     now: NOW,
-  }), 'processing');
+  }), null);
+  assert.equal(classifyStripePayment({
+    invoiceStatus: 'open',
+    amountRemainingCents: 400,
+    dueAt: null,
+    paymentIntentStatus: null,
+    now: NOW,
+  }), null);
   assert.equal(classifyStripePayment({
     invoiceStatus: 'paid',
     amountRemainingCents: 0,
@@ -51,4 +58,42 @@ test('authentication required, failed, and overdue stay distinct', () => {
     paymentIntentStatus: 'succeeded',
     now: NOW,
   }), null);
+});
+
+test('Checkout status is not inferred as processing', () => {
+  assert.equal(describeCheckoutAttempt({
+    paymentStatus: 'unpaid',
+    intentStatus: 'requires_payment_method',
+    paymentError: false,
+  }), 'incomplete');
+  assert.equal(describeCheckoutAttempt({
+    paymentStatus: 'unpaid',
+    intentStatus: 'requires_payment_method',
+    paymentError: true,
+  }), 'failed');
+  assert.equal(describeCheckoutAttempt({
+    paymentStatus: 'unpaid',
+    intentStatus: 'canceled',
+    paymentError: false,
+  }), 'failed');
+  assert.equal(describeCheckoutAttempt({
+    paymentStatus: 'unpaid',
+    intentStatus: 'requires_action',
+    paymentError: false,
+  }), 'authentication_required');
+  assert.equal(describeCheckoutAttempt({
+    paymentStatus: 'unpaid',
+    intentStatus: 'processing',
+    paymentError: false,
+  }), 'processing');
+  assert.equal(describeCheckoutAttempt({
+    paymentStatus: 'paid',
+    intentStatus: 'succeeded',
+    paymentError: false,
+  }), 'succeeded');
+  assert.equal(describeCheckoutAttempt({
+    paymentStatus: 'unpaid',
+    intentStatus: null,
+    paymentError: false,
+  }), 'incomplete');
 });

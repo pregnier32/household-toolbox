@@ -6,18 +6,19 @@
  * one, through a webhook or a reconciliation read.
  *
  * Recovery:
- * - processing: wait. Tool access stays available. Plan & Billing, the reconcile
- *   job, and the payment webhooks re-read Stripe. A cached read is refreshed
- *   about every five minutes; the refresh keeps processing when Stripe still
- *   says processing.
+ * - processing: wait, and only when Stripe's PaymentIntent status is processing
+ *   or requires_capture for the payment that covers this debt. An open Checkout
+ *   Session, a missing PaymentIntent, or an invoice with no payment state is
+ *   not processing and does not unlock an unpaid household.
  * - authentication_required: the customer confirms the payment in the billing
  *   portal. Access stays paused until Stripe reports success or failure.
- * - failed: the customer updates the payment method or pays the open invoice.
+ * - failed: a decline, requires_payment_method after a payment error, or a
+ *   canceled PaymentIntent. The customer can retry from Plan & Billing.
  *   Removing the tools that require payment also restores the remaining tools.
  * - overdue: the invoice due date has passed and Stripe is not processing a
  *   payment. The same recovery as a failed payment applies.
  * If Stripe cannot be reached, the last stored state is kept. A missing state
- * stays pending rather than being marked failed.
+ * is not marked failed and is not treated as processing.
  */
 
 import type Stripe from 'stripe';
@@ -46,8 +47,33 @@ export function classifyStripePayment(input: {
     const due = Date.parse(input.dueAt);
     if (!Number.isNaN(due) && due <= input.now.getTime()) return 'overdue';
   }
-  if (status === 'open') return 'processing';
   return null;
+}
+
+export type CheckoutAttemptState = 'incomplete' | 'processing' | 'failed' | 'authentication_required' | 'succeeded';
+
+export type CheckoutAttempt = {
+  state: CheckoutAttemptState;
+  amountCents: number;
+};
+
+/**
+ * An open Checkout Session is incomplete until Stripe reports a PaymentIntent
+ * result. requires_payment_method is the session's starting status; it is a
+ * decline only after Stripe records a payment error, or when the failure event
+ * itself is the confirmation.
+ */
+export function describeCheckoutAttempt(input: {
+  paymentStatus: string | null;
+  intentStatus: string | null;
+  paymentError: boolean;
+}): CheckoutAttemptState {
+  if (input.paymentStatus === 'paid' || input.intentStatus === 'succeeded') return 'succeeded';
+  if (input.intentStatus === 'processing' || input.intentStatus === 'requires_capture') return 'processing';
+  if (input.intentStatus === 'requires_action' || input.intentStatus === 'requires_confirmation') return 'authentication_required';
+  if (input.intentStatus === 'canceled' || input.intentStatus === 'cancelled') return 'failed';
+  if (input.paymentError && (input.intentStatus === 'requires_payment_method' || input.intentStatus == null)) return 'failed';
+  return 'incomplete';
 }
 
 type InvoicePaymentCarrier = {
@@ -136,6 +162,79 @@ export async function reconcileCustomerPayments(userId: string, now = new Date()
     });
     await saveInvoiceCollection({ stripeInvoiceId: invoice.id, collection, dueAt });
   }
+}
+
+const ATTEMPT_RANK: Record<CheckoutAttemptState, number> = {
+  failed: 4,
+  authentication_required: 3,
+  processing: 2,
+  incomplete: 1,
+  succeeded: 0,
+};
+
+export async function rememberCheckoutIntent(
+  userId: string,
+  intent: { id: string; status: string | null; livemode?: boolean | null; customer?: string | { id: string } | null },
+  forced?: 'failed' | 'authentication_required',
+): Promise<void> {
+  if (intent.livemode) return;
+  const state = forced ?? describeCheckoutAttempt({
+    paymentStatus: null,
+    intentStatus: intent.status,
+    paymentError: false,
+  });
+  const { clearPaymentAttention, notePaymentAttention } = await import('./billing-store');
+  if (state === 'failed') {
+    await notePaymentAttention(userId, intent.id, 'failed');
+    return;
+  }
+  if (state === 'authentication_required') {
+    await notePaymentAttention(userId, intent.id, 'authentication_required');
+    return;
+  }
+  if (state !== 'succeeded') return;
+  await clearPaymentAttention(intent.id);
+  const customer = typeof intent.customer === 'string' ? intent.customer : intent.customer?.id ?? null;
+  if (!customer) return;
+  const { reconcileCheckoutPayments } = await import('./billing-sync');
+  await reconcileCheckoutPayments(userId, customer);
+}
+
+/**
+ * Reads open Checkout Sessions from Stripe. A paid session is recorded once.
+ * A decline or a canceled PaymentIntent is stored as a failure so a missing
+ * webhook cannot leave the household looking like a payment in progress.
+ * Returns the strongest non-success result. A failure outranks processing.
+ */
+export async function reconcileOpenCheckoutAttempts(userId: string): Promise<CheckoutAttempt | null> {
+  const { clearPaymentAttention, listOpenCheckoutSessions, notePaymentAttention } = await import('./billing-store');
+  const sessions = await listOpenCheckoutSessions(userId);
+  if (sessions.length === 0) return null;
+  const { stripeServer } = await import('./stripe-server');
+  const stripe = stripeServer();
+  let chosen: CheckoutAttempt | null = null;
+  for (const row of sessions) {
+    const session = await stripe.checkout.sessions.retrieve(row.stripeSessionId, { expand: ['payment_intent'] });
+    if (session.livemode) continue;
+    const intent = session.payment_intent && typeof session.payment_intent !== 'string' ? session.payment_intent : null;
+    const state = describeCheckoutAttempt({
+      paymentStatus: session.payment_status,
+      intentStatus: intent?.status ?? null,
+      paymentError: Boolean(intent?.last_payment_error),
+    });
+    const amountCents = intent?.amount ?? session.amount_total ?? 0;
+    if (state === 'succeeded') {
+      const { recordCheckoutSessionPayment } = await import('./billing-sync');
+      await recordCheckoutSessionPayment(userId, session);
+      if (intent) await clearPaymentAttention(intent.id);
+      continue;
+    }
+    if (intent && state === 'failed') await notePaymentAttention(userId, intent.id, 'failed');
+    if (intent && state === 'authentication_required') await notePaymentAttention(userId, intent.id, 'authentication_required');
+    const attempt: CheckoutAttempt = { state, amountCents };
+    if (!chosen || ATTEMPT_RANK[state] > ATTEMPT_RANK[chosen.state]) chosen = attempt;
+  }
+  return chosen;
 }
 
 export function collectionNeedsRefresh(checkedAt: string | null, now: Date): boolean {

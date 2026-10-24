@@ -39,6 +39,25 @@ test('a paid Checkout without an invoice is recorded from the PaymentIntent and 
   assert.deepEqual(replay, { action: 'ignore' });
 });
 
+test('a declined Checkout is not recorded, and the successful retry is recorded once', () => {
+  assert.deepEqual(checkout({ paymentStatus: 'unpaid', paymentIntentId: 'pi_declined' }), { action: 'ignore' });
+  const paid = checkout({ paymentStatus: 'paid', paymentIntentId: 'pi_retry' });
+  assert.deepEqual(paid, {
+    action: 'record-payment',
+    paymentIntentId: 'pi_retry',
+    amountCents: 200,
+    periodStart: PERIOD,
+  });
+  const again = checkout({ paymentStatus: 'paid', paymentIntentId: 'pi_retry', recordedIds: ['pi_retry'] });
+  assert.deepEqual(again, { action: 'ignore' });
+  assert.equal(remainingDueCents(200, [{
+    periodStart: PERIOD,
+    role: 'supplemental',
+    status: 'paid',
+    amountCents: 200,
+  }], PERIOD), 0);
+});
+
 test('an unpaid or live Checkout payment is not recorded', () => {
   assert.deepEqual(checkout({ paymentStatus: 'unpaid' }), { action: 'ignore' });
   assert.deepEqual(checkout({ livemode: true }), { action: 'ignore' });

@@ -294,6 +294,28 @@ export async function listPaymentAttention(userId: string): Promise<PaymentAtten
   });
 }
 
+/** Open Checkout rows. An open session is not a processing payment and must not unlock tools. */
+export async function listOpenCheckoutSessions(userId: string): Promise<Array<{ stripeSessionId: string; createdAt: string }>> {
+  const { data, error } = await supabaseServer
+    .from('billing_checkout_sessions')
+    .select('stripe_session_id, created_at')
+    .eq('user_id', userId)
+    .eq('status', 'open')
+    .order('created_at', { ascending: false })
+    .limit(5);
+  if (error) {
+    if (missingRelation(error)) return [];
+    throw error;
+  }
+  return (data ?? []).flatMap((row) => {
+    const stripeSessionId = row.stripe_session_id;
+    const createdAt = row.created_at;
+    if (typeof stripeSessionId !== 'string' || typeof createdAt !== 'string') return [];
+    return [{ stripeSessionId, createdAt }];
+  });
+}
+
+/** Timestamp of the newest open Checkout. This is not a processing payment and does not grant access. */
 export async function newestOpenCheckoutAt(userId: string): Promise<string | null> {
   const { data, error } = await supabaseServer
     .from('billing_checkout_sessions')

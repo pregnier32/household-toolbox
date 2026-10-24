@@ -4,7 +4,7 @@ import { finalizedRenewalAction, renewalDraftMayBeCorrected } from '@/lib/billin
 import { withBillingLock } from '@/lib/billing-lock';
 import { subscriptionItemId, subscriptionPeriodEnd } from '@/lib/billing-subscription';
 import { clearPaymentAttention, loadBillingAccount, saveBillingAccount } from '@/lib/billing-store';
-import { reconcileCustomerPayments, rememberInvoicePaymentState } from '@/lib/billing-payment-state';
+import { reconcileCustomerPayments, rememberCheckoutIntent, rememberInvoicePaymentState } from '@/lib/billing-payment-state';
 import { loadToolAccessPolicy } from '@/lib/billing-access';
 import { createAnchoredSubscription, createSupplementalInvoice, recordCheckoutSessionPayment, recordStripeInvoice, refreshSavedPaymentMethod, settleUnintendedSubscriptionUpdate, syncSavedPaymentMethod } from '@/lib/billing-sync';
 import { supabaseServer } from '@/lib/supabaseServer';
@@ -249,6 +249,12 @@ export async function processStripeEvent(event: Stripe.Event): Promise<void> {
       if (intent.livemode) return;
       const userId = intent.metadata?.hhtb_user_id || await userIdForCustomer(customerId(intent.customer));
       if (!userId) return;
+      const forced = event.type === 'payment_intent.payment_failed' || event.type === 'payment_intent.canceled'
+        ? 'failed' as const
+        : event.type === 'payment_intent.requires_action'
+          ? 'authentication_required' as const
+          : undefined;
+      await rememberCheckoutIntent(userId, intent, forced);
       await reconcileCustomerPayments(userId);
       await loadToolAccessPolicy(userId);
       return;

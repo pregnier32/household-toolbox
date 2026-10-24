@@ -8,6 +8,7 @@ import { formatCents } from './account-pricing';
 import { billingDateLabel } from './billing-cycle';
 import type { InvoiceRole, InvoiceStatus } from './billing-ledger';
 
+/** Retained for callers. An open Checkout inside this window does not grant tool access. */
 export const PAYMENT_PENDING_MS = 15 * 60 * 1000;
 
 export const LOCKED_ADMIN_MESSAGE = 'Tool access is paused because your account needs payment attention. All household tools, including free tools, are temporarily unavailable. Update your payment or remove the tools requiring payment to restore access. Your saved data is safe.';
@@ -74,10 +75,17 @@ export type ToolAccessPolicyInput = {
   owedNowCents: number;
   nextAmountCents: number;
   nextBillingAt: string | null;
-  /** When the latest checkout was opened. This only covers a checkout that has not produced an invoice. A stored processing payment has no time limit. */
+  /**
+   * When the latest checkout was opened. Opening Checkout does not grant access.
+   * Kept so older callers still compile; the decision does not read it.
+   */
   paymentAttemptAt: string | null;
   trialActive: boolean;
   pendingWindowMs?: number;
+  /** Stripe's result for the Checkout that covers this debt. Incomplete is not processing. */
+  checkoutAttempt?: { state: 'incomplete' | 'processing' | 'failed' | 'authentication_required' | 'succeeded'; amountCents: number } | null;
+  /** The household is already locked for unpaid tools. Unknown state must not clear that lock. */
+  alreadyLocked?: boolean;
   /** Full monthly price added when the next trial ends inside this period. Not the renewal. */
   scheduledChargeCents?: number;
   scheduledChargeAt?: string | null;
@@ -107,14 +115,6 @@ function countsAsToolInvoice(invoice: AccessInvoice): boolean {
   return invoice.role !== 'setup' || invoice.amountCents > 0;
 }
 
-function attemptIsFresh(attemptAt: string | null, now: Date, windowMs: number): boolean {
-  if (!attemptAt) return false;
-  const started = Date.parse(attemptAt);
-  if (Number.isNaN(started)) return false;
-  const age = now.getTime() - started;
-  return age >= 0 && age <= windowMs;
-}
-
 type Attention = 'processing' | 'failed' | 'authentication_required' | 'overdue';
 
 function classifyInvoice(invoice: AccessInvoice): Attention | null {
@@ -125,9 +125,12 @@ function classifyInvoice(invoice: AccessInvoice): Attention | null {
   if (invoice.collection === 'overdue') return 'overdue';
   if (invoice.status === 'uncollectible') return unpaid(invoice) > 0 ? 'failed' : null;
   if (invoice.collection === 'processing') return 'processing';
-  if (invoice.status !== 'open' || unpaid(invoice) <= 0) return null;
-  // An open invoice without a Stripe result stays pending. Age does not make it failed.
-  return 'processing';
+  return null;
+}
+
+function processingCoversDebt(invoices: AccessInvoice[], owed: number): boolean {
+  if (owed <= 0) return false;
+  return invoices.some((invoice) => classifyInvoice(invoice) === 'processing' && unpaid(invoice) >= owed);
 }
 
 function subscriptionEnded(input: ToolAccessPolicyInput): boolean {
@@ -215,23 +218,23 @@ function debtNoticeFor(cents: number): string | null {
 }
 
 export function describeToolAccessPolicy(input: ToolAccessPolicyInput): ToolAccessPolicy {
-  const windowMs = input.pendingWindowMs ?? PAYMENT_PENDING_MS;
   const causingTools = input.tools
     .filter((tool) => tool.requiresPaymentNow)
     .map((tool) => ({ toolId: tool.toolId, name: tool.name }));
   const owed = Math.max(0, input.owedNowCents);
   const debt = debtCents(input.invoices);
-  const attemptFresh = attemptIsFresh(input.paymentAttemptAt, input.now, windowMs);
+  const checkout = input.checkoutAttempt ?? null;
+  const checkoutFailed = checkout?.state === 'failed';
+  const checkoutAuth = checkout?.state === 'authentication_required';
+  const checkoutProcessing = checkout?.state === 'processing' && checkout.amountCents >= owed && owed > 0;
   let authentication = false;
   let failed = input.subscriptionStatus === 'past_due';
   let overdue = false;
-  let processing = false;
   for (const invoice of input.invoices) {
     const attention = classifyInvoice(invoice);
     if (attention === 'authentication_required') authentication = true;
     else if (attention === 'failed') failed = true;
     else if (attention === 'overdue') overdue = true;
-    else if (attention === 'processing') processing = true;
   }
   const ended = subscriptionEnded(input);
   const current = subscriptionCurrent(input);
@@ -261,12 +264,12 @@ export function describeToolAccessPolicy(input: ToolAccessPolicyInput): ToolAcce
   }
 
   let reason: ToolAccessReason = 'open';
-  if (authentication) reason = 'authentication_required';
-  else if (failed) reason = 'payment_failed';
+  if (authentication || checkoutAuth) reason = 'authentication_required';
+  else if (failed || checkoutFailed) reason = 'payment_failed';
   else if (overdue) reason = 'payment_overdue';
   else if (ended) reason = 'subscription_ended';
-  else if (processing || attemptFresh) reason = 'payment_processing';
-  else if (owed > 0 && !current) reason = 'setup_required';
+  else if (processingCoversDebt(input.invoices, owed) || checkoutProcessing) reason = 'payment_processing';
+  else if (owed > 0 && (!current || input.alreadyLocked)) reason = 'setup_required';
 
   if (reason === 'payment_processing') {
     return {
