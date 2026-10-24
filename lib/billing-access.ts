@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server';
 import { loadChargeSnapshot } from './billing-amount';
+import { remainingDueCents } from './billing-ledger';
 import { describeBillingCycle } from './billing-cycle';
 import { loadFrozenPeriod } from './billing-period-store';
 import { loadAccountPricingInputs } from './load-account-pricing';
@@ -63,10 +64,11 @@ export async function loadToolAccessPolicy(
     }
     const cycle = describeBillingCycle(input, snapshot.signupAt, now, frozen);
     trialActive = cycle.current.tools.some((tool) => tool.inTrial);
+    const remaining = snapshot.periodStart ? remainingDueCents(snapshot.owedNowCents, invoices, snapshot.periodStart) : snapshot.owedNowCents;
     tools = cycle.current.tools.map((tool) => ({
       toolId: tool.toolId,
       name: tool.name,
-      requiresPaymentNow: tool.billable && tool.expectedMonthlyCents > 0,
+      requiresPaymentNow: remaining > 0 && tool.billable && tool.expectedMonthlyCents > 0,
     }));
   }
   const notes = new Map(attention.map((item) => [item.invoiceId, item.collection]));
@@ -99,9 +101,13 @@ export async function loadToolAccessPolicy(
     cancelAtPeriodEnd: Boolean(account?.cancel_at_period_end),
     currentPeriodEnd: account?.current_period_end ?? null,
     hasSavedPaymentMethod: Boolean(account?.card_brand && account.card_last4),
-    owedNowCents: snapshot?.owedNowCents ?? 0,
+    owedNowCents: snapshot?.periodStart
+      ? remainingDueCents(snapshot.owedNowCents, invoices, snapshot.periodStart)
+      : (snapshot?.owedNowCents ?? 0),
     nextAmountCents: snapshot?.nextAmountCents ?? 0,
     nextBillingAt: snapshot?.nextBillingAt ?? null,
+    scheduledChargeCents: snapshot?.scheduledChargeCents ?? 0,
+    scheduledChargeAt: snapshot?.scheduledChargeAt ?? null,
     paymentAttemptAt,
     trialActive,
   });

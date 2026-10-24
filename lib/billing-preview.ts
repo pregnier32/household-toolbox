@@ -599,8 +599,14 @@ export function buildCycleCustomerStatement(
   signupAt: string,
   effectiveAt: Date,
   frozen: PeriodToolRecord[] | null,
+  options?: { paidTowardPeriodCents?: number },
 ): { statement: PlanStatementRow[]; snapshot: BillingCycleSnapshot; billingCycle: CustomerBillingCycle } {
   const snapshot = describeBillingCycle(input, signupAt, effectiveAt, frozen);
+  const summary = describeBillingSummary(input, signupAt, effectiveAt, frozen);
+  const paidSpecified = options?.paidTowardPeriodCents != null;
+  const paid = paidSpecified ? Math.max(0, options?.paidTowardPeriodCents ?? 0) : 0;
+  const remainingDueCents = Math.max(0, summary.owedNowCents - paid);
+  const chargeSatisfied = paidSpecified && remainingDueCents <= 0;
   const notes = new Map<string, string>();
   for (const tool of snapshot.current.tools) {
     if (tool.inTrial) notes.set(tool.toolId, trialStatusNote(tool.daysRemaining, tool.trialEndsAt));
@@ -611,6 +617,7 @@ export function buildCycleCustomerStatement(
   for (const tool of snapshot.period?.tools ?? []) {
     if (!tool.inTrial || notes.has(tool.toolId)) continue;
     const live = snapshot.current.tools.find((item) => item.toolId === tool.toolId);
+    if (chargeSatisfied) continue;
     notes.set(tool.toolId, live?.inTrial
       ? trialStatusNote(live.daysRemaining, live.trialEndsAt)
       : 'Due now');
@@ -634,7 +641,6 @@ export function buildCycleCustomerStatement(
     storageRow.detail = `${storageLabel(snapshot.current.storageUsedBytes)} of ${storageLabel(snapshot.current.effectiveStorageBytes)}`;
   }
 
-  const summary = describeBillingSummary(input, signupAt, effectiveAt, frozen);
   const seen = new Set(snapshot.periodRecords.map((record) => record.toolId));
   const periodCents = snapshot.schedule.hasStarted ? (snapshot.period?.effectiveMonthlyCents ?? 0) : 0;
   const storageCentsForGap = Math.round(Math.max(0, input.storageAddonGb) * STORAGE_ADDON_MONTHLY_CENTS);
@@ -657,7 +663,7 @@ export function buildCycleCustomerStatement(
         benefitId: null,
         note: inTrial
           ? trialStatusNote(live?.daysRemaining ?? null, live?.trialEndsAt ?? null)
-          : dueNow ? 'Due now' : null,
+          : dueNow && !chargeSatisfied ? 'Due now' : null,
       };
     });
   const storageAt = statement.findIndex((row) => row.id === 'section-storage');
@@ -679,7 +685,7 @@ export function buildCycleCustomerStatement(
       estimatedNextBill: formatCents(summary.renewalCents),
       nextBillingAt: summary.renewalAt,
       anchorDate: billingDateLabel(summary.anchorAt),
-      amountDueNow: formatCents(summary.owedNowCents),
+      amountDueNow: formatCents(remainingDueCents),
       scheduledChargeDate: summary.scheduledChargeAt ? billingDateLabel(summary.scheduledChargeAt) : null,
       scheduledChargeAmount: summary.scheduledChargeCents > 0 ? formatCents(summary.scheduledChargeCents) : null,
       renewalDate: billingDateLabel(summary.renewalAt),

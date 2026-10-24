@@ -43,6 +43,11 @@ export function invoicedCents(invoices: LedgerInvoice[], periodStart: string | n
   }, 0);
 }
 
+/** Amount still unpaid for this period. A paid Checkout or invoice reduces it. It does not go below zero. */
+export function remainingDueCents(owedCents: number, invoices: LedgerInvoice[], periodStart: string | null): number {
+  return Math.max(0, owedCents - paidCents(invoices, periodStart));
+}
+
 export function paidCents(invoices: LedgerInvoice[], periodStart: string | null): number {
   if (!periodStart) return 0;
   return invoices.reduce((sum, invoice) => {

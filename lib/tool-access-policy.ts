@@ -78,6 +78,9 @@ export type ToolAccessPolicyInput = {
   paymentAttemptAt: string | null;
   trialActive: boolean;
   pendingWindowMs?: number;
+  /** Full monthly price added when the next trial ends inside this period. Not the renewal. */
+  scheduledChargeCents?: number;
+  scheduledChargeAt?: string | null;
 };
 
 export type ToolAccessPolicy = {
@@ -184,17 +187,26 @@ function recoveryFor(reason: ToolAccessReason, setupComplete: boolean): ToolAcce
   return [];
 }
 
-function warningFor(nextAmountCents: number, nextBillingAt: string | null): string | null {
-  if (nextAmountCents <= 0) return null;
-  const amount = formatCents(nextAmountCents);
-  const when = nextBillingAt ? billingDateLabel(nextBillingAt) : null;
+function warningFor(input: ToolAccessPolicyInput): string | null {
+  const scheduled = Math.max(0, input.scheduledChargeCents ?? 0);
+  if (scheduled > 0 && input.scheduledChargeAt) {
+    const trial = `A trial ends ${billingDateLabel(input.scheduledChargeAt)} and adds ${formatCents(scheduled)}. That charge is not the monthly renewal.`;
+    const renewal = input.nextAmountCents > 0 && input.nextBillingAt
+      ? ` The monthly renewal on ${billingDateLabel(input.nextBillingAt)} is ${formatCents(input.nextAmountCents)}.`
+      : '';
+    return `${trial}${renewal} ${LOCK_WARNING_SENTENCE}`;
+  }
+  if (input.nextAmountCents <= 0) return null;
+  const amount = formatCents(input.nextAmountCents);
+  const when = input.nextBillingAt ? billingDateLabel(input.nextBillingAt) : null;
   const bill = when ? `The estimated next bill is ${amount} on ${when}.` : `The estimated next bill is ${amount}.`;
   return `${bill} ${LOCK_WARNING_SENTENCE}`;
 }
 
 function upcomingWarning(input: ToolAccessPolicyInput, subscriptionIsCurrent: boolean): string | null {
+  if (input.hasSavedPaymentMethod && subscriptionIsCurrent && input.owedNowCents <= 0) return null;
   if (subscriptionIsCurrent && !input.trialActive) return null;
-  return warningFor(input.nextAmountCents, input.nextBillingAt);
+  return warningFor(input);
 }
 
 function debtNoticeFor(cents: number): string | null {

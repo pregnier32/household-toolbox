@@ -6,7 +6,7 @@ import { subscriptionItemId, subscriptionPeriodEnd } from '@/lib/billing-subscri
 import { clearPaymentAttention, loadBillingAccount, saveBillingAccount } from '@/lib/billing-store';
 import { reconcileCustomerPayments, rememberInvoicePaymentState } from '@/lib/billing-payment-state';
 import { loadToolAccessPolicy } from '@/lib/billing-access';
-import { createAnchoredSubscription, createSupplementalInvoice, recordStripeInvoice, refreshSavedPaymentMethod, settleUnintendedSubscriptionUpdate, syncSavedPaymentMethod } from '@/lib/billing-sync';
+import { createAnchoredSubscription, createSupplementalInvoice, recordCheckoutSessionPayment, recordStripeInvoice, refreshSavedPaymentMethod, settleUnintendedSubscriptionUpdate, syncSavedPaymentMethod } from '@/lib/billing-sync';
 import { supabaseServer } from '@/lib/supabaseServer';
 import { stripeServer } from '@/lib/stripe-server';
 
@@ -187,11 +187,7 @@ async function processCheckoutCompleted(session: Stripe.Checkout.Session, eventC
     }
     if (customer) await rememberCard(userId);
     await supabaseServer.from('billing_checkout_sessions').update({ status: 'complete' }).eq('stripe_session_id', session.id);
-    const invoiceId = typeof session.invoice === 'string' ? session.invoice : session.invoice?.id;
-    if (invoiceId) {
-      const invoice = await stripe.invoices.retrieve(invoiceId);
-      await recordStripeInvoice(userId, invoice, session.metadata?.hhtb_period_start || null);
-    }
+    await recordCheckoutSessionPayment(userId, session);
   });
 }
 

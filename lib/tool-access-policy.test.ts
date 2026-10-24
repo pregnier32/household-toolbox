@@ -80,6 +80,42 @@ test('a positive future bill during a valid trial stays unlocked and warns', () 
   assert.equal(toolAccessBlocked(result, true), false);
 });
 
+test('a saved card and a current subscription hide the routine renewal warning', () => {
+  const result = policy({
+    tools: [{ ...PAID, requiresPaymentNow: false }],
+    trialActive: true,
+    nextAmountCents: 400,
+    nextBillingAt: '2026-11-24T16:00:00.000Z',
+    scheduledChargeCents: 200,
+    scheduledChargeAt: '2026-10-31T16:00:00.000Z',
+    owedNowCents: 0,
+    hasSavedPaymentMethod: true,
+    subscriptionStatus: 'active',
+  });
+  assert.equal(result.locked, false);
+  assert.equal(result.warning, null);
+  assert.equal(result.reason, 'open');
+  assert.equal(result.causingTools.length, 0);
+  assert.equal(toolAccessNotice(result, 'admin').message, null);
+});
+
+test('a household without a card is warned about the trial-end charge before the renewal', () => {
+  const result = policy({
+    tools: [{ ...PAID, requiresPaymentNow: false }],
+    trialActive: true,
+    owedNowCents: 0,
+    nextAmountCents: 400,
+    nextBillingAt: '2026-11-24T16:00:00.000Z',
+    scheduledChargeCents: 200,
+    scheduledChargeAt: '2026-10-31T16:00:00.000Z',
+  });
+  assert.equal(result.locked, false);
+  assert.match(result.warning || '', /trial ends October 31, 2026 and adds \$2\.00/);
+  assert.match(result.warning || '', /not the monthly renewal/);
+  assert.match(result.warning || '', /monthly renewal on November 24, 2026 is \$4\.00/);
+  assert.doesNotMatch(result.warning || '', /next bill/);
+});
+
 test('an active unpaid tool locks paid and free tools, including after a failed charge', () => {
   const missingSetup = policy({
     tools: [PAID, FREE],

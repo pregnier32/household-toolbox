@@ -8,6 +8,7 @@ import { loadFrozenPeriod, loadSignupAt, materializeBillingPeriod } from '@/lib/
 import { formatStorageBytes } from '@/lib/user-storage';
 import { getAccountPricingProjection } from '@/lib/load-account-pricing';
 import { persistAccountNotices } from '@/lib/promotion-service';
+import { paidCents } from '@/lib/billing-ledger';
 import { listStoredInvoices, loadBillingAccount } from '@/lib/billing-store';
 import { loadChargeSnapshot } from '@/lib/billing-amount';
 import { describePaymentWorkflow } from '@/lib/billing-payment-workflow';
@@ -55,6 +56,7 @@ export async function GET() {
     });
     const state = projection.current;
     const signupAt = await loadSignupAt(user.id);
+    const invoices = await listStoredInvoices(user.id);
     let statement = buildCustomerStatement(projection.input, state);
     let billingCycle = null;
     if (signupAt) {
@@ -66,14 +68,15 @@ export async function GET() {
           ? await materializeBillingPeriod(projection.input, signupAt, now)
           : loaded.frozen;
       }
-      const cycle = buildCycleCustomerStatement(projection.input, signupAt, now, frozen);
+      const cycle = buildCycleCustomerStatement(projection.input, signupAt, now, frozen, {
+        paidTowardPeriodCents: paidCents(invoices, schedule.periodStart),
+      });
       statement = cycle.statement;
       billingCycle = cycle.billingCycle;
     }
     const cardSync = await syncSavedPaymentMethod(user.id).catch(() => null);
     const account = await loadBillingAccount(user.id);
     const snapshot = await loadChargeSnapshot(user.id, now);
-    const invoices = await listStoredInvoices(user.id);
     const paymentMethodStatus = cardSync?.state
       ?? (account?.card_brand && account.card_last4 ? 'saved' : account?.stripe_customer_id ? 'pending' : 'absent');
     const paymentMethodLabel = paymentMethodStatus === 'saved'

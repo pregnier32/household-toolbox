@@ -1,6 +1,7 @@
 import type Stripe from 'stripe';
 import type { Json } from '@/src/types/supabase';
 import { loadChargeSnapshot, type ChargeSnapshot } from '@/lib/billing-amount';
+import { describeCheckoutSettlement, supersededCheckoutPaymentIds } from '@/lib/billing-checkout-payment';
 import { supplementalInvoiceBlocked } from '@/lib/billing-cycle';
 import { invoicedCents, uninvoicedCents, type InvoiceRole, type InvoiceStatus, type LedgerInvoice } from '@/lib/billing-ledger';
 import {
@@ -299,18 +300,83 @@ async function backfillCustomerInvoices(userId: string, customerId: string, peri
   }
 }
 
+function paymentIntentIdsOnInvoice(invoice: Stripe.Invoice): string[] {
+  const ids: string[] = [];
+  for (const item of invoice.payments?.data ?? []) {
+    const paymentIntent = item.payment?.payment_intent;
+    if (typeof paymentIntent === 'string') ids.push(paymentIntent);
+    else if (paymentIntent && typeof paymentIntent === 'object' && 'id' in paymentIntent && typeof paymentIntent.id === 'string') ids.push(paymentIntent.id);
+  }
+  return ids;
+}
+
 export async function recordStripeInvoice(userId: string, invoice: Stripe.Invoice, periodStart: string | null, overcharge = false): Promise<void> {
-  const metadataPeriod = invoice.metadata?.hhtb_period_start;
+  const detailed = invoice.status === 'paid' && !invoice.payments?.data?.length
+    ? await stripeServer().invoices.retrieve(invoice.id, { expand: ['payments.data.payment.payment_intent'] })
+    : invoice;
+  if (detailed.livemode) return;
+  const metadataPeriod = detailed.metadata?.hhtb_period_start;
   await upsertStoredInvoice({
     userId,
-    stripeInvoiceId: invoice.id,
+    stripeInvoiceId: detailed.id,
     periodStart: metadataPeriod || periodStart,
-    role: roleForStripeInvoice(invoice),
-    status: invoiceStatus(invoice.status),
-    amountCents: invoice.total,
-    amountPaidCents: invoice.amount_paid,
+    role: roleForStripeInvoice(detailed),
+    status: invoiceStatus(detailed.status),
+    amountCents: detailed.total,
+    amountPaidCents: detailed.amount_paid,
     overcharge,
   });
+  const aliases = supersededCheckoutPaymentIds(detailed.id, paymentIntentIdsOnInvoice(detailed));
+  if (aliases.length === 0) return;
+  const removed = await supabaseServer.from('billing_invoices').delete().eq('user_id', userId).in('stripe_invoice_id', aliases);
+  if (removed.error) throw removed.error;
+}
+
+export async function recordCheckoutSessionPayment(userId: string, session: Stripe.Checkout.Session): Promise<void> {
+  if (session.livemode || session.mode !== 'payment') return;
+  const stripe = stripeServer();
+  const detailed = session.invoice || session.payment_status !== 'paid'
+    ? session
+    : await stripe.checkout.sessions.retrieve(session.id, { expand: ['invoice', 'payment_intent'] });
+  const invoiceRef = detailed.invoice;
+  const intentRef = detailed.payment_intent;
+  const invoiceId = typeof invoiceRef === 'string' ? invoiceRef : invoiceRef?.id ?? null;
+  const paymentIntentId = typeof intentRef === 'string' ? intentRef : intentRef?.id ?? null;
+  const existing = await listStoredInvoices(userId);
+  const decision = describeCheckoutSettlement({
+    livemode: Boolean(detailed.livemode),
+    mode: detailed.mode,
+    paymentStatus: detailed.payment_status,
+    amountCents: detailed.amount_total ?? 0,
+    invoiceId,
+    paymentIntentId,
+    periodStart: detailed.metadata?.hhtb_period_start || null,
+    recordedIds: existing.map((row) => row.stripeInvoiceId),
+  });
+  if (decision.action === 'ignore') return;
+  if (decision.action === 'record-invoice') {
+    const invoice = await stripe.invoices.retrieve(decision.invoiceId, { expand: ['payments.data.payment.payment_intent'] });
+    if (invoice.livemode) return;
+    await recordStripeInvoice(userId, invoice, detailed.metadata?.hhtb_period_start || null);
+    return;
+  }
+  await upsertStoredInvoice({
+    userId,
+    stripeInvoiceId: decision.paymentIntentId,
+    periodStart: decision.periodStart,
+    role: 'supplemental',
+    status: 'paid',
+    amountCents: decision.amountCents,
+    amountPaidCents: decision.amountCents,
+  });
+}
+
+export async function reconcileCheckoutPayments(userId: string, customerId: string): Promise<void> {
+  const sessions = await stripeServer().checkout.sessions.list({ customer: customerId, limit: 100 });
+  for (const session of sessions.data) {
+    if (session.livemode || session.mode !== 'payment' || session.payment_status !== 'paid') continue;
+    await recordCheckoutSessionPayment(userId, session);
+  }
 }
 
 export async function recoverBillingOperations(userId: string): Promise<void> {
@@ -431,7 +497,10 @@ export async function syncAccountBilling(userId: string, now = new Date()): Prom
     const snapshot = await loadChargeSnapshot(userId, now);
     if (!snapshot) return;
     const account = await loadBillingAccount(userId);
-    if (account?.stripe_customer_id) await backfillCustomerInvoices(userId, account.stripe_customer_id, snapshot.periodStart);
+    if (account?.stripe_customer_id) {
+      await backfillCustomerInvoices(userId, account.stripe_customer_id, snapshot.periodStart);
+      await reconcileCheckoutPayments(userId, account.stripe_customer_id);
+    }
     const refreshed = await loadBillingAccount(userId);
     await refreshSavedPaymentMethod(userId);
     if (refreshed?.stripe_subscription_id) await syncRecurringPrice(userId, refreshed, snapshot.nextAmountCents);

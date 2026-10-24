@@ -118,6 +118,13 @@ test('address book is due now, hsa is due when its trial ends, and the renewal s
   assert.equal(statement.billingCycle.renewalDate, 'November 24, 2026');
   assert.equal(statement.billingCycle.renewalAmount, '$4.00');
   assert.equal(statement.statement.find((row) => row.label === 'Address Book')?.note, 'Due now');
+  const settled = buildCycleCustomerStatement(input, ANCHOR, OPEN, null, { paidTowardPeriodCents: 200 });
+  assert.equal(settled.billingCycle.amountDueNow, '$0.00');
+  assert.equal(settled.statement.find((row) => row.label === 'Address Book')?.amount, '$2/month');
+  assert.equal(settled.statement.find((row) => row.label === 'Address Book')?.note ?? null, null);
+  assert.match(settled.statement.find((row) => row.label === 'HSA Tracker')?.note || '', /Ends Oct 31/);
+  assert.equal(settled.billingCycle.scheduledChargeAmount, '$2.00');
+  assert.equal(settled.billingCycle.renewalAmount, '$4.00');
   assert.match(statement.statement.find((row) => row.label === 'HSA Tracker')?.note || '', /Ends Oct 31/);
   const workflow = describePaymentWorkflow({
     owedNowCents: summary.owedNowCents,
