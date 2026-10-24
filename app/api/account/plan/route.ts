@@ -99,6 +99,8 @@ export async function GET() {
       paymentMethodLabel,
       paymentMethodStatus,
       trialPaymentDeferred: snapshot?.trialPaymentDeferred ?? false,
+      scheduledChargeCents: snapshot?.scheduledChargeCents ?? 0,
+      scheduledChargeAt: snapshot?.scheduledChargeAt ?? null,
     });
     return NextResponse.json({
       accountType: state.accountType,

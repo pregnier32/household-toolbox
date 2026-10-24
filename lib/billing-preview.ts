@@ -26,6 +26,7 @@ import {
   type BillingCycleSnapshot,
   type PeriodToolRecord,
 } from './billing-cycle';
+import { describeBillingSummary } from './billing-summary';
 import { formatDisplayDate } from './format-display-date';
 
 export type PreviewAccess = 'unauthorized' | 'forbidden' | null;
@@ -87,6 +88,12 @@ export type CustomerBillingCycle = {
   nextBillingDate: string;
   estimatedNextBill: string;
   nextBillingAt: string;
+  anchorDate: string;
+  amountDueNow: string;
+  scheduledChargeDate: string | null;
+  scheduledChargeAmount: string | null;
+  renewalDate: string;
+  renewalAmount: string;
 };
 
 export type BillingCyclePreview = {
@@ -606,7 +613,7 @@ export function buildCycleCustomerStatement(
     const live = snapshot.current.tools.find((item) => item.toolId === tool.toolId);
     notes.set(tool.toolId, live?.inTrial
       ? trialStatusNote(live.daysRemaining, live.trialEndsAt)
-      : `Free trial ended — first bill ${billingDateLabel(snapshot.schedule.nextBillingAt)}`);
+      : 'Due now');
   }
 
   const periodInput: AccountPricingInput = snapshot.period && snapshot.schedule.periodStart
@@ -627,30 +634,30 @@ export function buildCycleCustomerStatement(
     storageRow.detail = `${storageLabel(snapshot.current.storageUsedBytes)} of ${storageLabel(snapshot.current.effectiveStorageBytes)}`;
   }
 
+  const summary = describeBillingSummary(input, signupAt, effectiveAt, frozen);
   const seen = new Set(snapshot.periodRecords.map((record) => record.toolId));
-  let addedToolCents = 0;
+  const periodCents = snapshot.schedule.hasStarted ? (snapshot.period?.effectiveMonthlyCents ?? 0) : 0;
+  const storageCentsForGap = Math.round(Math.max(0, input.storageAddonGb) * STORAGE_ADDON_MONTHLY_CENTS);
+  const addedToolCents = Math.max(0, summary.owedNowCents - storageCentsForGap - periodCents);
   const extras: PlanStatementRow[] = input.tools
     .filter((tool) => !seen.has(tool.toolId))
     .sort((left, right) => left.name.localeCompare(right.name, undefined, { sensitivity: 'base' }))
     .map((tool) => {
       const live = snapshot.current.tools.find((item) => item.toolId === tool.toolId);
       const added = formatDisplayDate(tool.ownedAt);
-      const cents = toolListCents({
-        shelfPriceCents: tool.shelfPriceCents,
-        catalogPriceCents: tool.catalogPriceCents ?? tool.shelfPriceCents,
-      });
+      const cents = live?.expectedMonthlyCents ?? 0;
       const inTrial = Boolean(live?.inTrial);
-      if (!inTrial) addedToolCents += cents;
+      const dueNow = !inTrial && cents > 0 && addedToolCents > 0;
       return {
         id: `upcoming-${tool.toolId}`,
         kind: 'tool' as const,
         label: tool.name,
         detail: added ? `Added ${added}` : null,
-        amount: inTrial ? '$0' : statementAmount(cents),
+        amount: inTrial ? '$0' : dueNow ? statementAmount(cents) : statementAmount(0),
         benefitId: null,
         note: inTrial
           ? trialStatusNote(live?.daysRemaining ?? null, live?.trialEndsAt ?? null)
-          : `First bill ${billingDateLabel(snapshot.schedule.nextBillingAt)}`,
+          : dueNow ? 'Due now' : null,
       };
     });
   const storageAt = statement.findIndex((row) => row.id === 'section-storage');
@@ -664,20 +671,19 @@ export function buildCycleCustomerStatement(
     }
   }
 
-  const storageCents = Math.round(Math.max(0, input.storageAddonGb) * STORAGE_ADDON_MONTHLY_CENTS);
-  const openedToday = snapshot.schedule.hasStarted
-    && snapshot.schedule.previousBillingAt
-    && snapshot.schedule.previousBillingAt.slice(0, 10) === effectiveAt.toISOString().slice(0, 10);
-  const billingAt = openedToday && snapshot.schedule.previousBillingAt
-    ? snapshot.schedule.previousBillingAt
-    : snapshot.schedule.nextBillingAt;
   return {
     statement,
     snapshot,
     billingCycle: {
-      nextBillingDate: billingDateLabel(billingAt),
-      estimatedNextBill: formatCents(snapshot.next.effectiveMonthlyCents + storageCents),
-      nextBillingAt: snapshot.schedule.nextBillingAt,
+      nextBillingDate: billingDateLabel(summary.renewalAt),
+      estimatedNextBill: formatCents(summary.renewalCents),
+      nextBillingAt: summary.renewalAt,
+      anchorDate: billingDateLabel(summary.anchorAt),
+      amountDueNow: formatCents(summary.owedNowCents),
+      scheduledChargeDate: summary.scheduledChargeAt ? billingDateLabel(summary.scheduledChargeAt) : null,
+      scheduledChargeAmount: summary.scheduledChargeCents > 0 ? formatCents(summary.scheduledChargeCents) : null,
+      renewalDate: billingDateLabel(summary.renewalAt),
+      renewalAmount: formatCents(summary.renewalCents),
     },
   };
 }

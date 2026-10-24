@@ -14,6 +14,7 @@ import {
   planToolRemoval,
   removalNoticeForTool,
   skipSupplementalBeforeSubscriptionAnchor,
+  supplementalInvoiceBlocked,
   toPeriodRecord,
   trialStatusNote,
 } from './billing-cycle';
@@ -168,7 +169,7 @@ test('a tool added after the billing date stays off this period after its trial 
   const statement = buildCycleCustomerStatement(input, FIRST_BILL, new Date('2026-10-24T15:00:00.000Z'), null);
   const line = statement.statement.find((row) => row.label === 'Family Chores');
   assert.equal(line?.amount, '$2/month');
-  assert.match(line?.note || '', /First bill/);
+  assert.match(line?.note || '', /Due now/);
   assert.equal(statement.statement.find((row) => row.id === 'before')?.amount, '$2/month');
   assert.equal(statement.statement.find((row) => row.kind === 'total')?.amount, '$2/month');
 });
@@ -425,7 +426,9 @@ test('a tool without a trial is due on the day it is added', () => {
   }).locked, true);
   const statement = buildCycleCustomerStatement(input, added, new Date(added), null);
   assert.equal(statement.statement.find((row) => row.label === 'Address Book')?.amount, '$2/month');
-  assert.equal(statement.billingCycle.nextBillingDate, 'October 24, 2026');
+  assert.equal(statement.billingCycle.amountDueNow, '$2.00');
+  assert.equal(statement.billingCycle.renewalDate, 'November 24, 2026');
+  assert.equal(statement.billingCycle.nextBillingDate, 'November 24, 2026');
 });
 
 test('a trial tool does not require payment until the trial ends, and deletion during the trial leaves nothing due', () => {
@@ -489,5 +492,19 @@ test('an existing subscription with a future anchor is not invoiced again for an
     billingCycleAnchor: null,
     periodStart: '2026-10-24T15:00:00.000Z',
     now: new Date('2026-10-24T16:00:00.000Z'),
+  }), false);
+  assert.equal(supplementalInvoiceBlocked({
+    subscriptionStatus: 'active',
+    billingCycleAnchor: '2026-10-31T15:00:00.000Z',
+    periodStart: '2026-10-24T15:00:00.000Z',
+    nextBillingAt: '2026-11-24T15:00:00.000Z',
+    now: new Date('2026-10-24T16:00:00.000Z'),
+  }), true);
+  assert.equal(supplementalInvoiceBlocked({
+    subscriptionStatus: 'active',
+    billingCycleAnchor: '2026-11-24T15:00:00.000Z',
+    periodStart: '2026-10-24T15:00:00.000Z',
+    nextBillingAt: '2026-11-24T15:00:00.000Z',
+    now: new Date('2026-10-31T15:00:00.000Z'),
   }), false);
 });

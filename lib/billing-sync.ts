@@ -1,7 +1,7 @@
 import type Stripe from 'stripe';
 import type { Json } from '@/src/types/supabase';
 import { loadChargeSnapshot, type ChargeSnapshot } from '@/lib/billing-amount';
-import { skipSupplementalBeforeSubscriptionAnchor } from '@/lib/billing-cycle';
+import { supplementalInvoiceBlocked } from '@/lib/billing-cycle';
 import { invoicedCents, uninvoicedCents, type InvoiceRole, type InvoiceStatus, type LedgerInvoice } from '@/lib/billing-ledger';
 import {
   describePaymentWorkflow,
@@ -443,10 +443,11 @@ export async function syncAccountBilling(userId: string, now = new Date()): Prom
 
 async function collectGap(userId: string, account: BillingAccountRow | null, snapshot: ChargeSnapshot, invoices: LedgerInvoice[]): Promise<void> {
   if (!account?.stripe_customer_id || !snapshot.periodStart) return;
-  if (skipSupplementalBeforeSubscriptionAnchor({
+  if (supplementalInvoiceBlocked({
     subscriptionStatus: account.subscription_status,
     billingCycleAnchor: account.billing_cycle_anchor,
     periodStart: snapshot.periodStart,
+    nextBillingAt: snapshot.nextBillingAt,
     now: new Date(),
   })) return;
   const gap = uninvoicedCents(snapshot.owedNowCents, invoices, snapshot.periodStart);
@@ -631,6 +632,8 @@ async function workflowFor(userId: string, account: BillingAccountRow | null, sn
     nextAmountCents: snapshot?.nextAmountCents ?? 0,
     nextBillingAt: snapshot?.nextBillingAt ?? null,
     periodStart: snapshot?.periodStart ?? null,
+    scheduledChargeCents: snapshot?.scheduledChargeCents ?? 0,
+    scheduledChargeAt: snapshot?.scheduledChargeAt ?? null,
     invoices,
     account: paymentAccount(account),
     paymentMethodLabel: paymentMethodLabel(account),

@@ -141,14 +141,15 @@ export async function loadRemovalPlan(
   signupAt: string,
   effectiveAt: Date,
   toolId: string,
+  options?: { dropUninvoicedCharge?: boolean },
 ): Promise<{ plan: ToolRemovalPlan; periodStart: string | null; canPersist: boolean }> {
   const schedule = billingSchedule(signupAt, effectiveAt);
   if (!schedule.periodStart) {
-    return { plan: planToolRemoval(input, signupAt, effectiveAt, toolId, null), periodStart: null, canPersist: true };
+    return { plan: planToolRemoval(input, signupAt, effectiveAt, toolId, null, options), periodStart: null, canPersist: true };
   }
   const loaded = await loadFrozenPeriod(input.userId, schedule.periodStart);
   return {
-    plan: planToolRemoval(input, signupAt, effectiveAt, toolId, loaded.available ? loaded.frozen : null),
+    plan: planToolRemoval(input, signupAt, effectiveAt, toolId, loaded.available ? loaded.frozen : null, options),
     periodStart: schedule.periodStart,
     canPersist: loaded.available,
   };

@@ -34,6 +34,9 @@ export type PaymentWorkflowInput = {
   paymentMethodStatus?: 'saved' | 'absent' | 'pending';
   /** The priced tools are still in a free trial. A positive next bill can still save a card today. */
   trialPaymentDeferred?: boolean;
+  /** Full monthly price added when the next trial ends inside this period. Not the renewal. */
+  scheduledChargeCents?: number;
+  scheduledChargeAt?: string | null;
 };
 
 export type PaymentSecondary = {
@@ -71,6 +74,19 @@ function nextBillText(cents: number, nextBillingAt: string | null): string {
   const amount = formatCents(cents);
   if (!nextBillingAt) return amount;
   return `${amount} on ${billingDateLabel(nextBillingAt)}`;
+}
+
+function futureChargeSentences(input: PaymentWorkflowInput): string {
+  const scheduled = Math.max(0, input.scheduledChargeCents ?? 0);
+  if (scheduled <= 0) return '';
+  const when = input.scheduledChargeAt ? billingDateLabel(input.scheduledChargeAt) : null;
+  const trial = when
+    ? ` A trial ends ${when} and adds ${formatCents(scheduled)} for this billing period. That charge is not the monthly renewal.`
+    : ` A trial-end charge of ${formatCents(scheduled)} is scheduled for this billing period. That charge is not the monthly renewal.`;
+  const renewal = input.nextAmountCents > 0 && input.nextBillingAt
+    ? ` The monthly renewal on ${billingDateLabel(input.nextBillingAt)} is ${formatCents(input.nextAmountCents)}.`
+    : '';
+  return `${trial}${renewal}`;
 }
 
 function emptyWorkflow(input: PaymentWorkflowInput, uninvoiced: number, outstanding: number, next: number): PaymentWorkflow {
@@ -132,7 +148,9 @@ export function describePaymentWorkflow(input: PaymentWorkflowInput): PaymentWor
     if (outstanding > 0) {
       explanation += ` An open invoice of ${formatCents(outstanding)} is not included and will not be charged again.`;
     }
-    if (next > 0) {
+    const scheduledText = futureChargeSentences(input);
+    if (scheduledText) explanation += scheduledText;
+    else if (next > 0) {
       explanation += ` No other charge is added for the estimated next bill of ${nextText}.`;
     }
     const secondary: PaymentSecondary | null = outstanding > 0 && customer
@@ -174,12 +192,16 @@ export function describePaymentWorkflow(input: PaymentWorkflowInput): PaymentWor
     const trialNote = input.trialPaymentDeferred && owed === 0 && outstanding === 0
       ? ' The free trial is still running, so nothing is due today.'
       : '';
+    const scheduledText = futureChargeSentences(input);
+    const explanation = scheduledText
+      ? `No payment is collected today.${scheduledText}${trialNote}${invoiceNote}`
+      : `No payment is collected today. The estimated next bill is ${nextText}.${trialNote}${invoiceNote}`;
     return {
       ...base,
       action: 'setup',
       route: 'checkout',
       collectedTodayCents: 0,
-      explanation: `No payment is collected today. The estimated next bill is ${nextText}.${trialNote}${invoiceNote}`,
+      explanation,
       buttonLabel: 'Add Payment Method',
       secondary: saved
         ? { action: 'manage', route: 'portal', collectedTodayCents: 0, buttonLabel: 'Manage billing' }

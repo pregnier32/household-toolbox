@@ -53,7 +53,17 @@ type PlanPayload = {
     causingTools: { toolId: string; name: string }[];
   } | null;
   notice: { title: string; body: string } | null;
-  billingCycle?: { nextBillingDate: string; estimatedNextBill: string; nextBillingAt: string } | null;
+  billingCycle?: {
+    nextBillingDate: string;
+    estimatedNextBill: string;
+    nextBillingAt: string;
+    anchorDate?: string;
+    amountDueNow?: string;
+    scheduledChargeDate?: string | null;
+    scheduledChargeAmount?: string | null;
+    renewalDate?: string;
+    renewalAmount?: string;
+  } | null;
 };
 
 export function PlanBilling({
@@ -430,16 +440,23 @@ export function PlanBilling({
         </div>
 
         {plan.billingCycle && (
-          <div className={`mt-4 grid gap-3 sm:grid-cols-2 ${isLight ? 'text-slate-800' : 'text-slate-200'}`}>
+          <div className={`mt-4 grid gap-3 sm:grid-cols-3 ${isLight ? 'text-slate-800' : 'text-slate-200'}`}>
             <p>
-              <span className={isLight ? 'text-sm text-slate-600' : 'text-sm text-slate-400'}>Next billing date</span>
+              <span className={isLight ? 'text-sm text-slate-600' : 'text-sm text-slate-400'}>Amount due now</span>
               <br />
-              <span className="text-base font-semibold">{plan.billingCycle.nextBillingDate}</span>
+              <span className="text-base font-semibold">{plan.billingCycle.amountDueNow ?? plan.billingCycle.estimatedNextBill}</span>
             </p>
+            {plan.billingCycle.scheduledChargeDate && plan.billingCycle.scheduledChargeAmount && (
+              <p>
+                <span className={isLight ? 'text-sm text-slate-600' : 'text-sm text-slate-400'}>Trial-end charge</span>
+                <br />
+                <span className="text-base font-semibold">{plan.billingCycle.scheduledChargeAmount} on {plan.billingCycle.scheduledChargeDate}</span>
+              </p>
+            )}
             <p>
-              <span className={isLight ? 'text-sm text-slate-600' : 'text-sm text-slate-400'}>Estimated next bill</span>
+              <span className={isLight ? 'text-sm text-slate-600' : 'text-sm text-slate-400'}>Monthly renewal</span>
               <br />
-              <span className="text-base font-semibold">{plan.billingCycle.estimatedNextBill}</span>
+              <span className="text-base font-semibold">{plan.billingCycle.renewalAmount ?? plan.billingCycle.estimatedNextBill} on {plan.billingCycle.renewalDate ?? plan.billingCycle.nextBillingDate}</span>
             </p>
           </div>
         )}
@@ -459,7 +476,7 @@ export function PlanBilling({
                 : (statement.find((row) => row.kind === 'total')?.amount ?? '$0/month') === '$0/month'
                   ? 'No payment method needed on your current plan.'
                   : 'Payment setup will be required once this account is billed.')}
-          {plan.upcoming ? ` Upcoming ${plan.upcoming.amount} on ${formatDisplayDate(plan.upcoming.at)}.` : ''}
+          {!plan.billingCycle && plan.upcoming ? ` Upcoming ${plan.upcoming.amount} on ${formatDisplayDate(plan.upcoming.at)}.` : ''}
         </p>
         {checkoutNote && (
           <p className={`mt-3 ${checkoutNote.tone === 'ok' ? messageClass('ok') : noticeClass}`}>{checkoutNote.text}</p>

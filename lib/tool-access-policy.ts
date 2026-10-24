@@ -151,17 +151,9 @@ function debtCents(invoices: AccessInvoice[]): number {
   }, 0);
 }
 
-function causeSentence(
-  reason: ToolAccessReason,
-  balance: number | null,
-  billingDate: string | null,
-  hasSavedPaymentMethod: boolean,
-): string {
+function causeSentence(reason: ToolAccessReason, balance: number | null): string {
   const amount = balance != null && balance > 0 ? formatCents(balance) : null;
-  const when = billingDate ? billingDateLabel(billingDate) : null;
   if (reason === 'setup_required') {
-    if (hasSavedPaymentMethod && amount) return `Payment of ${amount} is required now and has not been completed.`;
-    if (amount && when) return `Payment of ${amount} is due ${when}, and payment setup has not been completed.`;
     if (amount) return `Payment of ${amount} is required now, and payment setup has not been completed.`;
     return 'Payment setup has not been completed.';
   }
@@ -295,7 +287,7 @@ export function describeToolAccessPolicy(input: ToolAccessPolicyInput): ToolAcce
   }
 
   const balance = reason === 'setup_required' ? (owed > 0 ? owed : knownBalance) : knownBalance;
-  const cause = causeSentence(reason, balance, input.nextBillingAt, input.hasSavedPaymentMethod);
+  const cause = causeSentence(reason, balance);
   return {
     ...base,
     locked: true,

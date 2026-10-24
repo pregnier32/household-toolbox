@@ -301,3 +301,22 @@ test('a payment request must name an action and whole-cent amounts', () => {
   assert.equal(parsePaymentExpectation({ action: 'none', collectedTodayCents: 0, nextAmountCents: 0, outstandingInvoiceCents: 0 }), null);
   assert.equal(parsePaymentExpectation(null), null);
 });
+
+test('a mixed trial and paid tool collects the paid tool now and keeps the trial charge off the renewal', () => {
+  const workflow = describePaymentWorkflow(quote({
+    owedNowCents: 200,
+    nextAmountCents: 400,
+    nextBillingAt: '2026-11-24T16:00:00.000Z',
+    periodStart: '2026-10-24T16:00:00.000Z',
+    scheduledChargeCents: 200,
+    scheduledChargeAt: '2026-10-31T16:00:00.000Z',
+  }));
+  assert.equal(workflow.action, 'pay');
+  assert.equal(workflow.collectedTodayCents, 200);
+  assert.equal(workflow.buttonLabel, 'Pay $2.00');
+  assert.match(workflow.explanation, /collects \$2\.00 today/);
+  assert.match(workflow.explanation, /trial ends October 31, 2026 and adds \$2\.00/);
+  assert.match(workflow.explanation, /not the monthly renewal/);
+  assert.match(workflow.explanation, /monthly renewal on November 24, 2026 is \$4\.00/);
+  assert.doesNotMatch(workflow.explanation, /No payment is collected today/);
+});

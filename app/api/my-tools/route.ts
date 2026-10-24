@@ -4,6 +4,8 @@ import { supabaseServer } from '@/lib/supabaseServer';
 import { deleteUserTool } from '@/lib/user-data-deletion';
 import { loadAccountPricingInputs } from '@/lib/load-account-pricing';
 import { billingSchedule, removalNoticeForTool } from '@/lib/billing-cycle';
+import { invoicedCents } from '@/lib/billing-ledger';
+import { listStoredInvoices } from '@/lib/billing-store';
 import { dropUncommittedPeriodTool, loadFrozenPeriod, loadRemovalPlan, loadSignupAt, persistScheduledRemoval } from '@/lib/billing-period-store';
 import { BillingCommitmentError, deleteAfterBillingCommitment, TOOL_REMOVAL_PRESERVATION_ERROR } from '@/lib/billing-tool-removal';
 import { refreshHouseholdLock } from '@/lib/billing-access';
@@ -15,6 +17,12 @@ type EmbeddedTool = {
   name: string;
   tool_tip: string | null;
 };
+
+async function dropUninvoicedCharge(userId: string, periodStart: string | null): Promise<boolean> {
+  if (!periodStart) return true;
+  const invoices = await listStoredInvoices(userId);
+  return invoicedCents(invoices, periodStart) === 0;
+}
 
 function asOwnedTool(tools: EmbeddedTool | EmbeddedTool[] | null | undefined): EmbeddedTool | null {
   if (!tools) return null;
@@ -80,11 +88,12 @@ export async function GET() {
     const frozen = signupAt && pricing && schedule?.periodStart
       ? (await loadFrozenPeriod(user.id, schedule.periodStart)).frozen
       : null;
+    const uninvoiced = await dropUninvoicedCharge(user.id, schedule?.periodStart ?? null);
     return NextResponse.json({
       tools: sortOwnedTools(userTools || []).map((row) => {
         const owned = asOwnedTool(row.tools);
         const removalNotice = signupAt && pricing && owned
-          ? removalNoticeForTool(pricing, signupAt, now, owned.id, frozen)
+          ? removalNoticeForTool(pricing, signupAt, now, owned.id, frozen, { dropUninvoicedCharge: uninvoiced })
           : null;
         return {
           ...row,
@@ -140,8 +149,11 @@ export async function DELETE(request: NextRequest) {
     try {
       const signupAt = await loadSignupAt(user.id);
       const pricing = signupAt ? (await loadAccountPricingInputs([user.id])).get(user.id) : undefined;
+      const periodStart = signupAt ? billingSchedule(signupAt, now).periodStart : null;
       removal = signupAt && pricing
-        ? await loadRemovalPlan(pricing, signupAt, now, userTool.tool_id)
+        ? await loadRemovalPlan(pricing, signupAt, now, userTool.tool_id, {
+          dropUninvoicedCharge: await dropUninvoicedCharge(user.id, periodStart),
+        })
         : null;
     } catch (error) {
       console.error('Tool removal stopped before data deletion:', removalErrorDetail(error));

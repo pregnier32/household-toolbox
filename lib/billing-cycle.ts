@@ -272,10 +272,11 @@ export function planToolRemoval(
   effectiveAt: Date,
   toolId: string,
   frozen: PeriodToolRecord[] | null,
+  options?: { dropUninvoicedCharge?: boolean },
 ): ToolRemovalPlan {
   const judged = describeBillingCycle(input, signupAt, effectiveAt, null);
   const priced = judged.period?.tools.find((tool) => tool.toolId === toolId);
-  if (!priced || !isPaidCommitment(priced)) {
+  if (!priced || !isPaidCommitment(priced) || options?.dropUninvoicedCharge) {
     const base = frozen ?? [];
     return {
       kind: 'uncommitted',
@@ -324,13 +325,37 @@ export function skipSupplementalBeforeSubscriptionAnchor(input: {
   return anchor > input.now.getTime() && start < anchor;
 }
 
+/**
+ * A future anchor blocks a supplemental only when it falls before the next
+ * monthly anniversary. An anchor on that anniversary is the renewal, so a
+ * charge that is already due (a tool with no trial, or a trial that ended)
+ * is still invoiced once. A $0-to-paid subscription whose first charge is
+ * earlier than the anniversary is left alone.
+ */
+export function supplementalInvoiceBlocked(input: {
+  subscriptionStatus: string | null;
+  billingCycleAnchor: string | null;
+  periodStart: string;
+  nextBillingAt: string | null;
+  now: Date;
+}): boolean {
+  if (!skipSupplementalBeforeSubscriptionAnchor(input)) return false;
+  if (!input.nextBillingAt || !input.billingCycleAnchor) return true;
+  const anchor = Date.parse(input.billingCycleAnchor);
+  const renewal = Date.parse(input.nextBillingAt);
+  if (Number.isNaN(anchor) || Number.isNaN(renewal)) return true;
+  return anchor + 1000 < renewal;
+}
+
 export function removalNoticeForTool(
   input: AccountPricingInput,
   signupAt: string,
   effectiveAt: Date,
   toolId: string,
   frozen: PeriodToolRecord[] | null,
+  options?: { dropUninvoicedCharge?: boolean },
 ): string | null {
+  if (options?.dropUninvoicedCharge) return null;
   const cycle = describeBillingCycle(input, signupAt, effectiveAt, frozen);
   if (!cycle.period || !cycle.schedule.nextBillingAt) return null;
   const priced = cycle.period.tools.find((tool) => tool.toolId === toolId);
