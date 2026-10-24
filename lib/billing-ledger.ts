@@ -58,6 +58,25 @@ export function uninvoicedCents(owedCents: number, invoices: LedgerInvoice[], pe
   return Math.max(0, owedCents - invoicedCents(invoices, periodStart));
 }
 
+/**
+ * Unpaid balance already on an open invoice for this period.
+ * A draft is not collectible yet. Paid, void, and uncollectible invoices
+ * are not collected again.
+ */
+export function outstandingCents(
+  invoices: Array<LedgerInvoice & { amountPaidCents?: number }>,
+  periodStart: string | null,
+): number {
+  if (!periodStart) return 0;
+  return invoices.reduce((sum, invoice) => {
+    if (invoice.status !== 'open') return sum;
+    if (!PERIOD_ROLES.has(invoice.role)) return sum;
+    if (!samePeriod(invoice.periodStart, periodStart)) return sum;
+    const paid = Math.max(0, invoice.amountPaidCents ?? 0);
+    return sum + Math.max(0, invoice.amountCents - paid);
+  }, 0);
+}
+
 const STATUS_RANK: Record<InvoiceStatus, number> = {
   draft: 1,
   open: 2,

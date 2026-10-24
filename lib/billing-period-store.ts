@@ -41,10 +41,31 @@ function asRecords(value: Json): PeriodToolRecord[] {
   });
 }
 
+/**
+ * Billing starts when the first tool is added, including a tool later removed.
+ * Entitlements keep that first start after ownership is deleted.
+ */
 export async function loadSignupAt(userId: string): Promise<string | null> {
-  const { data, error } = await supabaseServer.from('users').select('created_at').eq('id', userId).maybeSingle();
-  if (error) throw error;
-  return data?.created_at ?? null;
+  const [entitlements, owned] = await Promise.all([
+    supabaseServer.from('user_tool_entitlements').select('first_started_at').eq('user_id', userId),
+    supabaseServer.from('users_tools').select('created_at').eq('user_id', userId),
+  ]);
+  if (owned.error) throw owned.error;
+  const times: number[] = [];
+  if (entitlements.error) {
+    if (!missingTable(entitlements.error)) throw entitlements.error;
+  } else {
+    for (const row of entitlements.data ?? []) {
+      const parsed = Date.parse(row.first_started_at);
+      if (!Number.isNaN(parsed)) times.push(parsed);
+    }
+  }
+  for (const row of owned.data ?? []) {
+    const parsed = Date.parse(row.created_at);
+    if (!Number.isNaN(parsed)) times.push(parsed);
+  }
+  if (times.length === 0) return null;
+  return new Date(Math.min(...times)).toISOString();
 }
 
 export async function loadFrozenPeriod(userId: string, periodStart: string): Promise<PeriodLoad> {

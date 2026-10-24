@@ -80,7 +80,7 @@ test('a tool still in its free trial can be deleted without a paid commitment', 
     ownedAt: '2026-10-10T15:00:00.000Z',
     trialStartedAt: '2026-10-10T15:00:00.000Z',
   })]);
-  const plan = planToolRemoval(input, SIGNUP, new Date('2026-10-16T15:00:00.000Z'), 'clean', null);
+  const plan = planToolRemoval(input, '2026-10-10T15:00:00.000Z', new Date('2026-10-16T15:00:00.000Z'), 'clean', null);
   assert.equal(plan.kind, 'uncommitted');
   let preserved = false;
   let deleted = false;
@@ -104,7 +104,7 @@ test('a tool whose trial ended after the billing date is a paid commitment', asy
     ownedAt: '2026-10-10T15:00:00.000Z',
     trialStartedAt: '2026-10-10T15:00:00.000Z',
   })]);
-  const plan = planToolRemoval(input, SIGNUP, DURING_PERIOD, 'clean', null);
+  const plan = planToolRemoval(input, '2026-10-10T15:00:00.000Z', DURING_PERIOD, 'clean', null);
   assert.equal(plan.kind, 'schedule');
   let preserved = false;
   let deleted = false;
@@ -122,13 +122,33 @@ test('a tool whose trial ended after the billing date is a paid commitment', asy
   assert.equal(deleted, true);
 });
 
+test('a paid tool is deleted only after its billing line is saved', async () => {
+  const input = account([tool({ toolId: 'chores' })]);
+  const plan = planToolRemoval(input, SIGNUP, DURING_PERIOD, 'chores', null);
+  assert.equal(plan.kind, 'schedule');
+  let preserved = false;
+  let deleted = false;
+  await deleteAfterBillingCommitment({
+    plan,
+    toolId: 'chores',
+    preserve: async () => {
+      preserved = true;
+    },
+    deleteData: async () => {
+      deleted = true;
+    },
+  });
+  assert.equal(preserved, true);
+  assert.equal(deleted, true);
+});
+
 test('a tool removed before the first billing anniversary is not preserved as a charge', async () => {
   const input = account([tool({
     toolId: 'chores',
     ownedAt: '2026-10-01T15:00:00.000Z',
     trialStartedAt: '2026-10-01T15:00:00.000Z',
   })]);
-  const plan = planToolRemoval(input, SIGNUP, BEFORE_FIRST_BILL, 'chores', null);
+  const plan = planToolRemoval(input, '2026-10-15T15:00:00.000Z', BEFORE_FIRST_BILL, 'chores', null);
   assert.equal(plan.kind, 'uncommitted');
   if (plan.kind === 'uncommitted') assert.equal(plan.dropToolId, null);
   let deleted = false;

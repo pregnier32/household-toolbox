@@ -1,3 +1,4 @@
+import { denyLockedToolAccess, denyRemovedTool } from '@/lib/billing-access';
 import { NextRequest, NextResponse } from 'next/server';
 import { getHouseholdDataSession } from '@/lib/session';
 import {
@@ -16,6 +17,10 @@ function toolIdFrom(request: NextRequest, body?: { toolId?: string }) {
 export async function GET(request: NextRequest) {
   const user = await getHouseholdDataSession();
   if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+  const toolLock = await denyLockedToolAccess(user.id, user.householdRole);
+  if (toolLock) return toolLock;
+  const removedTool = await denyRemovedTool(user.id, 'End of Life Planner');
+  if (removedTool) return removedTool;
   const toolId = toolIdFrom(request);
   if (!toolId) return NextResponse.json({ error: 'toolId is required' }, { status: 400 });
   try {
@@ -30,6 +35,10 @@ export async function GET(request: NextRequest) {
 export async function POST(request: NextRequest) {
   const user = await getHouseholdDataSession();
   if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+  const toolLock = await denyLockedToolAccess(user.id, user.householdRole);
+  if (toolLock) return toolLock;
+  const removedTool = await denyRemovedTool(user.id, 'End of Life Planner');
+  if (removedTool) return removedTool;
   try {
     const body = await request.json();
     const toolId = toolIdFrom(request, body);
@@ -56,6 +65,10 @@ export async function POST(request: NextRequest) {
 export async function PUT(request: NextRequest) {
   const user = await getHouseholdDataSession();
   if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+  const toolLock = await denyLockedToolAccess(user.id, user.householdRole);
+  if (toolLock) return toolLock;
+  const removedTool = await denyRemovedTool(user.id, 'End of Life Planner');
+  if (removedTool) return removedTool;
   try {
     const body = await request.json();
     const toolId = toolIdFrom(request, body);
@@ -72,6 +85,10 @@ export async function PUT(request: NextRequest) {
 export async function PATCH(request: NextRequest) {
   const user = await getHouseholdDataSession();
   if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+  const toolLock = await denyLockedToolAccess(user.id, user.householdRole);
+  if (toolLock) return toolLock;
+  const removedTool = await denyRemovedTool(user.id, 'End of Life Planner');
+  if (removedTool) return removedTool;
   try {
     const body = await request.json();
     const toolId = toolIdFrom(request, body);
@@ -87,6 +104,10 @@ export async function PATCH(request: NextRequest) {
 export async function DELETE(request: NextRequest) {
   const user = await getHouseholdDataSession();
   if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+  const toolLock = await denyLockedToolAccess(user.id, user.householdRole);
+  if (toolLock) return toolLock;
+  const removedTool = await denyRemovedTool(user.id, 'End of Life Planner');
+  if (removedTool) return removedTool;
   const toolId = toolIdFrom(request);
   const planId = request.nextUrl.searchParams.get('id');
   if (!toolId || !planId) return NextResponse.json({ error: 'toolId and id are required' }, { status: 400 });

@@ -1,20 +1,44 @@
 import { NextResponse } from 'next/server';
 import { getHouseholdDataSession } from '@/lib/session';
-import { startCheckout } from '@/lib/billing-sync';
-import { stripeConfigured } from '@/lib/stripe-server';
+import { beginPayment } from '@/lib/billing-sync';
+import { parsePaymentExpectation } from '@/lib/billing-payment-workflow';
+
+async function expectationFrom(request: Request) {
+  const raw = await request.text();
+  if (!raw.trim()) return null;
+  try {
+    const parsed = parsePaymentExpectation(JSON.parse(raw));
+    if (!parsed) return { error: NextResponse.json({ error: 'Payment request could not be read.' }, { status: 400 }) };
+    return { expected: parsed };
+  } catch {
+    return { error: NextResponse.json({ error: 'Payment request could not be read.' }, { status: 400 }) };
+  }
+}
+
+function paymentResponse(result: { url: string | null; kind: string; explanation: string }) {
+  if (result.kind === 'checkout' || result.kind === 'portal') {
+    if (!result.url) return NextResponse.json({ error: 'Payment setup could not be started.' }, { status: 500 });
+    return NextResponse.json({ url: result.url });
+  }
+  return NextResponse.json({ refresh: true, explanation: result.explanation }, { status: 409 });
+}
 
 export async function POST(request: Request) {
   const user = await getHouseholdDataSession();
   if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   if (user.householdRole !== 'admin') return NextResponse.json({ error: 'Only the household Admin can set up payment.' }, { status: 403 });
-  if (!stripeConfigured()) return NextResponse.json({ error: 'Sandbox payments are not configured.' }, { status: 503 });
+  const body = await expectationFrom(request);
+  if (body && 'error' in body && body.error) return body.error;
   try {
     const origin = new URL(request.url).origin;
-    const result = await startCheckout(user.id, origin);
-    if (result.kind === 'none') return NextResponse.json({ error: 'No payment is due.' }, { status: 400 });
-    return NextResponse.json({ url: result.url });
+    const result = await beginPayment(user.id, origin, 'checkout', body && 'expected' in body ? body.expected : null);
+    return paymentResponse(result);
   } catch (error) {
-    console.error('Checkout failed', error instanceof Error ? error.message : 'unknown');
+    const message = error instanceof Error ? error.message : '';
+    if (message === 'Sandbox payments are not configured.') {
+      return NextResponse.json({ error: message }, { status: 503 });
+    }
+    console.error('Checkout failed', message || 'unknown');
     return NextResponse.json({ error: 'Payment setup could not be started.' }, { status: 500 });
   }
 }

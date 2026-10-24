@@ -1,8 +1,17 @@
 import type Stripe from 'stripe';
 import type { Json } from '@/src/types/supabase';
 import { loadChargeSnapshot, type ChargeSnapshot } from '@/lib/billing-amount';
+import { skipSupplementalBeforeSubscriptionAnchor } from '@/lib/billing-cycle';
 import { invoicedCents, uninvoicedCents, type InvoiceRole, type InvoiceStatus, type LedgerInvoice } from '@/lib/billing-ledger';
-import { withBillingLock } from '@/lib/billing-lock';
+import {
+  describePaymentWorkflow,
+  matchedPaymentRoute,
+  PAYMENT_STATE_CHANGED,
+  type PaymentAccount,
+  type PaymentExpectation,
+  type PaymentWorkflow,
+} from '@/lib/billing-payment-workflow';
+import { claimBillingLock, releaseBillingLock, withBillingLock } from '@/lib/billing-lock';
 import { replaceSubscriptionPrice, subscriptionItemId, subscriptionPeriodEnd } from '@/lib/billing-subscription';
 import {
   listOpenOperations,
@@ -18,7 +27,15 @@ import {
   type BillingOperation,
 } from '@/lib/billing-store';
 import { supabaseServer } from '@/lib/supabaseServer';
-import { stripeServer } from '@/lib/stripe-server';
+import {
+  cardFromPaymentMethod,
+  formatSavedCard,
+  resolveEffectiveCard,
+  type PaymentMethodSource,
+  type PaymentMethodSyncState,
+  type SavedCard,
+} from '@/lib/billing-card';
+import { stripeConfigured, stripeServer } from '@/lib/stripe-server';
 
 const LIVE_SUBSCRIPTION = new Set(['active', 'past_due', 'unpaid', 'trialing', 'paused', 'incomplete']);
 
@@ -416,6 +433,7 @@ export async function syncAccountBilling(userId: string, now = new Date()): Prom
     const account = await loadBillingAccount(userId);
     if (account?.stripe_customer_id) await backfillCustomerInvoices(userId, account.stripe_customer_id, snapshot.periodStart);
     const refreshed = await loadBillingAccount(userId);
+    await refreshSavedPaymentMethod(userId);
     if (refreshed?.stripe_subscription_id) await syncRecurringPrice(userId, refreshed, snapshot.nextAmountCents);
     const invoices = await listStoredInvoices(userId);
     await collectGap(userId, refreshed ?? account, snapshot, invoices);
@@ -425,6 +443,12 @@ export async function syncAccountBilling(userId: string, now = new Date()): Prom
 
 async function collectGap(userId: string, account: BillingAccountRow | null, snapshot: ChargeSnapshot, invoices: LedgerInvoice[]): Promise<void> {
   if (!account?.stripe_customer_id || !snapshot.periodStart) return;
+  if (skipSupplementalBeforeSubscriptionAnchor({
+    subscriptionStatus: account.subscription_status,
+    billingCycleAnchor: account.billing_cycle_anchor,
+    periodStart: snapshot.periodStart,
+    now: new Date(),
+  })) return;
   const gap = uninvoicedCents(snapshot.owedNowCents, invoices, snapshot.periodStart);
   if (gap <= 0) return;
   await createSupplementalInvoice({
@@ -503,30 +527,189 @@ export async function createAnchoredSubscription(input: {
   }
 }
 
-export async function startCheckout(userId: string, origin: string): Promise<{ url: string | null; kind: 'checkout' | 'portal' | 'none' }> {
+export type PaymentResult = {
+  url: string | null;
+  kind: 'checkout' | 'portal' | 'none' | 'stale';
+  explanation: string;
+};
+
+function paymentAccount(account: BillingAccountRow | null): PaymentAccount | null {
+  if (!account) return null;
+  return {
+    subscriptionStatus: account.subscription_status,
+    stripeCustomerId: account.stripe_customer_id,
+    stripeSubscriptionId: account.stripe_subscription_id,
+    hasSavedPaymentMethod: Boolean(account.card_brand && account.card_last4),
+  };
+}
+
+function paymentMethodLabel(account: BillingAccountRow | null): string | null {
+  if (!account?.card_brand || !account.card_last4) return null;
+  return formatSavedCard({ brand: account.card_brand, last4: account.card_last4 });
+}
+
+export type SavedCardSync = {
+  state: PaymentMethodSyncState;
+  card: SavedCard | null;
+  label: string | null;
+};
+
+function storedCardSync(account: BillingAccountRow | null): SavedCardSync {
+  if (account?.card_brand && account.card_last4) {
+    const card = { brand: account.card_brand, last4: account.card_last4 };
+    return { state: 'saved', card, label: formatSavedCard(card) };
+  }
+  if (account?.stripe_customer_id || account?.stripe_subscription_id) return { state: 'pending', card: null, label: null };
+  return { state: 'absent', card: null, label: null };
+}
+
+async function expandedPaymentMethod(stripe: Stripe, source: PaymentMethodSource): Promise<PaymentMethodSource> {
+  if (cardFromPaymentMethod(source)) return source;
+  const id = typeof source === 'string' ? source : source?.id;
+  if (!id) return source ?? null;
+  try {
+    const method = await stripe.paymentMethods.retrieve(id);
+    if (method.livemode) return null;
+    return method;
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Reads the subscription default, then the customer invoice-settings default.
+ * Writes only the brand and last four. Does not change the subscription or charge the card.
+ */
+export async function refreshSavedPaymentMethod(userId: string): Promise<SavedCardSync> {
+  const account = await loadBillingAccount(userId);
+  if (!account?.stripe_customer_id) return { state: 'absent', card: null, label: null };
+  if (!stripeConfigured()) return storedCardSync(account);
+  try {
+    const stripe = stripeServer();
+    const customer = await stripe.customers.retrieve(account.stripe_customer_id, {
+      expand: ['invoice_settings.default_payment_method'],
+    });
+    if (customer.deleted || customer.livemode) return storedCardSync(account);
+    let subscriptionDefault: PaymentMethodSource = null;
+    if (account.stripe_subscription_id) {
+      const subscription = await stripe.subscriptions.retrieve(account.stripe_subscription_id, {
+        expand: ['default_payment_method'],
+      });
+      if (!subscription.livemode) subscriptionDefault = subscription.default_payment_method;
+    }
+    const customerDefault = customer.invoice_settings?.default_payment_method ?? null;
+    const card = resolveEffectiveCard({
+      subscriptionDefault: await expandedPaymentMethod(stripe, subscriptionDefault),
+      customerDefault: await expandedPaymentMethod(stripe, customerDefault),
+    });
+    await saveBillingAccount(userId, {
+      card_brand: card?.brand ?? null,
+      card_last4: card?.last4 ?? null,
+    });
+    if (!card) return { state: 'absent', card: null, label: null };
+    return { state: 'saved', card, label: formatSavedCard(card) };
+  } catch (error) {
+    console.error('Saved payment method sync failed', error instanceof Error ? error.message : 'unknown');
+    return storedCardSync(account);
+  }
+}
+
+export async function syncSavedPaymentMethod(userId: string): Promise<SavedCardSync> {
+  const owner = await claimBillingLock(userId);
+  if (!owner) return storedCardSync(await loadBillingAccount(userId));
+  try {
+    return await refreshSavedPaymentMethod(userId);
+  } finally {
+    await releaseBillingLock(userId, owner);
+  }
+}
+
+async function workflowFor(userId: string, account: BillingAccountRow | null, snapshot: ChargeSnapshot | null): Promise<PaymentWorkflow> {
+  const invoices = await listStoredInvoices(userId);
+  return describePaymentWorkflow({
+    owedNowCents: snapshot?.owedNowCents ?? 0,
+    nextAmountCents: snapshot?.nextAmountCents ?? 0,
+    nextBillingAt: snapshot?.nextBillingAt ?? null,
+    periodStart: snapshot?.periodStart ?? null,
+    invoices,
+    account: paymentAccount(account),
+    paymentMethodLabel: paymentMethodLabel(account),
+    trialPaymentDeferred: snapshot?.trialPaymentDeferred ?? false,
+  });
+}
+
+function requireSandbox(): void {
+  if (!stripeConfigured()) throw new Error('Sandbox payments are not configured.');
+}
+
+async function openPortal(customerId: string, origin: string): Promise<string> {
+  requireSandbox();
+  const portal = await stripeServer().billingPortal.sessions.create({
+    customer: customerId,
+    return_url: `${origin}/dashboard/plan`,
+  });
+  return portal.url;
+}
+
+export async function beginPayment(
+  userId: string,
+  origin: string,
+  requested: 'checkout' | 'portal',
+  expected: PaymentExpectation | null,
+): Promise<PaymentResult> {
   return withBillingLock(userId, async () => {
     const snapshot = await loadChargeSnapshot(userId);
-    if (!snapshot) throw new Error('Account could not be priced.');
+    const account = await loadBillingAccount(userId);
+    let workflow = await workflowFor(userId, account, snapshot);
+    const route = expected ? matchedPaymentRoute(workflow, expected) : workflow.route;
+    if (expected && !route) return { url: null, kind: 'stale', explanation: PAYMENT_STATE_CHANGED };
+    if (!route || route === 'none') return { url: null, kind: 'none', explanation: workflow.explanation };
+    if (route !== requested) return { url: null, kind: 'stale', explanation: PAYMENT_STATE_CHANGED };
+    if (route === 'portal') {
+      if (!account?.stripe_customer_id) throw new Error('Payment setup has not been started.');
+      return { url: await openPortal(account.stripe_customer_id, origin), kind: 'portal', explanation: workflow.explanation };
+    }
+    if (!snapshot) return { url: null, kind: 'none', explanation: workflow.explanation };
+
+    requireSandbox();
     const stripe = stripeServer();
-    let account = await loadBillingAccount(userId);
     if (account?.stripe_customer_id) {
+      await backfillCustomerInvoices(userId, account.stripe_customer_id, snapshot.periodStart);
+      workflow = await workflowFor(userId, account, snapshot);
+      const refreshed = expected ? matchedPaymentRoute(workflow, expected) : workflow.route;
+      if (refreshed === 'portal' && !expected) {
+        return { url: await openPortal(account.stripe_customer_id, origin), kind: 'portal', explanation: workflow.explanation };
+      }
+      if (refreshed !== 'checkout') {
+        const nothingDue = !expected && workflow.route === 'none';
+        return {
+          url: null,
+          kind: nothingDue ? 'none' : 'stale',
+          explanation: nothingDue ? workflow.explanation : PAYMENT_STATE_CHANGED,
+        };
+      }
       const existing = await stripe.subscriptions.list({ customer: account.stripe_customer_id, status: 'all', limit: 20 });
       const openSubscription = existing.data.find((subscription) => LIVE_SUBSCRIPTION.has(subscription.status));
       if (openSubscription && openSubscription.status !== 'incomplete') {
-        const portal = await stripe.billingPortal.sessions.create({
-          customer: account.stripe_customer_id,
-          return_url: `${origin}/dashboard/plan`,
+        const periodEnd = subscriptionPeriodEnd(openSubscription);
+        await saveBillingAccount(userId, {
+          stripe_customer_id: account.stripe_customer_id,
+          stripe_subscription_id: openSubscription.id,
+          stripe_subscription_item_id: subscriptionItemId(openSubscription),
+          subscription_status: openSubscription.status,
+          billing_cycle_anchor: new Date(openSubscription.billing_cycle_anchor * 1000).toISOString(),
+          current_period_end: periodEnd ? new Date(periodEnd * 1000).toISOString() : null,
         });
-        return { url: portal.url, kind: 'portal' };
+        if (!expected) {
+          return { url: await openPortal(account.stripe_customer_id, origin), kind: 'portal', explanation: workflow.explanation };
+        }
+        return { url: null, kind: 'stale', explanation: PAYMENT_STATE_CHANGED };
       }
       if (openSubscription?.status === 'incomplete') await stripe.subscriptions.cancel(openSubscription.id);
     }
+
     const customerId = await ensureCustomer(stripe, userId, account);
-    account = await loadBillingAccount(userId);
-    if (account?.stripe_customer_id) await backfillCustomerInvoices(userId, account.stripe_customer_id, snapshot.periodStart);
-    const invoices = await listStoredInvoices(userId);
-    const gap = uninvoicedCents(snapshot.owedNowCents, invoices, snapshot.periodStart);
-    if (gap === 0 && snapshot.nextAmountCents === 0) return { url: null, kind: 'none' };
+    const gap = workflow.uninvoicedCents;
     const anchor = Math.floor(Date.parse(snapshot.nextBillingAt) / 1000);
     if (anchor <= Math.floor(Date.now() / 1000)) throw new Error('The next billing date is not in the future.');
     const openSession = await supabaseServer
@@ -539,7 +722,7 @@ export async function startCheckout(userId: string, origin: string): Promise<{ u
     if (openSession.data?.stripe_session_id) {
       const session = await stripe.checkout.sessions.retrieve(openSession.data.stripe_session_id);
       const sameQuote = session.metadata?.hhtb_gap === String(gap) && session.metadata?.hhtb_next_amount === String(snapshot.nextAmountCents);
-      if (session.status === 'open' && session.url && sameQuote) return { url: session.url, kind: 'checkout' };
+      if (session.status === 'open' && session.url && sameQuote) return { url: session.url, kind: 'checkout', explanation: workflow.explanation };
       if (session.status === 'open') await stripe.checkout.sessions.expire(session.id);
       await supabaseServer.from('billing_checkout_sessions').update({ status: 'expired' }).eq('stripe_session_id', openSession.data.stripe_session_id);
     }
@@ -599,19 +782,6 @@ export async function startCheckout(userId: string, origin: string): Promise<{ u
       livemode: false,
     });
     if (saved.error && saved.error.code !== '23505') throw saved.error;
-    return { url: session.url, kind: 'checkout' };
-  });
-}
-
-export async function startPortal(userId: string, origin: string): Promise<string> {
-  return withBillingLock(userId, async () => {
-    const account = await loadBillingAccount(userId);
-    if (!account?.stripe_customer_id) throw new Error('Payment setup has not been started.');
-    const stripe = stripeServer();
-    const portal = await stripe.billingPortal.sessions.create({
-      customer: account.stripe_customer_id,
-      return_url: `${origin}/dashboard/plan`,
-    });
-    return portal.url;
+    return { url: session.url, kind: 'checkout', explanation: workflow.explanation };
   });
 }

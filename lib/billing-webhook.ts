@@ -3,8 +3,10 @@ import { loadChargeSnapshot } from '@/lib/billing-amount';
 import { finalizedRenewalAction, renewalDraftMayBeCorrected } from '@/lib/billing-ledger';
 import { withBillingLock } from '@/lib/billing-lock';
 import { subscriptionItemId, subscriptionPeriodEnd } from '@/lib/billing-subscription';
-import { loadBillingAccount, saveBillingAccount } from '@/lib/billing-store';
-import { createAnchoredSubscription, createSupplementalInvoice, recordStripeInvoice, settleUnintendedSubscriptionUpdate } from '@/lib/billing-sync';
+import { clearPaymentAttention, loadBillingAccount, saveBillingAccount } from '@/lib/billing-store';
+import { reconcileCustomerPayments, rememberInvoicePaymentState } from '@/lib/billing-payment-state';
+import { loadToolAccessPolicy } from '@/lib/billing-access';
+import { createAnchoredSubscription, createSupplementalInvoice, recordStripeInvoice, refreshSavedPaymentMethod, settleUnintendedSubscriptionUpdate, syncSavedPaymentMethod } from '@/lib/billing-sync';
 import { supabaseServer } from '@/lib/supabaseServer';
 import { stripeServer } from '@/lib/stripe-server';
 
@@ -38,13 +40,8 @@ async function userIdForSubscription(subscriptionId: string | null): Promise<str
   return data?.user_id ?? null;
 }
 
-async function rememberCard(userId: string, customer: string): Promise<void> {
-  const stripe = stripeServer();
-  const loaded = await stripe.customers.retrieve(customer, { expand: ['invoice_settings.default_payment_method'] });
-  if (loaded.deleted) return;
-  const method = loaded.invoice_settings?.default_payment_method;
-  if (!method || typeof method === 'string' || !method.card) return;
-  await saveBillingAccount(userId, { card_brand: method.card.brand, card_last4: method.card.last4 });
+async function rememberCard(userId: string): Promise<void> {
+  await refreshSavedPaymentMethod(userId);
 }
 
 async function saveSubscription(userId: string, subscription: Stripe.Subscription, eventCreated: number): Promise<void> {
@@ -153,6 +150,7 @@ async function processSubscription(subscription: Stripe.Subscription, eventCreat
   if (!userId) return;
   await withBillingLock(userId, async () => {
     await saveSubscription(userId, subscription, eventCreated);
+    await rememberCard(userId);
   });
 }
 
@@ -187,7 +185,7 @@ async function processCheckoutCompleted(session: Stripe.Checkout.Session, eventC
         nextAmountCents: snapshot.nextAmountCents,
       });
     }
-    if (customer) await rememberCard(userId, customer);
+    if (customer) await rememberCard(userId);
     await supabaseServer.from('billing_checkout_sessions').update({ status: 'complete' }).eq('stripe_session_id', session.id);
     const invoiceId = typeof session.invoice === 'string' ? session.invoice : session.invoice?.id;
     if (invoiceId) {
@@ -213,19 +211,50 @@ export async function processStripeEvent(event: Stripe.Event): Promise<void> {
     case 'customer.subscription.deleted':
       await processSubscription(event.data.object as Stripe.Subscription, event.created);
       return;
+    case 'customer.updated':
+    case 'payment_method.attached':
+    case 'payment_method.detached':
+    case 'payment_method.updated': {
+      const object = event.data.object as Stripe.Customer | Stripe.PaymentMethod;
+      if (object.livemode) return;
+      const customer = 'customer' in object ? customerId(object.customer) : object.id;
+      const userId = await userIdForCustomer(customer);
+      if (userId) await syncSavedPaymentMethod(userId);
+      return;
+    }
     case 'invoice.created':
     case 'invoice.finalized':
+    case 'invoice.updated':
     case 'invoice.paid':
     case 'invoice.payment_failed':
+    case 'invoice.payment_action_required':
     case 'invoice.marked_uncollectible':
     case 'invoice.voided': {
       const invoice = event.data.object as Stripe.Invoice;
       await processInvoice(invoice);
-      if (event.type === 'invoice.paid') {
-        const userId = invoice.metadata?.hhtb_user_id || await userIdForCustomer(customerId(invoice.customer));
+      const userId = invoice.metadata?.hhtb_user_id || await userIdForCustomer(customerId(invoice.customer));
+      if (userId && event.type === 'invoice.paid') {
+        await clearPaymentAttention(invoice.id);
         const customer = customerId(invoice.customer);
-        if (userId && customer) await rememberCard(userId, customer);
+        if (customer) await syncSavedPaymentMethod(userId);
       }
+      if (userId) {
+        await rememberInvoicePaymentState(userId, invoice);
+        await loadToolAccessPolicy(userId);
+      }
+      return;
+    }
+    case 'payment_intent.processing':
+    case 'payment_intent.succeeded':
+    case 'payment_intent.payment_failed':
+    case 'payment_intent.requires_action':
+    case 'payment_intent.canceled': {
+      const intent = event.data.object as Stripe.PaymentIntent;
+      if (intent.livemode) return;
+      const userId = intent.metadata?.hhtb_user_id || await userIdForCustomer(customerId(intent.customer));
+      if (!userId) return;
+      await reconcileCustomerPayments(userId);
+      await loadToolAccessPolicy(userId);
       return;
     }
     default:

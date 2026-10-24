@@ -12,6 +12,7 @@ import { CalendarPanel } from './components/CalendarPanel';
 import { ToolboxPanel } from './components/ToolboxPanel';
 import { StorePanel } from './components/StorePanel';
 import { AdminOverviewPanel } from './components/AdminOverviewPanel';
+import { TOOL_ACCESS_UNVERIFIED_MESSAGE } from '@/lib/tool-access-policy';
 import type { DashboardTab, Tool, User } from './types';
 
 export function DashboardClient({ user }: { user: User }) {
@@ -36,6 +37,7 @@ export function DashboardClient({ user }: { user: User }) {
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [isBuying, setIsBuying] = useState(false);
   const [buyMessage, setBuyMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
+  const [accessNotice, setAccessNotice] = useState<{ locked: boolean; unverified: boolean; message: string | null } | null>(null);
 
   const isSuperAdmin = user.userStatus === 'superadmin';
   const isHouseholdAdmin = user.householdRole !== 'user';
@@ -43,23 +45,29 @@ export function DashboardClient({ user }: { user: User }) {
   const loadTools = useCallback(() => {
     setIsLoadingTools(true);
     fetch('/api/tools')
-      .then((res) => res.json())
-      .then((data) => {
-        if (data.tools) {
-          setTools(data.tools || []);
+      .then(async (res) => {
+        const data = await res.json().catch(() => null);
+        if (!res.ok || !data || data.error || !Array.isArray(data.tools)) {
+          setAccessNotice({ locked: false, unverified: true, message: TOOL_ACCESS_UNVERIFIED_MESSAGE });
+          setIsLoadingTools(false);
+          return;
         }
+        setTools(data.tools);
+        const notice = data.accessNotice;
+        setAccessNotice(notice && typeof notice.unverified === 'boolean'
+          ? notice
+          : { locked: false, unverified: true, message: TOOL_ACCESS_UNVERIFIED_MESSAGE });
         setIsLoadingTools(false);
       })
       .catch((error) => {
         console.error('Error fetching tools:', error);
+        setAccessNotice({ locked: false, unverified: true, message: TOOL_ACCESS_UNVERIFIED_MESSAGE });
         setIsLoadingTools(false);
       });
   }, []);
 
   useEffect(() => {
-    if (activeTab === 'tools' || activeTab === 'store') {
-      loadTools();
-    }
+    loadTools();
   }, [activeTab, loadTools]);
 
   const deepLinkAppliedRef = useRef(false);
@@ -84,7 +92,7 @@ export function DashboardClient({ user }: { user: User }) {
     if (activeTab !== 'tools' || isLoadingTools || !toolsLoadStartedRef.current) return;
 
     const addressBook = tools.find((t) => t.name === 'Address Book');
-    if (addressBook?.isOwned) {
+    if (addressBook?.isOwned && addressBook.isActive !== false && !addressBook.accessLocked && !addressBook.accessUnverified) {
       setActiveToolId(addressBook.id);
       setOpenedToolIds((prev) => new Set(prev).add(addressBook.id));
     }
@@ -96,6 +104,24 @@ export function DashboardClient({ user }: { user: User }) {
   };
 
   const handleToolClick = (tool: Tool) => {
+    if (accessNotice?.unverified || tool.accessUnverified) {
+      setBuyMessage({ type: 'error', text: TOOL_ACCESS_UNVERIFIED_MESSAGE });
+      setActiveTab('tools');
+      setActiveToolId(null);
+      return;
+    }
+    if (tool.isOwned && tool.isActive === false) {
+      setBuyMessage({ type: 'error', text: 'This tool is being removed. Open My Tools to try the removal again.' });
+      setActiveTab('tools');
+      setActiveToolId(null);
+      return;
+    }
+    if (tool.isOwned && tool.accessLocked) {
+      setBuyMessage({ type: 'error', text: tool.accessMessage || accessNotice?.message || 'Tool access is paused because your account needs payment attention. All household tools, including free tools, are temporarily unavailable. Update your payment or remove the tools requiring payment to restore access. Your saved data is safe.' });
+      setActiveTab('tools');
+      setActiveToolId(null);
+      return;
+    }
     if (tool.isOwned) {
       setActiveTab('tools');
       setActiveToolId(tool.id);
@@ -267,6 +293,25 @@ export function DashboardClient({ user }: { user: User }) {
         )}
 
         <div className="mx-auto min-w-0 max-w-7xl px-4 py-8 sm:px-6 lg:px-8">
+          {accessNotice?.unverified ? (
+            <div className={`rounded border px-4 py-4 ${isLight ? 'border-slate-300 bg-white text-slate-900' : 'border-slate-700 bg-slate-900 text-slate-100'}`}>
+              <p className="text-sm font-medium">{TOOL_ACCESS_UNVERIFIED_MESSAGE}</p>
+              <button
+                type="button"
+                onClick={() => loadTools()}
+                disabled={isLoadingTools}
+                className={`mt-3 rounded px-3 py-2 text-sm font-medium disabled:opacity-60 ${isLight ? 'bg-slate-900 text-white' : 'bg-emerald-500 text-slate-950'}`}
+              >
+                {isLoadingTools ? 'Checking...' : 'Retry'}
+              </button>
+            </div>
+          ) : (
+          <>
+          {accessNotice?.message && (
+            <p className={`mb-4 text-sm ${isLight ? 'text-amber-800' : 'text-amber-200'}`}>
+              {accessNotice.message}
+            </p>
+          )}
           {activeTab === 'tools' && (
             <ToolboxPanel
               tools={tools}
@@ -286,6 +331,8 @@ export function DashboardClient({ user }: { user: User }) {
             />
           )}
           {activeTab === 'overview' && isSuperAdmin && <AdminOverviewPanel />}
+          </>
+          )}
         </div>
 
         <ToolModal

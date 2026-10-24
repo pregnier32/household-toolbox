@@ -1,4 +1,5 @@
 import { timingSafeEqual } from 'node:crypto';
+import { refreshHouseholdLock } from '@/lib/billing-access';
 import { syncAccountBilling } from '@/lib/billing-sync';
 import { listReconcileCandidates } from '@/lib/billing-store';
 import { claimStripeEvent, finishStripeEvent } from '@/lib/billing-lock';
@@ -77,6 +78,12 @@ export async function reconcileBilling(now = new Date()): Promise<{ scanned: num
       }
     }
     await supabaseServer.from('billing_reconcile_runs').update({
+      try {
+        await refreshHouseholdLock(userId, now);
+      } catch (error) {
+        failed += 1;
+        console.error('Household tool access could not be saved', error instanceof Error ? error.message : 'unknown');
+      }
       status: failed > 0 ? 'failed' : 'completed',
       finished_at: new Date().toISOString(),
       scanned_count: scanned,

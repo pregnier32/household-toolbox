@@ -4,6 +4,15 @@ import { getToolComponent } from '../toolRegistry';
 import type { Tool } from '../types';
 
 export function ToolRenderer({ tool }: { tool: Tool }) {
+  if (tool.accessLocked) {
+    return (
+      <div className="rounded-2xl border border-slate-800 bg-slate-900/70 p-6">
+        <h2 className="mb-4 text-xl font-semibold text-slate-50">{tool.name}</h2>
+        <p className="text-slate-300">{tool.accessMessage || 'Tool access is paused because your account needs payment attention. All household tools, including free tools, are temporarily unavailable. Update your payment or remove the tools requiring payment to restore access. Your saved data is safe.'}</p>
+      </div>
+    );
+  }
+
   const Component = getToolComponent(tool.name);
 
   if (!Component) {

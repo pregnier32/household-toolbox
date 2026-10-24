@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getHouseholdDataSession } from '@/lib/session';
+import { denyLockedToolAccess, denyRemovedTool } from '@/lib/billing-access';
 import { supabaseServer } from '@/lib/supabaseServer';
 import { attachmentsByRecordIds, deleteHeaderRecordStorageFiles, deleteRecordStorageFiles, removeHealthcareStorageFiles } from '@/lib/healthcare-storage';
 import { CALENDAR_SOURCE_HEALTHCARE_APPOINTMENT } from '@/lib/calendarPins';
@@ -66,6 +67,10 @@ async function removeEmptyStockHeaders(userId: string, toolId: string): Promise<
 export async function GET(request: NextRequest) {
   const user = await getHouseholdDataSession();
   if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+  const toolLock = await denyLockedToolAccess(user.id, user.householdRole);
+  if (toolLock) return toolLock;
+  const removedTool = await denyRemovedTool(user.id, 'Healthcare Appts & History');
+  if (removedTool) return removedTool;
 
   const { searchParams } = new URL(request.url);
   const toolId = searchParams.get('toolId');
@@ -151,6 +156,10 @@ export async function GET(request: NextRequest) {
 export async function POST(request: NextRequest) {
   const user = await getHouseholdDataSession();
   if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+  const toolLock = await denyLockedToolAccess(user.id, user.householdRole);
+  if (toolLock) return toolLock;
+  const removedTool = await denyRemovedTool(user.id, 'Healthcare Appts & History');
+  if (removedTool) return removedTool;
 
   try {
     const formData = await request.formData();
@@ -334,6 +343,10 @@ export async function POST(request: NextRequest) {
 export async function DELETE(request: NextRequest) {
   const user = await getHouseholdDataSession();
   if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+  const toolLock = await denyLockedToolAccess(user.id, user.householdRole);
+  if (toolLock) return toolLock;
+  const removedTool = await denyRemovedTool(user.id, 'Healthcare Appts & History');
+  if (removedTool) return removedTool;
   const { searchParams } = new URL(request.url);
   const toolId = searchParams.get('toolId');
   const resource = searchParams.get('resource');

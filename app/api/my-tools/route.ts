@@ -6,6 +6,9 @@ import { loadAccountPricingInputs } from '@/lib/load-account-pricing';
 import { billingSchedule, removalNoticeForTool } from '@/lib/billing-cycle';
 import { dropUncommittedPeriodTool, loadFrozenPeriod, loadRemovalPlan, loadSignupAt, persistScheduledRemoval } from '@/lib/billing-period-store';
 import { BillingCommitmentError, deleteAfterBillingCommitment, TOOL_REMOVAL_PRESERVATION_ERROR } from '@/lib/billing-tool-removal';
+import { refreshHouseholdLock } from '@/lib/billing-access';
+import { isTypedRemovalConfirmation } from '@/lib/tool-access-policy';
+import { runPermanentToolRemoval, ToolDataRemainsError } from '@/lib/tool-removal-run';
 
 type EmbeddedTool = {
   id: string;
@@ -18,6 +21,15 @@ function asOwnedTool(tools: EmbeddedTool | EmbeddedTool[] | null | undefined): E
   return Array.isArray(tools) ? tools[0] ?? null : tools;
 }
 
+function removalErrorDetail(error: unknown): string {
+  if (error instanceof Error) return `${error.name}: ${error.message}`;
+  if (error && typeof error === 'object' && 'message' in error) {
+    const row = error as { code?: unknown; message?: unknown; details?: unknown };
+    return [row.code, row.message, row.details].filter((part) => part != null && part !== '').join(' ');
+  }
+  return 'Unknown removal error';
+}
+
 function sortOwnedTools<T extends { tools?: EmbeddedTool | EmbeddedTool[] | null }>(rows: T[]): T[] {
   return [...rows].sort((a, b) =>
     (asOwnedTool(a.tools)?.name || '').localeCompare(asOwnedTool(b.tools)?.name || '', undefined, {
@@ -26,7 +38,7 @@ function sortOwnedTools<T extends { tools?: EmbeddedTool | EmbeddedTool[] | null
   );
 }
 
-// GET - Fetch current user's owned tools (active and inactive) with details
+// GET - Fetch the household admin's active tools. A removal still in progress stays listed so it can be retried.
 export async function GET() {
   // Check if user is authenticated
   const user = await getHouseholdDataSession();
@@ -36,7 +48,6 @@ export async function GET() {
   }
 
   try {
-    // Owned tools stay listed after Inactivate so Reactivate is available (not Store Buy).
     const { data: userTools, error } = await supabaseServer
       .from('users_tools')
       .select(`
@@ -51,7 +62,7 @@ export async function GET() {
         )
       `)
       .eq('user_id', user.id)
-      .in('status', ['active', 'inactive'])
+      .in('status', ['active', 'removing'])
       .order('created_at', { ascending: false });
 
     if (error) {
@@ -88,7 +99,7 @@ export async function GET() {
   }
 }
 
-// DELETE - Permanently wipe one tool's records/files, then drop ownership
+// DELETE - Permanently wipe one household's records and files for one tool, then drop ownership.
 export async function DELETE(request: NextRequest) {
   const user = await getHouseholdDataSession();
 
@@ -101,10 +112,15 @@ export async function DELETE(request: NextRequest) {
 
   try {
     const body = await request.json();
-    const { toolId } = body;
+    const { toolId, confirmText } = body;
 
     if (!toolId) {
       return NextResponse.json({ error: 'Tool ID is required' }, { status: 400 });
+    }
+    if (!isTypedRemovalConfirmation(confirmText)) {
+      return NextResponse.json({
+        error: 'Type delete to confirm this removal. Refresh My Tools if the confirmation box is not shown.',
+      }, { status: 400 });
     }
 
     const { data: userTool, error: fetchError } = await supabaseServer
@@ -112,7 +128,7 @@ export async function DELETE(request: NextRequest) {
       .select('id, tool_id')
       .eq('id', toolId)
       .eq('user_id', user.id)
-      .in('status', ['active', 'inactive'])
+      .in('status', ['active', 'removing'])
       .single();
 
     if (fetchError || !userTool) {
@@ -128,7 +144,7 @@ export async function DELETE(request: NextRequest) {
         ? await loadRemovalPlan(pricing, signupAt, now, userTool.tool_id)
         : null;
     } catch (error) {
-      console.error('Tool removal stopped before data deletion:', error);
+      console.error('Tool removal stopped before data deletion:', removalErrorDetail(error));
       return NextResponse.json({ error: TOOL_REMOVAL_PRESERVATION_ERROR }, { status: 503 });
     }
     if (removal?.plan.kind === 'uncommitted' && removal.plan.dropToolId && removal.periodStart) {
@@ -139,43 +155,72 @@ export async function DELETE(request: NextRequest) {
       }
     }
 
-    let deleted;
+    const plan = removal?.plan ?? { kind: 'schedule' as const, tools: [] };
+    const preserve = async () => {
+      if (!removal || removal.plan.kind !== 'schedule' || !removal.periodStart || !removal.canPersist) {
+        throw new BillingCommitmentError();
+      }
+      await persistScheduledRemoval(user.id, removal.periodStart, removal.plan.tools, userTool.tool_id);
+    };
+
+    let deleted: { toolName: string };
     try {
       deleted = await deleteAfterBillingCommitment({
-        plan: removal?.plan ?? { kind: 'schedule', tools: [] },
+        plan,
         toolId: userTool.tool_id,
-        preserve: async () => {
-          if (!removal || removal.plan.kind !== 'schedule' || !removal.periodStart || !removal.canPersist) {
-            throw new BillingCommitmentError();
-          }
-          await persistScheduledRemoval(user.id, removal.periodStart, removal.plan.tools, userTool.tool_id);
+        preserve,
+        deleteData: async () => {
+          let toolName = 'Tool';
+          let residue = { rows: 0, files: 0 };
+          await runPermanentToolRemoval({
+            claim: async () => {
+              const claimed = await supabaseServer
+                .from('users_tools')
+                .update({ status: 'removing', updated_at: new Date().toISOString() })
+                .eq('id', toolId)
+                .eq('user_id', user.id)
+                .in('status', ['active', 'removing'])
+                .select('id');
+              if (claimed.error) throw claimed.error;
+              return claimed.data && claimed.data.length > 0 ? 'claimed' : 'missing';
+            },
+            deleteData: async () => {
+              const wiped = await deleteUserTool(user.id, userTool.tool_id);
+              toolName = wiped.toolName;
+              residue = { rows: 0, files: 0 };
+            },
+            remaining: async () => residue,
+            syncAccess: () => refreshHouseholdLock(user.id),
+            dropOwnership: async () => {
+              const dropped = await supabaseServer
+                .from('users_tools')
+                .delete()
+                .eq('id', toolId)
+                .eq('user_id', user.id);
+              if (dropped.error) throw dropped.error;
+            },
+          });
+          return { toolName };
         },
-        deleteData: () => deleteUserTool(user.id, userTool.tool_id),
       });
     } catch (error) {
-      if (!(error instanceof BillingCommitmentError)) throw error;
-      console.error('Tool removal stopped before data deletion:', error);
-      return NextResponse.json({ error: error.message }, { status: 503 });
-    }
-
-    // Drop current ownership only. user_tool_entitlements stays so a later
-    // re-buy cannot start another 7-day trial.
-
-    const { error: ownershipError } = await supabaseServer
-      .from('users_tools')
-      .delete()
-      .eq('id', toolId)
-      .eq('user_id', user.id);
-
-    if (ownershipError) {
-      console.error('Error removing tool ownership after data wipe:', ownershipError);
-      return NextResponse.json({ error: 'Failed to remove tool' }, { status: 500 });
+      if (error instanceof BillingCommitmentError || error instanceof ToolDataRemainsError) {
+        console.error('Tool removal stopped before completion:', removalErrorDetail(error));
+        return NextResponse.json({ error: error.message }, { status: 503 });
+      }
+      if (error instanceof Error && error.name === 'ToolRemovalMissing') {
+        return NextResponse.json({ error: error.message }, { status: 404 });
+      }
+      console.error('Tool removal stopped before completion:', removalErrorDetail(error));
+      return NextResponse.json({
+        error: 'This tool could not be fully removed. Some records or files may still be there. Billing is still available. Please try again.',
+      }, { status: 503 });
     }
 
     return NextResponse.json({
       success: true,
       toolName: deleted.toolName,
-      message: `${deleted.toolName} was removed`,
+      message: `${deleted.toolName} and its saved data were permanently deleted.`,
     });
   } catch (error) {
     console.error('Error removing user tool:', error);

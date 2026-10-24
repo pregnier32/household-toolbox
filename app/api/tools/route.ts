@@ -4,6 +4,7 @@ import { supabaseServer } from '@/lib/supabaseServer';
 import { getUsedTrialToolIds, toolOffersTrial } from '@/lib/user-tool-entitlements';
 import { dollarsToCents, formatCents } from '@/lib/account-pricing';
 import { getAccountPricingState } from '@/lib/load-account-pricing';
+import { loadToolAccessPolicy, toolAccessNotice, unverifiedToolAccessNotice } from '@/lib/billing-access';
 
 function offerNoteForTool(input: {
   owned: boolean;
@@ -45,7 +46,7 @@ export async function GET() {
         .from('users_tools')
         .select('tool_id, status')
         .eq('user_id', user.id)
-        .in('status', ['active', 'inactive']),
+        .in('status', ['active', 'removing']),
       supabaseServer
         .from('tools')
         .select('*')
@@ -81,9 +82,10 @@ export async function GET() {
       return NextResponse.json({ error: 'Failed to fetch tools' }, { status: 500 });
     }
 
-    // Active and inactive both count as owned. Inactivate must not drop entitlement
-    // or Store will offer Buy instead of My Tools Reactivate.
-    const accessibleToolIds = new Set(userTools?.map((ut) => ut.tool_id) || []);
+    const accessibleToolIds = new Set(
+      (userTools || []).filter((ut) => ut.status === 'active').map((ut) => ut.tool_id),
+    );
+    const ownedToolIds = new Set(userTools?.map((ut) => ut.tool_id) || []);
 
     let customTools: any[] = [];
     if (isSuperAdmin) {
@@ -138,8 +140,15 @@ export async function GET() {
       console.log('Tools without icons:', toolsWithoutIcons.map(t => ({ id: t.id, name: t.name })));
     }
 
-    // Create map for owned tools (active or inactivated — data stays)
-    const ownedToolIds = new Set(userTools?.map((ut) => ut.tool_id) || []);
+    let accessNotice: ReturnType<typeof toolAccessNotice> = { locked: false, unverified: false, message: null };
+    if (ownedToolIds.size > 0) {
+      try {
+        accessNotice = toolAccessNotice(await loadToolAccessPolicy(user.id), user.householdRole);
+      } catch (error) {
+        console.error('Tool access lock could not be checked', error instanceof Error ? error.message : 'unknown');
+        accessNotice = unverifiedToolAccessNotice();
+      }
+    }
     const activeToolIds = new Set(
       (userTools || []).filter((ut) => ut.status === 'active').map((ut) => ut.tool_id)
     );
@@ -158,6 +167,9 @@ export async function GET() {
         icons: iconsByTool[tool.id] || {},
         isOwned: ownedToolIds.has(tool.id),
         isActive: activeToolIds.has(tool.id),
+        accessUnverified: ownedToolIds.has(tool.id) && accessNotice.unverified,
+        accessLocked: ownedToolIds.has(tool.id) && accessNotice.locked,
+        accessMessage: ownedToolIds.has(tool.id) && (accessNotice.locked || accessNotice.unverified) ? accessNotice.message : null,
         trialEligible: offersTrial && !usedTrialToolIds.has(tool.id),
         trialStatus: null,
         trialEndDate: null,
@@ -171,7 +183,7 @@ export async function GET() {
       };
     });
 
-    return NextResponse.json({ tools: toolsWithIcons || [] });
+    return NextResponse.json({ tools: toolsWithIcons || [], accessNotice });
   } catch (error) {
     console.error('Error in tools API:', error);
     return NextResponse.json({ error: 'Internal server error' }, { status: 500 });

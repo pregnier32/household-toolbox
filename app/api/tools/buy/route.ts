@@ -3,6 +3,8 @@ import { getHouseholdDataSession } from '@/lib/session';
 import { supabaseServer } from '@/lib/supabaseServer';
 import { ensureToolEntitlement, toolOffersTrial } from '@/lib/user-tool-entitlements';
 import { ownershipShelfPrice } from '@/lib/ownership-price';
+import { toolAccessSyncResponse } from '@/lib/billing-access';
+import { deleteUserTool } from '@/lib/user-data-deletion';
 
 async function purchaseMessage(userId: string, toolId: string, trialGranted: boolean): Promise<string> {
   if (trialGranted) return '7-day free trial started. No payment is required to start.';
@@ -87,13 +89,30 @@ export async function POST(request: NextRequest) {
     if (existingUserTool) {
       // If user already has the tool and it's active, return success
       if (existingUserTool.status === 'active') {
+        const accessSync = await toolAccessSyncResponse(user.id);
+        if (accessSync) return accessSync;
         return NextResponse.json(
           { message: 'You already own this tool', userTool: existingUserTool },
           { status: 200 }
         );
       }
+      if (existingUserTool.status === 'removing') {
+        return NextResponse.json(
+          { error: 'This tool is being removed. Try again when removal finishes.' },
+          { status: 409 },
+        );
+      }
 
-      // Reactivate inactive subscription (no new trial)
+      try {
+        await deleteUserTool(user.id, toolId);
+      } catch (error) {
+        console.error('Adding a tool again stopped because old records remain:', error);
+        return NextResponse.json(
+          { error: 'This tool could not be added again because its previous records are still being removed. Please try again.' },
+          { status: 503 },
+        );
+      }
+
       const { data: updatedUserTool, error: updateError } = await supabaseServer
         .from('users_tools')
         .update({
@@ -107,10 +126,12 @@ export async function POST(request: NextRequest) {
 
       if (updateError) {
         console.error('Error updating user tool:', updateError);
-        return NextResponse.json({ error: 'Failed to reactivate tool' }, { status: 500 });
+        return NextResponse.json({ error: 'Failed to add tool' }, { status: 500 });
       }
 
       const entitlement = await recordEntitlement(user.id, tool);
+      const accessSync = await toolAccessSyncResponse(user.id);
+      if (accessSync) return accessSync;
       return NextResponse.json({
         message: await purchaseMessage(user.id, toolId, false),
         userTool: updatedUserTool,
@@ -143,6 +164,8 @@ export async function POST(request: NextRequest) {
       }, { status: 500 });
     }
 
+    const accessSync = await toolAccessSyncResponse(user.id);
+    if (accessSync) return accessSync;
     return NextResponse.json(
       {
         message: await purchaseMessage(user.id, toolId, entitlement.trialGranted),

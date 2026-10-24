@@ -6,6 +6,9 @@ export const runtime = 'nodejs';
 
 /**
  * Vercel Cron calls this route with GET on the production deployment only.
+ * The deployed schedule is 11:15 UTC daily. Hobby plans may start that daily
+ * job any time during the 11:00 UTC hour. The run also saves each household
+ * tool-access lock, including households with no Stripe customer.
  * Hobby plans accept a daily schedule and may run it any time during that hour.
  * Pro plans can use a more frequent schedule. Authorization is the Bearer
  * CRON_SECRET header Vercel sends when that variable is set on the project.

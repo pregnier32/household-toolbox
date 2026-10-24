@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getHouseholdDataSession } from '@/lib/session';
+import { denyLockedToolAccess } from '@/lib/billing-access';
 import { supabaseServer } from '@/lib/supabaseServer';
 import {
   CALENDAR_SOURCE_BUDGET_EVENT,
@@ -957,6 +958,36 @@ export async function loadTravelItems({
   });
 }
 
+const CALENDAR_TOOL_NAMES: Record<string, string> = {
+  [CALENDAR_SOURCE_CALENDAR_EVENT]: 'Calendar Events',
+  [CALENDAR_SOURCE_CLEANING_TASK]: 'Cleaning Schedule',
+  [CALENDAR_SOURCE_BUDGET_EVENT]: 'Event Budget Planner',
+  [CALENDAR_SOURCE_GOAL]: 'Goals Tracking',
+  [CALENDAR_SOURCE_HEALTHCARE_APPOINTMENT]: 'Healthcare Appts & History',
+  [CALENDAR_SOURCE_HOME_MAINTENANCE_TASK]: 'Home Maintenance Schedule',
+  [CALENDAR_SOURCE_PET_APPOINTMENT]: 'Pet Care Schedule',
+  [CALENDAR_SOURCE_REPAIR_WARRANTY]: 'Repair History',
+  [CALENDAR_SOURCE_SUBSCRIPTION]: 'Subscription Tracker',
+  [CALENDAR_SOURCE_TODO_TASK]: 'To Do List',
+  [CALENDAR_SOURCE_TRAVEL_TRIP]: 'Travel Log',
+};
+
+async function activeCalendarToolNames(userId: string): Promise<Set<string>> {
+  const { data, error } = await supabaseServer
+    .from('users_tools')
+    .select('tools(name)')
+    .eq('user_id', userId)
+    .eq('status', 'active');
+  if (error) throw error;
+  const names = new Set<string>();
+  for (const row of data ?? []) {
+    const tools = row.tools as { name?: string } | { name?: string }[] | null;
+    const name = Array.isArray(tools) ? tools[0]?.name : tools?.name;
+    if (name) names.add(name);
+  }
+  return names;
+}
+
 const CALENDAR_LOADERS: Array<{
   sourceType: string;
   load: (args: CalendarLoadArgs) => Promise<DashboardCalendarItem[]>;
@@ -987,8 +1018,11 @@ export async function loadDashboardCalendarItems({
   toolId?: string;
   pins: Map<string, Set<string>>;
 }): Promise<DashboardCalendarItem[]> {
+  const activeTools = await activeCalendarToolNames(userId);
   const batches = await Promise.all(
     CALENDAR_LOADERS.map(async ({ sourceType, load }) => {
+      const toolName = CALENDAR_TOOL_NAMES[sourceType];
+      if (toolName && !activeTools.has(toolName)) return [];
       const pinnedIds = pins.get(sourceType) ?? new Set<string>();
       if (pinnedIds.size === 0) return [];
       try {
@@ -1015,6 +1049,8 @@ export async function calendarSourceResponse(
   if (!user) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   }
+  const toolLock = await denyLockedToolAccess(user.id, user.householdRole);
+  if (toolLock) return toolLock;
 
   try {
     const { searchParams } = new URL(request.url);
@@ -1023,6 +1059,9 @@ export async function calendarSourceResponse(
       return NextResponse.json({ error: parsed.error }, { status: 400 });
     }
     const toolId = searchParams.get('toolId') || undefined;
+    const activeTools = await activeCalendarToolNames(user.id);
+    const sourceTool = CALENDAR_TOOL_NAMES[options.sourceType];
+    if (sourceTool && !activeTools.has(sourceTool)) return NextResponse.json({ items: [] });
     const { ids } = await getPinnedSourceIds({
       userId: user.id,
       sourceType: options.sourceType,
@@ -1052,6 +1091,8 @@ export async function dashboardCalendarResponse(request: NextRequest) {
   if (!user) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   }
+  const toolLock = await denyLockedToolAccess(user.id, user.householdRole);
+  if (toolLock) return toolLock;
 
   try {
     const { searchParams } = new URL(request.url);

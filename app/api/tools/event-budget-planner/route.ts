@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getHouseholdDataSession } from '@/lib/session';
+import { denyLockedToolAccess, denyRemovedTool } from '@/lib/billing-access';
 import { supabaseServer } from '@/lib/supabaseServer';
 import {
   attachmentsByEventIds,
@@ -395,6 +396,10 @@ export async function GET(request: NextRequest) {
   if (!user) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   }
+  const toolLock = await denyLockedToolAccess(user.id, user.householdRole);
+  if (toolLock) return toolLock;
+  const removedTool = await denyRemovedTool(user.id, 'Event Budget Planner');
+  if (removedTool) return removedTool;
 
   try {
     const { searchParams } = new URL(request.url);
@@ -417,6 +422,10 @@ export async function POST(request: NextRequest) {
   if (!user) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   }
+  const toolLock = await denyLockedToolAccess(user.id, user.householdRole);
+  if (toolLock) return toolLock;
+  const removedTool = await denyRemovedTool(user.id, 'Event Budget Planner');
+  if (removedTool) return removedTool;
 
   try {
     const body = await request.json();

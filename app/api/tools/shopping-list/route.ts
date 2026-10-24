@@ -1,3 +1,4 @@
+import { denyLockedToolAccess, denyRemovedTool } from '@/lib/billing-access';
 import { NextRequest, NextResponse } from 'next/server';
 import { getHouseholdDataSession } from '@/lib/session';
 import { supabaseServer } from '@/lib/supabaseServer';
@@ -249,11 +250,9 @@ async function resolveShoppingListToolId(userId: string) {
     .from('users_tools')
     .select('tool_id, status')
     .eq('user_id', userId)
-    .in('status', ['active', 'inactive']);
-  const ownedActive = new Set((owned ?? []).filter((row) => row.status === 'active').map((row) => row.tool_id));
-  const ownedAny = new Set((owned ?? []).map((row) => row.tool_id));
-  const activeOwned = slTools.filter((tool) => ownedActive.has(tool.id));
-  const candidates = activeOwned.length ? activeOwned : slTools.filter((tool) => ownedAny.has(tool.id));
+    .eq('status', 'active');
+  const ownedActive = new Set((owned ?? []).map((row) => row.tool_id));
+  const candidates = slTools.filter((tool) => ownedActive.has(tool.id));
   if (candidates.length === 0) return null;
   if (candidates.length === 1) return candidates[0].id;
 
@@ -392,6 +391,10 @@ export async function GET(request: NextRequest) {
   if (!user) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   }
+  const toolLock = await denyLockedToolAccess(user.id, user.householdRole);
+  if (toolLock) return toolLock;
+  const removedTool = await denyRemovedTool(user.id, 'Shopping List');
+  if (removedTool) return removedTool;
 
   const { searchParams } = new URL(request.url);
   const toolId = searchParams.get('toolId');
@@ -495,6 +498,10 @@ export async function POST(request: NextRequest) {
   if (!user) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   }
+  const toolLock = await denyLockedToolAccess(user.id, user.householdRole);
+  if (toolLock) return toolLock;
+  const removedTool = await denyRemovedTool(user.id, 'Shopping List');
+  if (removedTool) return removedTool;
 
   try {
     const body = await request.json();

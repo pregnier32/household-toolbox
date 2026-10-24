@@ -3,6 +3,7 @@ import { getSession } from '@/lib/session';
 import { supabaseServer } from '@/lib/supabaseServer';
 import { ensureToolEntitlement, toolOffersTrial } from '@/lib/user-tool-entitlements';
 import { ownershipShelfPrice } from '@/lib/ownership-price';
+import { toolAccessSyncResponse } from '@/lib/billing-access';
 
 // GET - Fetch tools for a specific user (admin only)
 export async function GET(
@@ -163,6 +164,8 @@ export async function PUT(
       return NextResponse.json({ error: 'Failed to update tool status' }, { status: 500 });
     }
 
+    const accessSync = await toolAccessSyncResponse(userId);
+    if (accessSync) return accessSync;
     return NextResponse.json({ tool: updatedTool, message: 'Tool status updated successfully' });
   } catch (error) {
     console.error('Error in user tools API:', error);
@@ -259,6 +262,8 @@ export async function POST(
         }
 
         await ensureToolEntitlement(userId, tool.id, { grantTrial: false });
+        const accessSync = await toolAccessSyncResponse(userId);
+        if (accessSync) return accessSync;
         return NextResponse.json({ tool: updatedTool, message: 'Tool reactivated successfully' });
       } else {
         return NextResponse.json(
@@ -303,6 +308,8 @@ export async function POST(
     await ensureToolEntitlement(userId, tool.id, {
       grantTrial: toolOffersTrial(tool),
     });
+    const accessSync = await toolAccessSyncResponse(userId);
+    if (accessSync) return accessSync;
     return NextResponse.json({ tool: newUserTool, message: 'Tool assigned successfully' }, { status: 201 });
   } catch (error) {
     console.error('Error in assign tool API:', error);

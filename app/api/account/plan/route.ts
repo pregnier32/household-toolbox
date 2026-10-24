@@ -8,10 +8,13 @@ import { loadFrozenPeriod, loadSignupAt, materializeBillingPeriod } from '@/lib/
 import { formatStorageBytes } from '@/lib/user-storage';
 import { getAccountPricingProjection } from '@/lib/load-account-pricing';
 import { persistAccountNotices } from '@/lib/promotion-service';
-import { loadBillingAccount } from '@/lib/billing-store';
+import { listStoredInvoices, loadBillingAccount } from '@/lib/billing-store';
+import { loadChargeSnapshot } from '@/lib/billing-amount';
+import { describePaymentWorkflow } from '@/lib/billing-payment-workflow';
+import { describePaymentMethod } from '@/lib/billing-card';
+import { syncSavedPaymentMethod } from '@/lib/billing-sync';
+import { loadToolAccessPolicy } from '@/lib/billing-access';
 import type { CustomerPlanBenefit, CustomerPlanSource } from '@/lib/customer-plan-preview';
-
-const LIVE_PAYMENT = new Set(['active', 'past_due', 'unpaid', 'trialing', 'paused']);
 
 function day(value: string | null): string | null {
   return value ? value.slice(0, 10) : null;
@@ -67,15 +70,36 @@ export async function GET() {
       statement = cycle.statement;
       billingCycle = cycle.billingCycle;
     }
+    const cardSync = await syncSavedPaymentMethod(user.id).catch(() => null);
     const account = await loadBillingAccount(user.id);
-    const card = account?.card_brand && account.card_last4 ? `${account.card_brand} •••• ${account.card_last4}` : 'Not configured yet';
-    const total = statement.find((row) => row.kind === 'total');
-    const amountIsDue = Boolean(total?.amount && total.amount !== '$0.00') || state.paymentSetupWouldBeNeeded;
-    const paymentAction = account?.subscription_status && LIVE_PAYMENT.has(account.subscription_status)
-      ? 'manage'
-      : amountIsDue
-        ? 'setup'
-        : 'none';
+    const snapshot = await loadChargeSnapshot(user.id, now);
+    const invoices = await listStoredInvoices(user.id);
+    const paymentMethodStatus = cardSync?.state
+      ?? (account?.card_brand && account.card_last4 ? 'saved' : account?.stripe_customer_id ? 'pending' : 'absent');
+    const paymentMethodLabel = paymentMethodStatus === 'saved'
+      ? (cardSync?.label ?? (account?.card_brand && account.card_last4
+        ? describePaymentMethod('saved', { brand: account.card_brand, last4: account.card_last4 })
+        : null))
+      : null;
+    const card = describePaymentMethod(paymentMethodStatus, cardSync?.card ?? (account?.card_brand && account.card_last4
+      ? { brand: account.card_brand, last4: account.card_last4 }
+      : null));
+    const payment = describePaymentWorkflow({
+      owedNowCents: snapshot?.owedNowCents ?? 0,
+      nextAmountCents: snapshot?.nextAmountCents ?? 0,
+      nextBillingAt: snapshot?.nextBillingAt ?? billingCycle?.nextBillingAt ?? null,
+      periodStart: snapshot?.periodStart ?? null,
+      invoices,
+      account: account ? {
+        subscriptionStatus: account.subscription_status,
+        stripeCustomerId: account.stripe_customer_id,
+        stripeSubscriptionId: account.stripe_subscription_id,
+        hasSavedPaymentMethod: paymentMethodStatus === 'saved',
+      } : null,
+      paymentMethodLabel,
+      paymentMethodStatus,
+      trialPaymentDeferred: snapshot?.trialPaymentDeferred ?? false,
+    });
     return NextResponse.json({
       accountType: state.accountType,
       freeSlots: state.freeSlots,
@@ -100,9 +124,26 @@ export async function GET() {
       storageUsed: formatStorageBytes(state.storageUsedBytes),
       storageAllowance: formatStorageBytes(state.effectiveStorageBytes),
       paymentMethod: card,
-      paymentAction,
+      paymentMethodStatus,
+      paymentAction: payment.action,
+      paymentRoute: payment.route,
+      paymentExplanation: payment.explanation,
+      paymentButtonLabel: payment.buttonLabel,
+      collectedTodayCents: payment.collectedTodayCents,
+      nextAmountCents: payment.nextAmountCents,
+      outstandingInvoiceCents: payment.outstandingInvoiceCents,
+      paymentSecondary: payment.secondary,
       subscriptionStatus: account?.subscription_status ?? null,
       paymentSetupWouldBeNeeded: state.paymentSetupWouldBeNeeded,
+      access: await loadToolAccessPolicy(user.id, now).then((policy) => ({
+        locked: policy.locked,
+        pending: policy.pending,
+        message: policy.adminMessage,
+        warning: policy.warning,
+        debtNotice: policy.debtNotice,
+        recovery: policy.recovery,
+        causingTools: policy.causingTools,
+      })).catch(() => null),
       notice: notice.data ? { title: notice.data.title, body: notice.data.body } : null,
     });
   } catch (error) {

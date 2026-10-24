@@ -21,6 +21,9 @@ export type BillingAccountRow = {
   card_last4: string | null;
   subscription_event_created: number | null;
   last_reconciled_at: string | null;
+  tool_access_locked?: boolean | null;
+  tool_access_reason?: string | null;
+  tool_access_synced_at?: string | null;
 };
 
 export type StoredInvoice = LedgerInvoice & {
@@ -28,6 +31,10 @@ export type StoredInvoice = LedgerInvoice & {
   amountPaidCents: number;
   replacesStripeInvoiceId: string | null;
   overcharge: boolean;
+  updatedAt: string | null;
+  collectionState: 'processing' | 'authentication_required' | 'failed' | 'overdue' | null;
+  collectionCheckedAt: string | null;
+  dueAt: string | null;
 };
 
 type InvoiceRow = {
@@ -39,6 +46,10 @@ type InvoiceRow = {
   amount_paid_cents: number;
   replaces_stripe_invoice_id: string | null;
   overcharge: boolean;
+  updated_at?: string | null;
+  collection_state?: 'processing' | 'authentication_required' | 'failed' | 'overdue' | null;
+  collection_checked_at?: string | null;
+  due_at?: string | null;
 };
 
 function missingRelation(error: { code?: string; message?: string } | null): boolean {
@@ -50,7 +61,7 @@ function missingRelation(error: { code?: string; message?: string } | null): boo
 export async function loadBillingAccount(userId: string): Promise<BillingAccountRow | null> {
   const { data, error } = await supabaseServer
     .from('billing_accounts')
-    .select('user_id, stripe_customer_id, stripe_subscription_id, stripe_subscription_item_id, subscription_status, cancel_at_period_end, billing_cycle_anchor, current_period_end, synced_amount_cents, card_brand, card_last4, subscription_event_created, last_reconciled_at')
+    .select('user_id, stripe_customer_id, stripe_subscription_id, stripe_subscription_item_id, subscription_status, cancel_at_period_end, billing_cycle_anchor, current_period_end, synced_amount_cents, card_brand, card_last4, subscription_event_created, last_reconciled_at, tool_access_locked, tool_access_reason, tool_access_synced_at')
     .eq('user_id', userId)
     .maybeSingle();
   if (error) {
@@ -65,6 +76,28 @@ export async function ensureBillingAccount(userId: string): Promise<void> {
   if (inserted.error && inserted.error.code !== '23505' && !missingRelation(inserted.error)) throw inserted.error;
 }
 
+export async function syncHouseholdToolAccess(userId: string, locked: boolean, reason: string): Promise<void> {
+  const account = await loadBillingAccount(userId);
+  if (account && Boolean(account.tool_access_locked) === locked && (account.tool_access_reason ?? 'open') === reason) return;
+  if (!account) {
+    const { error } = await supabaseServer.from('billing_accounts').insert({
+      user_id: userId,
+      tool_access_locked: locked,
+      tool_access_reason: reason,
+      tool_access_synced_at: new Date().toISOString(),
+      livemode: false,
+    });
+    if (error && !/tool_access_locked|schema cache/i.test(error.message || '')) throw error;
+    return;
+  }
+  const { error } = await supabaseServer.from('billing_accounts').update({
+    tool_access_locked: locked,
+    tool_access_reason: reason,
+    tool_access_synced_at: new Date().toISOString(),
+  }).eq('user_id', userId);
+  if (error && !/tool_access_locked|schema cache/i.test(error.message || '')) throw error;
+}
+
 export async function saveBillingAccount(userId: string, patch: Partial<Omit<BillingAccountRow, 'user_id'>>): Promise<void> {
   await ensureBillingAccount(userId);
   const { error } = await supabaseServer.from('billing_accounts').update(patch).eq('user_id', userId);
@@ -74,7 +107,7 @@ export async function saveBillingAccount(userId: string, patch: Partial<Omit<Bil
 export async function listStoredInvoices(userId: string): Promise<StoredInvoice[]> {
   const { data, error } = await supabaseServer
     .from('billing_invoices')
-    .select('period_start, stripe_invoice_id, role, status, amount_cents, amount_paid_cents, replaces_stripe_invoice_id, overcharge')
+    .select('period_start, stripe_invoice_id, role, status, amount_cents, amount_paid_cents, replaces_stripe_invoice_id, overcharge, updated_at, collection_state, collection_checked_at, due_at')
     .eq('user_id', userId);
   if (error) {
     if (missingRelation(error)) return [];
@@ -89,6 +122,10 @@ export async function listStoredInvoices(userId: string): Promise<StoredInvoice[
     amountPaidCents: row.amount_paid_cents,
     replacesStripeInvoiceId: row.replaces_stripe_invoice_id,
     overcharge: row.overcharge,
+    updatedAt: row.updated_at ?? null,
+    collectionState: row.collection_state ?? null,
+    collectionCheckedAt: row.collection_checked_at ?? null,
+    dueAt: row.due_at ?? null,
   }));
 }
 
@@ -122,6 +159,7 @@ export async function upsertStoredInvoice(input: {
     replaces_stripe_invoice_id: input.replacesStripeInvoiceId ?? null,
     overcharge: Boolean(existing.data?.overcharge) || Boolean(input.overcharge),
     livemode: false,
+    updated_at: new Date().toISOString(),
   };
   const saved = await supabaseServer.from('billing_invoices').upsert(row, { onConflict: 'stripe_invoice_id' });
   if (saved.error) throw saved.error;
@@ -202,6 +240,74 @@ export async function markOperationFailed(id: string, message: string): Promise<
     last_error: message.slice(0, 500),
   }).eq('id', id).eq('status', 'started');
   if (error) throw error;
+}
+
+export type PaymentAttention = {
+  invoiceId: string;
+  collection: 'failed' | 'authentication_required';
+  createdAt: string;
+};
+
+export async function notePaymentAttention(
+  userId: string,
+  stripeInvoiceId: string,
+  collection: 'failed' | 'authentication_required',
+): Promise<void> {
+  const operation = await startBillingOperation({
+    userId,
+    idempotencyKey: `attention:${stripeInvoiceId}`,
+    kind: 'payment_attention',
+    payload: { invoiceId: stripeInvoiceId, collection },
+  });
+  const { error } = await supabaseServer.from('billing_operations').update({
+    status: 'failed',
+    last_error: collection,
+    payload: { invoiceId: stripeInvoiceId, collection },
+  }).eq('id', operation.id);
+  if (error) throw error;
+}
+
+export async function clearPaymentAttention(stripeInvoiceId: string): Promise<void> {
+  const { error } = await supabaseServer.from('billing_operations').update({
+    status: 'completed',
+    last_error: null,
+  }).eq('idempotency_key', `attention:${stripeInvoiceId}`).eq('kind', 'payment_attention');
+  if (error && !missingRelation(error)) throw error;
+}
+
+export async function listPaymentAttention(userId: string): Promise<PaymentAttention[]> {
+  const { data, error } = await supabaseServer
+    .from('billing_operations')
+    .select('payload, created_at')
+    .eq('user_id', userId)
+    .eq('kind', 'payment_attention')
+    .eq('status', 'failed');
+  if (error) {
+    if (missingRelation(error)) return [];
+    throw error;
+  }
+  return (data ?? []).flatMap((row) => {
+    const payload = row.payload as { invoiceId?: string; collection?: string } | null;
+    if (!payload?.invoiceId) return [];
+    const collection = payload.collection === 'authentication_required' ? 'authentication_required' : 'failed';
+    return [{ invoiceId: payload.invoiceId, collection, createdAt: row.created_at as string }];
+  });
+}
+
+export async function newestOpenCheckoutAt(userId: string): Promise<string | null> {
+  const { data, error } = await supabaseServer
+    .from('billing_checkout_sessions')
+    .select('created_at')
+    .eq('user_id', userId)
+    .eq('status', 'open')
+    .order('created_at', { ascending: false })
+    .limit(1)
+    .maybeSingle();
+  if (error) {
+    if (missingRelation(error)) return null;
+    throw error;
+  }
+  return data?.created_at ?? null;
 }
 
 export async function listOpenOperations(userId?: string): Promise<BillingOperation[]> {

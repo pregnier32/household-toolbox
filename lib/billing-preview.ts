@@ -642,11 +642,17 @@ export function buildCycleCustomerStatement(
   if (extras.length > 0 && storageAt >= 0) statement.splice(storageAt, 0, ...extras);
 
   const storageCents = Math.round(Math.max(0, input.storageAddonGb) * STORAGE_ADDON_MONTHLY_CENTS);
+  const openedToday = snapshot.schedule.hasStarted
+    && snapshot.schedule.previousBillingAt
+    && snapshot.schedule.previousBillingAt.slice(0, 10) === effectiveAt.toISOString().slice(0, 10);
+  const billingAt = openedToday && snapshot.schedule.previousBillingAt
+    ? snapshot.schedule.previousBillingAt
+    : snapshot.schedule.nextBillingAt;
   return {
     statement,
     snapshot,
     billingCycle: {
-      nextBillingDate: billingDateLabel(snapshot.schedule.nextBillingAt),
+      nextBillingDate: billingDateLabel(billingAt),
       estimatedNextBill: formatCents(snapshot.next.effectiveMonthlyCents + storageCents),
       nextBillingAt: snapshot.schedule.nextBillingAt,
     },

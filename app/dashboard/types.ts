@@ -26,6 +26,9 @@ export type Tool = {
   updated_at: string | null;
   isOwned?: boolean;
   isActive?: boolean;
+  accessLocked?: boolean;
+  accessUnverified?: boolean;
+  accessMessage?: string | null;
   offers_trial?: boolean;
   trialEligible?: boolean;
   offerNote?: string | null;

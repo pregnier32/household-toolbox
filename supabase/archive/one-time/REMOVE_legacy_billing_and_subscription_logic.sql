@@ -108,7 +108,7 @@ BEGIN
   -- Re-add simplified status constraint
   ALTER TABLE users_tools
     ADD CONSTRAINT users_tools_status_check
-    CHECK (status IN ('active', 'inactive'));
+    CHECK (status IN ('active', 'inactive', 'removing'));
 
   -- Keep default status aligned
   ALTER TABLE users_tools

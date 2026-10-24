@@ -1,3 +1,4 @@
+import { denyLockedToolAccess, denyRemovedTool } from '@/lib/billing-access';
 import { NextRequest, NextResponse } from 'next/server';
 import { getHouseholdDataSession } from '@/lib/session';
 import { supabaseServer } from '@/lib/supabaseServer';
@@ -17,6 +18,10 @@ function mapAttachment(row: { id: string; file_name: string; file_size: number; 
 export async function POST(request: NextRequest) {
   const user = await getHouseholdDataSession();
   if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+  const toolLock = await denyLockedToolAccess(user.id, user.householdRole);
+  if (toolLock) return toolLock;
+  const removedTool = await denyRemovedTool(user.id, 'To Do List');
+  if (removedTool) return removedTool;
 
   try {
     const formData = await request.formData();
@@ -91,6 +96,10 @@ export async function POST(request: NextRequest) {
 export async function DELETE(request: NextRequest) {
   const user = await getHouseholdDataSession();
   if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+  const toolLock = await denyLockedToolAccess(user.id, user.householdRole);
+  if (toolLock) return toolLock;
+  const removedTool = await denyRemovedTool(user.id, 'To Do List');
+  if (removedTool) return removedTool;
 
   try {
     const body = await request.json().catch(() => ({}));

@@ -1,4 +1,4 @@
-import { describeBillingCycle, billingSchedule } from '@/lib/billing-cycle';
+import { describeBillingCycle, billingSchedule, paymentWaitsForTrial } from '@/lib/billing-cycle';
 import { STORAGE_ADDON_MONTHLY_CENTS } from '@/lib/billing-preview';
 import { loadFrozenPeriod, loadSignupAt, materializeBillingPeriod } from '@/lib/billing-period-store';
 import { loadAccountPricingInputs } from '@/lib/load-account-pricing';
@@ -12,6 +12,7 @@ export type ChargeSnapshot = {
   nextAmountCents: number;
   periodStart: string | null;
   nextBillingAt: string;
+  trialPaymentDeferred: boolean;
 };
 
 function storageCents(gigabytes: number): number {
@@ -44,5 +45,6 @@ export async function loadChargeSnapshot(userId: string, now = new Date()): Prom
     nextAmountCents: current.next.effectiveMonthlyCents + storage,
     periodStart: schedule.periodStart,
     nextBillingAt: schedule.nextBillingAt,
+    trialPaymentDeferred: paymentWaitsForTrial(current) && (schedule.hasStarted ? (current.period?.effectiveMonthlyCents ?? 0) + storage : 0) === 0,
   };
 }

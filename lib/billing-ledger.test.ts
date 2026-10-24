@@ -4,6 +4,7 @@ import {
   finalizedRenewalAction,
   invoicedCents,
   mergeInvoiceStatus,
+  outstandingCents,
   paidCents,
   renewalDraftMayBeCorrected,
   uninvoicedCents,
@@ -12,7 +13,7 @@ import {
 
 const PERIOD = '2026-10-15T15:00:00.000Z';
 
-function invoice(partial: Partial<LedgerInvoice> & Pick<LedgerInvoice, 'role' | 'status' | 'amountCents'>): LedgerInvoice {
+function invoice(partial: Partial<LedgerInvoice & { amountPaidCents?: number }> & Pick<LedgerInvoice, 'role' | 'status' | 'amountCents'>): LedgerInvoice & { amountPaidCents?: number } {
   return { periodStart: PERIOD, ...partial };
 }
 
@@ -25,6 +26,16 @@ test('open and uncollectible invoices count as invoiced, so the same debt is not
   assert.equal(invoicedCents(invoices, PERIOD), 400);
   assert.equal(uninvoicedCents(400, invoices, PERIOD), 0);
   assert.equal(paidCents(invoices, PERIOD), 0);
+});
+
+test('an open invoice keeps its unpaid balance, and a void invoice does not', () => {
+  const invoices = [
+    invoice({ role: 'renewal', status: 'open', amountCents: 400, amountPaidCents: 100 }),
+    invoice({ role: 'supplemental', status: 'void', amountCents: 200 }),
+    invoice({ role: 'setup', status: 'open', amountCents: 50, periodStart: null }),
+  ];
+  assert.equal(outstandingCents(invoices, PERIOD), 300);
+  assert.equal(uninvoicedCents(400, invoices, PERIOD), 0);
 });
 
 test('a void invoice drops out of the total and its replacement counts once', () => {

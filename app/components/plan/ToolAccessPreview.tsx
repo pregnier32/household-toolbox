@@ -208,7 +208,7 @@ export function ToolAccessPreview({ userName }: { userName: string }) {
         <section className={`mt-8 ${noteClass}`}>
           <p className={`font-medium ${isLight ? 'text-slate-800' : 'text-slate-200'}`}>Your records stay put</p>
           <p className="mt-2">
-            A trial ending, a promotion ending, or a missing payment method does not delete a tool. The only way to delete a tool’s records is Remove in My Tools, which already asks you to export a PDF and confirm twice. A tool’s one-time trial is remembered after that removal.
+            A trial ending, a promotion ending, or a missing payment method does not delete a tool. Remove in My Tools permanently deletes that household’s records, documents, and files for the tool. A tool’s one-time trial is remembered after that removal.
           </p>
         </section>
       </div>

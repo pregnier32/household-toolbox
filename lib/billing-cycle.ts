@@ -1,11 +1,10 @@
 /**
  * Anniversary billing periods around the Phase 8 pricing engine.
- * The anchor is derived from the account signup timestamp. Nothing here
+ * The anchor is the moment the first tool was added. Nothing here
  * charges a card, prorates, or writes a simulated clock.
  */
 
 import {
-  TRIAL_LENGTH_MS,
   calculateAccountPricing,
   trialEndsAt,
   type AccountPricingInput,
@@ -14,8 +13,6 @@ import {
   type PricingToolInput,
   type ToolPricingResult,
 } from './account-pricing';
-
-export const BILLING_ANCHOR_DELAY_MS = TRIAL_LENGTH_MS;
 
 const MONTHS = [
   'January', 'February', 'March', 'April', 'May', 'June',
@@ -56,12 +53,12 @@ export type BillingCycleSnapshot = {
   periodRecords: PeriodToolRecord[];
 };
 
-export function deriveBillingAnchor(signupAt: string): BillingAnchor {
-  const signup = new Date(signupAt);
-  if (Number.isNaN(signup.getTime())) throw new Error('Account signup time is not a valid timestamp.');
-  const first = new Date(signup.getTime() + BILLING_ANCHOR_DELAY_MS);
+/** The first tool-add instant is the first billing date. No extra days are added. */
+export function deriveBillingAnchor(firstToolAt: string): BillingAnchor {
+  const first = new Date(firstToolAt);
+  if (Number.isNaN(first.getTime())) throw new Error('The first tool date is not a valid timestamp.');
   return {
-    signupAt: signup.toISOString(),
+    signupAt: first.toISOString(),
     firstBillingAt: first.toISOString(),
     anniversaryDay: first.getUTCDate(),
   };
@@ -292,6 +289,39 @@ export function planToolRemoval(
   const rest = base.filter((record) => record.toolId !== toolId);
   if (!current) return { kind: 'schedule', tools: rest };
   return { kind: 'schedule', tools: [...rest, { ...current, scheduledRemoval: true }] };
+}
+
+/**
+ * A positive next bill does not need a payment method yet when every tool
+ * on that bill is still inside its free trial and the open period is $0.
+ */
+export function paymentWaitsForTrial(cycle: BillingCycleSnapshot): boolean {
+  const dueNow = cycle.schedule.hasStarted ? (cycle.period?.effectiveMonthlyCents ?? 0) : 0;
+  if (dueNow > 0) return false;
+  const current = new Map(cycle.current.tools.map((tool) => [tool.toolId, tool]));
+  const upcoming = cycle.next.tools.filter((tool) => tool.expectedMonthlyCents > 0);
+  if (upcoming.length === 0) return false;
+  return upcoming.every((tool) => current.get(tool.toolId)?.inTrial === true);
+}
+
+const LIVE_SUBSCRIPTION = new Set(['active', 'past_due', 'unpaid', 'trialing', 'paused']);
+
+/**
+ * A subscription whose first charge is still in the future already covers that
+ * upcoming date. Do not create another invoice for a period that starts earlier.
+ */
+export function skipSupplementalBeforeSubscriptionAnchor(input: {
+  subscriptionStatus: string | null;
+  billingCycleAnchor: string | null;
+  periodStart: string;
+  now: Date;
+}): boolean {
+  if (!input.subscriptionStatus || !LIVE_SUBSCRIPTION.has(input.subscriptionStatus)) return false;
+  if (!input.billingCycleAnchor) return false;
+  const anchor = Date.parse(input.billingCycleAnchor);
+  const start = Date.parse(input.periodStart);
+  if (Number.isNaN(anchor) || Number.isNaN(start)) return false;
+  return anchor > input.now.getTime() && start < anchor;
 }
 
 export function removalNoticeForTool(

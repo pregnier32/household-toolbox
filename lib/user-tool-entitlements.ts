@@ -1,4 +1,7 @@
 import { supabaseServer } from '@/lib/supabaseServer';
+import { trialGrantForStart } from '@/lib/tool-trial-grant';
+
+export { trialGrantForStart } from '@/lib/tool-trial-grant';
 
 export { toolOffersTrial } from '@/lib/tool-offers-trial';
 
@@ -35,10 +38,11 @@ export async function ensureToolEntitlement(
   }
 
   if (existing) {
+    const grant = trialGrantForStart({ trialUsed: Boolean(existing.trial_used) }, options.grantTrial);
     return {
       isFirstStart: false,
-      trialGranted: false,
-      trialUsed: existing.trial_used,
+      trialGranted: grant.trialGranted,
+      trialUsed: grant.trialUsed,
       firstStartedAt: existing.first_started_at,
     };
   }
@@ -66,10 +70,11 @@ export async function ensureToolEntitlement(
         .eq('tool_id', toolId)
         .single();
       if (racedError) throw racedError;
+      const grant = trialGrantForStart({ trialUsed: Boolean(raced.trial_used) }, options.grantTrial);
       return {
         isFirstStart: false,
-        trialGranted: false,
-        trialUsed: raced.trial_used,
+        trialGranted: grant.trialGranted,
+        trialUsed: grant.trialUsed,
         firstStartedAt: raced.first_started_at,
       };
     }

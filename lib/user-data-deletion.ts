@@ -113,7 +113,8 @@ async function removeStoragePaths(bucket: string, paths: string[]): Promise<void
     const chunk = uniquePaths.slice(i, i + chunkSize);
     const { error } = await supabaseServer.storage.from(bucket).remove(chunk);
     if (error && !isMissingRelationError(error)) {
-      console.error(`Storage cleanup warning for bucket ${bucket}:`, error);
+      console.error(`Storage cleanup failed for bucket ${bucket}:`, error);
+      throw error;
     }
   }
 }
@@ -151,6 +152,40 @@ async function collectUserFileUrls(
     .eq('user_id', userId);
   if (error && !isMissingRelationError(error)) throw error;
   pushFileUrlRows(dest, data, bucket);
+}
+
+async function storageObjectExists(bucket: string, path: string): Promise<boolean> {
+  const { data, error } = await supabaseServer.storage.from(bucket).download(path);
+  if (data) return true;
+  if (!error) return false;
+  const status = 'statusCode' in error ? Number(error.statusCode) : 0;
+  const message = (error.message || '').toLowerCase();
+  if (status === 404 || status === 400 || message.includes('not found') || message.includes('object not found')) return false;
+  throw error;
+}
+
+async function assertStorageRemoved(storageDeletes: StorageDelete[]): Promise<void> {
+  const unique = new Map<string, StorageDelete>();
+  for (const item of storageDeletes) {
+    if (!item.path) continue;
+    unique.set(`${item.bucket}/${item.path}`, item);
+  }
+  for (const item of unique.values()) {
+    if (await storageObjectExists(item.bucket, item.path)) {
+      throw new Error(`Storage file remains for ${item.bucket}.`);
+    }
+  }
+}
+
+async function countScopedRows(table: string, userId: string, toolId: string): Promise<number> {
+  const { count, error } = await supabaseServer
+    .from(table as 'tools_id_documents')
+    .select('id', { count: 'exact', head: true })
+    .eq('user_id', userId)
+    .eq('tool_id', toolId);
+  if (error && isMissingRelationError(error)) return 0;
+  if (error) throw error;
+  return count ?? 0;
 }
 
 async function deleteUserToolRows(table: string, userId: string, toolId: string): Promise<void> {
@@ -740,24 +775,31 @@ export async function deleteUserTool(userId: string, toolId: string): Promise<De
 
   const toolName = tool.name;
   const storageDeletes: StorageDelete[] = [];
+  const queuedTables: string[] = [];
+  const queueRowDelete = (table: string, scopeUserId: string, scopeToolId: string) => {
+    if (scopeUserId !== userId || scopeToolId !== toolId) {
+      throw new Error('Tool deletion was not scoped to this household and tool.');
+    }
+    queuedTables.push(table);
+  };
 
   switch (toolName) {
     case 'Important Documents': {
       await collectUserFileUrls('tools_id_documents', userId, 'important-documents', storageDeletes);
-      await deleteUserToolRows('tools_id_documents', userId, toolId);
-      await deleteUserToolRows('tools_id_tags', userId, toolId);
+      queueRowDelete('tools_id_documents', userId, toolId);
+      queueRowDelete('tools_id_tags', userId, toolId);
       break;
     }
     case 'Notes': {
       await collectUserFileUrls('tools_note_attachments', userId, 'notes', storageDeletes);
-      await deleteUserToolRows('tools_note_notes', userId, toolId);
-      await deleteUserToolRows('tools_note_tags', userId, toolId);
+      queueRowDelete('tools_note_notes', userId, toolId);
+      queueRowDelete('tools_note_tags', userId, toolId);
       break;
     }
     case 'To Do List': {
       await collectUserFileUrls('tools_tdl_attachments', userId, 'to-do-list', storageDeletes);
-      await deleteUserToolRows('tools_tdl_tasks', userId, toolId);
-      await deleteUserToolRows('tools_tdl_categories', userId, toolId);
+      queueRowDelete('tools_tdl_tasks', userId, toolId);
+      queueRowDelete('tools_tdl_categories', userId, toolId);
       break;
     }
     case 'Repair History': {
@@ -785,8 +827,8 @@ export async function deleteUserTool(userId: string, toolId: string): Promise<De
         pushFileUrlRows(storageDeletes, rhPictures, 'repair-history');
       }
 
-      await deleteUserToolRows('tools_rh_headers', userId, toolId);
-      await deleteUserToolRows('tools_rh_items', userId, toolId);
+      queueRowDelete('tools_rh_headers', userId, toolId);
+      queueRowDelete('tools_rh_items', userId, toolId);
       break;
     }
     case 'Healthcare Appts and History':
@@ -817,7 +859,7 @@ export async function deleteUserTool(userId: string, toolId: string): Promise<De
         }
       }
 
-      await deleteUserToolRows('tools_hcah_headers', userId, toolId);
+      queueRowDelete('tools_hcah_headers', userId, toolId);
       break;
     }
     case 'Pet Care Schedule': {
@@ -848,7 +890,7 @@ export async function deleteUserTool(userId: string, toolId: string): Promise<De
         pushFileUrlRows(storageDeletes, petDocs, 'pet-care-schedule');
       }
 
-      await deleteUserToolRows('tools_pcs_pets', userId, toolId);
+      queueRowDelete('tools_pcs_pets', userId, toolId);
       break;
     }
     case 'HSA Tracker': {
@@ -869,61 +911,61 @@ export async function deleteUserTool(userId: string, toolId: string): Promise<De
         pushFileUrlRows(storageDeletes, hsaReceipts, 'hsa-tracker');
       }
 
-      await deleteUserToolRows('tools_hsa_deposits', userId, toolId);
-      await deleteUserToolRows('tools_hsa_expenses', userId, toolId);
-      await deleteUserToolRows('tools_hsa_accounts', userId, toolId);
+      queueRowDelete('tools_hsa_deposits', userId, toolId);
+      queueRowDelete('tools_hsa_expenses', userId, toolId);
+      queueRowDelete('tools_hsa_accounts', userId, toolId);
       break;
     }
     case 'Travel Log': {
       await collectUserFileUrls('tools_tl_trip_attachments', userId, 'travel-log', storageDeletes);
-      await deleteUserToolRows('tools_tl_trips', userId, toolId);
+      queueRowDelete('tools_tl_trips', userId, toolId);
       break;
     }
     case 'Event Budget Planner': {
       await collectUserFileUrls('tools_ebp_event_attachments', userId, 'event-budget-planner', storageDeletes);
       await collectUserFileUrls('tools_ebp_expense_attachments', userId, 'event-budget-planner', storageDeletes);
-      await deleteUserToolRows('tools_ebp_events', userId, toolId);
-      await deleteUserToolRows('tools_ebp_categories', userId, toolId);
-      await deleteUserToolRows('tools_ebp_types', userId, toolId);
-      await deleteUserToolRows('tools_ebp_vendors', userId, toolId);
+      queueRowDelete('tools_ebp_events', userId, toolId);
+      queueRowDelete('tools_ebp_categories', userId, toolId);
+      queueRowDelete('tools_ebp_types', userId, toolId);
+      queueRowDelete('tools_ebp_vendors', userId, toolId);
       break;
     }
     case 'Meal Planner': {
       await collectUserFileUrls('tools_mp_meal_attachments', userId, 'meal-planner', storageDeletes);
-      await deleteUserToolRows('tools_mp_plans', userId, toolId);
-      await deleteUserToolRows('tools_mp_meals', userId, toolId);
-      await deleteUserToolRows('tools_mp_meal_types', userId, toolId);
-      await deleteUserToolRows('tools_mp_items', userId, toolId);
+      queueRowDelete('tools_mp_plans', userId, toolId);
+      queueRowDelete('tools_mp_meals', userId, toolId);
+      queueRowDelete('tools_mp_meal_types', userId, toolId);
+      queueRowDelete('tools_mp_items', userId, toolId);
       break;
     }
     case 'Shopping List': {
       await collectUserFileUrls('tools_sl_list_attachments', userId, 'shopping-list', storageDeletes);
-      await deleteUserToolRows('tools_sl_lists', userId, toolId);
-      await deleteUserToolRows('tools_sl_items', userId, toolId);
+      queueRowDelete('tools_sl_lists', userId, toolId);
+      queueRowDelete('tools_sl_items', userId, toolId);
       break;
     }
     case 'Goals Tracking': {
       await collectUserFileUrls('tools_gt_goal_attachments', userId, 'goals-tracking', storageDeletes);
       await collectUserFileUrls('tools_gt_update_attachments', userId, 'goals-tracking', storageDeletes);
-      await deleteUserToolRows('tools_gt_goals', userId, toolId);
-      await deleteUserToolRows('tools_gt_categories', userId, toolId);
+      queueRowDelete('tools_gt_goals', userId, toolId);
+      queueRowDelete('tools_gt_categories', userId, toolId);
       break;
     }
     case 'Calendar Events': {
       await collectUserFileUrls('tools_ce_event_attachments', userId, 'calendar-events', storageDeletes);
-      await deleteUserToolRows('tools_ce_events', userId, toolId);
-      await deleteUserToolRows('tools_ce_categories', userId, toolId);
+      queueRowDelete('tools_ce_events', userId, toolId);
+      queueRowDelete('tools_ce_categories', userId, toolId);
       break;
     }
     case 'Subscription Tracker': {
       await collectUserFileUrls('tools_st_subscription_attachments', userId, 'subscription-tracker', storageDeletes);
-      await deleteUserToolRows('tools_st_subscriptions', userId, toolId);
+      queueRowDelete('tools_st_subscriptions', userId, toolId);
       break;
     }
     case 'Address Book': {
       await collectUserFileUrls('tools_ab_address_attachments', userId, 'address-book', storageDeletes);
-      await deleteUserToolRows('tools_ab_addresses', userId, toolId);
-      await deleteUserToolRows('tools_ab_tags', userId, toolId);
+      queueRowDelete('tools_ab_addresses', userId, toolId);
+      queueRowDelete('tools_ab_tags', userId, toolId);
       break;
     }
     case 'Cleaning Schedule': {
@@ -944,8 +986,8 @@ export async function deleteUserTool(userId: string, toolId: string): Promise<De
         .eq('tool_id', toolId);
       if (csCategoriesUnflagError && !isMissingRelationError(csCategoriesUnflagError)) throw csCategoriesUnflagError;
 
-      await deleteUserToolRows('tools_cs_items', userId, toolId);
-      await deleteUserToolRows('tools_cs_categories', userId, toolId);
+      queueRowDelete('tools_cs_items', userId, toolId);
+      queueRowDelete('tools_cs_categories', userId, toolId);
       break;
     }
     case 'Home Maintenance Schedule': {
@@ -966,8 +1008,8 @@ export async function deleteUserTool(userId: string, toolId: string): Promise<De
         .eq('tool_id', toolId);
       if (hmsCategoriesUnflagError && !isMissingRelationError(hmsCategoriesUnflagError)) throw hmsCategoriesUnflagError;
 
-      await deleteUserToolRows('tools_hms_items', userId, toolId);
-      await deleteUserToolRows('tools_hms_categories', userId, toolId);
+      queueRowDelete('tools_hms_items', userId, toolId);
+      queueRowDelete('tools_hms_categories', userId, toolId);
       break;
     }
     case 'End of Life Planner': {
@@ -980,7 +1022,7 @@ export async function deleteUserTool(userId: string, toolId: string): Promise<De
       ] as const) {
         await collectUserFileUrls(table, userId, 'end-of-life-planner', storageDeletes);
       }
-      await deleteUserToolRows('tools_eolp_plans', userId, toolId);
+      queueRowDelete('tools_eolp_plans', userId, toolId);
       break;
     }
     case 'Percent of my Order':
@@ -990,6 +1032,10 @@ export async function deleteUserTool(userId: string, toolId: string): Promise<De
   }
 
   await flushStorageDeletes(storageDeletes);
+  await assertStorageRemoved(storageDeletes);
+  for (const table of queuedTables) {
+    await deleteUserToolRows(table, userId, toolId);
+  }
 
   const { error: pinsError } = await supabaseServer
     .from('calendar_pins')
@@ -997,6 +1043,21 @@ export async function deleteUserTool(userId: string, toolId: string): Promise<De
     .eq('user_id', userId)
     .eq('tool_id', toolId);
   if (pinsError && !isMissingRelationError(pinsError)) throw pinsError;
+
+  let remainingRows = 0;
+  for (const table of queuedTables) {
+    remainingRows += await countScopedRows(table, userId, toolId);
+  }
+  const pins = await supabaseServer
+    .from('calendar_pins')
+    .select('id', { count: 'exact', head: true })
+    .eq('user_id', userId)
+    .eq('tool_id', toolId);
+  if (pins.error && !isMissingRelationError(pins.error)) throw pins.error;
+  remainingRows += pins.count ?? 0;
+  if (remainingRows > 0) {
+    throw new Error('Tool records remain after deletion.');
+  }
 
   return { userId, toolId, toolName };
 }
