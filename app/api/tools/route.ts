@@ -29,55 +29,71 @@ export async function GET() {
   }
 
   try {
-    // Active and inactive both count as owned. Inactivate must not drop entitlement
-    // or Store will offer Buy instead of My Tools Reactivate.
-    const { data: userTools, error: userToolsError } = await supabaseServer
-      .from('users_tools')
-      .select('tool_id, status')
-      .eq('user_id', user.id)
-      .in('status', ['active', 'inactive']);
+    const isSuperAdmin = user.userStatus === 'superadmin';
+    // Owned tools, the catalog, icons, trials, and pricing do not depend on each other.
+    // Icon bytes stay out of this response. A second icons read only asks which rows have stored bytes.
+    const [
+      userToolsResult,
+      toolsResult,
+      iconsResult,
+      storedIconResult,
+      usedTrialToolIds,
+      pricing,
+      superAdminCustomResult,
+    ] = await Promise.all([
+      supabaseServer
+        .from('users_tools')
+        .select('tool_id, status')
+        .eq('user_id', user.id)
+        .in('status', ['active', 'inactive']),
+      supabaseServer
+        .from('tools')
+        .select('*')
+        .neq('status', 'inactive')
+        .neq('status', 'custom')
+        .order('created_at', { ascending: false }),
+      supabaseServer.from('tool_icons').select('id, tool_id, icon_type, icon_url'),
+      supabaseServer.from('tool_icons').select('id').not('icon_data', 'is', null),
+      getUsedTrialToolIds(user.id).catch((entitlementError: unknown) => {
+        console.error('Error fetching tool entitlements:', entitlementError);
+        return new Set<string>();
+      }),
+      getAccountPricingState(user.id, new Date()).catch((pricingError: unknown) => {
+        console.error(
+          'Error calculating tool offers:',
+          pricingError instanceof Error ? pricingError.message : 'unknown'
+        );
+        return null;
+      }),
+      isSuperAdmin
+        ? supabaseServer.from('tools').select('*').eq('status', 'custom').order('created_at', { ascending: false })
+        : Promise.resolve(null),
+    ]);
 
+    const { data: userTools, error: userToolsError } = userToolsResult;
     if (userToolsError) {
       console.error('Error fetching user tools:', userToolsError);
-      // Continue even if this fails, just won't include custom tools
     }
 
-    // Get list of tool IDs the user has access to (for custom tools)
-    const accessibleToolIds = new Set(userTools?.map((ut) => ut.tool_id) || []);
-
-    // Fetch all tools (excluding inactive and custom ones for regular users)
-    // Custom tools will be added separately if user has access
-    const { data: tools, error: toolsError } = await supabaseServer
-      .from('tools')
-      .select('*')
-      .neq('status', 'inactive')
-      .neq('status', 'custom')
-      .order('created_at', { ascending: false });
-
+    const { data: tools, error: toolsError } = toolsResult;
     if (toolsError) {
       console.error('Error fetching tools:', toolsError);
       return NextResponse.json({ error: 'Failed to fetch tools' }, { status: 500 });
     }
 
-    // Fetch custom tools that the user has access to
-    // For superadmins, fetch ALL custom tools; for regular users, only fetch ones they have access to
-    let customTools: any[] = [];
-    if (user.userStatus === 'superadmin') {
-      // Superadmins can see all custom tools
-      const { data: customToolsData, error: customToolsError } = await supabaseServer
-        .from('tools')
-        .select('*')
-        .eq('status', 'custom')
-        .order('created_at', { ascending: false });
+    // Active and inactive both count as owned. Inactivate must not drop entitlement
+    // or Store will offer Buy instead of My Tools Reactivate.
+    const accessibleToolIds = new Set(userTools?.map((ut) => ut.tool_id) || []);
 
+    let customTools: any[] = [];
+    if (isSuperAdmin) {
+      const customToolsError = superAdminCustomResult?.error;
       if (customToolsError) {
         console.error('Error fetching custom tools:', customToolsError);
-        // Continue even if this fails
       } else {
-        customTools = customToolsData || [];
+        customTools = superAdminCustomResult?.data || [];
       }
     } else if (accessibleToolIds.size > 0) {
-      // Regular users only see custom tools they have access to
       const { data: customToolsData, error: customToolsError } = await supabaseServer
         .from('tools')
         .select('*')
@@ -87,38 +103,32 @@ export async function GET() {
 
       if (customToolsError) {
         console.error('Error fetching custom tools:', customToolsError);
-        // Continue even if this fails
       } else {
         customTools = customToolsData || [];
       }
     }
 
-    // Combine regular tools with accessible custom tools
     const allTools = [...(tools || []), ...customTools];
 
-    // Fetch all tool icons - explicitly select fields we need
-    // Note: We don't select icon_data here to avoid large payloads, we'll check if it exists
-    const { data: icons, error: iconsError } = await supabaseServer
-      .from('tool_icons')
-      .select('id, tool_id, icon_type, icon_url, icon_data');
-
-    if (iconsError) {
-      console.error('Error fetching tool icons:', iconsError);
+    if (iconsResult.error) {
+      console.error('Error fetching tool icons:', iconsResult.error);
+      return NextResponse.json({ error: 'Failed to fetch tool icons' }, { status: 500 });
+    }
+    if (storedIconResult.error) {
+      console.error('Error fetching tool icon storage flags:', storedIconResult.error);
       return NextResponse.json({ error: 'Failed to fetch tool icons' }, { status: 500 });
     }
 
-    // Group icons by tool_id and icon_type
+    const storedIconIds = new Set((storedIconResult.data || []).map((icon) => icon.id));
     const iconsByTool: Record<string, Record<string, any>> = {};
-    icons?.forEach((icon) => {
+    iconsResult.data?.forEach((icon) => {
       if (!iconsByTool[icon.tool_id]) {
         iconsByTool[icon.tool_id] = {};
       }
-      // Check if icon_data exists (it might be null, undefined, or a Buffer)
-      const hasIconData = icon.icon_data !== null && icon.icon_data !== undefined;
       iconsByTool[icon.tool_id][icon.icon_type] = {
         id: icon.id,
         icon_url: icon.icon_url,
-        has_icon_data: hasIconData,
+        has_icon_data: storedIconIds.has(icon.id),
       };
     });
 
@@ -134,19 +144,6 @@ export async function GET() {
       (userTools || []).filter((ut) => ut.status === 'active').map((ut) => ut.tool_id)
     );
 
-    let usedTrialToolIds = new Set<string>();
-    try {
-      usedTrialToolIds = await getUsedTrialToolIds(user.id);
-    } catch (entitlementError) {
-      console.error('Error fetching tool entitlements:', entitlementError);
-    }
-
-    let pricing = null;
-    try {
-      pricing = await getAccountPricingState(user.id, new Date());
-    } catch (pricingError) {
-      console.error('Error calculating tool offers:', pricingError instanceof Error ? pricingError.message : 'unknown');
-    }
     const coveredToolIds = new Set(
       (pricing?.activePromotions ?? [])
         .filter((promotion) => promotion.benefitType === 'specific_tools')

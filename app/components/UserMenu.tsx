@@ -14,11 +14,12 @@ type StorageSummary = {
 type UserMenuProps = {
   userName: string;
   onSignOut: () => void | Promise<void>;
+  householdRole?: 'admin' | 'user';
 };
 
-export function UserMenu({ userName, onSignOut }: UserMenuProps) {
+export function UserMenu({ userName, onSignOut, householdRole: householdRoleProp }: UserMenuProps) {
   const [isOpen, setIsOpen] = useState(false);
-  const [householdRole, setHouseholdRole] = useState<'admin' | 'user' | null>(null);
+  const [householdRole, setHouseholdRole] = useState<'admin' | 'user' | null>(householdRoleProp ?? null);
   const [storage, setStorage] = useState<StorageSummary | null>(null);
   const [storageLoading, setStorageLoading] = useState(false);
   const menuRef = useRef<HTMLDivElement>(null);
@@ -76,6 +77,11 @@ export function UserMenu({ userName, onSignOut }: UserMenuProps) {
   }, [isOpen]);
 
   useEffect(() => {
+    if (householdRoleProp === 'admin' || householdRoleProp === 'user') {
+      setHouseholdRole(householdRoleProp);
+      return;
+    }
+
     let cancelled = false;
     fetch('/api/auth/session')
       .then((res) => (res.ok ? res.json() : null))
@@ -90,7 +96,7 @@ export function UserMenu({ userName, onSignOut }: UserMenuProps) {
     return () => {
       cancelled = true;
     };
-  }, []);
+  }, [householdRoleProp]);
 
   useEffect(() => {
     if (!isOpen) return;

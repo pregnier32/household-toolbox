@@ -127,3 +127,40 @@ export async function getPinnedSourceIds({
 
   return { ids: new Set((data || []).map((row) => row.source_id)), error: null };
 }
+
+/** One pin read for the dashboard calendar. A missing table or query error yields an empty map. */
+export async function getPinnedIdsBySource({
+  userId,
+  toolId,
+}: {
+  userId: string;
+  toolId?: string;
+}): Promise<Map<string, Set<string>>> {
+  let query = supabaseServer
+    .from('calendar_pins')
+    .select('source_type, source_id')
+    .eq('user_id', userId);
+
+  if (toolId) {
+    query = query.eq('tool_id', toolId);
+  }
+
+  const { data, error } = await query;
+  const grouped = new Map<string, Set<string>>();
+  if (error) {
+    if (isMissingRelationError(error)) return grouped;
+    console.error('Error fetching calendar pins:', error);
+    return grouped;
+  }
+
+  for (const row of data || []) {
+    const sourceType = String(row.source_type || '');
+    const sourceId = String(row.source_id || '');
+    if (!sourceType || !sourceId) continue;
+    const ids = grouped.get(sourceType) ?? new Set<string>();
+    ids.add(sourceId);
+    grouped.set(sourceType, ids);
+  }
+
+  return grouped;
+}

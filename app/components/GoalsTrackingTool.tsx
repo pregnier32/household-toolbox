@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect, useCallback, createContext, useContext, useRef } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import { createPortal } from 'react-dom';
 import { useTheme } from './AppThemeProvider';
 import { useAppNotice } from './AppNotice';
@@ -15,69 +15,21 @@ import {
   isPdfAttachment,
   type AttachmentItem,
 } from '@/lib/attachments';
+import {
+  normalizeGoal,
+  useGoalsContext,
+  type Category,
+  type Goal,
+  type GoalStatus,
+  type Phase,
+  type Priority,
+  type Task,
+  type UpdateNote,
+} from './goals-tracking-context';
 
 const API_BASE = '/api/tools/goals-tracking';
 
-type GoalAttachment = {
-  id: string;
-  name: string;
-  size: number;
-  type: string;
-};
-
 type AttachmentTarget = { kind: 'goal' | 'update'; id: 'add' | string };
-
-// --- Types (exported for dashboard / context) ---
-export type Category = {
-  id: string;
-  name: string;
-  card_color: string;
-  isStock?: boolean;
-};
-
-type Priority = 'High' | 'Medium' | 'Low';
-type GoalStatus = 'Not Started' | 'In Progress' | 'Delayed' | 'Completed';
-
-type Task = {
-  id: string;
-  phaseId: string;
-  title: string;
-  completed: boolean;
-};
-
-type Phase = {
-  id: string;
-  goalId: string;
-  name: string;
-  order: number;
-};
-
-type UpdateNote = {
-  id: string;
-  goalId: string;
-  noteDate: string;
-  note: string;
-  attachments: GoalAttachment[];
-};
-
-export type Goal = {
-  id: string;
-  categoryId: string;
-  title: string;
-  description: string;
-  targetDate: string;
-  priority: Priority;
-  status: GoalStatus;
-  percentComplete: number;
-  reminderDays: number | null;
-  lastUpdateDate: string | null;
-  useTaskProgressForPercent: boolean;
-  addToDashboard: boolean;
-  phases: Phase[];
-  tasks: Task[];
-  updateNotes: UpdateNote[];
-  attachments: GoalAttachment[];
-};
 
 const DEFAULT_CATEGORY_NAMES = ['Home', 'Finance', 'Health', 'Career', 'Personal'];
 const DEFAULT_CATEGORY_COLORS = ['#10b981', '#3b82f6', '#8b5cf6', '#f59e0b', '#ec4899'];
@@ -141,18 +93,6 @@ function pickOpenCategoryId(list: { id: string }[], currentId: string | null): s
   return list[0].id;
 }
 
-function normalizeGoal(goal: Goal): Goal {
-  return {
-    ...goal,
-    addToDashboard: goal.addToDashboard === true,
-    attachments: goal.attachments || [],
-    updateNotes: (goal.updateNotes || []).map((note) => ({
-      ...note,
-      attachments: note.attachments || [],
-    })),
-  };
-}
-
 function DashboardCalendarSwitch({
   isOn,
   onToggle,
@@ -211,54 +151,6 @@ function OnCalendarChip({ isLight }: { isLight: boolean }) {
       On calendar
     </span>
   );
-}
-
-// --- Shared context for dashboard to show goals ---
-type GoalsContextValue = {
-  goals: Goal[];
-  setGoals: React.Dispatch<React.SetStateAction<Goal[]>>;
-  categories: Category[];
-  setCategories: React.Dispatch<React.SetStateAction<Category[]>>;
-};
-
-const GoalsContext = createContext<GoalsContextValue | null>(null);
-
-export function GoalsProvider({
-  children,
-  goalsToolId = null,
-}: {
-  children: React.ReactNode;
-  goalsToolId?: string | null;
-}) {
-  const [goals, setGoals] = useState<Goal[]>([]);
-  const [categories, setCategories] = useState<Category[]>([]);
-
-  useEffect(() => {
-    if (!goalsToolId) return;
-    let cancelled = false;
-    fetch(`/api/tools/goals-tracking?toolId=${encodeURIComponent(goalsToolId)}`)
-      .then((res) => res.json())
-      .then((data) => {
-        if (cancelled) return;
-        if (data.error) return;
-        setCategories(data.categories ?? []);
-        setGoals(((data.goals ?? []) as Goal[]).map(normalizeGoal));
-      })
-      .catch(() => {});
-    return () => {
-      cancelled = true;
-    };
-  }, [goalsToolId]);
-
-  return (
-    <GoalsContext.Provider value={{ goals, setGoals, categories, setCategories }}>
-      {children}
-    </GoalsContext.Provider>
-  );
-}
-
-export function useGoalsContext() {
-  return useContext(GoalsContext);
 }
 
 // Helper to compute goal percent (exported for dashboard cards)

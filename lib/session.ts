@@ -4,7 +4,7 @@ import { cache } from 'react';
 import { cookies } from 'next/headers';
 import { supabaseServer } from './supabaseServer';
 import { createSupabaseAuthServerClient } from './supabaseAuthServer';
-import { readMfaAccess } from './mfa-gate';
+import { readMfaAccess, readMfaAccessForVerifiedLevel } from './mfa-gate';
 import { resolveHouseholdAccess } from './household-access';
 import { ensureDefaultAccountEntitlements } from './promotion-service';
 import type { HouseholdRole } from './session-types';
@@ -64,12 +64,14 @@ async function loadProfile(userId: string) {
     .maybeSingle();
 }
 
-async function readSupabaseUserId(): Promise<string | null> {
+async function readVerifiedClaims(): Promise<{ sub: string; aal?: string } | null> {
   try {
     const supabase = await createSupabaseAuthServerClient();
     const { data, error } = await supabase.auth.getClaims();
-    if (error || !data?.claims.sub) return null;
-    return data.claims.sub;
+    const sub = data?.claims.sub;
+    if (error || !sub) return null;
+    const aal = data.claims.aal;
+    return { sub, aal: aal === 'aal1' || aal === 'aal2' ? aal : undefined };
   } catch {
     console.error('Supabase Auth session check failed');
     return null;
@@ -91,26 +93,45 @@ export type SessionGate =
   | { status: 'mfa_unknown'; user: AppSession }
   | { status: 'ok'; user: AppSession };
 
+async function loadActiveProfile(userId: string) {
+  const { data: user, error } = await loadProfile(userId);
+  if (error) {
+    console.error('Application profile lookup failed for Supabase Auth user', userId);
+    return null;
+  }
+  if (!user) {
+    console.error('Supabase Auth user has no public.users row', userId);
+    await signOutSupabaseAuth();
+    return null;
+  }
+  if (user.active !== 'Y') {
+    console.error('Supabase Auth user is inactive in public.users', userId);
+    await signOutSupabaseAuth();
+    return null;
+  }
+  return user;
+}
+
+function withHousehold(
+  user: NonNullable<Awaited<ReturnType<typeof loadActiveProfile>>>,
+  access: Awaited<ReturnType<typeof resolveHouseholdAccess>>
+): AppSession {
+  return {
+    ...toAppSession(user),
+    householdReady: access.ready,
+    householdId: access.householdId,
+    householdRole: access.householdRole,
+    householdOwnerId: access.householdOwnerId,
+  };
+}
+
 async function resolveSession(): Promise<SessionGate> {
-  const userId = await readSupabaseUserId();
-  if (!userId) return { status: 'anonymous' };
+  const claims = await readVerifiedClaims();
+  if (!claims) return { status: 'anonymous' };
 
   try {
-    const { data: user, error } = await loadProfile(userId);
-    if (error) {
-      console.error('Application profile lookup failed for Supabase Auth user', userId);
-      return { status: 'anonymous' };
-    }
-    if (!user) {
-      console.error('Supabase Auth user has no public.users row', userId);
-      await signOutSupabaseAuth();
-      return { status: 'anonymous' };
-    }
-    if (user.active !== 'Y') {
-      console.error('Supabase Auth user is inactive in public.users', userId);
-      await signOutSupabaseAuth();
-      return { status: 'anonymous' };
-    }
+    const user = await loadActiveProfile(claims.sub);
+    if (!user) return { status: 'anonymous' };
     const access = await resolveHouseholdAccess(user.id);
     if (access.ready && access.householdRole === 'admin' && access.householdOwnerId === user.id) {
       try {
@@ -119,19 +140,13 @@ async function resolveSession(): Promise<SessionGate> {
         console.error('Default entitlement check failed', error instanceof Error ? error.message : 'unknown');
       }
     }
-    const appUser: AppSession = {
-      ...toAppSession(user),
-      householdReady: access.ready,
-      householdId: access.householdId,
-      householdRole: access.householdRole,
-      householdOwnerId: access.householdOwnerId,
-    };
+    const appUser = withHousehold(user, access);
     const mfa = await readMfaAccess();
     if (mfa === 'required') return { status: 'mfa_required', user: appUser };
     if (mfa === 'unknown') return { status: 'mfa_unknown', user: appUser };
     return { status: 'ok', user: appUser };
   } catch {
-    console.error('Application profile lookup failed for Supabase Auth user', userId);
+    console.error('Application profile lookup failed for Supabase Auth user', claims.sub);
     return { status: 'anonymous' };
   }
 }
@@ -144,13 +159,34 @@ export async function getSession(): Promise<AppSession | null> {
   return gate.user;
 }
 
-/** Tool, storage, and calendar reads use the household Admin's user id. */
-export async function getHouseholdDataSession(): Promise<AppSession | null> {
-  const user = await getSession();
-  if (!user) return null;
-  if (user.id === user.householdOwnerId) return user;
-  return { ...user, id: user.householdOwnerId };
+/**
+ * Tool, storage, and calendar reads use the household Admin's user id.
+ * Verifies the token, the active profile, household membership, and MFA.
+ * Skips the default-entitlement grant, which the page gate still runs.
+ * A session that has already finished MFA does not list factors again.
+ */
+async function resolveHouseholdDataSession(): Promise<AppSession | null> {
+  const claims = await readVerifiedClaims();
+  if (!claims) return null;
+
+  try {
+    const user = await loadActiveProfile(claims.sub);
+    if (!user) return null;
+    const [access, mfa] = await Promise.all([
+      resolveHouseholdAccess(user.id),
+      readMfaAccessForVerifiedLevel(claims.aal),
+    ]);
+    if (mfa !== 'open') return null;
+    const appUser = withHousehold(user, access);
+    if (appUser.id === appUser.householdOwnerId) return appUser;
+    return { ...appUser, id: appUser.householdOwnerId };
+  } catch {
+    console.error('Application profile lookup failed for Supabase Auth user', claims.sub);
+    return null;
+  }
 }
+
+export const getHouseholdDataSession = cache(resolveHouseholdDataSession);
 
 /** Expires a leftover pre-Auth cookie. Sign-in does not read it. */
 export async function clearStaleLegacySessionCookie() {

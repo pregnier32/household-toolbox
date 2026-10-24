@@ -1,11 +1,23 @@
 import { createServerClient } from '@supabase/ssr';
 import { NextResponse, type NextRequest } from 'next/server';
 
+/** Session cookies, including the split `sb-...-auth-token.0` chunks. */
+function hasSupabaseAuthCookie(request: NextRequest): boolean {
+  return request.cookies.getAll().some((cookie) => {
+    if (!cookie.value) return false;
+    return cookie.name.startsWith('sb-') && cookie.name.includes('auth-token');
+  });
+}
+
 /**
  * Refreshes a Supabase Auth session and writes the new cookies onto the
  * request and the response. Does not authorize routes.
  */
 export async function refreshSupabaseAuthSession(request: NextRequest) {
+  if (!hasSupabaseAuthCookie(request)) {
+    return NextResponse.next({ request });
+  }
+
   const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
   const anonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
   if (!url || !anonKey) {
