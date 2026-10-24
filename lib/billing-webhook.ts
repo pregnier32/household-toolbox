@@ -1,12 +1,12 @@
 import type Stripe from 'stripe';
 import { loadChargeSnapshot } from '@/lib/billing-amount';
 import { finalizedRenewalAction, renewalDraftMayBeCorrected } from '@/lib/billing-ledger';
-import { withBillingLock } from '@/lib/billing-lock';
+import { claimStripeEvent, finishStripeEvent, withBillingLock } from '@/lib/billing-lock';
 import { subscriptionBillingPatch, subscriptionEventApplies } from '@/lib/billing-subscription';
 import { clearPaymentAttention, loadBillingAccount, saveBillingAccount } from '@/lib/billing-store';
 import { reconcileCustomerPayments, rememberCheckoutIntent, rememberInvoicePaymentState } from '@/lib/billing-payment-state';
 import { loadToolAccessPolicy } from '@/lib/billing-access';
-import { deletionBlocksBilling, deletionBlocksCustomer, deletionUserForCustomer, recordDeletionInvoice, settleDeletionCheckout, suppressRevivedSubscription } from '@/lib/billing-closure';
+import { deletionBlocksBilling, deletionBlocksCustomer, deletionUserForCustomer, recordDeletionInvoice, recordVerifiedClosureSubscription, settleDeletionCheckout, suppressRevivedSubscription, type DeletionCheckoutDeps } from '@/lib/billing-closure';
 import { createAnchoredSubscription, createSupplementalInvoice, recordCheckoutSessionPayment, recordStripeInvoice, refreshSavedPaymentMethod, settleUnintendedSubscriptionUpdate, syncSavedPaymentMethod } from '@/lib/billing-sync';
 import { supabaseServer } from '@/lib/supabaseServer';
 import { stripeServer } from '@/lib/stripe-server';
@@ -147,6 +147,8 @@ async function processSubscription(subscription: Stripe.Subscription, eventCreat
     || (customer ? await deletionUserForCustomer(customer) : null);
   if ((userId && await deletionBlocksBilling(userId)) || (!userId && customer && await deletionBlocksCustomer(customer))) {
     await suppressRevivedSubscription(subscription);
+    const verified = await stripeServer().subscriptions.retrieve(subscription.id);
+    if (userId) await recordVerifiedClosureSubscription(userId, verified, eventCreated);
     return;
   }
   if (!userId) return;
@@ -156,13 +158,13 @@ async function processSubscription(subscription: Stripe.Subscription, eventCreat
   });
 }
 
-async function processCheckoutCompleted(session: Stripe.Checkout.Session, eventCreated: number): Promise<void> {
+async function processCheckoutCompleted(session: Stripe.Checkout.Session, eventCreated: number, deps?: DeletionCheckoutDeps): Promise<void> {
   if (session.livemode) return;
   const customer = customerId(session.customer);
   const userId = session.metadata?.hhtb_user_id || session.client_reference_id || (customer ? await deletionUserForCustomer(customer) : null);
   if (!userId) return;
   if (await deletionBlocksBilling(userId)) {
-    await settleDeletionCheckout(userId, session);
+    await settleDeletionCheckout(userId, session, { ...deps, eventCreated });
     return;
   }
   const stripe = stripeServer();
@@ -199,11 +201,11 @@ async function processCheckoutCompleted(session: Stripe.Checkout.Session, eventC
   });
 }
 
-export async function processStripeEvent(event: Stripe.Event): Promise<void> {
+export async function processStripeEvent(event: Stripe.Event, deps?: DeletionCheckoutDeps): Promise<void> {
   if (event.livemode) return;
   switch (event.type) {
     case 'checkout.session.completed':
-      await processCheckoutCompleted(event.data.object as Stripe.Checkout.Session, event.created);
+      await processCheckoutCompleted(event.data.object as Stripe.Checkout.Session, event.created, deps);
       return;
     case 'checkout.session.expired': {
       const session = event.data.object as Stripe.Checkout.Session;
@@ -300,5 +302,26 @@ export async function processStripeEvent(event: Stripe.Event): Promise<void> {
     }
     default:
       return;
+  }
+}
+
+export async function acceptVerifiedStripeEvent(event: Stripe.Event, deps?: DeletionCheckoutDeps): Promise<{ outcome: 'duplicate' | 'busy' | 'completed' | 'failed'; message?: string }> {
+  const claimed = await claimStripeEvent({
+    eventId: event.id,
+    type: event.type,
+    livemode: false,
+    payload: event,
+  });
+  if (claimed.claim === 'completed') return { outcome: 'duplicate' };
+  if (claimed.claim === 'busy') return { outcome: 'busy' };
+  try {
+    await processStripeEvent(event, deps);
+    const finished = await finishStripeEvent(event.id, claimed.owner, 'completed', null);
+    if (!finished) throw new Error('Event completion was not recorded.');
+    return { outcome: 'completed' };
+  } catch (error) {
+    const message = error instanceof Error ? error.message : 'Webhook failed.';
+    await finishStripeEvent(event.id, claimed.owner, 'failed', message);
+    return { outcome: 'failed', message };
   }
 }

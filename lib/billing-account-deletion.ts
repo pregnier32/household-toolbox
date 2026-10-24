@@ -41,6 +41,7 @@ export type SubscriptionSnapshot = {
   id: string;
   status: string;
   scheduleId: string | null;
+  canceledAt?: string | null;
 };
 
 export type CancelParams = { invoice_now: false; prorate: false };
@@ -71,8 +72,11 @@ export async function closeOneSubscription(stripe: ClosureStripe, subscription: 
     }
   }
   const current = await stripe.retrieveSubscription(subscription.id);
-  if (!subscriptionIsTerminal(current.status)) {
-    await stripe.cancelSubscription(subscription.id, CANCEL_PARAMS);
+  if (subscriptionIsTerminal(current.status)) return;
+  await stripe.cancelSubscription(subscription.id, CANCEL_PARAMS);
+  const confirmed = await stripe.retrieveSubscription(subscription.id);
+  if (!subscriptionIsTerminal(confirmed.status)) {
+    throw new Error('Subscription cancellation was not confirmed.');
   }
 }
 
@@ -163,10 +167,96 @@ function mergeInvoiceRecords(previous: Array<Record<string, unknown>>, live: Arr
   return [...merged.values()];
 }
 
+export type ClosureSubscriptionResult = {
+  result: 'final';
+  stripe_subscription_id: string;
+  subscription_status: string;
+  canceled_at: string | null;
+  verified_at: string;
+  event_created: number | null;
+};
+
+export function closureSubscriptionResult(input: {
+  stripeSubscriptionId: string;
+  status: string;
+  canceledAt: string | null;
+  verifiedAt: string;
+  eventCreated: number | null;
+}): ClosureSubscriptionResult {
+  return {
+    result: 'final',
+    stripe_subscription_id: input.stripeSubscriptionId,
+    subscription_status: input.status,
+    canceled_at: input.canceledAt,
+    verified_at: input.verifiedAt,
+    event_created: input.eventCreated,
+  };
+}
+
+export function mergeClosureSubscriptionResult(existing: ClosureSubscriptionResult | null, incoming: ClosureSubscriptionResult): ClosureSubscriptionResult {
+  if (!existing || existing.stripe_subscription_id !== incoming.stripe_subscription_id) return incoming;
+  const existingFinal = subscriptionIsTerminal(existing.subscription_status);
+  const incomingFinal = subscriptionIsTerminal(incoming.subscription_status);
+  if (existingFinal && !incomingFinal) return existing;
+  if (existing.event_created != null && incoming.event_created != null && incoming.event_created < existing.event_created) return existing;
+  if (existingFinal && incomingFinal) {
+    return {
+      ...existing,
+      subscription_status: incoming.subscription_status,
+      canceled_at: incoming.canceled_at ?? existing.canceled_at,
+      verified_at: incoming.verified_at,
+      event_created: incoming.event_created ?? existing.event_created,
+    };
+  }
+  return incoming;
+}
+
+function closureResultsOf(account: Record<string, unknown> | null): ClosureSubscriptionResult[] {
+  const value = account?.closure_results;
+  if (!Array.isArray(value)) return [];
+  return value.filter((item): item is ClosureSubscriptionResult => {
+    if (!item || typeof item !== 'object') return false;
+    const row = item as Partial<ClosureSubscriptionResult>;
+    return row.result === 'final' && typeof row.stripe_subscription_id === 'string' && typeof row.subscription_status === 'string';
+  });
+}
+
+export function mergeClosureResultList(existing: ClosureSubscriptionResult[], incoming: ClosureSubscriptionResult[]): ClosureSubscriptionResult[] {
+  const merged = new Map(existing.map((row) => [row.stripe_subscription_id, row]));
+  for (const item of incoming) {
+    merged.set(item.stripe_subscription_id, mergeClosureSubscriptionResult(merged.get(item.stripe_subscription_id) ?? null, item));
+  }
+  return [...merged.values()];
+}
+
+/** Account fields remain the pre-deletion snapshot. closure_results holds the verified final subscription state. */
+export function stampBeforeDeletionAccount(
+  account: Record<string, unknown> | null,
+  incoming: ClosureSubscriptionResult[],
+): Record<string, unknown> | null {
+  if (!account && incoming.length === 0) return null;
+  const base = { ...(account ?? {}) };
+  return {
+    ...base,
+    deletion_snapshot: 'before_deletion',
+    closure_results: mergeClosureResultList(closureResultsOf(base), incoming),
+  };
+}
+
+function mergeAccount(previous: Record<string, unknown> | null, live: Record<string, unknown> | null): Record<string, unknown> | null {
+  if (!previous) return live;
+  if (!live) return previous;
+  const results = mergeClosureResultList(closureResultsOf(previous), closureResultsOf(live));
+  if (previous.deletion_snapshot === 'before_deletion') {
+    return { ...previous, ...(results.length > 0 ? { closure_results: results } : {}) };
+  }
+  return { ...previous, ...live, ...(results.length > 0 ? { closure_results: results } : {}) };
+}
+
 export function mergeLedgers(previous: LedgerSnapshot | null, live: LedgerSnapshot): LedgerSnapshot {
   const base = previous ?? emptyLedger();
   return {
-    account: live.account ? { ...base.account, ...live.account } : base.account,
+    account: mergeAccount(base.account, live.account),
     invoices: mergeInvoiceRecords(base.invoices, live.invoices),
     operations: mergeRows(base.operations, live.operations, 'idempotency_key'),
     periods: mergeRows(base.periods, live.periods, 'period_start'),
@@ -204,8 +294,20 @@ export async function applyBillingClosure(input: {
   const pending: ClosureSnapshot = { phase: 'pending', customerId, lastError: null, archive };
   await input.write(pending);
   try {
-    if (customerId) await closeStripeCustomer(input.stripe, customerId);
-    archive = mergeLedgers(archive, await input.readLedger());
+  if (customerId) await closeStripeCustomer(input.stripe, customerId);
+  const verifiedAt = new Date().toISOString();
+  const finals = customerId ? await input.stripe.listSubscriptions(customerId) : [];
+  archive = mergeLedgers(archive, await input.readLedger());
+  archive = {
+    ...archive,
+    account: stampBeforeDeletionAccount(archive.account, finals.filter((subscription) => subscriptionIsTerminal(subscription.status)).map((subscription) => closureSubscriptionResult({
+      stripeSubscriptionId: subscription.id,
+      status: subscription.status,
+      canceledAt: subscription.canceledAt ?? null,
+      verifiedAt,
+      eventCreated: null,
+    }))),
+  };
     await input.write({ phase: 'pending', customerId, lastError: null, archive });
     await input.removeLiveLedger();
     const closed: ClosureSnapshot = { phase: 'billing_closed', customerId, lastError: null, archive };

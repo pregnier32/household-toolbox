@@ -2,14 +2,18 @@ import assert from 'node:assert/strict';
 import test from 'node:test';
 import {
   applyBillingClosure,
+  closeOneSubscription,
+  closureSubscriptionResult,
   customerToClose,
   emptyLedger,
   mergeArchivedInvoice,
   planDeletionCheckout,
   recordPaymentOnArchive,
+  stampBeforeDeletionAccount,
   syncBlockedByDeletion,
   type ClosureSnapshot,
   type ClosureStripe,
+  type ClosureSubscriptionResult,
   type LedgerSnapshot,
   type SubscriptionSnapshot,
 } from './billing-account-deletion';
@@ -18,7 +22,7 @@ const CANCEL = { invoice_now: false as const, prorate: false as const };
 
 function ledger(): LedgerSnapshot {
   return {
-    account: { stripe_customer_id: 'cus_owned', stripe_subscription_id: 'sub_live', deletion_status: 'deleting' },
+    account: { stripe_customer_id: 'cus_owned', stripe_subscription_id: 'sub_live', subscription_status: 'active', deletion_status: 'deleting' },
     invoices: [
       { stripe_invoice_id: 'in_open', status: 'open', amount_cents: 200, amount_paid_cents: 0, collection_state: 'processing' },
       { stripe_invoice_id: 'in_other', status: 'open', amount_cents: 400, amount_paid_cents: 0, collection_state: null },
@@ -29,7 +33,7 @@ function ledger(): LedgerSnapshot {
   };
 }
 
-function fakeStripe(subscriptions: SubscriptionSnapshot[], options?: { failCancel?: boolean; scheduleLeavesActive?: boolean }): ClosureStripe & { calls: string[] } {
+function fakeStripe(subscriptions: SubscriptionSnapshot[], options?: { failCancel?: boolean; scheduleLeavesActive?: boolean; leaveActive?: boolean }): ClosureStripe & { calls: string[] } {
   const calls: string[] = [];
   const rows = subscriptions.map((subscription) => ({ ...subscription }));
   return {
@@ -54,14 +58,20 @@ function fakeStripe(subscriptions: SubscriptionSnapshot[], options?: { failCance
       calls.push(`cancel-schedule:${scheduleId}:${JSON.stringify(params)}`);
       assert.deepEqual(params, CANCEL);
       const match = rows.find((subscription) => subscription.scheduleId === scheduleId);
-      if (match && !options?.scheduleLeavesActive) match.status = 'canceled';
+      if (match && !options?.scheduleLeavesActive) {
+        match.status = 'canceled';
+        match.canceledAt = '2026-10-24T23:11:30.000Z';
+      }
     },
     async cancelSubscription(subscriptionId, params) {
       calls.push(`cancel-subscription:${subscriptionId}:${JSON.stringify(params)}`);
       assert.deepEqual(params, CANCEL);
       if (options?.failCancel) throw new Error('Stripe unavailable');
       const match = rows.find((subscription) => subscription.id === subscriptionId);
-      if (match) match.status = 'canceled';
+      if (match && !options?.leaveActive) {
+        match.status = 'canceled';
+        match.canceledAt = '2026-10-24T23:11:30.000Z';
+      }
     },
   };
 }
@@ -109,6 +119,58 @@ test('an active subscription and a scheduled subscription are canceled immediate
   assert.ok(stripe.calls.some((call) => call.startsWith('cancel-schedule:sched_1')));
   assert.equal(stripe.calls.some((call) => call.startsWith('cancel-subscription:sub_scheduled')), false);
   assert.equal(stripe.calls.some((call) => call.includes('customers.del')), false);
+  const account = closed.archive?.account;
+  assert.equal(account?.deletion_snapshot, 'before_deletion');
+  assert.equal(account?.subscription_status, 'active');
+  const results = account?.closure_results as ClosureSubscriptionResult[];
+  assert.equal(results.length, 2);
+  assert.ok(results.every((result) => result.result === 'final' && result.subscription_status === 'canceled' && result.canceled_at === '2026-10-24T23:11:30.000Z' && result.verified_at));
+});
+
+test('an older or non-final event does not replace a verified cancellation', () => {
+  const verified = closureSubscriptionResult({
+    stripeSubscriptionId: 'sub_live',
+    status: 'canceled',
+    canceledAt: '2026-10-24T23:11:30.000Z',
+    verifiedAt: '2026-10-24T23:11:31.000Z',
+    eventCreated: 200,
+  });
+  const before = stampBeforeDeletionAccount({ subscription_status: 'active', stripe_subscription_id: 'sub_live' }, [verified]);
+  const olderActive = closureSubscriptionResult({
+    stripeSubscriptionId: 'sub_live',
+    status: 'active',
+    canceledAt: null,
+    verifiedAt: '2026-10-24T23:12:00.000Z',
+    eventCreated: 100,
+  });
+  const kept = stampBeforeDeletionAccount(before, [olderActive]);
+  assert.equal(kept?.deletion_snapshot, 'before_deletion');
+  assert.equal(kept?.subscription_status, 'active');
+  const keptResults = kept?.closure_results as ClosureSubscriptionResult[];
+  assert.equal(keptResults.length, 1);
+  assert.equal(keptResults[0].subscription_status, 'canceled');
+  assert.equal(keptResults[0].canceled_at, '2026-10-24T23:11:30.000Z');
+  assert.equal(keptResults[0].event_created, 200);
+  const newerActive = closureSubscriptionResult({
+    stripeSubscriptionId: 'sub_live',
+    status: 'active',
+    canceledAt: null,
+    verifiedAt: '2026-10-24T23:13:00.000Z',
+    eventCreated: 300,
+  });
+  const stillCanceled = stampBeforeDeletionAccount(kept, [newerActive]);
+  const stillResults = stillCanceled?.closure_results as ClosureSubscriptionResult[];
+  assert.equal(stillResults[0].subscription_status, 'canceled');
+  assert.equal(stillCanceled?.subscription_status, 'active');
+});
+
+test('cancellation that leaves the subscription active is not treated as confirmed', async () => {
+  const stripe = fakeStripe([{ id: 'sub_active', status: 'active', scheduleId: null }], { leaveActive: true });
+  await assert.rejects(
+    () => closeOneSubscription(stripe, { id: 'sub_active', status: 'active', scheduleId: null }),
+    /Subscription cancellation was not confirmed/,
+  );
+  assert.ok(stripe.calls.some((call) => call.startsWith('cancel-subscription:sub_active')));
 });
 
 test('a schedule that stays active is then canceled on the subscription', async () => {

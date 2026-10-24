@@ -3,12 +3,14 @@ import {
   applyBillingClosure,
   BillingDeletionPendingError,
   closeOneSubscription,
+  closureSubscriptionResult,
   customerToClose,
   DELETION_FINISHING_MESSAGE,
   DELETION_PENDING_MESSAGE,
   emptyLedger,
   mergeArchivedInvoice,
   mergeLedgers,
+  stampBeforeDeletionAccount,
   subscriptionIsTerminal,
   syncBlockedByDeletion,
   type ArchivedInvoice,
@@ -229,7 +231,12 @@ function scheduleIdOf(subscription: Stripe.Subscription): string | null {
 }
 
 function snapshotOf(subscription: Stripe.Subscription): SubscriptionSnapshot {
-  return { id: subscription.id, status: subscription.status, scheduleId: scheduleIdOf(subscription) };
+  return {
+    id: subscription.id,
+    status: subscription.status,
+    scheduleId: scheduleIdOf(subscription),
+    canceledAt: typeof subscription.canceled_at === 'number' ? new Date(subscription.canceled_at * 1000).toISOString() : null,
+  };
 }
 
 function unusedStripe(): ClosureStripe {
@@ -243,8 +250,7 @@ function unusedStripe(): ClosureStripe {
   };
 }
 
-function stripeAdapter(): ClosureStripe {
-  const stripe = stripeServer();
+function stripeAdapter(stripe: Stripe = stripeServer()): ClosureStripe {
   return {
     async listOpenSessions(customerId) {
       const ids: string[] = [];
@@ -414,18 +420,58 @@ export async function recordDeletionInvoice(userId: string, invoice: ArchivedInv
   });
 }
 
-export async function suppressRevivedSubscription(subscription: Stripe.Subscription): Promise<void> {
-  if (subscription.livemode || subscriptionIsTerminal(subscription.status)) return;
-  await closeOneSubscription(stripeAdapter(), snapshotOf(subscription));
+export async function recordVerifiedClosureSubscription(userId: string, subscription: Stripe.Subscription, eventCreated: number | null): Promise<void> {
+  if (subscription.livemode) return;
+  const closure = await closureByUser(userId);
+  if (!closure) return;
+  const existing = await supabaseServer
+    .from('billing_ledger_archive')
+    .select('payload')
+    .eq('closure_id', closure.id)
+    .eq('kind', 'account')
+    .maybeSingle();
+  if (existing.error) throw existing.error;
+  const account = stampBeforeDeletionAccount(existing.data?.payload ? asRecord(existing.data.payload) : null, [closureSubscriptionResult({
+    stripeSubscriptionId: subscription.id,
+    status: subscription.status,
+    canceledAt: typeof subscription.canceled_at === 'number' ? new Date(subscription.canceled_at * 1000).toISOString() : null,
+    verifiedAt: new Date().toISOString(),
+    eventCreated,
+  })]);
+  if (!account) return;
+  const saved = await supabaseServer.from('billing_ledger_archive').upsert({
+    closure_id: closure.id,
+    former_user_id: userId,
+    kind: 'account',
+    source_id: userId,
+    payload: account,
+    livemode: false,
+    updated_at: new Date().toISOString(),
+  }, { onConflict: 'kind,source_id' });
+  if (saved.error) throw saved.error;
 }
 
-export async function settleDeletionCheckout(userId: string, session: Stripe.Checkout.Session): Promise<void> {
+export async function suppressRevivedSubscription(subscription: Stripe.Subscription, stripe: Stripe = stripeServer()): Promise<void> {
+  if (subscription.livemode || subscriptionIsTerminal(subscription.status)) return;
+  await closeOneSubscription(stripeAdapter(stripe), snapshotOf(subscription));
+}
+
+export type DeletionCheckoutDeps = {
+  stripe?: Stripe;
+  recordInvoice?: typeof recordDeletionInvoice;
+  eventCreated?: number | null;
+};
+
+export async function settleDeletionCheckout(userId: string, session: Stripe.Checkout.Session, deps?: DeletionCheckoutDeps): Promise<void> {
   if (session.livemode) return;
-  const stripe = stripeServer();
+  const stripe = deps?.stripe ?? stripeServer();
+  const recordInvoice = deps?.recordInvoice ?? recordDeletionInvoice;
   const subscriptionId = typeof session.subscription === 'string' ? session.subscription : session.subscription?.id ?? null;
   if (subscriptionId) {
-    const subscription = await stripe.subscriptions.retrieve(subscriptionId);
-    await suppressRevivedSubscription(subscription);
+    let subscription = await stripe.subscriptions.retrieve(subscriptionId);
+    await suppressRevivedSubscription(subscription, stripe);
+    subscription = await stripe.subscriptions.retrieve(subscriptionId);
+    await recordVerifiedClosureSubscription(userId, subscription, deps?.eventCreated ?? null);
   }
   if (session.status === 'open') await stripe.checkout.sessions.expire(session.id);
   const amount = session.amount_total ?? 0;
@@ -433,7 +479,7 @@ export async function settleDeletionCheckout(userId: string, session: Stripe.Che
   const invoiceId = typeof session.invoice === 'string' ? session.invoice : session.invoice?.id
     ?? (typeof session.payment_intent === 'string' ? session.payment_intent : session.payment_intent?.id);
   if (!invoiceId) return;
-  await recordDeletionInvoice(userId, {
+  await recordInvoice(userId, {
     stripeInvoiceId: invoiceId,
     status: paid ? 'paid' : 'open',
     amountCents: amount,
