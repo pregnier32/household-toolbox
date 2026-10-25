@@ -1,0 +1,26 @@
+---
+description: Household RLS, grants, service-role routes, and storage ownership
+alwaysApply: true
+---
+
+# Household access security
+
+Follow `system_design.md`, section **Row level security and household access**. New tables and features do not inherit existing protections.
+
+Review any change to tables, policies, grants, functions, API authorization, or storage before it is applied. Do not apply production SQL or deploy as part of writing the change unless the user asks.
+
+For every new table or feature:
+
+- Enable RLS in the migration and write the intended policies there.
+- Set grants explicitly. Revoke `PUBLIC`, `anon`, and `authenticated`, then grant only what those roles need. Do not grant `TRUNCATE`, `TRIGGER`, or `REFERENCES` to `anon` or `authenticated`.
+- Keep household rows isolated. A child record stays with its parent. A client-supplied `user_id` is not proof of ownership.
+- On a household-owned `user_id` table, add `reject_user_id_change` and `reject_unowned_user_id` in that migration. Existing triggers do not attach themselves to new tables.
+- Leave `users` and `household_members` without those triggers. `user_id` there is the person. `user_release_note_reads` stores the signed-in person: reject a `user_id` change, and do not force the household admin id on insert.
+- In service-role routes, take identity from `getSession()` and shared tool data from `getHouseholdDataSession()`. Check `householdRole === 'admin'` before billing, household management, or account notices. Validate parent and child ids before writing.
+- Keep `view_password_hash`, `download_password_hash`, `answer_hash`, and `tools_note_notes.note` off direct `anon` and `authenticated` access. A column revoke does not hide a column while a table-level `SELECT` remains. APIs strip hashes. Return locked note text only after the password check.
+- Revoke `EXECUTE` from `PUBLIC` and `anon` on new functions. Grant it only to the roles that call the function. Keep `can_access_user_data` and `can_access_storage_owner` available to `authenticated`. Do not grant `household_tool_access_locked` to `anon` or `authenticated`.
+- For storage, authorize the record and require the object key to start with the household data owner id (`objectPathForOwner`). A later UUID is not ownership.
+- Put the change in `supabase/migrations` as one transaction with a preflight, a failing post-check, and a rollback in `supabase/rollbacks`.
+- Add an authorization test for the new path: a member may use the shared record, and another household may not read or rewrite it.
+
+`getSession()` is the signed-in person. `getHouseholdDataSession()` remaps a member’s `id` to `householdOwnerId` and preserves `actorId` and `householdRole`. That remap is not an admin grant.

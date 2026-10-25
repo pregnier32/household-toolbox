@@ -20,6 +20,7 @@ Full UX recipes, class strings, and per-tool exceptions are in [`UX_DESIGN_STAND
 - [Attachments](#attachments)
 - [Accessibility](#accessibility)
 - [Database standards](#database-standards)
+- [Row level security and household access](#row-level-security-and-household-access)
 - [Implementation notes](#implementation-notes)
 - [Future considerations](#future-considerations)
 - [Calendar events frequency design (legacy)](#calendar-events-frequency-design-legacy)
@@ -1658,15 +1659,17 @@ All Row Level Security (RLS) policies must use optimized `auth.uid()` calls to p
 
 **Example**:
 ```sql
--- Optimized RLS policy
+-- Household-owned rows. Prefer this over a direct auth.uid() comparison.
 CREATE POLICY "Users can view their own records" ON table_name
   FOR SELECT
   TO authenticated
-  USING ((select auth.uid()) = user_id);
+  USING (public.can_access_user_data(user_id));
 ```
 
+Use `(select auth.uid())` only when the policy is intentionally about the signed-in person, such as `users` or `household_members`. See **Row level security and household access**.
+
 **Special Cases**:
-- For tables without `user_id` columns (e.g., junction tables, security_questions), use EXISTS subqueries:
+- For tables without `user_id` columns (junction tables, security questions), check the parent through `can_access_user_data`:
 ```sql
 CREATE POLICY "Users can view their own items" ON junction_table
   FOR SELECT
@@ -1675,7 +1678,7 @@ CREATE POLICY "Users can view their own items" ON junction_table
     EXISTS (
       SELECT 1 FROM parent_table
       WHERE parent_table.id = junction_table.parent_id
-      AND parent_table.user_id = (select auth.uid())
+      AND public.can_access_user_data(parent_table.user_id)
     )
   );
 ```
@@ -1698,11 +1701,13 @@ When creating storage buckets for file uploads, follow this standardized pattern
 **Verification note (2026-09-29):** app attachment APIs already validate the newer type list and 10 MB cap. This repo does not contain `INSERT INTO storage.buckets` that would prove live public/private flags. Confirm each hosted bucket is private in the Supabase dashboard before changing production bucket settings. Do not change application code in this documentation pass.
 
 **Folder Structure**:
-Files are organized by user ID in subfolders:
+The first segment is the household data owner id, not a member id and not a folder name:
 ```
-{bucket-name}/{userId}/{timestamp}-{filename}
+{bucket-name}/{householdOwnerId}/{timestamp}-{filename}
 ```
-Example: `repair-history/receipts/{userId}/1734567890123-Test_Document.pdf`
+Example: `repair-history/{householdOwnerId}/1734567890123-receipt.pdf`
+
+A key such as `documents/{userId}/file` or `receipts/{userId}/file` is not an owned key. Storage accounting counts a key only when it equals the owner id or starts with `{ownerId}/`. A UUID later in the path does not grant access. See **Row level security and household access**.
 
 #### Storage Policy Pattern
 All storage buckets must have Row Level Security (RLS) policies to ensure users can only access their own files.
@@ -1717,63 +1722,46 @@ Use bucket-specific policy names to avoid conflicts:
 ```
 
 **Standard Policy Template**:
-```sql
--- Drop existing policies if they exist (to allow re-running this script)
-DROP POLICY IF EXISTS "{bucket-name}: Users can upload to their own folder" ON storage.objects;
-DROP POLICY IF EXISTS "{bucket-name}: Users can read their own files" ON storage.objects;
-DROP POLICY IF EXISTS "{bucket-name}: Users can update their own files" ON storage.objects;
-DROP POLICY IF EXISTS "{bucket-name}: Users can delete their own files" ON storage.objects;
+The first path segment is the household data owner. Policies call `can_access_storage_owner` for that segment, as in `supabase/archive/tools/travel-log.sql`. A member’s `auth.uid()` is the signed-in person, so do not compare the folder to `auth.uid()` on a household-shared bucket.
 
--- Policy: Allow authenticated users to upload files to their own folder
+```sql
 CREATE POLICY "{bucket-name}: Users can upload to their own folder"
-ON storage.objects
-FOR INSERT
-TO authenticated
+ON storage.objects FOR INSERT TO authenticated
 WITH CHECK (
   bucket_id = '{bucket-name}' AND
-  (storage.foldername(name))[1] = auth.uid()::text
+  public.can_access_storage_owner((storage.foldername(name))[1])
 );
 
--- Policy: Allow authenticated users to read their own files
 CREATE POLICY "{bucket-name}: Users can read their own files"
-ON storage.objects
-FOR SELECT
-TO authenticated
+ON storage.objects FOR SELECT TO authenticated
 USING (
   bucket_id = '{bucket-name}' AND
-  (storage.foldername(name))[1] = auth.uid()::text
+  public.can_access_storage_owner((storage.foldername(name))[1])
 );
 
--- Policy: Allow authenticated users to update their own files
 CREATE POLICY "{bucket-name}: Users can update their own files"
-ON storage.objects
-FOR UPDATE
-TO authenticated
+ON storage.objects FOR UPDATE TO authenticated
 USING (
   bucket_id = '{bucket-name}' AND
-  (storage.foldername(name))[1] = auth.uid()::text
+  public.can_access_storage_owner((storage.foldername(name))[1])
 )
 WITH CHECK (
   bucket_id = '{bucket-name}' AND
-  (storage.foldername(name))[1] = auth.uid()::text
+  public.can_access_storage_owner((storage.foldername(name))[1])
 );
 
--- Policy: Allow authenticated users to delete their own files
 CREATE POLICY "{bucket-name}: Users can delete their own files"
-ON storage.objects
-FOR DELETE
-TO authenticated
+ON storage.objects FOR DELETE TO authenticated
 USING (
   bucket_id = '{bucket-name}' AND
-  (storage.foldername(name))[1] = auth.uid()::text
+  public.can_access_storage_owner((storage.foldername(name))[1])
 );
 ```
 
 **Implementation Steps**:
-1. Create the storage bucket in Supabase Dashboard > Storage
-2. Create a SQL script file: `supabase/create-{bucket-name}-storage-bucket.sql`
-3. Include bucket creation instructions and the policy template
-4. Run the SQL script in Supabase SQL Editor to apply policies
+1. Create the private bucket in Supabase Storage.
+2. Add the policies, grants, and owner-prefix rule to a versioned file in `supabase/migrations`, with a rollback in `supabase/rollbacks`.
+3. Application uploads and downloads still go through the service role and `objectPathForOwner`.
 
 **Current Storage Buckets**:
 - `repair-history` - Stores receipts, warranties, and repair pictures (`supabase/archive/tools/repair-history.sql`)
@@ -1893,13 +1881,75 @@ $$;
 - Users functions (1)
 - Additional functions (4): promo_codes, tools, tool_icons, users_tools
 
+### Row level security and household access
+
+Released October 2026. New tables and features do not inherit these protections. Each migration must state them again. A change that adds or modifies tables, policies, grants, functions, API authorization, or storage needs a security review before it is applied.
+
+#### Two identities
+
+`getSession()` is the signed-in person. Keep `actorId` and `householdRole` for that person.
+
+`getHouseholdDataSession()` is the household data owner. For a member it remaps `id` to `householdOwnerId` and still preserves `actorId` and `householdRole`. Tool, attachment, and shared-calendar queries use that owner id.
+
+Check `householdRole === 'admin'` before using the remapped id for billing, household management, or account notices. Resolving a member to the admin’s data does not make that member an admin. Account deletion uses the signed-in person. Release-note read state is also the signed-in person.
+
+#### Tables, RLS, and grants
+
+- `ENABLE ROW LEVEL SECURITY` on every new public table in the same migration that creates it.
+- Write the intended policies in that migration. A table with RLS and no policy is deny-all. A table without RLS is not protected.
+- Set grants explicitly. Revoke `PUBLIC`, `anon`, and `authenticated` first, then grant only the privileges those roles need. Do not grant `TRUNCATE`, `TRIGGER`, or `REFERENCES` to `anon` or `authenticated`.
+- `service_role` keeps the access the API uses. The browser client is for Auth only. Data routes use `lib/supabaseServer.ts`.
+- Household tool rows are readable by the owner and by an active member of that household through `can_access_user_data(owner_id)`. A child row must stay inside its parent. Validate parent and child ids in the route before a service-role write. A client-supplied `user_id` is not proof of ownership.
+
+#### Ownership triggers
+
+`reject_user_id_change` and `reject_unowned_user_id` are installed per table. A new `user_id` table does not receive them automatically. Add both triggers in the migration when `user_id` is the household data owner.
+
+The triggers reject every change of `user_id`, including `service_role`. Sending the same `user_id` again is allowed, so upserts that repeat the owner keep working. While `auth.uid()` is present, an insert must use the household admin id. `service_role` has a null `auth.uid()`, so application inserts are unchanged.
+
+Established exceptions:
+
+- `users` and `household_members`: `user_id` is the person. Do not add these triggers.
+- `user_release_note_reads`: still reject a `user_id` change. Do not force the household admin id on insert, because the row stores the signed-in person.
+
+A person-specific table needs the same explicit decision. Do not treat it as household-owned data, and do not leave a household-owned table without the triggers.
+
+#### Passwords and protected content
+
+`anon` and `authenticated` have no table-level access to `tools_note_notes`, `tools_note_security_questions`, `tools_id_documents`, or `tools_id_security_questions`. A column revoke does not hide a column while a table-level `SELECT` remains.
+
+Withheld from direct access: `view_password_hash`, `download_password_hash`, `answer_hash`, and `tools_note_notes.note`. The note column is withheld for every row because a column grant cannot depend on `requires_password_for_view`. `authenticated` may still select non-secret columns such as `note_name` and `document_name`. `tools_id_documents.note` is a document field and stays selectable. Ordinary `note` columns on expenses, goal updates, and HSA deposits are not password secrets.
+
+The notes and documents APIs strip hashes. Open note text is returned by the API. Locked note text is returned only after the password check. Document download requires the password. Do not add an RPC or a view that reads these columns for `anon` or `authenticated`.
+
+#### Functions
+
+Revoke `EXECUTE` from `PUBLIC` and `anon` on every new function. Grant it only to the roles that call it.
+
+- `can_access_user_data(owner_id uuid)` and `can_access_storage_owner(folder text)` stay executable by `authenticated` and `service_role` because policies call them.
+- `household_tool_access_locked(owner_id uuid)` is called by the security-definer owner check. Do not grant it to `anon` or `authenticated`, and do not add an `auth.uid()` requirement. That would break service-role jobs.
+- Billing, promotion, storage-stat, and owner-policy rewrite helpers are `service_role` only.
+- Set `search_path` on the function. Trigger functions the application fires need `EXECUTE` for `service_role`.
+
+#### Storage
+
+Application uploads, downloads, and deletes use the service role. Authorize both the record and the object key. The key’s first segment must be the household data owner from the server session. Use `objectPathForOwner` in `lib/storage-owner.ts`. A `file_url`, a client-supplied id, or a UUID in a later segment is not proof of ownership. Storage policies call `can_access_storage_owner`. New buckets follow that helper and the `{householdOwnerId}/...` prefix.
+
+#### Migrations and tests
+
+Put the change in `supabase/migrations`. Make it one transaction with a preflight check and a post-check that raises on failure. Put the rollback in `supabase/rollbacks`. Do not apply a bundle with `supabase db push`.
+
+Add an authorization test for each new access path. Show that a household member can use the shared record and that another household cannot read or rewrite it. Cover a forged owner id and a child id from another household. `lib/household-authorization.test.ts` is the pattern. Do not run billing tests that write the linked database.
+
 ### Database Migration Guidelines
 
 1. **Always add indexes for foreign keys** when creating new tables
-2. **Always use optimized RLS policies** with `(select auth.uid())` pattern
-3. **Always set search_path** on all function definitions
-4. **Test migrations** in development before applying to production
-5. **Document any special cases** in migration file comments
+2. **Enable RLS, write the policies, and set least-privilege grants** in the same migration. New tables do not inherit existing protections
+3. **Always use optimized RLS policies** with `(select auth.uid())` pattern
+4. **Add the ownership triggers** on a new household-owned `user_id` table. Leave person-specific tables exempt
+5. **Always set search_path** on all function definitions, and grant `EXECUTE` only to the roles that call the function
+6. **Test migrations** before applying to production, and review any change to tables, policies, grants, functions, API authorization, or storage
+7. **Document any special cases** in migration file comments
 
 ---
 
