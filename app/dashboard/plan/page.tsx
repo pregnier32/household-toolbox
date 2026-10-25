@@ -13,7 +13,7 @@ export default function PlanBillingPage() {
       .then((response) => response.json())
       .then((data) => {
         if (!data.user) {
-          router.push('/');
+          router.push('/?next=/dashboard/plan');
           return;
         }
         if (data.user.householdRole === 'user') {
@@ -24,7 +24,7 @@ export default function PlanBillingPage() {
         setUserName(name || 'Account');
       })
       .catch(() => {
-        router.push('/');
+        router.push('/?next=/dashboard/plan');
       });
   }, [router]);
 

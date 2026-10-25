@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server';
-import { loadChargeSnapshot } from './billing-amount';
+import { loadCollectibleSnapshot } from './billing-amount';
 import { remainingDueCents } from './billing-ledger';
 import { describeBillingCycle } from './billing-cycle';
 import { loadFrozenPeriod } from './billing-period-store';
@@ -11,6 +11,7 @@ import {
   syncHouseholdToolAccess,
 } from './billing-store';
 import { collectionNeedsRefresh, reconcileCustomerPayments, reconcileOpenCheckoutAttempts } from './billing-payment-state';
+import { billingAccountForMode } from './billing-environment';
 import { supabaseServer } from './supabaseServer';
 import {
   describeToolAccessPolicy,
@@ -49,8 +50,8 @@ export async function loadToolAccessPolicy(
     });
   }
   const [snapshot, account, invoices, attention, pricing] = await Promise.all([
-    loadChargeSnapshot(userId, now),
-    loadBillingAccount(userId),
+    loadCollectibleSnapshot(userId, now),
+    billingAccountForMode(await loadBillingAccount(userId)),
     needsStripe ? listStoredInvoices(userId) : Promise.resolve(storedInvoices),
     listPaymentAttention(userId),
     loadAccountPricingInputs([userId]),

@@ -23,7 +23,8 @@ import {
 } from '@/lib/billing-account-deletion';
 import { withBillingLock } from '@/lib/billing-lock';
 import { loadBillingAccount, upsertStoredInvoice } from '@/lib/billing-store';
-import { stripeConfigured, stripeServer } from '@/lib/stripe-server';
+import { stripeConfigured, stripeServer, assertConfiguredStripe } from '@/lib/stripe-server';
+import { foreignStripeObject, stripeIdForMode, stripeLivemode } from '@/lib/stripe-mode';
 import { supabaseServer } from '@/lib/supabaseServer';
 
 type ClosureRow = {
@@ -122,7 +123,7 @@ async function resolveRole(userId: string): Promise<{ role: DeletionRole; househ
   const adminId = household.data?.admin_user_id;
   if (!adminId || adminId === userId) return { role: 'admin', householdCustomerId: null };
   const adminAccount = await loadBillingAccount(adminId);
-  return { role: 'member', householdCustomerId: adminAccount?.stripe_customer_id ?? null };
+  return { role: 'member', householdCustomerId: stripeIdForMode(adminAccount?.stripe_customer_id, adminAccount?.livemode) };
 }
 
 async function readLedger(userId: string): Promise<LedgerSnapshot> {
@@ -185,7 +186,7 @@ async function persistSnapshot(userId: string, next: ClosureSnapshot): Promise<v
     status: next.phase ?? 'pending',
     stripe_customer_id: next.customerId,
     last_error: next.lastError,
-    livemode: false,
+    livemode: stripeLivemode(),
     updated_at: now,
     ...(next.phase === 'billing_closed' ? { billing_closed_at: now } : {}),
     ...(next.phase === 'user_deleted' ? { user_deleted_at: now } : {}),
@@ -212,7 +213,7 @@ async function persistSnapshot(userId: string, next: ClosureSnapshot): Promise<v
     kind: row.kind,
     source_id: row.source_id,
     payload: row.payload,
-    livemode: false,
+    livemode: stripeLivemode(),
     updated_at: now,
   })), { onConflict: 'kind,source_id' });
   if (upserted.error) throw upserted.error;
@@ -299,13 +300,14 @@ export async function prepareBillingClosure(userId: string): Promise<void> {
     await withBillingLock(userId, async () => {
       const account = await loadBillingAccount(userId);
       const role = await resolveRole(userId);
-      const ownedCustomerId = account?.stripe_customer_id ?? null;
+      const ownedCustomerId = stripeIdForMode(account?.stripe_customer_id, account?.livemode);
       const closingCustomerId = customerToClose({
         role: role.role,
         ownedCustomerId,
         householdCustomerId: role.householdCustomerId,
       });
       if (closingCustomerId && !stripeConfigured()) throw new BillingDeletionPendingError();
+      if (closingCustomerId) await assertConfiguredStripe();
       await applyBillingClosure({
         read: () => readSnapshot(userId),
         write: (next) => persistSnapshot(userId, next),
@@ -401,7 +403,7 @@ export async function recordDeletionInvoice(userId: string, invoice: ArchivedInv
     kind: 'invoice',
     source_id: merged.stripeInvoiceId,
     payload,
-    livemode: false,
+    livemode: stripeLivemode(),
     updated_at: new Date().toISOString(),
   }, { onConflict: 'kind,source_id' });
   if (saved.error) throw saved.error;
@@ -421,7 +423,7 @@ export async function recordDeletionInvoice(userId: string, invoice: ArchivedInv
 }
 
 export async function recordVerifiedClosureSubscription(userId: string, subscription: Stripe.Subscription, eventCreated: number | null): Promise<void> {
-  if (subscription.livemode) return;
+  if (foreignStripeObject(subscription.livemode)) return;
   const closure = await closureByUser(userId);
   if (!closure) return;
   const existing = await supabaseServer
@@ -445,14 +447,14 @@ export async function recordVerifiedClosureSubscription(userId: string, subscrip
     kind: 'account',
     source_id: userId,
     payload: account,
-    livemode: false,
+    livemode: stripeLivemode(),
     updated_at: new Date().toISOString(),
   }, { onConflict: 'kind,source_id' });
   if (saved.error) throw saved.error;
 }
 
 export async function suppressRevivedSubscription(subscription: Stripe.Subscription, stripe: Stripe = stripeServer()): Promise<void> {
-  if (subscription.livemode || subscriptionIsTerminal(subscription.status)) return;
+  if (foreignStripeObject(subscription.livemode) || subscriptionIsTerminal(subscription.status)) return;
   await closeOneSubscription(stripeAdapter(stripe), snapshotOf(subscription));
 }
 
@@ -463,7 +465,7 @@ export type DeletionCheckoutDeps = {
 };
 
 export async function settleDeletionCheckout(userId: string, session: Stripe.Checkout.Session, deps?: DeletionCheckoutDeps): Promise<void> {
-  if (session.livemode) return;
+  if (foreignStripeObject(session.livemode)) return;
   const stripe = deps?.stripe ?? stripeServer();
   const recordInvoice = deps?.recordInvoice ?? recordDeletionInvoice;
   const subscriptionId = typeof session.subscription === 'string' ? session.subscription : session.subscription?.id ?? null;

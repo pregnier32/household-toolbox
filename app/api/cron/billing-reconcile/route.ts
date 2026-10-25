@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server';
 import { cronAuthorization, reconcileBilling } from '@/lib/billing-reconcile';
-import { stripeConfigured } from '@/lib/stripe-server';
+import { paymentsConfigurationError, stripeConfigured } from '@/lib/stripe-server';
 
 export const runtime = 'nodejs';
 
@@ -17,12 +17,16 @@ async function handle(request: Request) {
   const authorization = cronAuthorization(request);
   if (authorization === 'missing') return NextResponse.json({ error: 'CRON_SECRET is not configured.' }, { status: 503 });
   if (authorization === 'rejected') return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-  if (!stripeConfigured()) return NextResponse.json({ error: 'Sandbox payments are not configured.' }, { status: 503 });
+  if (!stripeConfigured()) return NextResponse.json({ error: paymentsConfigurationError() }, { status: 503 });
   try {
     const result = await reconcileBilling();
     return NextResponse.json(result);
   } catch (error) {
-    console.error('Billing reconcile failed', error instanceof Error ? error.message : 'unknown');
+    const message = error instanceof Error ? error.message : 'unknown';
+    console.error('Billing reconcile failed', message);
+    if (message === 'Live billing storage is not ready.' || message === 'Live payments are not configured.' || message === 'Sandbox payments are not configured.' || message === 'New charges are disabled. Existing billing remains active.') {
+      return NextResponse.json({ error: message }, { status: 503 });
+    }
     return NextResponse.json({ error: 'Billing reconcile failed.' }, { status: 500 });
   }
 }

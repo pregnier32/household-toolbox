@@ -35,7 +35,7 @@ export async function POST(request: Request) {
     return paymentResponse(result);
   } catch (error) {
     const message = error instanceof Error ? error.message : '';
-    if (message === 'Sandbox payments are not configured.') {
+    if (message === 'Sandbox payments are not configured.' || message === 'Live payments are not configured.' || message === 'Live billing storage is not ready.' || message === 'New charges are disabled. Existing billing remains active.' || message === 'This household has live billing records. Test mode will not create a customer or charge.') {
       return NextResponse.json({ error: message }, { status: 503 });
     }
     console.error('Checkout failed', message || 'unknown');

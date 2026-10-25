@@ -21,8 +21,10 @@ export type CheckoutSettlement =
   | { action: 'record-invoice'; invoiceId: string }
   | { action: 'record-payment'; paymentIntentId: string; amountCents: number; periodStart: string | null };
 
+import { foreignStripeObject } from '@/lib/stripe-mode';
+
 export function describeCheckoutSettlement(input: CheckoutSettlementInput): CheckoutSettlement {
-  if (input.livemode || input.mode !== 'payment') return { action: 'ignore' };
+  if (foreignStripeObject(input.livemode) || input.mode !== 'payment') return { action: 'ignore' };
   if (input.paymentStatus !== 'paid' || input.amountCents <= 0) return { action: 'ignore' };
   if (input.invoiceId) return { action: 'record-invoice', invoiceId: input.invoiceId };
   if (!input.paymentIntentId || input.recordedIds.includes(input.paymentIntentId)) return { action: 'ignore' };

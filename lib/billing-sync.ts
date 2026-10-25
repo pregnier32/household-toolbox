@@ -1,6 +1,6 @@
 import type Stripe from 'stripe';
 import type { Json } from '@/src/types/supabase';
-import { loadChargeSnapshot, type ChargeSnapshot } from '@/lib/billing-amount';
+import { loadCollectibleSnapshot, type ChargeSnapshot } from '@/lib/billing-amount';
 import { describeCheckoutSettlement, supersededCheckoutPaymentIds } from '@/lib/billing-checkout-payment';
 import { supplementalInvoiceBlocked } from '@/lib/billing-cycle';
 import { invoicedCents, uninvoicedCents, type InvoiceRole, type InvoiceStatus, type LedgerInvoice } from '@/lib/billing-ledger';
@@ -37,7 +37,11 @@ import {
   type PaymentMethodSyncState,
   type SavedCard,
 } from '@/lib/billing-card';
-import { stripeConfigured, stripeServer } from '@/lib/stripe-server';
+import { planBillingReturnUrl } from '@/lib/auth-app-origin';
+import { loadAccountPricingInputs } from '@/lib/load-account-pricing';
+import { billingAccountForMode, liveBillingStorageReady, recordLiveCommencement, separateTestStripeIdentity } from '@/lib/billing-environment';
+import { assertConfiguredStripe, paymentsConfigurationError, stripeConfigured, stripeServer } from '@/lib/stripe-server';
+import { foreignStripeObject, LIVE_IDENTITY_IN_TEST_MESSAGE, NEW_CHARGES_DISABLED_MESSAGE, stripeChargeCreationEnabled, stripeIdForMode, stripeLivemode, stripeMode } from '@/lib/stripe-mode';
 
 const LIVE_SUBSCRIPTION = new Set(['active', 'past_due', 'unpaid', 'trialing', 'paused', 'incomplete']);
 
@@ -59,7 +63,7 @@ function roleForStripeInvoice(invoice: Stripe.Invoice): InvoiceRole {
   return 'supplemental';
 }
 
-async function sandboxProduct(stripe: Stripe): Promise<string> {
+async function monthlyProduct(stripe: Stripe): Promise<string> {
   const listed = await stripe.products.list({ active: true, limit: 100 });
   const found = listed.data.find((product) => product.metadata?.hhtb_role === 'monthly');
   if (found) return found.id;
@@ -75,7 +79,7 @@ async function monthlyPrice(stripe: Stripe, cents: number, recurring: boolean): 
   const existing = await stripe.prices.list({ lookup_keys: [lookupKey], limit: 1 });
   if (existing.data[0]) return existing.data[0].id;
   const price = await stripe.prices.create({
-    product: await sandboxProduct(stripe),
+    product: await monthlyProduct(stripe),
     currency: 'usd',
     unit_amount: cents,
     recurring: recurring ? { interval: 'month' } : undefined,
@@ -93,7 +97,11 @@ async function customerEmail(userId: string): Promise<string> {
 }
 
 async function ensureCustomer(stripe: Stripe, userId: string, account: BillingAccountRow | null): Promise<string> {
-  if (account?.stripe_customer_id) return account.stripe_customer_id;
+  if (stripeMode() === 'test' && account?.livemode === true) throw new Error(LIVE_IDENTITY_IN_TEST_MESSAGE);
+  const existing = stripeIdForMode(account?.stripe_customer_id, account?.livemode);
+  if (existing) return existing;
+  if (account?.stripe_customer_id) throw new Error('Test Stripe customers cannot be used for live billing.');
+  if (!stripeChargeCreationEnabled()) throw new Error(NEW_CHARGES_DISABLED_MESSAGE);
   const operation = await startBillingOperation({
     userId,
     idempotencyKey: `customer:${userId}`,
@@ -108,18 +116,22 @@ async function ensureCustomer(stripe: Stripe, userId: string, account: BillingAc
       metadata: { hhtb_user_id: userId },
     }, { idempotencyKey: operation.idempotency_key });
   if (customer.deleted) throw new Error('Stripe customer was deleted.');
+  if (foreignStripeObject(customer.livemode)) throw new Error('Test Stripe customers cannot be used for live billing.');
   await markOperationStripeSucceeded(operation.id, customer.id, { customerId: customer.id });
-  await saveBillingAccount(userId, { stripe_customer_id: customer.id });
+  await saveBillingAccount(userId, { stripe_customer_id: customer.id, livemode: stripeLivemode() });
   await markOperationCompleted(operation.id);
   return customer.id;
 }
 
 export async function syncRecurringPrice(userId: string, account: BillingAccountRow, nextAmountCents: number): Promise<void> {
+  if (!stripeChargeCreationEnabled()) return;
   if (await deletionBlocksBilling(userId)) return;
-  if (!account.stripe_subscription_id || account.synced_amount_cents === nextAmountCents) return;
+  const subscriptionId = stripeIdForMode(account.stripe_subscription_id, account.livemode);
+  if (!subscriptionId) return;
+  if (account.synced_amount_cents === nextAmountCents) return;
   if (account.subscription_status === 'canceled' || account.subscription_status === 'incomplete_expired') return;
   const stripe = stripeServer();
-  const current = await stripe.subscriptions.retrieve(account.stripe_subscription_id);
+  const current = await stripe.subscriptions.retrieve(subscriptionId);
   if (!LIVE_SUBSCRIPTION.has(current.status) || current.status === 'incomplete') return;
   const itemId = subscriptionItemId(current);
   if (!itemId) throw new Error('Stripe subscription has no item.');
@@ -187,6 +199,7 @@ export async function createSupplementalInvoice(input: {
   role?: 'supplemental' | 'replacement';
   replacesInvoiceId?: string | null;
 }): Promise<void> {
+  if (!stripeChargeCreationEnabled()) return;
   if (await deletionBlocksBilling(input.userId)) return;
   const role = input.role ?? 'supplemental';
   const key = input.replacesInvoiceId
@@ -205,6 +218,8 @@ export async function createSupplementalInvoice(input: {
   });
   if (operation.status === 'completed') return;
   const stripe = stripeServer();
+  const customer = await stripe.customers.retrieve(input.customerId);
+  if (customer.deleted || foreignStripeObject(customer.livemode)) throw new Error('Test Stripe customers cannot be used for live billing.');
   let stripeDone = operation.status === 'stripe_succeeded';
   try {
     if (!stripeDone) {
@@ -273,7 +288,7 @@ export async function createSupplementalInvoice(input: {
  * that amount again.
  */
 export async function settleUnintendedSubscriptionUpdate(userId: string, invoice: Stripe.Invoice, periodStart: string | null): Promise<boolean> {
-  if (invoice.billing_reason !== 'subscription_update' || invoice.total <= 0 || invoice.livemode) return false;
+  if (invoice.billing_reason !== 'subscription_update' || invoice.total <= 0 || foreignStripeObject(invoice.livemode)) return false;
   const stripe = stripeServer();
   if (invoice.status === 'draft') {
     await stripe.invoices.del(invoice.id);
@@ -303,7 +318,7 @@ export async function settleUnintendedSubscriptionUpdate(userId: string, invoice
 async function backfillCustomerInvoices(userId: string, customerId: string, periodStart: string | null): Promise<void> {
   const listed = await stripeServer().invoices.list({ customer: customerId, limit: 100 });
   for (const invoice of listed.data) {
-    if (invoice.livemode) continue;
+    if (foreignStripeObject(invoice.livemode)) continue;
     const settled = await settleUnintendedSubscriptionUpdate(userId, invoice, periodStart);
     if (!settled) await recordStripeInvoice(userId, invoice, invoice.metadata?.hhtb_period_start || periodStart);
   }
@@ -323,7 +338,7 @@ export async function recordStripeInvoice(userId: string, invoice: Stripe.Invoic
   const detailed = invoice.status === 'paid' && !invoice.payments?.data?.length
     ? await stripeServer().invoices.retrieve(invoice.id, { expand: ['payments.data.payment.payment_intent'] })
     : invoice;
-  if (detailed.livemode) return;
+  if (foreignStripeObject(detailed.livemode)) return;
   const metadataPeriod = detailed.metadata?.hhtb_period_start;
   await upsertStoredInvoice({
     userId,
@@ -342,7 +357,7 @@ export async function recordStripeInvoice(userId: string, invoice: Stripe.Invoic
 }
 
 export async function recordCheckoutSessionPayment(userId: string, session: Stripe.Checkout.Session): Promise<void> {
-  if (session.livemode || session.mode !== 'payment') return;
+  if (foreignStripeObject(session.livemode) || session.mode !== 'payment') return;
   const stripe = stripeServer();
   const detailed = session.invoice || session.payment_status !== 'paid'
     ? session
@@ -365,7 +380,7 @@ export async function recordCheckoutSessionPayment(userId: string, session: Stri
   if (decision.action === 'ignore') return;
   if (decision.action === 'record-invoice') {
     const invoice = await stripe.invoices.retrieve(decision.invoiceId, { expand: ['payments.data.payment.payment_intent'] });
-    if (invoice.livemode) return;
+    if (foreignStripeObject(invoice.livemode)) return;
     await recordStripeInvoice(userId, invoice, detailed.metadata?.hhtb_period_start || null);
     return;
   }
@@ -383,7 +398,7 @@ export async function recordCheckoutSessionPayment(userId: string, session: Stri
 export async function reconcileCheckoutPayments(userId: string, customerId: string): Promise<void> {
   const sessions = await stripeServer().checkout.sessions.list({ customer: customerId, limit: 100 });
   for (const session of sessions.data) {
-    if (session.livemode || session.mode !== 'payment' || session.payment_status !== 'paid') continue;
+    if (foreignStripeObject(session.livemode) || session.mode !== 'payment' || session.payment_status !== 'paid') continue;
     await recordCheckoutSessionPayment(userId, session);
   }
 }
@@ -399,6 +414,9 @@ export async function recoverBillingOperations(userId: string): Promise<void> {
     if (ageMs <= 23 * 60 * 60 * 1000) {
       if (operation.kind === 'customer') {
         const account = await loadBillingAccount(userId);
+        if (!stripeChargeCreationEnabled()) continue;
+        if (account?.stripe_customer_id && !stripeIdForMode(account.stripe_customer_id, account.livemode)) continue;
+        if (stripeMode() === 'test' && account?.livemode === true) continue;
         await ensureCustomer(stripeServer(), userId, account);
       }
       continue;
@@ -425,12 +443,14 @@ async function findStripeObjectForOperation(operation: BillingOperation): Promis
   const stripe = stripeServer();
   if (operation.kind === 'customer') {
     const customers = await stripe.customers.search({ query: `metadata['hhtb_user_id']:'${operation.user_id}'` });
-    const customer = customers.data.find((item) => !('deleted' in item && item.deleted));
+    const customer = customers.data.find((item) => !('deleted' in item && item.deleted) && !foreignStripeObject(item.livemode));
     return customer ? { id: customer.id } : null;
   }
-  if (!account?.stripe_customer_id) return null;
-  if (operation.kind === 'subscription_price' && account.stripe_subscription_id) {
-    const subscription = await stripe.subscriptions.retrieve(account.stripe_subscription_id);
+  const customerId = stripeIdForMode(account?.stripe_customer_id, account?.livemode);
+  const subscriptionId = stripeIdForMode(account?.stripe_subscription_id, account?.livemode);
+  if (!customerId) return null;
+  if (operation.kind === 'subscription_price' && subscriptionId) {
+    const subscription = await stripe.subscriptions.retrieve(subscriptionId);
     const payload = asRecord(operation.payload);
     const item = subscription.items.data[0];
     const expectedAmount = payload.nextAmountCents;
@@ -451,12 +471,12 @@ async function findStripeObjectForOperation(operation: BillingOperation): Promis
     return null;
   }
   if (operation.kind === 'subscription_create') {
-    const subscriptions = await stripe.subscriptions.list({ customer: account.stripe_customer_id, status: 'all', limit: 20 });
+    const subscriptions = await stripe.subscriptions.list({ customer: customerId, status: 'all', limit: 20 });
     const match = subscriptions.data.find((subscription) => subscription.metadata?.hhtb_operation_id === operation.id);
     const item = match?.items.data[0];
     return match ? { id: match.id, periodEnd: subscriptionPeriodEnd(match) ?? undefined, itemId: item?.id } : null;
   }
-  const invoices = await stripe.invoices.list({ customer: account.stripe_customer_id, limit: 100 });
+  const invoices = await stripe.invoices.list({ customer: customerId, limit: 100 });
   const match = invoices.data.find((invoice) => invoice.metadata?.hhtb_operation_id === operation.id);
   return match ? { id: match.id, status: match.status ?? undefined, amountPaidCents: match.amount_paid } : null;
 }
@@ -465,7 +485,7 @@ async function finishSucceededOperation(operation: BillingOperation): Promise<vo
   if (operation.status !== 'stripe_succeeded' || !operation.stripe_id) return;
   const payload = asRecord(operation.payload);
   if (operation.kind === 'customer') {
-    await saveBillingAccount(operation.user_id, { stripe_customer_id: operation.stripe_id });
+    await saveBillingAccount(operation.user_id, { stripe_customer_id: operation.stripe_id, livemode: stripeLivemode() });
   }
   if (operation.kind === 'supplemental' || operation.kind === 'replacement') {
     const periodStart = typeof payload.periodStart === 'string' ? payload.periodStart : null;
@@ -506,16 +526,17 @@ async function finishSucceededOperation(operation: BillingOperation): Promise<vo
 /** Reads the live subscription and stores a scheduled cancel_at. Does not change Stripe. */
 export async function refreshSubscriptionCancellation(userId: string): Promise<void> {
   const account = await loadBillingAccount(userId);
-  if (!account?.stripe_subscription_id) return;
+  const subscriptionId = stripeIdForMode(account?.stripe_subscription_id, account?.livemode);
+  if (!account || !subscriptionId) return;
   const stripe = stripeServer();
   let subscription: Stripe.Subscription;
   try {
-    subscription = await stripe.subscriptions.retrieve(account.stripe_subscription_id);
+    subscription = await stripe.subscriptions.retrieve(subscriptionId);
   } catch (error) {
     console.error('Subscription cancellation could not be read', error instanceof Error ? error.message : 'unknown');
     return;
   }
-  if (subscription.livemode) return;
+  if (foreignStripeObject(subscription.livemode)) return;
   const observedAt = Math.floor(Date.now() / 1000);
   await saveBillingAccount(userId, {
     ...subscriptionBillingPatch(subscription),
@@ -531,12 +552,13 @@ export async function syncAccountBilling(userId: string, now = new Date()): Prom
   await withBillingLock(userId, async () => {
     if (await deletionBlocksBilling(userId)) return;
     await recoverBillingOperations(userId);
-    const snapshot = await loadChargeSnapshot(userId, now);
+    const snapshot = await loadCollectibleSnapshot(userId, now);
     if (!snapshot) return;
     const account = await loadBillingAccount(userId);
-    if (account?.stripe_customer_id) {
-      await backfillCustomerInvoices(userId, account.stripe_customer_id, snapshot.periodStart);
-      await reconcileCheckoutPayments(userId, account.stripe_customer_id);
+    const customerId = stripeIdForMode(account?.stripe_customer_id, account?.livemode);
+    if (customerId) {
+      await backfillCustomerInvoices(userId, customerId, snapshot.periodStart);
+      await reconcileCheckoutPayments(userId, customerId);
     }
     const refreshed = await loadBillingAccount(userId);
     await refreshSavedPaymentMethod(userId);
@@ -550,7 +572,8 @@ export async function syncAccountBilling(userId: string, now = new Date()): Prom
 }
 
 async function collectGap(userId: string, account: BillingAccountRow | null, snapshot: ChargeSnapshot, invoices: LedgerInvoice[]): Promise<void> {
-  if (!account?.stripe_customer_id || !snapshot.periodStart) return;
+  const customerId = stripeIdForMode(account?.stripe_customer_id, account?.livemode);
+  if (!account || !customerId || !snapshot.periodStart) return;
   if (supplementalBlockedByCancellation(snapshot.periodStart, account.current_period_end, account.cancel_at_period_end)) return;
   if (supplementalInvoiceBlocked({
     subscriptionStatus: account.subscription_status,
@@ -563,7 +586,7 @@ async function collectGap(userId: string, account: BillingAccountRow | null, sna
   if (gap <= 0) return;
   await createSupplementalInvoice({
     userId,
-    customerId: account.stripe_customer_id,
+    customerId,
     periodStart: snapshot.periodStart,
     amountCents: gap,
     invoicedCents: invoicedCents(invoices, snapshot.periodStart),
@@ -577,9 +600,12 @@ export async function createAnchoredSubscription(input: {
   anchor: number;
   nextAmountCents: number;
 }): Promise<void> {
+  if (!stripeChargeCreationEnabled()) throw new Error(NEW_CHARGES_DISABLED_MESSAGE);
   if (await deletionBlocksBilling(input.userId)) throw new Error('Account deletion is in progress.');
   if (input.anchor <= Math.floor(Date.now() / 1000)) throw new Error('The next billing date is not in the future.');
   const stripe = stripeServer();
+  const customer = await stripe.customers.retrieve(input.customerId);
+  if (customer.deleted || foreignStripeObject(customer.livemode)) throw new Error('Test Stripe customers cannot be used for live billing.');
   const existing = await stripe.subscriptions.list({ customer: input.customerId, status: 'all', limit: 20 });
   const live = existing.data.find((subscription) => LIVE_SUBSCRIPTION.has(subscription.status) && subscription.status !== 'incomplete');
   if (live) {
@@ -660,11 +686,12 @@ export type SavedCardSync = {
 };
 
 function storedCardSync(account: BillingAccountRow | null): SavedCardSync {
-  if (account?.card_brand && account.card_last4) {
-    const card = { brand: account.card_brand, last4: account.card_last4 };
+  const visible = billingAccountForMode(account);
+  if (visible?.card_brand && visible.card_last4) {
+    const card = { brand: visible.card_brand, last4: visible.card_last4 };
     return { state: 'saved', card, label: formatSavedCard(card) };
   }
-  if (account?.stripe_customer_id || account?.stripe_subscription_id) return { state: 'pending', card: null, label: null };
+  if (visible?.stripe_customer_id || visible?.stripe_subscription_id) return { state: 'pending', card: null, label: null };
   return { state: 'absent', card: null, label: null };
 }
 
@@ -674,7 +701,7 @@ async function expandedPaymentMethod(stripe: Stripe, source: PaymentMethodSource
   if (!id) return source ?? null;
   try {
     const method = await stripe.paymentMethods.retrieve(id);
-    if (method.livemode) return null;
+    if (foreignStripeObject(method.livemode)) return null;
     return method;
   } catch {
     return null;
@@ -687,20 +714,22 @@ async function expandedPaymentMethod(stripe: Stripe, source: PaymentMethodSource
  */
 export async function refreshSavedPaymentMethod(userId: string): Promise<SavedCardSync> {
   const account = await loadBillingAccount(userId);
-  if (!account?.stripe_customer_id) return { state: 'absent', card: null, label: null };
+  const customerId = stripeIdForMode(account?.stripe_customer_id, account?.livemode);
+  if (!account || !customerId) return { state: 'absent', card: null, label: null };
   if (!stripeConfigured()) return storedCardSync(account);
   try {
     const stripe = stripeServer();
-    const customer = await stripe.customers.retrieve(account.stripe_customer_id, {
+    const customer = await stripe.customers.retrieve(customerId, {
       expand: ['invoice_settings.default_payment_method'],
     });
-    if (customer.deleted || customer.livemode) return storedCardSync(account);
+    if (customer.deleted || foreignStripeObject(customer.livemode)) return { state: 'absent', card: null, label: null };
     let subscriptionDefault: PaymentMethodSource = null;
-    if (account.stripe_subscription_id) {
-      const subscription = await stripe.subscriptions.retrieve(account.stripe_subscription_id, {
+    const subscriptionId = stripeIdForMode(account.stripe_subscription_id, account.livemode);
+    if (subscriptionId) {
+      const subscription = await stripe.subscriptions.retrieve(subscriptionId, {
         expand: ['default_payment_method'],
       });
-      if (!subscription.livemode) subscriptionDefault = subscription.default_payment_method;
+      if (!foreignStripeObject(subscription.livemode)) subscriptionDefault = subscription.default_payment_method;
     }
     const customerDefault = customer.invoice_settings?.default_payment_method ?? null;
     const card = resolveEffectiveCard({
@@ -738,6 +767,7 @@ async function workflowFor(userId: string, account: BillingAccountRow | null, sn
     periodStart: snapshot?.periodStart ?? null,
     scheduledChargeCents: snapshot?.scheduledChargeCents ?? 0,
     scheduledChargeAt: snapshot?.scheduledChargeAt ?? null,
+    historicalCents: (snapshot?.historicalOwedCents ?? 0) + (snapshot?.historicalScheduledCents ?? 0),
     invoices,
     account: paymentAccount(account),
     paymentMethodLabel: paymentMethodLabel(account),
@@ -745,15 +775,15 @@ async function workflowFor(userId: string, account: BillingAccountRow | null, sn
   });
 }
 
-function requireSandbox(): void {
-  if (!stripeConfigured()) throw new Error('Sandbox payments are not configured.');
+function requireStripe(): void {
+  if (!stripeConfigured()) throw new Error(paymentsConfigurationError());
 }
 
-async function openPortal(customerId: string, origin: string): Promise<string> {
-  requireSandbox();
+async function openPortal(customerId: string): Promise<string> {
+  requireStripe();
   const portal = await stripeServer().billingPortal.sessions.create({
     customer: customerId,
-    return_url: `${origin}/dashboard/plan`,
+    return_url: planBillingReturnUrl(),
   });
   return portal.url;
 }
@@ -768,27 +798,50 @@ export async function beginPayment(
     if (await deletionBlocksBilling(userId)) {
       return { url: null, kind: 'stale', explanation: 'Account deletion is in progress.' };
     }
-    const snapshot = await loadChargeSnapshot(userId);
+    const snapshot = await loadCollectibleSnapshot(userId);
     const account = await loadBillingAccount(userId);
-    let workflow = await workflowFor(userId, account, snapshot);
+    const visible = billingAccountForMode(account);
+    let workflow = await workflowFor(userId, visible, snapshot);
     const route = expected ? matchedPaymentRoute(workflow, expected) : workflow.route;
     if (expected && !route) return { url: null, kind: 'stale', explanation: PAYMENT_STATE_CHANGED };
     if (!route || route === 'none') return { url: null, kind: 'none', explanation: workflow.explanation };
     if (route !== requested) return { url: null, kind: 'stale', explanation: PAYMENT_STATE_CHANGED };
     if (route === 'portal') {
-      if (!account?.stripe_customer_id) throw new Error('Payment setup has not been started.');
-      return { url: await openPortal(account.stripe_customer_id, origin), kind: 'portal', explanation: workflow.explanation };
+      const customerId = stripeIdForMode(account?.stripe_customer_id, account?.livemode);
+      if (!customerId) return { url: null, kind: 'stale', explanation: PAYMENT_STATE_CHANGED };
+      await assertConfiguredStripe();
+      return { url: await openPortal(customerId), kind: 'portal', explanation: workflow.explanation };
     }
     if (!snapshot) return { url: null, kind: 'none', explanation: workflow.explanation };
 
-    requireSandbox();
+    if (!stripeChargeCreationEnabled()) throw new Error(NEW_CHARGES_DISABLED_MESSAGE);
+    if (stripeMode() === 'test' && account?.livemode === true) throw new Error(LIVE_IDENTITY_IN_TEST_MESSAGE);
+    if (stripeMode() === 'live' && !(await liveBillingStorageReady())) throw new Error('Live billing storage is not ready.');
+    await assertConfiguredStripe();
+    requireStripe();
     const stripe = stripeServer();
-    if (account?.stripe_customer_id) {
-      await backfillCustomerInvoices(userId, account.stripe_customer_id, snapshot.periodStart);
-      workflow = await workflowFor(userId, account, snapshot);
+    let current = account;
+    if (stripeMode() === 'live' && current && current.livemode !== true) {
+      const inputs = await loadAccountPricingInputs([userId]);
+      const pricing = inputs.get(userId);
+      await recordLiveCommencement(userId, {
+        commencedAt: new Date().toISOString(),
+        excludedPeriodStart: snapshot.periodStart,
+        excludedToolIds: pricing?.tools.map((tool) => tool.toolId) ?? [],
+        excludedStorageGb: pricing?.storageAddonGb ?? 0,
+      });
+    }
+    if (stripeMode() === 'live' && current && current.livemode !== true) {
+      await separateTestStripeIdentity(userId, current);
+      current = await loadBillingAccount(userId);
+    }
+    const activeCustomerId = stripeIdForMode(current?.stripe_customer_id, current?.livemode);
+    if (activeCustomerId) {
+      await backfillCustomerInvoices(userId, activeCustomerId, snapshot.periodStart);
+      workflow = await workflowFor(userId, billingAccountForMode(current), snapshot);
       const refreshed = expected ? matchedPaymentRoute(workflow, expected) : workflow.route;
       if (refreshed === 'portal' && !expected) {
-        return { url: await openPortal(account.stripe_customer_id, origin), kind: 'portal', explanation: workflow.explanation };
+        return { url: await openPortal(activeCustomerId), kind: 'portal', explanation: workflow.explanation };
       }
       if (refreshed !== 'checkout') {
         const nothingDue = !expected && workflow.route === 'none';
@@ -798,22 +851,23 @@ export async function beginPayment(
           explanation: nothingDue ? workflow.explanation : PAYMENT_STATE_CHANGED,
         };
       }
-      const existing = await stripe.subscriptions.list({ customer: account.stripe_customer_id, status: 'all', limit: 20 });
+      const existing = await stripe.subscriptions.list({ customer: activeCustomerId, status: 'all', limit: 20 });
       const openSubscription = existing.data.find((subscription) => LIVE_SUBSCRIPTION.has(subscription.status));
       if (openSubscription && openSubscription.status !== 'incomplete') {
         await saveBillingAccount(userId, {
-          stripe_customer_id: account.stripe_customer_id,
+          stripe_customer_id: activeCustomerId,
+          livemode: stripeLivemode(),
           ...subscriptionBillingPatch(openSubscription),
         });
         if (!expected) {
-          return { url: await openPortal(account.stripe_customer_id, origin), kind: 'portal', explanation: workflow.explanation };
+          return { url: await openPortal(activeCustomerId), kind: 'portal', explanation: workflow.explanation };
         }
         return { url: null, kind: 'stale', explanation: PAYMENT_STATE_CHANGED };
       }
       if (openSubscription?.status === 'incomplete') await stripe.subscriptions.cancel(openSubscription.id);
     }
 
-    const customerId = await ensureCustomer(stripe, userId, account);
+    const customerId = await ensureCustomer(stripe, userId, current);
     const gap = workflow.uninvoicedCents;
     const anchor = Math.floor(Date.parse(snapshot.nextBillingAt) / 1000);
     if (anchor <= Math.floor(Date.now() / 1000)) throw new Error('The next billing date is not in the future.');
@@ -822,14 +876,19 @@ export async function beginPayment(
       .select('stripe_session_id')
       .eq('user_id', userId)
       .eq('status', 'open')
+      .eq('livemode', stripeLivemode())
       .maybeSingle();
     if (openSession.error) throw openSession.error;
     if (openSession.data?.stripe_session_id) {
       const session = await stripe.checkout.sessions.retrieve(openSession.data.stripe_session_id);
+      if (foreignStripeObject(session.livemode)) {
+        await supabaseServer.from('billing_checkout_sessions').update({ status: 'expired' }).eq('stripe_session_id', openSession.data.stripe_session_id);
+      } else {
       const sameQuote = session.metadata?.hhtb_gap === String(gap) && session.metadata?.hhtb_next_amount === String(snapshot.nextAmountCents);
       if (session.status === 'open' && session.url && sameQuote) return { url: session.url, kind: 'checkout', explanation: workflow.explanation };
       if (session.status === 'open') await stripe.checkout.sessions.expire(session.id);
       await supabaseServer.from('billing_checkout_sessions').update({ status: 'expired' }).eq('stripe_session_id', openSession.data.stripe_session_id);
+      }
     }
     const key = `checkout:${userId}:${snapshot.periodStart ?? 'pre'}:${gap}:${snapshot.nextAmountCents}`;
     const metadata = {
@@ -884,7 +943,7 @@ export async function beginPayment(
       user_id: userId,
       stripe_session_id: session.id,
       status: 'open',
-      livemode: false,
+      livemode: stripeLivemode(),
     });
     if (saved.error && saved.error.code !== '23505') throw saved.error;
     return { url: session.url, kind: 'checkout', explanation: workflow.explanation };

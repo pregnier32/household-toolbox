@@ -6,7 +6,9 @@ import { listReconcileCandidates } from '@/lib/billing-store';
 import { claimStripeEvent, finishStripeEvent } from '@/lib/billing-lock';
 import { processStripeEvent } from '@/lib/billing-webhook';
 import { supabaseServer } from '@/lib/supabaseServer';
-import { stripeServer } from '@/lib/stripe-server';
+import { assertConfiguredStripe, stripeServer } from '@/lib/stripe-server';
+import { stripeLivemode } from '@/lib/stripe-mode';
+import { liveBillingStorageReady } from '@/lib/billing-environment';
 import type Stripe from 'stripe';
 
 const STALE_MS = 60 * 60 * 1000;
@@ -26,7 +28,7 @@ async function retryFailedEvents(): Promise<number> {
     .from('stripe_events')
     .select('stripe_event_id, type, payload')
     .eq('status', 'failed')
-    .eq('livemode', false)
+    .eq('livemode', stripeLivemode())
     .limit(50);
   if (error) throw error;
   let retried = 0;
@@ -36,7 +38,7 @@ async function retryFailedEvents(): Promise<number> {
     const claimed = await claimStripeEvent({
       eventId: row.stripe_event_id,
       type: row.type,
-      livemode: false,
+      livemode: stripeLivemode(),
       payload: row.payload,
     });
     if (claimed.claim !== 'claimed') continue;
@@ -60,6 +62,8 @@ async function retryFailedEvents(): Promise<number> {
  * does not depend on an hourly schedule.
  */
 export async function reconcileBilling(now = new Date()): Promise<{ scanned: number; failed: number; retriedEvents: number }> {
+  if (!(await liveBillingStorageReady())) throw new Error('Live billing storage is not ready.');
+  await assertConfiguredStripe();
   stripeServer();
   const run = await supabaseServer.from('billing_reconcile_runs').insert({ status: 'running' }).select('id').single();
   if (run.error) throw run.error;

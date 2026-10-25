@@ -1,6 +1,7 @@
 'use client';
 
 import { useState } from 'react';
+import { resumeAfterAuth } from '@/lib/auth-app-origin';
 import { createSupabaseAuthBrowserClient } from '@/lib/supabaseAuthBrowser';
 import { completeSignOut } from '@/lib/client-sign-out';
 import { SideLogo } from '@/app/components/SideLogo';
@@ -10,11 +11,6 @@ function messageForCode(code: string | undefined): string {
     return 'That code is not correct. Enter the current code from your authenticator app.';
   }
   return 'Something went wrong. Try again.';
-}
-
-function safeNextPath(value: string | null): string {
-  if (!value || !value.startsWith('/invite/') || value.startsWith('//') || value.includes('\\')) return '/dashboard';
-  return value;
 }
 
 export function MfaChallengeClient({ checkFailed, nextPath = '/dashboard' }: { checkFailed: boolean; nextPath?: string }) {
@@ -54,7 +50,7 @@ export function MfaChallengeClient({ checkFailed, nextPath = '/dashboard' }: { c
         setError(messageForCode(verified.error.code));
         return;
       }
-      window.location.assign(safeNextPath(nextPath));
+      window.location.assign(resumeAfterAuth(nextPath));
     } catch {
       console.error('MFA challenge failed');
       setError('Something went wrong. Try again.');

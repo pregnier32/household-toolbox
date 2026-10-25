@@ -2,12 +2,13 @@
 
 import { useState, useRef, useEffect, type ReactNode } from 'react'
 import Link from 'next/link'
+import { PLAN_BILLING_PATH } from '@/lib/auth-app-origin'
 import { signUp, signIn } from '../../actions/auth'
 import { PasswordField } from '../PasswordField'
 import { PublicFooter } from './PublicFooter'
 import { PublicHeader } from './PublicHeader'
 
-export function HomePage({ explore }: { explore?: ReactNode }) {
+export function HomePage({ explore, returnPath = null }: { explore?: ReactNode; returnPath?: string | null }) {
   const [isSignUp, setIsSignUp] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -183,8 +184,10 @@ export function HomePage({ explore }: { explore?: ReactNode }) {
                       // Remove saved email if checkbox is unchecked
                       localStorage.removeItem('rememberedEmail');
                     }
-                    // Redirect to dashboard
-                    window.location.assign(result.needsMfa ? '/auth/mfa' : '/dashboard');
+                    const destination = returnPath === PLAN_BILLING_PATH ? PLAN_BILLING_PATH : '/dashboard';
+                    window.location.assign(result.needsMfa
+                      ? (destination === PLAN_BILLING_PATH ? `/auth/mfa?next=${encodeURIComponent(destination)}` : '/auth/mfa')
+                      : destination);
                   } else {
                     setError(result.error || 'Failed to sign in');
                   }

@@ -3,6 +3,10 @@ import { STORAGE_ADDON_MONTHLY_CENTS } from '@/lib/billing-preview';
 import { describeBillingSummary } from '@/lib/billing-summary';
 import { loadFrozenPeriod, loadSignupAt, materializeBillingPeriod } from '@/lib/billing-period-store';
 import { loadAccountPricingInputs } from '@/lib/load-account-pricing';
+import { historicalSummaryForCommencement, projectLiveCharges, sameExcludedPeriod } from '@/lib/billing-commencement';
+import { loadLiveCommencement } from '@/lib/billing-environment';
+import { loadBillingAccount } from '@/lib/billing-store';
+import { stripeMode } from '@/lib/stripe-mode';
 import type { BillingSchedule } from '@/lib/billing-cycle';
 
 export type ChargeSnapshot = {
@@ -16,6 +20,9 @@ export type ChargeSnapshot = {
   trialPaymentDeferred: boolean;
   scheduledChargeAt: string | null;
   scheduledChargeCents: number;
+  historicalOwedCents: number;
+  historicalScheduledCents: number;
+  excludedToolIds: string[];
 };
 
 function storageCents(gigabytes: number): number {
@@ -52,5 +59,59 @@ export async function loadChargeSnapshot(userId: string, now = new Date()): Prom
     trialPaymentDeferred: paymentWaitsForTrial(current) && summary.owedNowCents === 0,
     scheduledChargeAt: summary.scheduledChargeAt,
     scheduledChargeCents: summary.scheduledChargeCents,
+    historicalOwedCents: 0,
+    historicalScheduledCents: 0,
+    excludedToolIds: [],
+  };
+}
+
+/** Test mode returns the priced snapshot. Live mode removes sandbox-era cents from what Checkout can collect. */
+export async function loadCollectibleSnapshot(userId: string, now = new Date()): Promise<ChargeSnapshot | null> {
+  const snapshot = await loadChargeSnapshot(userId, now);
+  if (!snapshot || stripeMode() !== 'live') return snapshot;
+  const account = await loadBillingAccount(userId);
+  const commencement = await loadLiveCommencement(userId);
+  const sandboxHistory = Boolean(account) && account?.livemode !== true && !commencement;
+  const commenced = Boolean(commencement);
+  const samePeriod = sameExcludedPeriod(snapshot.periodStart, commencement?.excludedPeriodStart ?? null);
+  let historicalOwed = sandboxHistory ? snapshot.owedNowCents : 0;
+  let historicalScheduled = sandboxHistory ? snapshot.scheduledChargeCents : 0;
+  let excludedToolIds: string[] = [];
+  if (sandboxHistory) {
+    const inputs = await loadAccountPricingInputs([userId]);
+    excludedToolIds = inputs.get(userId)?.tools.map((tool) => tool.toolId) ?? [];
+  }
+  if (commencement && samePeriod) {
+    const inputs = await loadAccountPricingInputs([userId]);
+    const pricing = inputs.get(userId);
+    if (pricing) {
+      const historical = historicalSummaryForCommencement(pricing, snapshot.signupAt, now, commencement);
+      historicalOwed = historical.owedNowCents;
+      historicalScheduled = historical.scheduledChargeCents;
+      excludedToolIds = commencement.excludedToolIds;
+    }
+  }
+  const projected = projectLiveCharges({
+    mode: 'live',
+    sandboxHistory,
+    commenced,
+    sameExcludedPeriod: samePeriod,
+    fullOwedNowCents: snapshot.owedNowCents,
+    fullScheduledCents: snapshot.scheduledChargeCents,
+    historicalOwedNowCents: historicalOwed,
+    historicalScheduledCents: historicalScheduled,
+    renewalCents: snapshot.nextAmountCents,
+  });
+  return {
+    ...snapshot,
+    owedNowCents: projected.owedNowCents,
+    owedAtPeriodStartCents: projected.owedNowCents,
+    scheduledChargeCents: projected.scheduledChargeCents,
+    scheduledChargeAt: projected.scheduledChargeCents > 0 ? snapshot.scheduledChargeAt : null,
+    trialPaymentDeferred: projected.owedNowCents === 0 && snapshot.trialPaymentDeferred,
+    historicalOwedCents: commenced || sandboxHistory ? historicalOwed : 0,
+    historicalScheduledCents: commenced || sandboxHistory ? historicalScheduled : 0,
+    excludedToolIds,
+    nextAmountCents: projected.renewalCents,
   };
 }

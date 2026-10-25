@@ -2,6 +2,7 @@ import type { Metadata } from 'next';
 import { ExploreToolbox } from './components/public/ExploreToolbox';
 import { HomePage } from './components/public/HomePage';
 import { JsonLd } from './components/public/JsonLd';
+import { PLAN_BILLING_PATH, resumeAfterAuth } from '@/lib/auth-app-origin';
 import { absoluteUrl, PUBLIC_SITE_NAME, publicMetadata } from '@/lib/public-site';
 
 const title = 'Household Toolbox - All your home life admin, in one place';
@@ -14,7 +15,12 @@ export const metadata: Metadata = publicMetadata({
   path: '/',
 });
 
-export default function Page() {
+export default async function Page({
+  searchParams,
+}: {
+  searchParams?: Promise<{ next?: string }>;
+}) {
+  const next = resumeAfterAuth((await searchParams)?.next);
   const siteUrl = absoluteUrl('/');
   const structuredData = [
     {
@@ -40,7 +46,7 @@ export default function Page() {
   return (
     <>
       <JsonLd data={structuredData} />
-      <HomePage explore={<ExploreToolbox />} />
+      <HomePage explore={<ExploreToolbox />} returnPath={next === PLAN_BILLING_PATH ? PLAN_BILLING_PATH : null} />
     </>
   );
 }

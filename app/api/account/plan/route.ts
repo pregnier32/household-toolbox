@@ -10,10 +10,11 @@ import { getAccountPricingProjection } from '@/lib/load-account-pricing';
 import { persistAccountNotices } from '@/lib/promotion-service';
 import { paidCents } from '@/lib/billing-ledger';
 import { listStoredInvoices, loadBillingAccount } from '@/lib/billing-store';
-import { loadChargeSnapshot } from '@/lib/billing-amount';
+import { loadCollectibleSnapshot } from '@/lib/billing-amount';
 import { describePaymentWorkflow } from '@/lib/billing-payment-workflow';
 import { describePaymentMethod } from '@/lib/billing-card';
 import { syncSavedPaymentMethod, syncSubscriptionFromStripe } from '@/lib/billing-sync';
+import { billingAccountForMode } from '@/lib/billing-environment';
 import { describeCancellationNotice } from '@/lib/billing-subscription';
 import { loadToolAccessPolicy } from '@/lib/billing-access';
 import type { CustomerPlanBenefit, CustomerPlanSource } from '@/lib/customer-plan-preview';
@@ -58,6 +59,7 @@ export async function GET() {
     const state = projection.current;
     const signupAt = await loadSignupAt(user.id);
     const invoices = await listStoredInvoices(user.id);
+    const collectible = await loadCollectibleSnapshot(user.id, now);
     let statement = buildCustomerStatement(projection.input, state);
     let billingCycle = null;
     if (signupAt) {
@@ -71,6 +73,9 @@ export async function GET() {
       }
       const cycle = buildCycleCustomerStatement(projection.input, signupAt, now, frozen, {
         paidTowardPeriodCents: paidCents(invoices, schedule.periodStart),
+        excludedOwedCents: collectible?.historicalOwedCents ?? 0,
+        excludedScheduledCents: collectible?.historicalScheduledCents ?? 0,
+        excludedToolIds: collectible?.excludedToolIds ?? [],
       });
       statement = cycle.statement;
       billingCycle = cycle.billingCycle;
@@ -79,8 +84,8 @@ export async function GET() {
     await syncSubscriptionFromStripe(user.id).catch((error: unknown) => {
       console.error('Subscription cancellation could not be synchronized', error instanceof Error ? error.message : 'unknown');
     });
-    const account = await loadBillingAccount(user.id);
-    const snapshot = await loadChargeSnapshot(user.id, now);
+    const account = billingAccountForMode(await loadBillingAccount(user.id));
+    const snapshot = collectible;
     const paymentMethodStatus = cardSync?.state
       ?? (account?.card_brand && account.card_last4 ? 'saved' : account?.stripe_customer_id ? 'pending' : 'absent');
     const paymentMethodLabel = paymentMethodStatus === 'saved'
@@ -108,6 +113,7 @@ export async function GET() {
       trialPaymentDeferred: snapshot?.trialPaymentDeferred ?? false,
       scheduledChargeCents: snapshot?.scheduledChargeCents ?? 0,
       scheduledChargeAt: snapshot?.scheduledChargeAt ?? null,
+      historicalCents: (snapshot?.historicalOwedCents ?? 0) + (snapshot?.historicalScheduledCents ?? 0),
     });
     return NextResponse.json({
       accountType: state.accountType,

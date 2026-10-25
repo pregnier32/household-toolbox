@@ -37,6 +37,8 @@ export type PaymentWorkflowInput = {
   /** Full monthly price added when the next trial ends inside this period. Not the renewal. */
   scheduledChargeCents?: number;
   scheduledChargeAt?: string | null;
+  /** Sandbox-era cents excluded from the live charge. Not a live credit. */
+  historicalCents?: number;
 };
 
 export type PaymentSecondary = {
@@ -74,6 +76,10 @@ function nextBillText(cents: number, nextBillingAt: string | null): string {
   const amount = formatCents(cents);
   if (!nextBillingAt) return amount;
   return `${amount} on ${billingDateLabel(nextBillingAt)}`;
+}
+
+function historicalSentence(input: PaymentWorkflowInput): string {
+  return Math.max(0, input.historicalCents ?? 0) > 0 ? ' Previous test balances are not charged.' : '';
 }
 
 function futureChargeSentences(input: PaymentWorkflowInput): string {
@@ -144,7 +150,7 @@ export function describePaymentWorkflow(input: PaymentWorkflowInput): PaymentWor
   }
 
   if (uninvoiced > 0) {
-    let explanation = `Setting up payment collects ${formatCents(uninvoiced)} today.`;
+    let explanation = `Setting up payment collects ${formatCents(uninvoiced)} today.${historicalSentence(input)}`;
     if (outstanding > 0) {
       explanation += ` An open invoice of ${formatCents(outstanding)} is not included and will not be charged again.`;
     }
@@ -194,8 +200,8 @@ export function describePaymentWorkflow(input: PaymentWorkflowInput): PaymentWor
       : '';
     const scheduledText = futureChargeSentences(input);
     const explanation = scheduledText
-      ? `No payment is collected today.${scheduledText}${trialNote}${invoiceNote}`
-      : `No payment is collected today. The estimated next bill is ${nextText}.${trialNote}${invoiceNote}`;
+      ? `No payment is collected today.${scheduledText}${trialNote}${invoiceNote}${historicalSentence(input)}`
+      : `No payment is collected today. The estimated next bill is ${nextText}.${trialNote}${invoiceNote}${historicalSentence(input)}`;
     return {
       ...base,
       action: 'setup',

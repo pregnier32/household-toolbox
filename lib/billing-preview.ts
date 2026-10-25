@@ -599,14 +599,18 @@ export function buildCycleCustomerStatement(
   signupAt: string,
   effectiveAt: Date,
   frozen: PeriodToolRecord[] | null,
-  options?: { paidTowardPeriodCents?: number },
+  options?: { paidTowardPeriodCents?: number; excludedOwedCents?: number; excludedScheduledCents?: number; excludedToolIds?: string[] },
 ): { statement: PlanStatementRow[]; snapshot: BillingCycleSnapshot; billingCycle: CustomerBillingCycle } {
   const snapshot = describeBillingCycle(input, signupAt, effectiveAt, frozen);
   const summary = describeBillingSummary(input, signupAt, effectiveAt, frozen);
   const paidSpecified = options?.paidTowardPeriodCents != null;
   const paid = paidSpecified ? Math.max(0, options?.paidTowardPeriodCents ?? 0) : 0;
-  const remainingDueCents = Math.max(0, summary.owedNowCents - paid);
-  const chargeSatisfied = paidSpecified && remainingDueCents <= 0;
+  const excludedOwedCents = Math.max(0, options?.excludedOwedCents ?? 0);
+  const excludedScheduledCents = Math.max(0, options?.excludedScheduledCents ?? 0);
+  const excludedTools = new Set(options?.excludedToolIds ?? []);
+  const remainingDueCents = Math.max(0, summary.owedNowCents - paid - excludedOwedCents);
+  const liveScheduledCents = Math.max(0, summary.scheduledChargeCents - excludedScheduledCents);
+  const chargeSatisfied = remainingDueCents <= 0 && (paidSpecified || excludedOwedCents > 0);
   const notes = new Map<string, string>();
   for (const tool of snapshot.current.tools) {
     if (tool.inTrial) notes.set(tool.toolId, trialStatusNote(tool.daysRemaining, tool.trialEndsAt));
@@ -615,7 +619,7 @@ export function buildCycleCustomerStatement(
     if (record.scheduledRemoval) notes.set(record.toolId, scheduledRemovalNote(snapshot.schedule.nextBillingAt));
   }
   for (const tool of snapshot.period?.tools ?? []) {
-    if (!tool.inTrial || notes.has(tool.toolId)) continue;
+    if (!tool.inTrial || notes.has(tool.toolId) || excludedTools.has(tool.toolId)) continue;
     const live = snapshot.current.tools.find((item) => item.toolId === tool.toolId);
     if (chargeSatisfied) continue;
     notes.set(tool.toolId, live?.inTrial
@@ -653,7 +657,7 @@ export function buildCycleCustomerStatement(
       const added = formatDisplayDate(tool.ownedAt);
       const cents = live?.expectedMonthlyCents ?? 0;
       const inTrial = Boolean(live?.inTrial);
-      const dueNow = !inTrial && cents > 0 && addedToolCents > 0;
+      const dueNow = !inTrial && cents > 0 && addedToolCents > 0 && !excludedTools.has(tool.toolId);
       return {
         id: `upcoming-${tool.toolId}`,
         kind: 'tool' as const,
@@ -686,8 +690,8 @@ export function buildCycleCustomerStatement(
       nextBillingAt: summary.renewalAt,
       anchorDate: billingDateLabel(summary.anchorAt),
       amountDueNow: formatCents(remainingDueCents),
-      scheduledChargeDate: summary.scheduledChargeAt ? billingDateLabel(summary.scheduledChargeAt) : null,
-      scheduledChargeAmount: summary.scheduledChargeCents > 0 ? formatCents(summary.scheduledChargeCents) : null,
+      scheduledChargeDate: liveScheduledCents > 0 && summary.scheduledChargeAt ? billingDateLabel(summary.scheduledChargeAt) : null,
+      scheduledChargeAmount: liveScheduledCents > 0 ? formatCents(liveScheduledCents) : null,
       renewalDate: billingDateLabel(summary.renewalAt),
       renewalAmount: formatCents(summary.renewalCents),
     },

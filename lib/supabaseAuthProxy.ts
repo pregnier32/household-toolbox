@@ -14,6 +14,7 @@ function hasSupabaseAuthCookie(request: NextRequest): boolean {
  * request and the response. Does not authorize routes.
  */
 export async function refreshSupabaseAuthSession(request: NextRequest) {
+  request.headers.set('x-htb-pathname', request.nextUrl.pathname);
   if (!hasSupabaseAuthCookie(request)) {
     return NextResponse.next({ request });
   }

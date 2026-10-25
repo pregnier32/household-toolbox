@@ -8,6 +8,8 @@
  * the anniversary, are not part of the period total.
  */
 
+import { foreignStripeObject } from '@/lib/stripe-mode';
+
 export const INVOICE_ROLES = ['setup', 'renewal', 'supplemental', 'replacement'] as const;
 export const INVOICE_STATUSES = ['draft', 'open', 'paid', 'void', 'uncollectible'] as const;
 
@@ -125,7 +127,7 @@ export function renewalDraftMayBeCorrected(input: {
   billingReason: string | null;
   role: string | null;
 }): boolean {
-  if (input.livemode) return false;
+  if (foreignStripeObject(input.livemode)) return false;
   if (input.status !== 'draft') return false;
   if (input.billingReason !== 'subscription_cycle') return false;
   if (input.role === 'supplemental' || input.role === 'replacement' || input.role === 'setup') return false;

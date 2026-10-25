@@ -1,5 +1,5 @@
 import type Stripe from 'stripe';
-import { loadChargeSnapshot } from '@/lib/billing-amount';
+import { loadCollectibleSnapshot } from '@/lib/billing-amount';
 import { finalizedRenewalAction, renewalDraftMayBeCorrected } from '@/lib/billing-ledger';
 import { claimStripeEvent, finishStripeEvent, withBillingLock } from '@/lib/billing-lock';
 import { subscriptionBillingPatch, subscriptionEventApplies } from '@/lib/billing-subscription';
@@ -10,6 +10,7 @@ import { deletionBlocksBilling, deletionBlocksCustomer, deletionUserForCustomer,
 import { createAnchoredSubscription, createSupplementalInvoice, recordCheckoutSessionPayment, recordStripeInvoice, refreshSavedPaymentMethod, settleUnintendedSubscriptionUpdate, syncSavedPaymentMethod } from '@/lib/billing-sync';
 import { supabaseServer } from '@/lib/supabaseServer';
 import { stripeServer } from '@/lib/stripe-server';
+import { foreignStripeObject, stripeChargeCreationEnabled, stripeLivemode } from '@/lib/stripe-mode';
 
 function knownInvoiceStatus(status: string | null | undefined): 'draft' | 'open' | 'paid' | 'void' | 'uncollectible' {
   if (status === 'draft' || status === 'open' || status === 'paid' || status === 'void' || status === 'uncollectible') return status;
@@ -84,14 +85,14 @@ async function correctDraftRenewal(invoice: Stripe.Invoice, owedAtPeriodStartCen
 }
 
 async function processInvoice(invoice: Stripe.Invoice): Promise<void> {
-  if (invoice.livemode) return;
+  if (foreignStripeObject(invoice.livemode)) return;
   const userId = invoice.metadata?.hhtb_user_id
     || invoice.parent?.subscription_details?.metadata?.hhtb_user_id
     || await userIdForSubscription(subscriptionIdFromInvoice(invoice))
     || await userIdForCustomer(customerId(invoice.customer));
   if (!userId) return;
   await withBillingLock(userId, async () => {
-    const snapshot = await loadChargeSnapshot(userId);
+    const snapshot = await loadCollectibleSnapshot(userId);
     let current = invoice;
     if (!snapshot) {
       await recordStripeInvoice(userId, current, null);
@@ -99,7 +100,7 @@ async function processInvoice(invoice: Stripe.Invoice): Promise<void> {
     }
     if (await settleUnintendedSubscriptionUpdate(userId, current, snapshot.periodStart)) return;
     const correctable = renewalDraftMayBeCorrected({
-      livemode: false,
+      livemode: stripeLivemode(),
       status: current.status,
       billingReason: current.billing_reason,
       role: current.metadata?.hhtb_role ?? null,
@@ -113,7 +114,7 @@ async function processInvoice(invoice: Stripe.Invoice): Promise<void> {
         amountPaidCents: current.amount_paid,
         owedAtPeriodStartCents: snapshot.owedAtPeriodStartCents,
       });
-      if (action === 'void-and-replace' && snapshot.periodStart) {
+      if (action === 'void-and-replace' && snapshot.periodStart && stripeChargeCreationEnabled()) {
         const stripe = stripeServer();
         const voided = await stripe.invoices.voidInvoice(current.id);
         await recordStripeInvoice(userId, voided, snapshot.periodStart);
@@ -139,7 +140,7 @@ async function processInvoice(invoice: Stripe.Invoice): Promise<void> {
 }
 
 async function processSubscription(subscription: Stripe.Subscription, eventCreated: number): Promise<void> {
-  if (subscription.livemode) return;
+  if (foreignStripeObject(subscription.livemode)) return;
   const customer = customerId(subscription.customer);
   const userId = subscription.metadata?.hhtb_user_id
     || await userIdForSubscription(subscription.id)
@@ -159,7 +160,7 @@ async function processSubscription(subscription: Stripe.Subscription, eventCreat
 }
 
 async function processCheckoutCompleted(session: Stripe.Checkout.Session, eventCreated: number, deps?: DeletionCheckoutDeps): Promise<void> {
-  if (session.livemode) return;
+  if (foreignStripeObject(session.livemode)) return;
   const customer = customerId(session.customer);
   const userId = session.metadata?.hhtb_user_id || session.client_reference_id || (customer ? await deletionUserForCustomer(customer) : null);
   if (!userId) return;
@@ -177,7 +178,7 @@ async function processCheckoutCompleted(session: Stripe.Checkout.Session, eventC
       await saveSubscription(userId, subscription, eventCreated);
     }
     if (session.mode === 'payment' && customer) {
-      const snapshot = await loadChargeSnapshot(userId);
+      const snapshot = await loadCollectibleSnapshot(userId);
       if (!snapshot) throw new Error('Account could not be priced.');
       const anchor = Math.floor(Date.parse(snapshot.nextBillingAt) / 1000);
       const intentId = typeof session.payment_intent === 'string' ? session.payment_intent : session.payment_intent?.id;
@@ -202,7 +203,7 @@ async function processCheckoutCompleted(session: Stripe.Checkout.Session, eventC
 }
 
 export async function processStripeEvent(event: Stripe.Event, deps?: DeletionCheckoutDeps): Promise<void> {
-  if (event.livemode) return;
+  if (foreignStripeObject(event.livemode)) return;
   switch (event.type) {
     case 'checkout.session.completed':
       await processCheckoutCompleted(event.data.object as Stripe.Checkout.Session, event.created, deps);
@@ -222,7 +223,7 @@ export async function processStripeEvent(event: Stripe.Event, deps?: DeletionChe
     case 'payment_method.detached':
     case 'payment_method.updated': {
       const object = event.data.object as Stripe.Customer | Stripe.PaymentMethod;
-      if (object.livemode) return;
+      if (foreignStripeObject(object.livemode)) return;
       const customer = 'customer' in object ? customerId(object.customer) : object.id;
       const userId = await userIdForCustomer(customer);
       if (userId) await syncSavedPaymentMethod(userId);
@@ -272,7 +273,7 @@ export async function processStripeEvent(event: Stripe.Event, deps?: DeletionChe
     case 'payment_intent.requires_action':
     case 'payment_intent.canceled': {
       const intent = event.data.object as Stripe.PaymentIntent;
-      if (intent.livemode) return;
+      if (foreignStripeObject(intent.livemode)) return;
       const customer = customerId(intent.customer);
       const userId = intent.metadata?.hhtb_user_id || await userIdForCustomer(customer) || (customer ? await deletionUserForCustomer(customer) : null);
       if (!userId) return;
@@ -309,7 +310,7 @@ export async function acceptVerifiedStripeEvent(event: Stripe.Event, deps?: Dele
   const claimed = await claimStripeEvent({
     eventId: event.id,
     type: event.type,
-    livemode: false,
+    livemode: event.livemode,
     payload: event,
   });
   if (claimed.claim === 'completed') return { outcome: 'duplicate' };

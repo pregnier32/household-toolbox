@@ -153,7 +153,7 @@ export function PlanBilling({
     : 'rounded-lg border border-slate-700 bg-slate-800 px-4 py-2 text-sm font-medium text-slate-300 transition-colors hover:bg-slate-700';
 
   const load = () => {
-    return fetch('/api/account/plan')
+    return fetch('/api/account/plan', { cache: 'no-store' })
       .then((response) => response.json())
       .then((data) => {
         if (data.error) throw new Error(data.error);
@@ -168,6 +168,11 @@ export function PlanBilling({
   useEffect(() => {
     if (preview) return;
     load();
+    const refreshOnReturn = (event: PageTransitionEvent) => {
+      if (event.persisted) load();
+    };
+    window.addEventListener('pageshow', refreshOnReturn);
+    return () => window.removeEventListener('pageshow', refreshOnReturn);
   }, [preview]);
 
   const asOf = preview?.asOf;

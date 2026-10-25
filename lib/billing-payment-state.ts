@@ -22,6 +22,7 @@
  */
 
 import type Stripe from 'stripe';
+import { foreignStripeObject } from '@/lib/stripe-mode';
 
 export const PAYMENT_STATE_CACHE_MS = 5 * 60 * 1000;
 
@@ -110,7 +111,7 @@ function amountRemaining(invoice: Stripe.Invoice): number {
 }
 
 export async function rememberInvoicePaymentState(userId: string, invoice: Stripe.Invoice, now = new Date()): Promise<void> {
-  if (invoice.livemode) return;
+  if (foreignStripeObject(invoice.livemode)) return;
   let detailed = invoice;
   if (invoice.status === 'open' && !paymentIntentStatusFromInvoice(invoice)) {
     const { stripeServer } = await import('./stripe-server');
@@ -136,16 +137,18 @@ export async function rememberInvoicePaymentState(userId: string, invoice: Strip
 
 export async function reconcileCustomerPayments(userId: string, now = new Date()): Promise<void> {
   const { loadBillingAccount } = await import('./billing-store');
+  const { stripeIdForMode } = await import('./stripe-mode');
   const account = await loadBillingAccount(userId);
-  if (!account?.stripe_customer_id) return;
+  const customerId = stripeIdForMode(account?.stripe_customer_id, account?.livemode);
+  if (!customerId) return;
   const { stripeServer } = await import('./stripe-server');
   const stripe = stripeServer();
   const listed = await stripe.invoices.list({
-    customer: account.stripe_customer_id,
+    customer: customerId,
     limit: 20,
   });
   for (const summary of listed.data) {
-    if (summary.livemode) continue;
+    if (foreignStripeObject(summary.livemode)) continue;
     if (summary.status !== 'open' && summary.status !== 'uncollectible') continue;
     const invoice = await stripe.invoices.retrieve(summary.id, {
       expand: ['payments.data.payment.payment_intent'],
@@ -177,7 +180,7 @@ export async function rememberCheckoutIntent(
   intent: { id: string; status: string | null; livemode?: boolean | null; customer?: string | { id: string } | null },
   forced?: 'failed' | 'authentication_required',
 ): Promise<void> {
-  if (intent.livemode) return;
+  if (foreignStripeObject(intent.livemode)) return;
   const state = forced ?? describeCheckoutAttempt({
     paymentStatus: null,
     intentStatus: intent.status,
@@ -215,7 +218,7 @@ export async function reconcileOpenCheckoutAttempts(userId: string): Promise<Che
   let chosen: CheckoutAttempt | null = null;
   for (const row of sessions) {
     const session = await stripe.checkout.sessions.retrieve(row.stripeSessionId, { expand: ['payment_intent'] });
-    if (session.livemode) continue;
+    if (foreignStripeObject(session.livemode)) continue;
     const intent = session.payment_intent && typeof session.payment_intent !== 'string' ? session.payment_intent : null;
     const state = describeCheckoutAttempt({
       paymentStatus: session.payment_status,
