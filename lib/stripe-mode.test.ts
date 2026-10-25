@@ -25,8 +25,11 @@ test('Stripe mode defaults to the sandbox account', () => {
   try {
     assert.equal(stripeMode(), 'test');
     assert.equal(expectedStripeAccountId(), 'acct_1UTlXZHzRlnuMAFU');
-    assert.equal(STRIPE_WEBHOOK_EVENTS.length, 21);
+    assert.equal(STRIPE_WEBHOOK_EVENTS.length, 22);
+    assert.equal(STRIPE_WEBHOOK_EVENTS.includes('customer.updated'), true);
     assert.equal(webhookEventsMatch([...STRIPE_WEBHOOK_EVENTS]), true);
+    assert.equal(webhookEventsMatch(STRIPE_WEBHOOK_EVENTS.filter((event) => event !== 'customer.updated')), true);
+    assert.equal(webhookEventsMatch([...STRIPE_WEBHOOK_EVENTS, 'charge.succeeded']), false);
   } finally {
     setEnv('STRIPE_MODE', previous);
   }

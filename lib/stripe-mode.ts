@@ -18,6 +18,7 @@ export const STRIPE_WEBHOOK_URL = 'https://www.householdtoolbox.com/api/stripe/w
 export const STRIPE_WEBHOOK_EVENTS = [
   'checkout.session.completed',
   'checkout.session.expired',
+  'customer.updated',
   'customer.subscription.created',
   'customer.subscription.deleted',
   'customer.subscription.updated',
@@ -117,8 +118,13 @@ export function webhookDisposition(input: {
   return 'process';
 }
 
+function sameEvents(actual: readonly string[], expected: readonly string[]): boolean {
+  const left = [...actual].sort();
+  const right = [...expected].sort();
+  return left.length === right.length && left.every((event, index) => event === right[index]);
+}
+
 export function webhookEventsMatch(events: readonly string[]): boolean {
-  const actual = [...events].sort();
-  const expected = [...STRIPE_WEBHOOK_EVENTS].sort();
-  return actual.length === expected.length && actual.every((event, index) => event === expected[index]);
+  const previous = STRIPE_WEBHOOK_EVENTS.filter((event) => event !== 'customer.updated');
+  return sameEvents(events, STRIPE_WEBHOOK_EVENTS) || sameEvents(events, previous);
 }
