@@ -4,6 +4,8 @@ import { getHouseholdDataSession } from '@/lib/session';
 import { supabaseServer } from '@/lib/supabaseServer';
 import bcrypt from 'bcryptjs';
 import { isMissingRelationError, removeNotesStorageFiles } from '@/lib/notes-storage';
+import { requireOwnedIds } from '@/lib/owned-record';
+import { publicNoteRow } from '@/lib/protected-content';
 
 async function attachmentsByNoteIds(noteIds: string[], userId: string) {
   const map: Record<string, Array<{ id: string; name: string; size: number; type: string }>> = {};
@@ -104,7 +106,7 @@ export async function GET(request: NextRequest) {
 
       return NextResponse.json({
         note: {
-          ...note,
+          ...publicNoteRow(note),
           tags: tagIds,
           securityQuestions: securityQuestions?.map(sq => ({ questionId: sq.question_id })) || [],
           attachments: attachmentMap[noteId] || []
@@ -160,7 +162,7 @@ export async function GET(request: NextRequest) {
     const attachmentMap = await attachmentsByNoteIds(noteIds, user.id);
 
     const notesWithTags = notes?.map(note => ({
-      ...note,
+      ...publicNoteRow(note),
       tags: noteTagsMap[note.id] || [],
       attachments: attachmentMap[note.id] || []
     })) || [];
@@ -300,6 +302,11 @@ export async function POST(request: NextRequest) {
       }
     }
 
+    if (Array.isArray(selectedTags) && selectedTags.length > 0) {
+      const tagsOwned = await requireOwnedIds('tools_note_tags', selectedTags, user.id, { toolId });
+      if (!tagsOwned) return NextResponse.json({ error: 'Tag not found' }, { status: 404 });
+    }
+
     if (action === 'create' || !noteId) {
       // Create new note
       const { data: newNote, error: noteError } = await supabaseServer
@@ -359,8 +366,19 @@ export async function POST(request: NextRequest) {
         }
       }
 
-      return NextResponse.json({ note: newNote });
+      return NextResponse.json({ note: publicNoteRow(newNote, { includeContent: true }) });
     } else {
+      const existingNote = await supabaseServer
+        .from('tools_note_notes')
+        .select('id')
+        .eq('id', noteId)
+        .eq('user_id', user.id)
+        .eq('tool_id', toolId)
+        .maybeSingle();
+      if (existingNote.error || !existingNote.data) {
+        return NextResponse.json({ error: 'Note not found' }, { status: 404 });
+      }
+
       // Update existing note
       const updateData: any = {
         note_name: noteName.trim(),
@@ -429,7 +447,7 @@ export async function POST(request: NextRequest) {
           .insert(securityQuestionInserts);
       }
 
-      return NextResponse.json({ note: updatedNote });
+      return NextResponse.json({ note: publicNoteRow(updatedNote, { includeContent: true }) });
     }
   } catch (error: any) {
     console.error('Error in POST /api/tools/notes:', error);

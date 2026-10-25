@@ -29,6 +29,7 @@ export function AccountNotices({ userName }: { userName: string }) {
   const { resolvedTheme } = useTheme();
   const isLight = resolvedTheme === 'light';
   const [notices, setNotices] = useState<Notice[] | null>(null);
+  const [loadError, setLoadError] = useState<string | null>(null);
   const headerChromeButtonClass = isLight
     ? 'flex items-center gap-2 rounded-lg px-3 py-2 text-sm font-medium text-slate-700 transition-colors hover:bg-slate-100 hover:text-slate-900'
     : 'flex items-center gap-2 rounded-lg px-3 py-2 text-sm font-medium text-slate-300 transition-colors hover:bg-slate-800 hover:text-slate-100';
@@ -41,9 +42,20 @@ export function AccountNotices({ userName }: { userName: string }) {
 
   const load = () => {
     fetch('/api/account/notices')
-      .then((response) => response.json())
-      .then((data) => setNotices(data.notices || []))
-      .catch(() => setNotices([]));
+      .then(async (response) => {
+        const data = await response.json().catch(() => ({}));
+        if (!response.ok) {
+          setLoadError(typeof data.error === 'string' ? data.error : 'Notices could not be loaded.');
+          setNotices([]);
+          return;
+        }
+        setLoadError(null);
+        setNotices(data.notices || []);
+      })
+      .catch(() => {
+        setLoadError('Notices could not be loaded.');
+        setNotices([]);
+      });
   };
 
   useEffect(() => {
@@ -85,7 +97,12 @@ export function AccountNotices({ userName }: { userName: string }) {
           </button>
         </div>
         {!notices && <p className={`mt-6 ${mutedClass}`}>Loading notices...</p>}
-        {notices && notices.length === 0 && (
+        {loadError && (
+          <section className={`mt-6 ${cardClass}`}>
+            <p className={mutedClass}>{loadError}</p>
+          </section>
+        )}
+        {notices && notices.length === 0 && !loadError && (
           <section className={`mt-6 ${cardClass}`}>
             <p className={mutedClass}>You have no notices right now.</p>
           </section>

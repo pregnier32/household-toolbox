@@ -44,9 +44,9 @@ export async function GET(
     const list = await loadOwnedList(attachment.list_id, user.id);
     if (!list) return NextResponse.json({ error: 'List not found' }, { status: 404 });
 
-    const storagePath = extractShoppingListStoragePath(attachment.file_url);
+    const storagePath = extractShoppingListStoragePath(attachment.file_url, user.id);
     if (!storagePath) {
-      return NextResponse.json({ error: 'Invalid file path' }, { status: 500 });
+      return NextResponse.json({ error: 'Invalid file path' }, { status: 404 });
     }
 
     const { data: fileData, error: downloadError } = await supabaseServer.storage

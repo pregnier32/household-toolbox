@@ -44,9 +44,9 @@ export async function GET(
     const address = await loadOwnedAddress(attachment.address_id, user.id);
     if (!address) return NextResponse.json({ error: 'Address not found' }, { status: 404 });
 
-    const storagePath = extractAddressBookStoragePath(attachment.file_url);
+    const storagePath = extractAddressBookStoragePath(attachment.file_url, user.id);
     if (!storagePath) {
-      return NextResponse.json({ error: 'Invalid file path' }, { status: 500 });
+      return NextResponse.json({ error: 'Invalid file path' }, { status: 404 });
     }
 
     const { data: fileData, error: downloadError } = await supabaseServer.storage

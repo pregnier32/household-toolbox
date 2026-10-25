@@ -3,6 +3,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { getHouseholdDataSession } from '@/lib/session';
 import { supabaseServer } from '@/lib/supabaseServer';
 import bcrypt from 'bcryptjs';
+import { authorizeStoredFileRead, type StoredFileGrant } from '@/lib/storage-owner';
 
 // GET - Download a document file
 export async function GET(
@@ -47,50 +48,49 @@ export async function GET(
       return NextResponse.json({ error: 'No file available for download' }, { status: 404 });
     }
 
-    // Verify password if required
-    if (document.requires_password_for_download) {
-      if (!password) {
-        return NextResponse.json({ error: 'Password required for download' }, { status: 403 });
-      }
-
-      if (!document.download_password_hash) {
-        return NextResponse.json({ error: 'Password not set for this document' }, { status: 500 });
-      }
-
-      const isValid = await bcrypt.compare(password, document.download_password_hash);
-      if (!isValid) {
-        return NextResponse.json({ error: 'Incorrect password' }, { status: 403 });
-      }
+    if (document.requires_password_for_download && !document.download_password_hash) {
+      return NextResponse.json({ error: 'Password not set for this document' }, { status: 500 });
     }
 
-    // Extract storage path from the file URL
-    // The URL format is: https://[project].supabase.co/storage/v1/object/public/important-documents/[path]
-    // Or: https://[project].supabase.co/storage/v1/object/sign/important-documents/[path]
-    let storagePath: string;
-    
-    try {
-      const url = new URL(document.file_url);
-      // Extract path after 'important-documents/'
-      const pathMatch = url.pathname.match(/important-documents\/(.+)$/);
-      if (pathMatch) {
-        storagePath = pathMatch[1];
-      } else {
-        // If URL parsing fails, try to extract from the stored URL directly
-        // The storage path should be in format: userId/timestamp-filename
-        // We stored it as: ${user.id}/${Date.now()}-${sanitizedFileName}
-        // So we can try to extract it from the URL
-        const segments = url.pathname.split('/');
-        const importantDocsIndex = segments.indexOf('important-documents');
-        if (importantDocsIndex !== -1 && segments[importantDocsIndex + 1]) {
-          storagePath = segments.slice(importantDocsIndex + 1).join('/');
-        } else {
-          throw new Error('Could not extract storage path from URL');
-        }
-      }
-    } catch (urlError) {
-      console.error('Error parsing file URL:', urlError);
-      return NextResponse.json({ error: 'Invalid file URL format' }, { status: 500 });
+    const relatedResult = await supabaseServer
+      .from('tools_id_documents')
+      .select('id, file_url, requires_password_for_download, download_password_hash')
+      .eq('user_id', user.id);
+    if (relatedResult.error || !relatedResult.data) {
+      console.error('Error loading document file restrictions');
+      return NextResponse.json({ error: 'Failed to verify document access' }, { status: 500 });
     }
+
+    const related: StoredFileGrant[] = (relatedResult.data || [])
+      .filter((row) => row.id !== documentId)
+      .map((row) => ({
+        recordId: row.id,
+        fileReference: row.file_url,
+        requiresPassword: Boolean(row.requires_password_for_download),
+        passwordHash: row.download_password_hash,
+      }));
+    const decision = authorizeStoredFileRead({
+      bucket: 'important-documents',
+      ownerId: user.id,
+      requested: {
+        recordId: documentId,
+        fileReference: document.file_url,
+        requiresPassword: Boolean(document.requires_password_for_download),
+        passwordHash: document.download_password_hash,
+      },
+      related,
+      password,
+      passwordMatches: (entered, hash) => bcrypt.compareSync(entered, hash),
+    });
+    if (!decision.ok) {
+      const error = decision.error === 'Incorrect password'
+        ? 'Incorrect password'
+        : decision.error === 'Password required'
+          ? 'Password required for download'
+          : 'Invalid file path';
+      return NextResponse.json({ error }, { status: decision.status });
+    }
+    const storagePath = decision.path;
 
     // Download file from Supabase Storage
     const { data: fileData, error: downloadError } = await supabaseServer

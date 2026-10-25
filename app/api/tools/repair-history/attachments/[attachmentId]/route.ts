@@ -44,9 +44,9 @@ export async function GET(
     const record = await loadOwnedRecord(attachment.record_id, user.id);
     if (!record) return NextResponse.json({ error: 'Repair record not found' }, { status: 404 });
 
-    const storagePath = extractRepairHistoryStoragePath(attachment.file_url);
+    const storagePath = extractRepairHistoryStoragePath(attachment.file_url, user.id);
     if (!storagePath) {
-      return NextResponse.json({ error: 'Invalid file path' }, { status: 500 });
+      return NextResponse.json({ error: 'Invalid file path' }, { status: 404 });
     }
 
     const { data: fileData, error: downloadError } = await supabaseServer.storage

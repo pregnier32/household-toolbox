@@ -2,6 +2,7 @@ import { denyLockedToolAccess, denyRemovedTool } from '@/lib/billing-access';
 import { NextRequest, NextResponse } from 'next/server';
 import { getHouseholdDataSession } from '@/lib/session';
 import { supabaseServer } from '@/lib/supabaseServer';
+import { objectPathForOwner } from '@/lib/storage-owner';
 import { ATTACHMENT_MAX_FILE_BYTES, isAllowedAttachmentType } from '@/lib/attachments';
 import { assertCanStoreBytes, isStorageLimitError, refreshUserStorageUsage } from '@/lib/user-storage';
 import { isMissingRelationError, loadOwnedTask, removeTodoStorageFiles, TODO_BUCKET } from '@/lib/todo-storage';
@@ -48,6 +49,9 @@ export async function POST(request: NextRequest) {
 
     const sanitized = file.name.replace(/[^a-zA-Z0-9.-]/g, '_');
     const storagePath = `${user.id}/${taskId}/${Date.now()}-${sanitized}`;
+    if (!objectPathForOwner(storagePath, TODO_BUCKET, user.id)) {
+      return NextResponse.json({ error: 'Invalid file path' }, { status: 400 });
+    }
     const buffer = Buffer.from(await file.arrayBuffer());
     const { error: uploadError } = await supabaseServer.storage.from(TODO_BUCKET).upload(storagePath, buffer, {
       contentType: file.type,

@@ -555,9 +555,43 @@ export function NotesTool({ toolId }: NotesToolProps) {
     }
   };
 
-  const startEditing = (note: Note) => {
-    // Check if password is required
-    if (note.requiresPasswordForView && noteUnlocks[note.id] == null) {
+  const rememberUnlockedText = (noteId: string, text: string) => {
+    setNotes((prev) => prev.map((item) => (item.id === noteId ? { ...item, note: text } : item)));
+  };
+
+  const fetchUnlockedNoteText = async (noteId: string, password: string): Promise<string | null> => {
+    const response = await fetch('/api/tools/notes/verify-password', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ noteId, password }),
+    });
+    const data = await response.json().catch(() => ({}));
+    if (!response.ok || !data.valid || typeof data.note !== 'string') return null;
+    rememberUnlockedText(noteId, data.note);
+    return data.note;
+  };
+
+  const startEditing = async (note: Note) => {
+    let noteText = note.note;
+    if (note.requiresPasswordForView && !noteText.trim()) {
+      const stored = noteUnlocks[note.id];
+      if (stored == null) {
+        setViewPasswordModalId(note.id);
+        setViewPasswordInput('');
+        setViewPasswordError('');
+        setPasswordAction('edit');
+        return;
+      }
+      const unlocked = await fetchUnlockedNoteText(note.id, stored);
+      if (unlocked == null) {
+        setViewPasswordModalId(note.id);
+        setViewPasswordInput('');
+        setViewPasswordError('');
+        setPasswordAction('edit');
+        return;
+      }
+      noteText = unlocked;
+    } else if (note.requiresPasswordForView && noteUnlocks[note.id] == null) {
       setViewPasswordModalId(note.id);
       setViewPasswordInput('');
       setViewPasswordError('');
@@ -570,7 +604,7 @@ export function NotesTool({ toolId }: NotesToolProps) {
     setEditingNote({
       noteName: note.noteName,
       createdDate: note.createdDate,
-      note: note.note,
+      note: noteText,
       selectedTags: note.tags,
       requiresPasswordForView: note.requiresPasswordForView || false,
       viewPassword: note.requiresPasswordForView ? '••••••••' : '', // Placeholder to indicate password exists
@@ -1176,10 +1210,20 @@ export function NotesTool({ toolId }: NotesToolProps) {
     const loadResponse = await fetch(`/api/tools/notes?toolId=${toolId}`);
     if (!loadResponse.ok) return [];
     const data = await loadResponse.json();
-    const next: Note[] = (data.notes || []).map((note: Parameters<typeof mapNote>[0]) => mapNote(note));
-    setNotes(next);
-    setViewNoteModal((prev) => (prev ? next.find((note) => note.id === prev.id) || prev : null));
-    return next;
+    const incoming: Note[] = (data.notes || []).map((note: Parameters<typeof mapNote>[0]) => mapNote(note));
+    const keepUnlocked = (note: Note, previousText?: string) => {
+      if (!note.requiresPasswordForView || note.note.trim() || !previousText?.trim()) return note;
+      return { ...note, note: previousText };
+    };
+    setNotes((previous) =>
+      incoming.map((note) => keepUnlocked(note, previous.find((item) => item.id === note.id)?.note))
+    );
+    setViewNoteModal((prev) => {
+      if (!prev) return null;
+      const next = incoming.find((note) => note.id === prev.id);
+      return next ? keepUnlocked(next, prev.note) : prev;
+    });
+    return incoming;
   };
 
   const rememberNoteUnlock = (noteId: string, password: string) => {
@@ -1355,6 +1399,18 @@ export function NotesTool({ toolId }: NotesToolProps) {
       setPasswordAction('view');
       return;
     }
+    if (note.requiresPasswordForView && !note.note.trim()) {
+      const unlocked = await fetchUnlockedNoteText(note.id, noteUnlocks[note.id]);
+      if (unlocked == null) {
+        setViewPasswordModalId(note.id);
+        setViewPasswordInput('');
+        setViewPasswordError('');
+        setPasswordAction('view');
+        return;
+      }
+      setViewNoteModal({ ...note, note: unlocked });
+      return;
+    }
 
     setViewNoteModal(note);
   };
@@ -1515,23 +1571,25 @@ export function NotesTool({ toolId }: NotesToolProps) {
 
       if (response.ok) {
         const data = await response.json();
-        if (data.valid) {
+        if (data.valid && typeof data.note === 'string') {
           const password = viewPasswordInput.trim();
           rememberNoteUnlock(note.id, password);
+          rememberUnlockedText(note.id, data.note);
+          const unlocked = { ...note, note: data.note };
           const action = passwordAction || 'view';
           
           if (action === 'view') {
-            setViewNoteModal(note);
+            setViewNoteModal(unlocked);
           } else if (action === 'attachments') {
             setAttachmentModal(note.id);
           } else if (action === 'edit') {
             // Proceed with editing
             // Use a placeholder value to indicate password is already set
-            setEditingId(note.id);
+            setEditingId(unlocked.id);
             setEditingNote({
-              noteName: note.noteName,
-              createdDate: note.createdDate,
-              note: note.note,
+              noteName: unlocked.noteName,
+              createdDate: unlocked.createdDate,
+              note: unlocked.note,
               selectedTags: note.tags,
               requiresPasswordForView: note.requiresPasswordForView || false,
               viewPassword: note.requiresPasswordForView ? '••••••••' : '', // Placeholder to indicate password exists

@@ -2,7 +2,6 @@ import assert from 'node:assert/strict';
 import test from 'node:test';
 import { trialGrantForStart } from './tool-trial-grant';
 import {
-  LOCK_WARNING_SENTENCE,
   LOCKED_ADMIN_MESSAGE,
   LOCKED_MEMBER_MESSAGE,
   PAYMENT_PENDING_MS,
@@ -63,7 +62,7 @@ test('a free-only household stays unlocked', () => {
   assert.equal(toolAccessDenial(result, 'admin'), null);
 });
 
-test('a positive future bill during a valid trial stays unlocked and warns', () => {
+test('a positive future bill during a valid trial stays unlocked without a warning', () => {
   const result = policy({
     tools: [{ ...PAID, requiresPaymentNow: false }],
     trialActive: true,
@@ -71,12 +70,11 @@ test('a positive future bill during a valid trial stays unlocked and warns', () 
     owedNowCents: 0,
   });
   assert.equal(result.locked, false);
-  assert.equal(result.reason, 'trial_warning');
+  assert.equal(result.reason, 'open');
   assert.equal(result.causingTools.length, 0);
-  assert.match(result.warning || '', /\$4\.00/);
-  assert.match(result.warning || '', /October 31, 2026/);
-  assert.match(result.warning || '', new RegExp(LOCK_WARNING_SENTENCE.replace(/[.]/g, '\\.')));
-  assert.deepEqual(result.recovery, ['setup_payment', 'review_tools']);
+  assert.equal(result.warning, null);
+  assert.equal(toolAccessNotice(result, 'admin').message, null);
+  assert.deepEqual(result.recovery, []);
   assert.equal(toolAccessBlocked(result, true), false);
 });
 
@@ -99,7 +97,7 @@ test('a saved card and a current subscription hide the routine renewal warning',
   assert.equal(toolAccessNotice(result, 'admin').message, null);
 });
 
-test('a household without a card is warned about the trial-end charge before the renewal', () => {
+test('an open toolbox does not warn about a future trial charge or renewal', () => {
   const result = policy({
     tools: [{ ...PAID, requiresPaymentNow: false }],
     trialActive: true,
@@ -110,10 +108,9 @@ test('a household without a card is warned about the trial-end charge before the
     scheduledChargeAt: '2026-10-31T16:00:00.000Z',
   });
   assert.equal(result.locked, false);
-  assert.match(result.warning || '', /trial ends October 31, 2026 and adds \$2\.00/);
-  assert.match(result.warning || '', /not the monthly renewal/);
-  assert.match(result.warning || '', /monthly renewal on November 24, 2026 is \$4\.00/);
-  assert.doesNotMatch(result.warning || '', /next bill/);
+  assert.equal(result.warning, null);
+  assert.equal(toolAccessNotice(result, 'admin').message, null);
+  assert.equal(toolAccessNotice(result, 'user').message, null);
 });
 
 test('an active unpaid tool locks paid and free tools, including after a failed charge', () => {

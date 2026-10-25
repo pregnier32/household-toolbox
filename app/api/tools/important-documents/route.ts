@@ -5,6 +5,9 @@ import { getHouseholdDataSession } from '@/lib/session';
 import { supabaseServer } from '@/lib/supabaseServer';
 import bcrypt from 'bcryptjs';
 import { assertCanStoreBytes, isStorageLimitError, refreshUserStorageUsage } from '@/lib/user-storage';
+import { findOwnedRow, requireOwnedIds } from '@/lib/owned-record';
+import { withoutSecrets } from '@/lib/protected-content';
+import { objectPathForOwner } from '@/lib/storage-owner';
 
 // Constants
 const MAX_FILE_SIZE = 10 * 1024 * 1024; // 10MB in bytes
@@ -21,25 +24,15 @@ function publicFileFields(fileUrl: string | null | undefined) {
 
 function withoutStorageUrl<T extends { file_url?: string | null }>(doc: T) {
   const { file_url, ...rest } = doc;
-  return { ...rest, ...publicFileFields(file_url) };
+  return { ...withoutSecrets(rest), ...publicFileFields(file_url) };
 }
 
-function extractStoragePath(fileUrl: string | null | undefined): string | null {
-  if (!fileUrl) return null;
-  if (!fileUrl.startsWith('http://') && !fileUrl.startsWith('https://')) return fileUrl;
-  try {
-    const url = new URL(fileUrl);
-    const marker = `${DOCUMENT_BUCKET}/`;
-    const markerIndex = url.pathname.indexOf(marker);
-    if (markerIndex === -1) return null;
-    return decodeURIComponent(url.pathname.slice(markerIndex + marker.length));
-  } catch {
-    return null;
-  }
+function extractStoragePath(fileUrl: string | null | undefined, ownerId: string): string | null {
+  return objectPathForOwner(fileUrl, DOCUMENT_BUCKET, ownerId);
 }
 
 async function removeStoredDocumentFile(fileUrl: string | null | undefined, userId: string): Promise<void> {
-  const path = extractStoragePath(fileUrl);
+  const path = extractStoragePath(fileUrl, userId);
   if (!path) return;
   await supabaseServer.storage.from(DOCUMENT_BUCKET).remove([path]);
   await refreshUserStorageUsage(userId);
@@ -324,6 +317,9 @@ export async function POST(request: NextRequest) {
 
       const sanitizedFileName = file.name.replace(/[^a-zA-Z0-9.-]/g, '_');
       const storageFileName = `${user.id}/${Date.now()}-${sanitizedFileName}`;
+      if (!objectPathForOwner(storageFileName, DOCUMENT_BUCKET, user.id)) {
+        return NextResponse.json({ error: 'Invalid file path' }, { status: 400 });
+      }
       const buffer = Buffer.from(await file.arrayBuffer());
       const { error: uploadError } = await supabaseServer.storage.from(DOCUMENT_BUCKET).upload(storageFileName, buffer, {
         contentType: file.type,
@@ -351,7 +347,7 @@ export async function POST(request: NextRequest) {
         return NextResponse.json({ error: 'Failed to update document file' }, { status: 500 });
       }
 
-      const oldPath = extractStoragePath(existing.file_url);
+      const oldPath = extractStoragePath(existing.file_url, user.id);
       if (oldPath) {
         await supabaseServer.storage.from(DOCUMENT_BUCKET).remove([oldPath]);
       }
@@ -376,6 +372,13 @@ export async function POST(request: NextRequest) {
 
     if (selectedTags.length === 0) {
       return NextResponse.json({ error: 'At least one tag is required' }, { status: 400 });
+    }
+    if (documentId && action !== 'create') {
+      const ownedDocument = await findOwnedRow('tools_id_documents', documentId, user.id, { toolId, columns: 'id' });
+      if (!ownedDocument) return NextResponse.json({ error: 'Document not found' }, { status: 404 });
+    }
+    if (!(await requireOwnedIds('tools_id_tags', selectedTags, user.id, { toolId }))) {
+      return NextResponse.json({ error: 'Tag not found' }, { status: 404 });
     }
 
     // Handle file upload
@@ -406,7 +409,10 @@ export async function POST(request: NextRequest) {
       // Upload file to Supabase Storage
       const sanitizedFileName = file.name.replace(/[^a-zA-Z0-9.-]/g, '_');
       const storageFileName = `${user.id}/${Date.now()}-${sanitizedFileName}`;
-      
+      if (!objectPathForOwner(storageFileName, DOCUMENT_BUCKET, user.id)) {
+        return NextResponse.json({ error: 'Invalid file path' }, { status: 400 });
+      }
+
       // Convert File to ArrayBuffer for Supabase Storage
       const arrayBuffer = await file.arrayBuffer();
       const buffer = Buffer.from(arrayBuffer);

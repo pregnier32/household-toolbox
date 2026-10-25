@@ -1,5 +1,6 @@
 import { BillingDeletionPendingError, DELETION_FINISHING_MESSAGE } from '@/lib/billing-account-deletion';
 import { markClosureCompleted, markClosureUserDeleted, prepareBillingClosure, listUnfinishedClosures } from '@/lib/billing-closure';
+import { objectPathForOwner } from '@/lib/storage-owner';
 import { supabaseServer } from '@/lib/supabaseServer';
 
 type SupabaseLikeError = { message?: string; code?: string } | null;
@@ -84,22 +85,8 @@ export async function listLinkedGuestAccounts(
   return grouped;
 }
 
-function extractStoragePath(fileUrl: string, bucket: string): string | null {
-  if (!fileUrl) return null;
-
-  if (!fileUrl.startsWith('http://') && !fileUrl.startsWith('https://')) {
-    return fileUrl;
-  }
-
-  try {
-    const url = new URL(fileUrl);
-    const marker = `${bucket}/`;
-    const markerIndex = url.pathname.indexOf(marker);
-    if (markerIndex === -1) return null;
-    return url.pathname.slice(markerIndex + marker.length);
-  } catch {
-    return null;
-  }
+function extractStoragePath(fileUrl: string | null | undefined, bucket: string, ownerId: string): string | null {
+  return objectPathForOwner(fileUrl, bucket, ownerId);
 }
 
 type StorageDelete = { bucket: string; path: string };
@@ -133,13 +120,13 @@ async function flushStorageDeletes(storageDeletes: StorageDelete[]): Promise<voi
   }
 }
 
-function pushFileUrl(dest: StorageDelete[], fileUrl: string | null | undefined, bucket: string): void {
-  const path = fileUrl ? extractStoragePath(fileUrl, bucket) : null;
+function pushFileUrl(dest: StorageDelete[], fileUrl: string | null | undefined, bucket: string, ownerId: string): void {
+  const path = extractStoragePath(fileUrl, bucket, ownerId);
   if (path) dest.push({ bucket, path });
 }
 
-function pushFileUrlRows(dest: StorageDelete[], rows: FileUrlRow[] | null, bucket: string): void {
-  (rows || []).forEach((row) => pushFileUrl(dest, row.file_url, bucket));
+function pushFileUrlRows(dest: StorageDelete[], rows: FileUrlRow[] | null, bucket: string, ownerId: string): void {
+  (rows || []).forEach((row) => pushFileUrl(dest, row.file_url, bucket, ownerId));
 }
 
 async function collectUserFileUrls(
@@ -153,7 +140,7 @@ async function collectUserFileUrls(
     .select('file_url')
     .eq('user_id', userId);
   if (error && !isMissingRelationError(error)) throw error;
-  pushFileUrlRows(dest, data, bucket);
+  pushFileUrlRows(dest, data, bucket, userId);
 }
 
 async function storageObjectExists(bucket: string, path: string): Promise<boolean> {
@@ -301,7 +288,7 @@ export async function deleteUserAndAssociatedData(
 
   if (idDocsError && !isMissingRelationError(idDocsError)) throw idDocsError;
   (idDocs || []).forEach((row: { file_url: string | null }) => {
-    const path = row.file_url ? extractStoragePath(row.file_url, 'important-documents') : null;
+    const path = row.file_url ? extractStoragePath(row.file_url, 'important-documents', userId) : null;
     if (path) storageDeletes.push({ bucket: 'important-documents', path });
   });
 
@@ -314,8 +301,8 @@ export async function deleteUserAndAssociatedData(
 
   const rhRecordIds = (rhRecords || []).map((r: { id: string }) => r.id);
   (rhRecords || []).forEach((row: { receipt_file_url: string | null; warranty_file_url: string | null }) => {
-    const receiptPath = row.receipt_file_url ? extractStoragePath(row.receipt_file_url, 'repair-history') : null;
-    const warrantyPath = row.warranty_file_url ? extractStoragePath(row.warranty_file_url, 'repair-history') : null;
+    const receiptPath = row.receipt_file_url ? extractStoragePath(row.receipt_file_url, 'repair-history', userId) : null;
+    const warrantyPath = row.warranty_file_url ? extractStoragePath(row.warranty_file_url, 'repair-history', userId) : null;
     if (receiptPath) storageDeletes.push({ bucket: 'repair-history', path: receiptPath });
     if (warrantyPath) storageDeletes.push({ bucket: 'repair-history', path: warrantyPath });
   });
@@ -326,7 +313,7 @@ export async function deleteUserAndAssociatedData(
     .eq('user_id', userId);
   if (rhAttachmentsError && !isMissingRelationError(rhAttachmentsError)) throw rhAttachmentsError;
   (rhAttachments || []).forEach((row: { file_url: string | null }) => {
-    const path = row.file_url ? extractStoragePath(row.file_url, 'repair-history') : null;
+    const path = row.file_url ? extractStoragePath(row.file_url, 'repair-history', userId) : null;
     if (path) storageDeletes.push({ bucket: 'repair-history', path });
   });
 
@@ -337,7 +324,7 @@ export async function deleteUserAndAssociatedData(
       .in('record_id', rhRecordIds);
     if (rhPicturesError && !isMissingRelationError(rhPicturesError)) throw rhPicturesError;
     (rhPictures || []).forEach((row: { file_url: string | null }) => {
-      const path = row.file_url ? extractStoragePath(row.file_url, 'repair-history') : null;
+      const path = row.file_url ? extractStoragePath(row.file_url, 'repair-history', userId) : null;
       if (path) storageDeletes.push({ bucket: 'repair-history', path });
     });
   }
@@ -365,7 +352,7 @@ export async function deleteUserAndAssociatedData(
         .in('record_id', hcahRecordIds);
       if (hcahDocsError && !isMissingRelationError(hcahDocsError)) throw hcahDocsError;
       (hcahDocs || []).forEach((row: { file_url: string | null }) => {
-        const path = row.file_url ? extractStoragePath(row.file_url, 'healthcare-appt-history') : null;
+        const path = row.file_url ? extractStoragePath(row.file_url, 'healthcare-appt-history', userId) : null;
         if (path) storageDeletes.push({ bucket: 'healthcare-appt-history', path });
       });
     }
@@ -386,7 +373,7 @@ export async function deleteUserAndAssociatedData(
       .eq('user_id', userId);
     if (pcsFilesError && !isMissingRelationError(pcsFilesError)) throw pcsFilesError;
     (pcsFiles || []).forEach((row: { file_url: string | null }) => {
-      const path = row.file_url ? extractStoragePath(row.file_url, 'pet-care-schedule') : null;
+      const path = row.file_url ? extractStoragePath(row.file_url, 'pet-care-schedule', userId) : null;
       if (path) storageDeletes.push({ bucket: 'pet-care-schedule', path });
     });
   }
@@ -405,7 +392,7 @@ export async function deleteUserAndAssociatedData(
       .in('pet_id', petIds);
     if (petDocsError && !isMissingRelationError(petDocsError)) throw petDocsError;
     (petDocs || []).forEach((row: { file_url: string | null }) => {
-      const path = row.file_url ? extractStoragePath(row.file_url, 'pet-care-schedule') : null;
+      const path = row.file_url ? extractStoragePath(row.file_url, 'pet-care-schedule', userId) : null;
       if (path) storageDeletes.push({ bucket: 'pet-care-schedule', path });
     });
   }
@@ -425,7 +412,7 @@ export async function deleteUserAndAssociatedData(
       .in('expense_id', hsaExpenseIds);
     if (hsaReceiptsError && !isMissingRelationError(hsaReceiptsError)) throw hsaReceiptsError;
     (hsaReceipts || []).forEach((row: { file_url: string | null }) => {
-      const path = row.file_url ? extractStoragePath(row.file_url, 'hsa-tracker') : null;
+      const path = row.file_url ? extractStoragePath(row.file_url, 'hsa-tracker', userId) : null;
       if (path) storageDeletes.push({ bucket: 'hsa-tracker', path });
     });
   }
@@ -439,7 +426,7 @@ export async function deleteUserAndAssociatedData(
     .eq('user_id', userId);
   if (todoFilesError && !isMissingRelationError(todoFilesError)) throw todoFilesError;
   (todoFiles || []).forEach((row: { file_url: string | null }) => {
-    const path = row.file_url ? extractStoragePath(row.file_url, 'to-do-list') : null;
+    const path = row.file_url ? extractStoragePath(row.file_url, 'to-do-list', userId) : null;
     if (path) storageDeletes.push({ bucket: 'to-do-list', path });
   });
 
@@ -450,7 +437,7 @@ export async function deleteUserAndAssociatedData(
     .eq('user_id', userId);
   if (noteFilesError && !isMissingRelationError(noteFilesError)) throw noteFilesError;
   (noteFiles || []).forEach((row: { file_url: string | null }) => {
-    const path = row.file_url ? extractStoragePath(row.file_url, 'notes') : null;
+    const path = row.file_url ? extractStoragePath(row.file_url, 'notes', userId) : null;
     if (path) storageDeletes.push({ bucket: 'notes', path });
   });
 
@@ -461,7 +448,7 @@ export async function deleteUserAndAssociatedData(
     .eq('user_id', userId);
   if (addressBookFilesError && !isMissingRelationError(addressBookFilesError)) throw addressBookFilesError;
   (addressBookFiles || []).forEach((row: { file_url: string | null }) => {
-    const path = row.file_url ? extractStoragePath(row.file_url, 'address-book') : null;
+    const path = row.file_url ? extractStoragePath(row.file_url, 'address-book', userId) : null;
     if (path) storageDeletes.push({ bucket: 'address-book', path });
   });
   // tools_ab_addresses / tags / address_tags: removed via users ON DELETE CASCADE
@@ -473,7 +460,7 @@ export async function deleteUserAndAssociatedData(
     .eq('user_id', userId);
   if (travelFilesError && !isMissingRelationError(travelFilesError)) throw travelFilesError;
   (travelFiles || []).forEach((row: { file_url: string | null }) => {
-    const path = row.file_url ? extractStoragePath(row.file_url, 'travel-log') : null;
+    const path = row.file_url ? extractStoragePath(row.file_url, 'travel-log', userId) : null;
     if (path) storageDeletes.push({ bucket: 'travel-log', path });
   });
   // tools_tl_trips (user_id) → tools_tl_lodging, tools_tl_journal_notes: removed via users + trip CASCADE
@@ -485,7 +472,7 @@ export async function deleteUserAndAssociatedData(
     .eq('user_id', userId);
   if (ebpEventFilesError && !isMissingRelationError(ebpEventFilesError)) throw ebpEventFilesError;
   (ebpEventFiles || []).forEach((row: { file_url: string | null }) => {
-    const path = row.file_url ? extractStoragePath(row.file_url, 'event-budget-planner') : null;
+    const path = row.file_url ? extractStoragePath(row.file_url, 'event-budget-planner', userId) : null;
     if (path) storageDeletes.push({ bucket: 'event-budget-planner', path });
   });
 
@@ -495,7 +482,7 @@ export async function deleteUserAndAssociatedData(
     .eq('user_id', userId);
   if (ebpExpenseFilesError && !isMissingRelationError(ebpExpenseFilesError)) throw ebpExpenseFilesError;
   (ebpExpenseFiles || []).forEach((row: { file_url: string | null }) => {
-    const path = row.file_url ? extractStoragePath(row.file_url, 'event-budget-planner') : null;
+    const path = row.file_url ? extractStoragePath(row.file_url, 'event-budget-planner', userId) : null;
     if (path) storageDeletes.push({ bucket: 'event-budget-planner', path });
   });
 
@@ -506,7 +493,7 @@ export async function deleteUserAndAssociatedData(
     .eq('user_id', userId);
   if (mealPlannerFilesError && !isMissingRelationError(mealPlannerFilesError)) throw mealPlannerFilesError;
   (mealPlannerFiles || []).forEach((row: { file_url: string | null }) => {
-    const path = row.file_url ? extractStoragePath(row.file_url, 'meal-planner') : null;
+    const path = row.file_url ? extractStoragePath(row.file_url, 'meal-planner', userId) : null;
     if (path) storageDeletes.push({ bucket: 'meal-planner', path });
   });
   // tools_mp_meals / plans / items: removed via users ON DELETE CASCADE
@@ -518,7 +505,7 @@ export async function deleteUserAndAssociatedData(
     .eq('user_id', userId);
   if (shoppingListFilesError && !isMissingRelationError(shoppingListFilesError)) throw shoppingListFilesError;
   (shoppingListFiles || []).forEach((row: { file_url: string | null }) => {
-    const path = row.file_url ? extractStoragePath(row.file_url, 'shopping-list') : null;
+    const path = row.file_url ? extractStoragePath(row.file_url, 'shopping-list', userId) : null;
     if (path) storageDeletes.push({ bucket: 'shopping-list', path });
   });
   // tools_sl_lists / items / list_items: removed via users ON DELETE CASCADE
@@ -530,7 +517,7 @@ export async function deleteUserAndAssociatedData(
     .eq('user_id', userId);
   if (gtGoalFilesError && !isMissingRelationError(gtGoalFilesError)) throw gtGoalFilesError;
   (gtGoalFiles || []).forEach((row: { file_url: string | null }) => {
-    const path = row.file_url ? extractStoragePath(row.file_url, 'goals-tracking') : null;
+    const path = row.file_url ? extractStoragePath(row.file_url, 'goals-tracking', userId) : null;
     if (path) storageDeletes.push({ bucket: 'goals-tracking', path });
   });
 
@@ -540,7 +527,7 @@ export async function deleteUserAndAssociatedData(
     .eq('user_id', userId);
   if (gtUpdateFilesError && !isMissingRelationError(gtUpdateFilesError)) throw gtUpdateFilesError;
   (gtUpdateFiles || []).forEach((row: { file_url: string | null }) => {
-    const path = row.file_url ? extractStoragePath(row.file_url, 'goals-tracking') : null;
+    const path = row.file_url ? extractStoragePath(row.file_url, 'goals-tracking', userId) : null;
     if (path) storageDeletes.push({ bucket: 'goals-tracking', path });
   });
   // tools_gt_categories / goals / phases / tasks / update_notes: removed via users + goal CASCADE
@@ -552,7 +539,7 @@ export async function deleteUserAndAssociatedData(
     .eq('user_id', userId);
   if (calendarEventFilesError && !isMissingRelationError(calendarEventFilesError)) throw calendarEventFilesError;
   (calendarEventFiles || []).forEach((row: { file_url: string | null }) => {
-    const path = row.file_url ? extractStoragePath(row.file_url, 'calendar-events') : null;
+    const path = row.file_url ? extractStoragePath(row.file_url, 'calendar-events', userId) : null;
     if (path) storageDeletes.push({ bucket: 'calendar-events', path });
   });
   // tools_ce_categories / events: removed via users ON DELETE CASCADE
@@ -564,7 +551,7 @@ export async function deleteUserAndAssociatedData(
     .eq('user_id', userId);
   if (subscriptionFilesError && !isMissingRelationError(subscriptionFilesError)) throw subscriptionFilesError;
   (subscriptionFiles || []).forEach((row: { file_url: string | null }) => {
-    const path = row.file_url ? extractStoragePath(row.file_url, 'subscription-tracker') : null;
+    const path = row.file_url ? extractStoragePath(row.file_url, 'subscription-tracker', userId) : null;
     if (path) storageDeletes.push({ bucket: 'subscription-tracker', path });
   });
   // tools_st_subscriptions: removed via users ON DELETE CASCADE
@@ -585,7 +572,7 @@ export async function deleteUserAndAssociatedData(
     .eq('user_id', userId);
   if (csItemFilesError && !isMissingRelationError(csItemFilesError)) throw csItemFilesError;
   (csItemFiles || []).forEach((row: { file_url: string | null }) => {
-    const path = row.file_url ? extractStoragePath(row.file_url, 'cleaning-schedule') : null;
+    const path = row.file_url ? extractStoragePath(row.file_url, 'cleaning-schedule', userId) : null;
     if (path) storageDeletes.push({ bucket: 'cleaning-schedule', path });
   });
 
@@ -595,7 +582,7 @@ export async function deleteUserAndAssociatedData(
     .eq('user_id', userId);
   if (csCompletionFilesError && !isMissingRelationError(csCompletionFilesError)) throw csCompletionFilesError;
   (csCompletionFiles || []).forEach((row: { file_url: string | null }) => {
-    const path = row.file_url ? extractStoragePath(row.file_url, 'cleaning-schedule') : null;
+    const path = row.file_url ? extractStoragePath(row.file_url, 'cleaning-schedule', userId) : null;
     if (path) storageDeletes.push({ bucket: 'cleaning-schedule', path });
   });
 
@@ -634,7 +621,7 @@ export async function deleteUserAndAssociatedData(
     .eq('user_id', userId);
   if (hmsItemFilesError && !isMissingRelationError(hmsItemFilesError)) throw hmsItemFilesError;
   (hmsItemFiles || []).forEach((row: { file_url: string | null }) => {
-    const path = row.file_url ? extractStoragePath(row.file_url, 'home-maintenance-schedule') : null;
+    const path = row.file_url ? extractStoragePath(row.file_url, 'home-maintenance-schedule', userId) : null;
     if (path) storageDeletes.push({ bucket: 'home-maintenance-schedule', path });
   });
 
@@ -644,7 +631,7 @@ export async function deleteUserAndAssociatedData(
     .eq('user_id', userId);
   if (hmsCompletionFilesError && !isMissingRelationError(hmsCompletionFilesError)) throw hmsCompletionFilesError;
   (hmsCompletionFiles || []).forEach((row: { file_url: string | null }) => {
-    const path = row.file_url ? extractStoragePath(row.file_url, 'home-maintenance-schedule') : null;
+    const path = row.file_url ? extractStoragePath(row.file_url, 'home-maintenance-schedule', userId) : null;
     if (path) storageDeletes.push({ bucket: 'home-maintenance-schedule', path });
   });
 
@@ -693,7 +680,7 @@ export async function deleteUserAndAssociatedData(
       .eq('user_id', userId);
     if (eolFilesError && !isMissingRelationError(eolFilesError)) throw eolFilesError;
     (eolFiles || []).forEach((row: { file_url: string | null }) => {
-      const path = row.file_url ? extractStoragePath(row.file_url, 'end-of-life-planner') : null;
+      const path = row.file_url ? extractStoragePath(row.file_url, 'end-of-life-planner', userId) : null;
       if (path) storageDeletes.push({ bucket: 'end-of-life-planner', path });
     });
   }
@@ -837,8 +824,8 @@ export async function deleteUserTool(userId: string, toolId: string): Promise<De
 
       const rhRecordIds = (rhRecords || []).map((row: { id: string }) => row.id);
       (rhRecords || []).forEach((row: { receipt_file_url: string | null; warranty_file_url: string | null }) => {
-        pushFileUrl(storageDeletes, row.receipt_file_url, 'repair-history');
-        pushFileUrl(storageDeletes, row.warranty_file_url, 'repair-history');
+        pushFileUrl(storageDeletes, row.receipt_file_url, 'repair-history', userId);
+        pushFileUrl(storageDeletes, row.warranty_file_url, 'repair-history', userId);
       });
 
       await collectUserFileUrls('tools_rh_record_attachments', userId, 'repair-history', storageDeletes);
@@ -849,7 +836,7 @@ export async function deleteUserTool(userId: string, toolId: string): Promise<De
           .select('file_url')
           .in('record_id', rhRecordIds);
         if (rhPicturesError && !isMissingRelationError(rhPicturesError)) throw rhPicturesError;
-        pushFileUrlRows(storageDeletes, rhPictures, 'repair-history');
+        pushFileUrlRows(storageDeletes, rhPictures, 'repair-history', userId);
       }
 
       queueRowDelete('tools_rh_headers', userId, toolId);
@@ -880,7 +867,7 @@ export async function deleteUserTool(userId: string, toolId: string): Promise<De
             .select('file_url')
             .in('record_id', hcahRecordIds);
           if (hcahDocsError && !isMissingRelationError(hcahDocsError)) throw hcahDocsError;
-          pushFileUrlRows(storageDeletes, hcahDocs, 'healthcare-appt-history');
+          pushFileUrlRows(storageDeletes, hcahDocs, 'healthcare-appt-history', userId);
         }
       }
 
@@ -912,7 +899,7 @@ export async function deleteUserTool(userId: string, toolId: string): Promise<De
           .select('file_url')
           .in('pet_id', petIds);
         if (petDocsError && !isMissingRelationError(petDocsError)) throw petDocsError;
-        pushFileUrlRows(storageDeletes, petDocs, 'pet-care-schedule');
+        pushFileUrlRows(storageDeletes, petDocs, 'pet-care-schedule', userId);
       }
 
       queueRowDelete('tools_pcs_pets', userId, toolId);
@@ -933,7 +920,7 @@ export async function deleteUserTool(userId: string, toolId: string): Promise<De
           .select('file_url')
           .in('expense_id', hsaExpenseIds);
         if (hsaReceiptsError && !isMissingRelationError(hsaReceiptsError)) throw hsaReceiptsError;
-        pushFileUrlRows(storageDeletes, hsaReceipts, 'hsa-tracker');
+        pushFileUrlRows(storageDeletes, hsaReceipts, 'hsa-tracker', userId);
       }
 
       queueRowDelete('tools_hsa_deposits', userId, toolId);

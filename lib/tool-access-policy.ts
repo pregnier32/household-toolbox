@@ -5,7 +5,6 @@
  */
 
 import { formatCents } from './account-pricing';
-import { billingDateLabel } from './billing-cycle';
 import type { InvoiceRole, InvoiceStatus } from './billing-ledger';
 
 /** Retained for callers. An open Checkout inside this window does not grant tool access. */
@@ -16,8 +15,6 @@ export const LOCKED_ADMIN_MESSAGE = 'Tool access is paused because your account 
 export const LOCKED_MEMBER_MESSAGE = 'Your household\'s tool access is paused. Ask your household admin to review Plan & Billing.';
 
 export const MEMBER_ATTENTION_MESSAGE = 'Your household may need payment attention soon. Ask your household admin to review Plan & Billing.';
-
-export const LOCK_WARNING_SENTENCE = 'All household tools, including free tools, will lock if payment becomes required and the account is not current.';
 
 export function removalConfirmationMessage(toolName: string): string {
   const name = toolName.trim() || 'this tool';
@@ -190,28 +187,6 @@ function recoveryFor(reason: ToolAccessReason, setupComplete: boolean): ToolAcce
   return [];
 }
 
-function warningFor(input: ToolAccessPolicyInput): string | null {
-  const scheduled = Math.max(0, input.scheduledChargeCents ?? 0);
-  if (scheduled > 0 && input.scheduledChargeAt) {
-    const trial = `A trial ends ${billingDateLabel(input.scheduledChargeAt)} and adds ${formatCents(scheduled)}. That charge is not the monthly renewal.`;
-    const renewal = input.nextAmountCents > 0 && input.nextBillingAt
-      ? ` The monthly renewal on ${billingDateLabel(input.nextBillingAt)} is ${formatCents(input.nextAmountCents)}.`
-      : '';
-    return `${trial}${renewal} ${LOCK_WARNING_SENTENCE}`;
-  }
-  if (input.nextAmountCents <= 0) return null;
-  const amount = formatCents(input.nextAmountCents);
-  const when = input.nextBillingAt ? billingDateLabel(input.nextBillingAt) : null;
-  const bill = when ? `The estimated next bill is ${amount} on ${when}.` : `The estimated next bill is ${amount}.`;
-  return `${bill} ${LOCK_WARNING_SENTENCE}`;
-}
-
-function upcomingWarning(input: ToolAccessPolicyInput, subscriptionIsCurrent: boolean): string | null {
-  if (input.hasSavedPaymentMethod && subscriptionIsCurrent && input.owedNowCents <= 0) return null;
-  if (subscriptionIsCurrent && !input.trialActive) return null;
-  return warningFor(input);
-}
-
 function debtNoticeFor(cents: number): string | null {
   if (cents <= 0) return null;
   return `An outstanding balance of ${formatCents(cents)} remains. It is still owed.`;
@@ -248,17 +223,15 @@ export function describeToolAccessPolicy(input: ToolAccessPolicyInput): ToolAcce
   };
 
   if (causingTools.length === 0) {
-    const warning = upcomingWarning(input, current);
-    const reason: ToolAccessReason = warning ? (input.trialActive ? 'trial_warning' : 'upcoming_bill') : 'open';
     return {
       ...base,
       locked: false,
       pending: false,
-      reason,
-      recovery: recoveryFor(reason, setupComplete),
+      reason: 'open',
+      recovery: [],
       adminMessage: null,
       memberMessage: null,
-      warning,
+      warning: null,
       debtNotice: debtNoticeFor(debt),
     };
   }
@@ -286,17 +259,15 @@ export function describeToolAccessPolicy(input: ToolAccessPolicyInput): ToolAcce
   }
 
   if (reason === 'open') {
-    const warning = upcomingWarning(input, current);
-    const openReason: ToolAccessReason = warning ? (input.trialActive ? 'trial_warning' : 'upcoming_bill') : 'open';
     return {
       ...base,
       locked: false,
       pending: false,
-      reason: openReason,
-      recovery: recoveryFor(openReason, setupComplete),
+      reason: 'open',
+      recovery: [],
       adminMessage: null,
       memberMessage: null,
-      warning,
+      warning: null,
       debtNotice: debtNoticeFor(debt),
     };
   }

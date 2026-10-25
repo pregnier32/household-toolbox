@@ -1,3 +1,4 @@
+import { objectPathForOwner } from '@/lib/storage-owner';
 import { supabaseServer } from '@/lib/supabaseServer';
 import { refreshUserStorageUsage } from '@/lib/user-storage';
 
@@ -48,18 +49,8 @@ export function isMissingRelationError(error: { code?: string; message?: string 
   return error?.code === '42P01' || (error?.message || '').toLowerCase().includes('does not exist');
 }
 
-export function extractPetCareStoragePath(fileUrl: string | null | undefined): string | null {
-  if (!fileUrl) return null;
-  if (!fileUrl.startsWith('http://') && !fileUrl.startsWith('https://')) return fileUrl;
-  try {
-    const url = new URL(fileUrl);
-    const marker = `${PET_CARE_BUCKET}/`;
-    const markerIndex = url.pathname.indexOf(marker);
-    if (markerIndex === -1) return null;
-    return decodeURIComponent(url.pathname.slice(markerIndex + marker.length));
-  } catch {
-    return null;
-  }
+export function extractPetCareStoragePath(fileUrl: string | null | undefined, ownerId: string): string | null {
+  return objectPathForOwner(fileUrl, PET_CARE_BUCKET, ownerId);
 }
 
 export async function removePetCareStorageFiles(
@@ -67,7 +58,7 @@ export async function removePetCareStorageFiles(
   userId: string
 ): Promise<void> {
   const paths = [
-    ...new Set(fileUrls.map(extractPetCareStoragePath).filter((path): path is string => Boolean(path))),
+    ...new Set(fileUrls.map((fileUrl) => extractPetCareStoragePath(fileUrl, userId)).filter((path): path is string => Boolean(path))),
   ];
   if (paths.length === 0) return;
   await supabaseServer.storage.from(PET_CARE_BUCKET).remove(paths);

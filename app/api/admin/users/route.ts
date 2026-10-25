@@ -205,6 +205,10 @@ export async function PUT(request: NextRequest) {
     }
 
     if (userStatus !== undefined) {
+      const allowedStatus = ['superadmin', 'admin', 'guest'];
+      if (typeof userStatus !== 'string' || !allowedStatus.includes(userStatus)) {
+        return NextResponse.json({ error: 'User status must be guest, admin, or superadmin' }, { status: 400 });
+      }
       updateData.user_status = userStatus;
     }
 

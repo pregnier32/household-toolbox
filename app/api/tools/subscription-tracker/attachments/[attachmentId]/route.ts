@@ -44,9 +44,9 @@ export async function GET(
     const subscription = await loadOwnedSubscription(attachment.subscription_id, user.id);
     if (!subscription) return NextResponse.json({ error: 'Subscription not found' }, { status: 404 });
 
-    const storagePath = extractSubscriptionTrackerStoragePath(attachment.file_url);
+    const storagePath = extractSubscriptionTrackerStoragePath(attachment.file_url, user.id);
     if (!storagePath) {
-      return NextResponse.json({ error: 'Invalid file path' }, { status: 500 });
+      return NextResponse.json({ error: 'Invalid file path' }, { status: 404 });
     }
 
     const { data: fileData, error: downloadError } = await supabaseServer.storage

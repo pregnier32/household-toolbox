@@ -2,6 +2,7 @@ import { denyLockedToolAccess, denyRemovedTool } from '@/lib/billing-access';
 import { NextRequest, NextResponse } from 'next/server';
 import { getHouseholdDataSession } from '@/lib/session';
 import { supabaseServer } from '@/lib/supabaseServer';
+import { findOwnedRow, requireOwnedIds } from '@/lib/owned-record';
 import { attachmentsByListIds, deleteListStorageFiles } from '@/lib/shopping-list-storage';
 
 type LineItemWrite = { itemId: string; quantity?: unknown; unit?: unknown };
@@ -550,6 +551,17 @@ export async function POST(request: NextRequest) {
           return NextResponse.json({ error: 'No grocery line names to save.' }, { status: 400 });
         }
       }
+      if (
+        createItems.length > 0 &&
+        !(await requireOwnedIds(
+          'tools_sl_items',
+          createItems.map((item) => item.itemId),
+          user.id,
+          { toolId: listToolId }
+        ))
+      ) {
+        return NextResponse.json({ error: 'Item not found' }, { status: 404 });
+      }
       const { list, listError } = await insertShoppingList(
         user.id,
         listToolId,
@@ -618,6 +630,22 @@ export async function POST(request: NextRequest) {
       if (!listId) {
         return NextResponse.json({ error: 'List ID is required' }, { status: 400 });
       }
+      const list = await findOwnedRow('tools_sl_lists', listId, user.id, { toolId, columns: 'id' });
+      if (!list) return NextResponse.json({ error: 'List not found' }, { status: 404 });
+
+      const replacingItems = itemIds !== undefined || itemWrites !== undefined;
+      const updateItems = replacingItems ? lineItemsFromBody(itemIds, itemWrites) : [];
+      if (
+        replacingItems &&
+        !(await requireOwnedIds(
+          'tools_sl_items',
+          updateItems.map((item) => item.itemId),
+          user.id,
+          { toolId }
+        ))
+      ) {
+        return NextResponse.json({ error: 'Item not found' }, { status: 404 });
+      }
 
       const updates: Record<string, unknown> = {};
       if (name !== undefined) updates.name = name.trim();
@@ -635,8 +663,7 @@ export async function POST(request: NextRequest) {
         }
       }
 
-      if (itemIds !== undefined || itemWrites !== undefined) {
-        const updateItems = lineItemsFromBody(itemIds, itemWrites);
+      if (replacingItems) {
         let existingRows: { item_id: string; is_checked?: boolean }[] | null = null;
         const existingFull = await supabaseServer
           .from('tools_sl_list_items')

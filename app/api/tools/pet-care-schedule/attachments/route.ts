@@ -2,6 +2,7 @@ import { denyLockedToolAccess, denyRemovedTool } from '@/lib/billing-access';
 import { NextRequest, NextResponse } from 'next/server';
 import { getHouseholdDataSession } from '@/lib/session';
 import { supabaseServer } from '@/lib/supabaseServer';
+import { objectPathForOwner } from '@/lib/storage-owner';
 import { ATTACHMENT_MAX_FILE_BYTES, isAllowedAttachmentType } from '@/lib/attachments';
 import { assertCanStoreBytes, isStorageLimitError, refreshUserStorageUsage } from '@/lib/user-storage';
 import {
@@ -70,6 +71,9 @@ export async function POST(request: NextRequest) {
     const { table, ownerColumn, folder } = storeConfig(owner.store);
     const sanitized = file.name.replace(/[^a-zA-Z0-9.-]/g, '_');
     const storagePath = `${user.id}/${folder}/${owner.ownerId}/${Date.now()}-${sanitized}`;
+    if (!objectPathForOwner(storagePath, PET_CARE_BUCKET, user.id)) {
+      return NextResponse.json({ error: 'Invalid file path' }, { status: 400 });
+    }
     const buffer = Buffer.from(await file.arrayBuffer());
     const { error: uploadError } = await supabaseServer.storage.from(PET_CARE_BUCKET).upload(storagePath, buffer, {
       contentType: file.type,

@@ -44,9 +44,9 @@ export async function GET(
     const trip = await loadOwnedTrip(attachment.trip_id, user.id);
     if (!trip) return NextResponse.json({ error: 'Trip not found' }, { status: 404 });
 
-    const storagePath = extractTravelLogStoragePath(attachment.file_url);
+    const storagePath = extractTravelLogStoragePath(attachment.file_url, user.id);
     if (!storagePath) {
-      return NextResponse.json({ error: 'Invalid file path' }, { status: 500 });
+      return NextResponse.json({ error: 'Invalid file path' }, { status: 404 });
     }
 
     const { data: fileData, error: downloadError } = await supabaseServer.storage

@@ -6,6 +6,9 @@ import { persistAccountNotices } from '@/lib/promotion-service';
 export async function GET() {
   const user = await getHouseholdDataSession();
   if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+  if (user.householdRole !== 'admin') {
+    return NextResponse.json({ error: 'Only the household Admin can view account notices.' }, { status: 403 });
+  }
   try {
     await persistAccountNotices(user.id, new Date());
     const { data, error } = await supabaseServer
@@ -24,6 +27,9 @@ export async function GET() {
 export async function POST(request: NextRequest) {
   const user = await getHouseholdDataSession();
   if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+  if (user.householdRole !== 'admin') {
+    return NextResponse.json({ error: 'Only the household Admin can update account notices.' }, { status: 403 });
+  }
   try {
     const body = await request.json();
     const now = new Date().toISOString();

@@ -24,7 +24,20 @@ function loadLocalEnv(): void {
 
 loadLocalEnv();
 
-const databaseReady = Boolean(process.env.NEXT_PUBLIC_SUPABASE_URL && process.env.SUPABASE_SERVICE_ROLE_KEY);
+const PRODUCTION_SUPABASE_REF = 'hjbneuicvfbihtbufrxq';
+const isolatedUrl = process.env.HTB_TEST_SUPABASE_URL ?? '';
+const isolatedAnon = process.env.HTB_TEST_SUPABASE_ANON_KEY ?? '';
+const isolatedService = process.env.HTB_TEST_SUPABASE_SERVICE_ROLE_KEY ?? '';
+const isolatedReady = Boolean(isolatedUrl && isolatedAnon && isolatedService) && !isolatedUrl.includes(PRODUCTION_SUPABASE_REF);
+if (isolatedReady) {
+  process.env.NEXT_PUBLIC_SUPABASE_URL = isolatedUrl;
+  process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY = isolatedAnon;
+  process.env.SUPABASE_SERVICE_ROLE_KEY = isolatedService;
+}
+const databaseReady = isolatedReady;
+const databaseSkip = isolatedUrl.includes(PRODUCTION_SUPABASE_REF)
+  ? 'HTB_TEST_SUPABASE_URL points at the production project.'
+  : 'Set HTB_TEST_SUPABASE_URL, HTB_TEST_SUPABASE_ANON_KEY, and HTB_TEST_SUPABASE_SERVICE_ROLE_KEY to an isolated project.';
 const sandboxKey = (process.env.STRIPE_SECRET_KEY ?? '').startsWith('sk_test_');
 
 type SupabaseServer = typeof import('./supabaseServer').supabaseServer;
@@ -143,7 +156,7 @@ function checkoutSession(input: {
   };
 }
 
-test('a delayed checkout completion is processed for the first time after deletion', { skip: databaseReady ? false : 'Supabase service role is not configured' }, async () => {
+test('a delayed checkout completion is processed for the first time after deletion', { skip: databaseReady ? false : databaseSkip }, async () => {
   assert.equal(sandboxKey, true, 'Stripe configuration must be a sandbox test key');
   const { supabaseServer } = await import('./supabaseServer');
   const { acceptVerifiedStripeEvent } = await import('./billing-webhook');

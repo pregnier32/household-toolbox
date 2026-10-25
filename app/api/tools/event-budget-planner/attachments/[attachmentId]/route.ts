@@ -74,9 +74,9 @@ export async function GET(
       attachment = expenseAttachment;
     }
 
-    const storagePath = extractEbpStoragePath(attachment.file_url);
+    const storagePath = extractEbpStoragePath(attachment.file_url, user.id);
     if (!storagePath) {
-      return NextResponse.json({ error: 'Invalid file path' }, { status: 500 });
+      return NextResponse.json({ error: 'Invalid file path' }, { status: 404 });
     }
 
     const { data: fileData, error: downloadError } = await supabaseServer.storage.from(EBP_BUCKET).download(storagePath);

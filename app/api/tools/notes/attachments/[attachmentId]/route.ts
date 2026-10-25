@@ -2,11 +2,13 @@ import { denyLockedToolAccess, denyRemovedTool } from '@/lib/billing-access';
 import { NextRequest, NextResponse } from 'next/server';
 import { getHouseholdDataSession } from '@/lib/session';
 import { supabaseServer } from '@/lib/supabaseServer';
+import bcrypt from 'bcryptjs';
+import { authorizeStoredFileRead } from '@/lib/storage-owner';
 import {
   NOTES_BUCKET,
   assertNotePassword,
-  extractNotesStoragePath,
   isMissingRelationError,
+  loadNoteFileGrants,
   loadOwnedNote,
   noteFileErrorStatus,
 } from '@/lib/notes-storage';
@@ -46,10 +48,24 @@ export async function GET(
     if (!note) return NextResponse.json({ error: 'Note not found' }, { status: 404 });
     await assertNotePassword(note, password);
 
-    const storagePath = extractNotesStoragePath(attachment.file_url);
-    if (!storagePath) {
-      return NextResponse.json({ error: 'Invalid file path' }, { status: 500 });
+    const related = await loadNoteFileGrants(user.id, attachment.id);
+    const decision = authorizeStoredFileRead({
+      bucket: NOTES_BUCKET,
+      ownerId: user.id,
+      requested: {
+        recordId: note.id,
+        fileReference: attachment.file_url,
+        requiresPassword: Boolean(note.requires_password_for_view),
+        passwordHash: note.view_password_hash,
+      },
+      related,
+      password,
+      passwordMatches: (entered, hash) => bcrypt.compareSync(entered, hash),
+    });
+    if (!decision.ok) {
+      return NextResponse.json({ error: decision.error === 'Incorrect password' ? 'Incorrect password' : decision.error === 'Password required' ? 'Password required' : 'Invalid file path' }, { status: decision.status });
     }
+    const storagePath = decision.path;
 
     const { data: fileData, error: downloadError } = await supabaseServer.storage
       .from(NOTES_BUCKET)

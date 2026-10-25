@@ -74,9 +74,9 @@ export async function GET(
       attachment = completionAttachment;
     }
 
-    const storagePath = extractCleaningStoragePath(attachment.file_url);
+    const storagePath = extractCleaningStoragePath(attachment.file_url, user.id);
     if (!storagePath) {
-      return NextResponse.json({ error: 'Invalid file path' }, { status: 500 });
+      return NextResponse.json({ error: 'Invalid file path' }, { status: 404 });
     }
 
     const { data: fileData, error: downloadError } = await supabaseServer.storage

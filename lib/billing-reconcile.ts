@@ -9,6 +9,7 @@ import { supabaseServer } from '@/lib/supabaseServer';
 import { assertConfiguredStripe, stripeServer } from '@/lib/stripe-server';
 import { stripeLivemode } from '@/lib/stripe-mode';
 import { liveBillingStorageReady } from '@/lib/billing-environment';
+import { billingJobNote } from '@/lib/billing-job-log';
 import type Stripe from 'stripe';
 
 const STALE_MS = 60 * 60 * 1000;
@@ -70,12 +71,20 @@ export async function reconcileBilling(now = new Date()): Promise<{ scanned: num
   let scanned = 0;
   let failed = 0;
   let retriedEvents = 0;
+  const notes: string[] = [];
+  const note = (message: string) => {
+    const safe = billingJobNote(message);
+    if (!safe || notes.includes(safe) || notes.length >= 5) return;
+    notes.push(safe);
+  };
   try {
     try {
       await resumeDeletedAuthIdentities();
     } catch (error) {
       failed += 1;
-      console.error('Deleted login cleanup could not be finished', error instanceof Error ? error.message : 'unknown');
+      const message = error instanceof Error ? error.message : 'unknown';
+      note(`Deleted login cleanup could not be finished. ${message}`);
+      console.error('Deleted login cleanup could not be finished', message);
     }
     retriedEvents = await retryFailedEvents();
     const userIds = await listReconcileCandidates(new Date(now.getTime() - STALE_MS));
@@ -85,28 +94,41 @@ export async function reconcileBilling(now = new Date()): Promise<{ scanned: num
         scanned += 1;
       } catch (error) {
         failed += 1;
-        console.error('Billing reconcile failed for an account', error instanceof Error ? error.message : 'unknown');
+        const message = error instanceof Error ? error.message : 'unknown';
+        note(`A household bill could not be checked. ${message}`);
+        console.error('Billing reconcile failed for an account', message);
       }
       try {
         await refreshHouseholdLock(userId, now);
       } catch (error) {
         failed += 1;
-        console.error('Household tool access could not be saved', error instanceof Error ? error.message : 'unknown');
+        const message = error instanceof Error ? error.message : 'unknown';
+        note(`Household tool access could not be saved. ${message}`);
+        console.error('Household tool access could not be saved', message);
       }
     }
+    const summary = failed > 0 ? `${failed} account${failed === 1 ? '' : 's'} failed.` : null;
     await supabaseServer.from('billing_reconcile_runs').update({
       status: failed > 0 ? 'failed' : 'completed',
       finished_at: new Date().toISOString(),
       scanned_count: scanned,
-      last_error: failed > 0 ? `${failed} account${failed === 1 ? '' : 's'} failed.` : null,
+      failed_count: failed,
+      retried_event_count: retriedEvents,
+      last_error: summary,
+      detail: notes.length > 0 ? notes.join('\n') : null,
     }).eq('id', run.data.id);
     return { scanned, failed, retriedEvents };
   } catch (error) {
+    const message = error instanceof Error ? error.message : 'Reconcile failed.';
+    note(message);
     await supabaseServer.from('billing_reconcile_runs').update({
       status: 'failed',
       finished_at: new Date().toISOString(),
       scanned_count: scanned,
-      last_error: error instanceof Error ? error.message.slice(0, 500) : 'Reconcile failed.',
+      failed_count: failed,
+      retried_event_count: retriedEvents,
+      last_error: billingJobNote(message).slice(0, 500) || 'Reconcile failed.',
+      detail: notes.length > 0 ? notes.join('\n') : null,
     }).eq('id', run.data.id);
     throw error;
   }

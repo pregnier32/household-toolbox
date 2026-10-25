@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { getHouseholdDataSession } from '@/lib/session';
 import { denyLockedToolAccess, denyRemovedTool } from '@/lib/billing-access';
 import { supabaseServer } from '@/lib/supabaseServer';
+import { findOwnedRow } from '@/lib/owned-record';
 import { attachmentsByRecordIds, deleteHeaderRecordStorageFiles, deleteRecordStorageFiles, removeHealthcareStorageFiles } from '@/lib/healthcare-storage';
 import { CALENDAR_SOURCE_HEALTHCARE_APPOINTMENT } from '@/lib/calendarPins';
 import {
@@ -247,6 +248,11 @@ export async function POST(request: NextRequest) {
           .eq('user_id', user.id);
         if (error) return NextResponse.json({ error: 'Failed to delete record' }, { status: 500 });
         return NextResponse.json({ success: true });
+      }
+
+      if (action === 'create' || action === 'update') {
+        const header = await findOwnedRow('tools_hcah_headers', headerId, user.id, { toolId, columns: 'id' });
+        if (!header) return NextResponse.json({ error: 'Header not found' }, { status: 404 });
       }
 
       const recordPayload = {

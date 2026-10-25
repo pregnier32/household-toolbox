@@ -44,9 +44,9 @@ export async function GET(
     const event = await loadOwnedEvent(attachment.event_id, user.id);
     if (!event) return NextResponse.json({ error: 'Event not found' }, { status: 404 });
 
-    const storagePath = extractCalendarEventsStoragePath(attachment.file_url);
+    const storagePath = extractCalendarEventsStoragePath(attachment.file_url, user.id);
     if (!storagePath) {
-      return NextResponse.json({ error: 'Invalid file path' }, { status: 500 });
+      return NextResponse.json({ error: 'Invalid file path' }, { status: 404 });
     }
 
     const { data: fileData, error: downloadError } = await supabaseServer.storage

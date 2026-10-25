@@ -1,3 +1,4 @@
+import { storageObjectOwnedBy } from '@/lib/storage-owner';
 import { supabaseServer } from '@/lib/supabaseServer';
 
 export const STORAGE_FREE_BYTES = 200 * 1024 * 1024;
@@ -138,7 +139,7 @@ async function persistUsedBytes(userId: string, usedBytes: number): Promise<void
 }
 
 function objectBelongsToUser(path: string, userId: string): boolean {
-  return path === userId || path.startsWith(`${userId}/`) || path.includes(`/${userId}/`);
+  return storageObjectOwnedBy(path, userId);
 }
 
 async function listPrefixSizes(bucket: string, prefix: string): Promise<number> {
@@ -191,12 +192,9 @@ async function recountViaStorageApi(userId: string): Promise<StorageToolUsage[]>
         continue;
       }
 
-      if (path === userId) {
-        usedBytes += await listPrefixSizes(tool.bucket, userId);
-        continue;
+      if (path.toLowerCase() === userId.toLowerCase()) {
+        usedBytes += await listPrefixSizes(tool.bucket, path);
       }
-
-      usedBytes += await listPrefixSizes(tool.bucket, `${path}/${userId}`);
     }
 
     tools.push({ bucket: tool.bucket, name: tool.name, usedBytes });
@@ -404,11 +402,9 @@ async function countUserStorageFiles(userId: string): Promise<number> {
         if (objectBelongsToUser(path, userId)) total += 1;
         continue;
       }
-      if (path === userId) {
-        total += await countPrefixFiles(tool.bucket, userId);
-        continue;
+      if (path.toLowerCase() === userId.toLowerCase()) {
+        total += await countPrefixFiles(tool.bucket, path);
       }
-      total += await countPrefixFiles(tool.bucket, `${path}/${userId}`);
     }
   }
 

@@ -6,6 +6,11 @@
 export const PLAN_BILLING_PATH = '/dashboard/plan';
 
 export function getAuthAppOrigin(): string {
+  if (process.env.VERCEL_ENV === 'preview') {
+    const host = process.env.VERCEL_URL?.trim();
+    if (!host) throw new Error('Preview auth origin requires VERCEL_URL.');
+    return `https://${host}`;
+  }
   if (process.env.NODE_ENV !== 'production') {
     return 'http://localhost:3000';
   }
@@ -14,6 +19,9 @@ export function getAuthAppOrigin(): string {
 
 /** Portal return URL. Production uses the www host that serves the signed-in app. */
 export function planBillingReturnUrl(): string {
+  if (process.env.VERCEL_ENV === 'preview') {
+    return `${getAuthAppOrigin()}${PLAN_BILLING_PATH}`;
+  }
   const origin = process.env.NODE_ENV === 'production'
     ? 'https://www.householdtoolbox.com'
     : getAuthAppOrigin();

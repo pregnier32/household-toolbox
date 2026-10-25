@@ -75,6 +75,21 @@ async function syncRows(options: {
   rows: Record<string, unknown>[];
   scope?: { column: string; value: string | null };
 }) {
+  const userId = String(options.rows.find((row) => row.user_id)?.user_id || '');
+  const incomingIds = options.rows.map((row) => String(row.id || '')).filter(Boolean);
+  if (incomingIds.length > 0) {
+    if (!userId) throw new Error('Record not found');
+    const { data: existingIds, error: idError } = await supabaseServer
+      .from(options.table)
+      .select('id, user_id, plan_id')
+      .in('id', incomingIds);
+    await throwIfError(idError, `check ${options.table} ids`);
+    const foreign = (existingIds || []).some((row) => {
+      const record = row as { user_id?: string; plan_id?: string };
+      return record.user_id !== userId || record.plan_id !== options.planId;
+    });
+    if (foreign) throw new Error('Record not found');
+  }
   let query = supabaseServer.from(options.table).select('id').eq('plan_id', options.planId);
   if (options.scope) {
     query =
@@ -1000,9 +1015,6 @@ async function persistPlanData(userId: string, toolId: string, planId: string, p
   await throwIfError(fieldsError, 'load custom fields');
   const recordIds = new Set(otherRecords.map(({ item }) => rowId(item.id)));
   const staleFields = (existingFields || []).filter((row) => recordIds.has(row.record_id)).map((row) => row.id);
-  if (staleFields.length) {
-    await supabaseServer.from('tools_eolp_other_custom_fields').delete().in('id', staleFields);
-  }
   const fieldRows = otherRecords.flatMap(({ item }) =>
     (item.customFields || []).map((field, index) => ({
       id: rowId(field.id),
@@ -1014,6 +1026,20 @@ async function persistPlanData(userId: string, toolId: string, planId: string, p
       display_order: index * 10,
     }))
   );
+  const fieldIds = fieldRows.map((row) => row.id).filter(Boolean);
+  if (fieldIds.length) {
+    const { data: existingFieldIds, error: fieldIdError } = await supabaseServer
+      .from('tools_eolp_other_custom_fields')
+      .select('id, user_id')
+      .in('id', fieldIds);
+    await throwIfError(fieldIdError, 'check custom field ids');
+    if ((existingFieldIds || []).some((row) => row.user_id !== userId)) {
+      throw new Error('Record not found');
+    }
+  }
+  if (staleFields.length) {
+    await supabaseServer.from('tools_eolp_other_custom_fields').delete().in('id', staleFields);
+  }
   if (fieldRows.length) {
     const { error } = await supabaseServer.from('tools_eolp_other_custom_fields').upsert(fieldRows, { onConflict: 'id' });
     await throwIfError(error, 'upsert custom fields');

@@ -2,6 +2,7 @@ import { denyLockedToolAccess, denyRemovedTool } from '@/lib/billing-access';
 import { NextRequest, NextResponse } from 'next/server';
 import { getHouseholdDataSession } from '@/lib/session';
 import { supabaseServer } from '@/lib/supabaseServer';
+import { findOwnedRow } from '@/lib/owned-record';
 import {
   attachmentsByRecordIds,
   deleteHeaderRecordStorageFiles,
@@ -630,6 +631,11 @@ export async function POST(request: NextRequest) {
         }
 
         return NextResponse.json({ success: true });
+      }
+
+      if (action === 'create' || action === 'update') {
+        const header = await findOwnedRow('tools_rh_headers', headerId, user.id, { toolId, columns: 'id' });
+        if (!header) return NextResponse.json({ error: 'Header not found' }, { status: 404 });
       }
 
       const recordData: any = {

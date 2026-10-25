@@ -1,3 +1,4 @@
+import { objectPathForOwner } from '@/lib/storage-owner';
 import { supabaseServer } from '@/lib/supabaseServer';
 import { refreshUserStorageUsage } from '@/lib/user-storage';
 import type { EolAttachment } from '@/lib/end-of-life-planner';
@@ -55,22 +56,12 @@ export function isMissingRelationError(error: { code?: string; message?: string 
   return error?.code === '42P01' || (error?.message || '').toLowerCase().includes('does not exist');
 }
 
-export function extractEolStoragePath(fileUrl: string | null | undefined): string | null {
-  if (!fileUrl) return null;
-  if (!fileUrl.startsWith('http://') && !fileUrl.startsWith('https://')) return fileUrl;
-  try {
-    const url = new URL(fileUrl);
-    const marker = `${END_OF_LIFE_PLANNER_BUCKET}/`;
-    const markerIndex = url.pathname.indexOf(marker);
-    if (markerIndex === -1) return null;
-    return decodeURIComponent(url.pathname.slice(markerIndex + marker.length));
-  } catch {
-    return null;
-  }
+export function extractEolStoragePath(fileUrl: string | null | undefined, ownerId: string): string | null {
+  return objectPathForOwner(fileUrl, END_OF_LIFE_PLANNER_BUCKET, ownerId);
 }
 
 export async function removeEolStorageFiles(fileUrls: Array<string | null | undefined>, userId: string): Promise<void> {
-  const paths = [...new Set(fileUrls.map(extractEolStoragePath).filter((path): path is string => Boolean(path)))];
+  const paths = [...new Set(fileUrls.map((fileUrl) => extractEolStoragePath(fileUrl, userId)).filter((path): path is string => Boolean(path)))];
   if (paths.length === 0) return;
   await supabaseServer.storage.from(END_OF_LIFE_PLANNER_BUCKET).remove(paths);
   await refreshUserStorageUsage(userId);

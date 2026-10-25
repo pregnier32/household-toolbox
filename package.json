@@ -10,7 +10,10 @@
     "supabase:types": "npx supabase gen types typescript --linked > src/types/supabase.ts",
     "auth:test-import": "node --experimental-strip-types scripts/test-supabase-auth-import.ts",
     "test:pricing": "npx --yes tsx --test lib/account-pricing.test.ts lib/account-notice-drafts.test.ts lib/default-account-entitlements.test.ts lib/billing-preview.test.ts lib/billing-cycle.test.ts lib/billing-tool-removal.test.ts lib/tool-removal-run.test.ts lib/ownership-price.test.ts lib/user-entitlements-preview.test.ts lib/user-tool-entitlements.test.ts",
-    "test:billing": "npx --yes tsx --test --test-concurrency=1 lib/billing-ledger.test.ts lib/billing-card.test.ts lib/billing-payment-workflow.test.ts lib/billing-payment-state.test.ts lib/billing-stripe-anchor.test.ts lib/billing-db.test.ts lib/tool-access-policy.test.ts lib/billing-summary.test.ts lib/billing-checkout-payment.test.ts lib/billing-subscription.test.ts lib/billing-account-deletion.test.ts lib/billing-deletion-webhook.test.ts lib/auth-app-origin.test.ts lib/stripe-mode.test.ts lib/billing-commencement.test.ts lib/plan-stripe-refresh.test.ts"
+    "test:authorization": "npx --yes tsx --import ./scripts/register-server-only.mjs --test --test-concurrency=1 lib/household-authorization.test.ts",
+    "test:isolation": "npx --yes tsx --import ./scripts/register-server-only.mjs --test --test-concurrency=1 lib/household-isolation.integration.test.ts",
+    "test:storage-owner": "npx --yes tsx --test lib/storage-owner.test.ts",
+    "test:billing": "npx --yes tsx --conditions=react-server --test --test-concurrency=1 lib/billing-ledger.test.ts lib/billing-card.test.ts lib/billing-payment-workflow.test.ts lib/billing-payment-state.test.ts lib/billing-stripe-anchor.test.ts lib/billing-db.test.ts lib/tool-access-policy.test.ts lib/billing-summary.test.ts lib/billing-checkout-payment.test.ts lib/billing-subscription.test.ts lib/billing-account-deletion.test.ts lib/billing-deletion-webhook.test.ts lib/auth-app-origin.test.ts lib/stripe-mode.test.ts lib/billing-commencement.test.ts lib/plan-stripe-refresh.test.ts lib/billing-job-log.test.ts"
   },
   "dependencies": {
     "@supabase/ssr": "^0.12.7",
@@ -20,11 +23,12 @@
     "docx": "^9.7.2",
     "jspdf": "^4.2.1",
     "lucide-react": "^0.555.0",
-    "next": "^16.0.7",
+    "next": "^16.4.3",
     "react": "19.2.0",
     "react-dom": "19.2.0",
     "recharts": "^3.5.1",
     "resend": "^6.5.2",
+    "server-only": "^0.0.1",
     "stripe": "^23.0.1"
   },
   "devDependencies": {

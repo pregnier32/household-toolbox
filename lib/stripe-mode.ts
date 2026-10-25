@@ -72,6 +72,9 @@ export function expectedStripeWebhookId(): string {
 }
 
 export function stripeSecretKey(): string {
+  if ((process.env.VERCEL_ENV === 'preview' || process.env.VERCEL_ENV === 'development') && stripeMode() === 'live') {
+    throw new Error('Preview and Vercel development cannot use live Stripe.');
+  }
   const mode = stripeMode();
   const key = process.env.STRIPE_SECRET_KEY?.trim() ?? '';
   const prefix = mode === 'live' ? 'sk_live_' : 'sk_test_';

@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { getHouseholdDataSession } from '@/lib/session';
 import { denyLockedToolAccess, denyRemovedTool } from '@/lib/billing-access';
 import { supabaseServer } from '@/lib/supabaseServer';
+import { findChildThroughOwnedParent, findOwnedRow } from '@/lib/owned-record';
 import {
   attachmentsByGoalIds,
   attachmentsByUpdateIds,
@@ -578,6 +579,8 @@ export async function POST(request: NextRequest) {
         if (!goalId || !name?.trim()) {
           return NextResponse.json({ error: 'Goal ID and name are required' }, { status: 400 });
         }
+        const goal = await findOwnedRow('tools_gt_goals', goalId, user.id, { toolId, columns: 'id' });
+        if (!goal) return NextResponse.json({ error: 'Goal not found' }, { status: 404 });
         const { data, error } = await supabaseServer
           .from('tools_gt_phases')
           .insert({
@@ -601,17 +604,45 @@ export async function POST(request: NextRequest) {
         });
       }
       if (action === 'update') {
-        const { phaseId, name, display_order } = body as { phaseId: string; name?: string; display_order?: number };
+        const { phaseId, goalId, name, display_order } = body as {
+          phaseId: string;
+          goalId?: string;
+          name?: string;
+          display_order?: number;
+        };
         if (!phaseId) {
           return NextResponse.json({ error: 'Phase ID is required' }, { status: 400 });
+        }
+        const owned = await findChildThroughOwnedParent({
+          childTable: 'tools_gt_phases',
+          childId: phaseId,
+          parentFk: 'goal_id',
+          parentTable: 'tools_gt_goals',
+          userId: user.id,
+          toolId,
+          childColumns: 'id, goal_id, name, display_order',
+        });
+        if (!owned || (goalId && goalId !== owned.parentId)) {
+          return NextResponse.json({ error: 'Phase not found' }, { status: 404 });
         }
         const updates: Record<string, unknown> = {};
         if (name !== undefined) updates.name = name.trim();
         if (display_order !== undefined) updates.display_order = display_order;
+        if (Object.keys(updates).length === 0) {
+          return NextResponse.json({
+            phase: {
+              id: owned.child.id,
+              goalId: owned.parentId,
+              name: owned.child.name,
+              order: owned.child.display_order,
+            },
+          });
+        }
         const { data, error } = await supabaseServer
           .from('tools_gt_phases')
           .update(updates)
           .eq('id', phaseId)
+          .eq('goal_id', owned.parentId)
           .select()
           .single();
         if (error) {
@@ -632,7 +663,21 @@ export async function POST(request: NextRequest) {
         if (!phaseId) {
           return NextResponse.json({ error: 'Phase ID is required' }, { status: 400 });
         }
-        const { error } = await supabaseServer.from('tools_gt_phases').delete().eq('id', phaseId);
+        const owned = await findChildThroughOwnedParent({
+          childTable: 'tools_gt_phases',
+          childId: phaseId,
+          parentFk: 'goal_id',
+          parentTable: 'tools_gt_goals',
+          userId: user.id,
+          toolId,
+          childColumns: 'id, goal_id',
+        });
+        if (!owned) return NextResponse.json({ error: 'Phase not found' }, { status: 404 });
+        const { error } = await supabaseServer
+          .from('tools_gt_phases')
+          .delete()
+          .eq('id', phaseId)
+          .eq('goal_id', owned.parentId);
         if (error) {
           console.error('Error deleting phase:', error);
           return NextResponse.json({ error: error.message }, { status: 500 });
@@ -646,6 +691,19 @@ export async function POST(request: NextRequest) {
         const { phaseId, goalId, title } = body as { phaseId: string; goalId: string; title?: string };
         if (!phaseId || !goalId) {
           return NextResponse.json({ error: 'Phase ID and goal ID are required' }, { status: 400 });
+        }
+        const goal = await findOwnedRow('tools_gt_goals', goalId, user.id, { toolId, columns: 'id' });
+        const phase = await findChildThroughOwnedParent({
+          childTable: 'tools_gt_phases',
+          childId: phaseId,
+          parentFk: 'goal_id',
+          parentTable: 'tools_gt_goals',
+          userId: user.id,
+          toolId,
+          childColumns: 'id, goal_id',
+        });
+        if (!goal || !phase || phase.parentId !== goalId) {
+          return NextResponse.json({ error: 'Phase not found' }, { status: 404 });
         }
         const { data, error } = await supabaseServer
           .from('tools_gt_tasks')
@@ -675,13 +733,41 @@ export async function POST(request: NextRequest) {
         if (!taskId) {
           return NextResponse.json({ error: 'Task ID is required' }, { status: 400 });
         }
+        const owned = await findChildThroughOwnedParent({
+          childTable: 'tools_gt_tasks',
+          childId: taskId,
+          parentFk: 'goal_id',
+          parentTable: 'tools_gt_goals',
+          userId: user.id,
+          toolId,
+          childColumns: 'id, goal_id, phase_id, title, completed',
+        });
+        const requested = body as { goalId?: string; phaseId?: string };
+        if (
+          !owned ||
+          (requested.goalId && requested.goalId !== owned.parentId) ||
+          (requested.phaseId && requested.phaseId !== owned.child.phase_id)
+        ) {
+          return NextResponse.json({ error: 'Task not found' }, { status: 404 });
+        }
         const updates: Record<string, unknown> = {};
         if (title !== undefined) updates.title = title.trim();
         if (completed !== undefined) updates.completed = completed;
+        if (Object.keys(updates).length === 0) {
+          return NextResponse.json({
+            task: {
+              id: owned.child.id,
+              phaseId: owned.child.phase_id,
+              title: owned.child.title,
+              completed: !!owned.child.completed,
+            },
+          });
+        }
         const { data, error } = await supabaseServer
           .from('tools_gt_tasks')
           .update(updates)
           .eq('id', taskId)
+          .eq('goal_id', owned.parentId)
           .select()
           .single();
         if (error) {
@@ -702,7 +788,21 @@ export async function POST(request: NextRequest) {
         if (!taskId) {
           return NextResponse.json({ error: 'Task ID is required' }, { status: 400 });
         }
-        const { error } = await supabaseServer.from('tools_gt_tasks').delete().eq('id', taskId);
+        const owned = await findChildThroughOwnedParent({
+          childTable: 'tools_gt_tasks',
+          childId: taskId,
+          parentFk: 'goal_id',
+          parentTable: 'tools_gt_goals',
+          userId: user.id,
+          toolId,
+          childColumns: 'id, goal_id',
+        });
+        if (!owned) return NextResponse.json({ error: 'Task not found' }, { status: 404 });
+        const { error } = await supabaseServer
+          .from('tools_gt_tasks')
+          .delete()
+          .eq('id', taskId)
+          .eq('goal_id', owned.parentId);
         if (error) {
           console.error('Error deleting task:', error);
           return NextResponse.json({ error: error.message }, { status: 500 });
@@ -717,6 +817,8 @@ export async function POST(request: NextRequest) {
         if (!goalId || !noteDate) {
           return NextResponse.json({ error: 'Goal ID and note date are required' }, { status: 400 });
         }
+        const goal = await findOwnedRow('tools_gt_goals', goalId, user.id, { toolId, columns: 'id' });
+        if (!goal) return NextResponse.json({ error: 'Goal not found' }, { status: 404 });
         const { data, error } = await supabaseServer
           .from('tools_gt_update_notes')
           .insert({
@@ -755,24 +857,41 @@ export async function POST(request: NextRequest) {
         if (!noteId) {
           return NextResponse.json({ error: 'Note ID is required' }, { status: 400 });
         }
+        const owned = await findChildThroughOwnedParent({
+          childTable: 'tools_gt_update_notes',
+          childId: noteId,
+          parentFk: 'goal_id',
+          parentTable: 'tools_gt_goals',
+          userId: user.id,
+          toolId,
+          childColumns: 'id, goal_id, note_date, note',
+        });
+        if (!owned || (goalId && goalId !== owned.parentId)) {
+          return NextResponse.json({ error: 'Note not found' }, { status: 404 });
+        }
         const updates: Record<string, unknown> = {};
         if (noteDate !== undefined) updates.note_date = noteDate;
         if (note !== undefined) updates.note = note;
-        const { data, error } = await supabaseServer
-          .from('tools_gt_update_notes')
-          .update(updates)
-          .eq('id', noteId)
-          .select()
-          .single();
-        if (error) {
-          console.error('Error updating update note:', error);
-          return NextResponse.json({ error: error.message }, { status: 500 });
+        let data = owned.child;
+        if (Object.keys(updates).length > 0) {
+          const updated = await supabaseServer
+            .from('tools_gt_update_notes')
+            .update(updates)
+            .eq('id', noteId)
+            .eq('goal_id', owned.parentId)
+            .select()
+            .single();
+          if (updated.error) {
+            console.error('Error updating update note:', updated.error);
+            return NextResponse.json({ error: updated.error.message }, { status: 500 });
+          }
+          data = updated.data;
         }
-        if (noteDate !== undefined && goalId) {
+        if (noteDate !== undefined) {
           await supabaseServer
             .from('tools_gt_goals')
             .update({ last_update_date: noteDate })
-            .eq('id', goalId)
+            .eq('id', owned.parentId)
             .eq('user_id', user.id);
         }
         return NextResponse.json({
@@ -789,8 +908,22 @@ export async function POST(request: NextRequest) {
         if (!noteId) {
           return NextResponse.json({ error: 'Note ID is required' }, { status: 400 });
         }
+        const owned = await findChildThroughOwnedParent({
+          childTable: 'tools_gt_update_notes',
+          childId: noteId,
+          parentFk: 'goal_id',
+          parentTable: 'tools_gt_goals',
+          userId: user.id,
+          toolId,
+          childColumns: 'id, goal_id',
+        });
+        if (!owned) return NextResponse.json({ error: 'Note not found' }, { status: 404 });
         await deleteUpdateStorageFiles(noteId, user.id);
-        const { error } = await supabaseServer.from('tools_gt_update_notes').delete().eq('id', noteId);
+        const { error } = await supabaseServer
+          .from('tools_gt_update_notes')
+          .delete()
+          .eq('id', noteId)
+          .eq('goal_id', owned.parentId);
         if (error) {
           console.error('Error deleting update note:', error);
           return NextResponse.json({ error: error.message }, { status: 500 });

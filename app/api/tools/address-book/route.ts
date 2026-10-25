@@ -2,6 +2,7 @@ import { denyLockedToolAccess, denyRemovedTool } from '@/lib/billing-access';
 import { NextRequest, NextResponse } from 'next/server';
 import { getHouseholdDataSession } from '@/lib/session';
 import { supabaseServer } from '@/lib/supabaseServer';
+import { findOwnedRow, requireOwnedIds } from '@/lib/owned-record';
 import {
   attachmentsByAddressIds,
   deleteAddressStorageFiles,
@@ -234,6 +235,13 @@ export async function POST(request: NextRequest) {
     }
 
     const tagIds = Array.isArray(selectedTags) ? selectedTags : [];
+    if (!(await requireOwnedIds('tools_ab_tags', tagIds, user.id, { toolId }))) {
+      return NextResponse.json({ error: 'Tag not found' }, { status: 404 });
+    }
+    if (addressId && action !== 'create') {
+      const ownedAddress = await findOwnedRow('tools_ab_addresses', addressId, user.id, { toolId, columns: 'id' });
+      if (!ownedAddress) return NextResponse.json({ error: 'Address not found' }, { status: 404 });
+    }
 
     const addressRow = buildAddressRow({
       mailingName,

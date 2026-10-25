@@ -27,7 +27,7 @@ export async function POST(request: NextRequest) {
     // Fetch note with password hash
     const { data: note, error: noteError } = await supabaseServer
       .from('tools_note_notes')
-      .select('view_password_hash, requires_password_for_view')
+      .select('view_password_hash, requires_password_for_view, note')
       .eq('id', noteId)
       .eq('user_id', user.id)
       .single();
@@ -46,8 +46,9 @@ export async function POST(request: NextRequest) {
 
     // Verify password
     const isValid = await bcrypt.compare(password, note.view_password_hash);
+    if (!isValid) return NextResponse.json({ valid: false });
 
-    return NextResponse.json({ valid: isValid });
+    return NextResponse.json({ valid: true, note: note.note ?? '' });
   } catch (error: any) {
     console.error('Error in POST /api/tools/notes/verify-password:', error);
     return NextResponse.json(

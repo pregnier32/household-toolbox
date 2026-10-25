@@ -2,6 +2,7 @@ import { denyLockedToolAccess, denyRemovedTool } from '@/lib/billing-access';
 import { NextRequest, NextResponse } from 'next/server';
 import { getHouseholdDataSession } from '@/lib/session';
 import { supabaseServer } from '@/lib/supabaseServer';
+import { findOwnedRow, requireOwnedIds } from '@/lib/owned-record';
 import { attachmentsByMealIds, deleteMealStorageFiles } from '@/lib/meal-planner-storage';
 
 const DAY_KEYS = ['mon', 'tue', 'wed', 'thu', 'fri', 'sat', 'sun'] as const;
@@ -665,6 +666,13 @@ export async function POST(request: NextRequest) {
       if (!name?.trim()) {
         return NextResponse.json({ error: 'Meal name is required' }, { status: 400 });
       }
+      const itemIds = Array.isArray(ingredientIds) ? ingredientIds : [];
+      if (mealTypeId && !(await findOwnedRow('tools_mp_meal_types', mealTypeId, user.id, { toolId, columns: 'id' }))) {
+        return NextResponse.json({ error: 'Meal type not found' }, { status: 404 });
+      }
+      if (!(await requireOwnedIds('tools_mp_items', itemIds, user.id, { toolId }))) {
+        return NextResponse.json({ error: 'Item not found' }, { status: 404 });
+      }
       const { data: meal, error: mealErr } = await supabaseServer
         .from('tools_mp_meals')
         .insert({
@@ -684,7 +692,6 @@ export async function POST(request: NextRequest) {
         .single();
       if (mealErr) return NextResponse.json({ error: mealErr.message }, { status: 500 });
 
-      const itemIds = Array.isArray(ingredientIds) ? ingredientIds : [];
       if (itemIds.length > 0) {
         await supabaseServer.from('tools_mp_meal_ingredients').insert(
           itemIds.map((item_id, i) => ({
@@ -737,6 +744,14 @@ export async function POST(request: NextRequest) {
       };
       if (!mealId) {
         return NextResponse.json({ error: 'Meal ID is required' }, { status: 400 });
+      }
+      const meal = await findOwnedRow('tools_mp_meals', mealId, user.id, { toolId, columns: 'id' });
+      if (!meal) return NextResponse.json({ error: 'Meal not found' }, { status: 404 });
+      if (mealTypeId && !(await findOwnedRow('tools_mp_meal_types', mealTypeId, user.id, { toolId, columns: 'id' }))) {
+        return NextResponse.json({ error: 'Meal type not found' }, { status: 404 });
+      }
+      if (ingredientIds !== undefined && !(await requireOwnedIds('tools_mp_items', ingredientIds, user.id, { toolId }))) {
+        return NextResponse.json({ error: 'Item not found' }, { status: 404 });
       }
       const updates: Record<string, unknown> = {};
       if (name !== undefined) updates.name = name.trim();
@@ -816,6 +831,8 @@ export async function POST(request: NextRequest) {
       }
       let assign = emptyWeekAssignments();
       if (copyFromPlanId) {
+        const sourcePlan = await findOwnedRow('tools_mp_plans', copyFromPlanId, user.id, { toolId, columns: 'id' });
+        if (!sourcePlan) return NextResponse.json({ error: 'Plan not found' }, { status: 404 });
         let { data: fromRows, error: fromErr } = await supabaseServer
           .from('tools_mp_plan_assignments')
           .select('day_key, meal_id, display_order, slot_key, is_leftover')
@@ -848,6 +865,10 @@ export async function POST(request: NextRequest) {
       }
       if (hasLeftoverWithoutCook(assign)) {
         return NextResponse.json({ error: 'Mark another day as the cook day first.' }, { status: 400 });
+      }
+      const createMealIds = assignmentsToRows('pending', assign).map((row) => row.meal_id);
+      if (!(await requireOwnedIds('tools_mp_meals', createMealIds, user.id, { toolId }))) {
+        return NextResponse.json({ error: 'Meal not found' }, { status: 404 });
       }
       const { data: plan, error: planErr } = await supabaseServer
         .from('tools_mp_plans')
@@ -889,6 +910,17 @@ export async function POST(request: NextRequest) {
       if (!planId) {
         return NextResponse.json({ error: 'Plan ID is required' }, { status: 400 });
       }
+      const plan = await findOwnedRow('tools_mp_plans', planId, user.id, { toolId, columns: 'id' });
+      if (!plan) return NextResponse.json({ error: 'Plan not found' }, { status: 404 });
+      if (assignments !== undefined) {
+        if (hasLeftoverWithoutCook(assignments)) {
+          return NextResponse.json({ error: 'Mark another day as the cook day first.' }, { status: 400 });
+        }
+        const mealIds = assignmentsToRows(planId, assignments).map((row) => row.meal_id);
+        if (!(await requireOwnedIds('tools_mp_meals', mealIds, user.id, { toolId }))) {
+          return NextResponse.json({ error: 'Meal not found' }, { status: 404 });
+        }
+      }
       const updates: Record<string, unknown> = {};
       if (name !== undefined) updates.name = name.trim();
       if (startDate !== undefined) updates.start_date = startDate;
@@ -902,9 +934,6 @@ export async function POST(request: NextRequest) {
         if (upErr) return NextResponse.json({ error: upErr.message }, { status: 500 });
       }
       if (assignments !== undefined) {
-        if (hasLeftoverWithoutCook(assignments)) {
-          return NextResponse.json({ error: 'Mark another day as the cook day first.' }, { status: 400 });
-        }
         let { data: previous, error: prevErr } = await supabaseServer
           .from('tools_mp_plan_assignments')
           .select('plan_id, day_key, meal_id, display_order, slot_key, is_leftover')

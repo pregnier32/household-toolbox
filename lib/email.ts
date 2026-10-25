@@ -17,6 +17,13 @@ type WelcomeEmailTemplate = {
 
 const RECENT_SIGNUP_MS = 7 * 24 * 60 * 60 * 1000;
 
+function vercelEmailDisabled(): { success: false; error: string } | null {
+  if (process.env.VERCEL_ENV === 'preview' || process.env.VERCEL_ENV === 'development') {
+    return { success: false, error: 'Email is disabled for Vercel preview and development.' };
+  }
+  return null;
+}
+
 const defaultWelcomeEmailTemplate: WelcomeEmailTemplate = {
   subject: 'Welcome to Household Toolbox',
   html: `<!DOCTYPE html>
@@ -166,6 +173,8 @@ export async function sendWelcomeEmail({ to, firstName }: WelcomeEmailParams): P
     console.warn('RESEND_API_KEY not configured. Welcome email will not be sent.');
     return { success: false, error: 'Email service not configured' };
   }
+  const emailDisabled = vercelEmailDisabled();
+  if (emailDisabled) return emailDisabled;
 
   try {
     const fromEmail = process.env.RESEND_FROM_EMAIL || 'onboarding@resend.dev';
@@ -180,7 +189,7 @@ export async function sendWelcomeEmail({ to, firstName }: WelcomeEmailParams): P
     const html = replaceTemplateVariables(template.html, escapeHtml(firstName), appUrl, year);
     const text = replaceTemplateVariables(template.text, firstName, appUrl, year);
     
-    console.log(`[Email] Sending welcome email to ${to} from ${fromEmail}`);
+    console.log('[Email] Sending welcome email');
     
     const { data, error } = await resend.emails.send({
       from: `Household Toolbox <${fromEmail}>`,
@@ -289,6 +298,8 @@ export async function sendSupportEmail({ type, name, email, subject, message }: 
     console.warn('RESEND_API_KEY not configured. Support email will not be sent.');
     return { success: false, error: 'Email service not configured' };
   }
+  const emailDisabled = vercelEmailDisabled();
+  if (emailDisabled) return emailDisabled;
 
   try {
     const fromEmail = process.env.RESEND_FROM_EMAIL || 'onboarding@resend.dev';
@@ -305,7 +316,7 @@ export async function sendSupportEmail({ type, name, email, subject, message }: 
     const typeLabel = typeLabels[type];
     const emailSubject = `[${typeLabel}] ${subject}`;
     
-    console.log(`[Email] Sending support email from ${email} to ${supportEmail}`);
+    console.log('[Email] Sending support email');
     
     const { data, error } = await resend.emails.send({
       from: `Household Toolbox <${fromEmail}>`,
@@ -411,6 +422,8 @@ export async function sendHouseholdInvitationEmail({
     console.warn('RESEND_API_KEY not configured. Invitation email will not be sent.');
     return { success: false, error: 'Email service not configured' };
   }
+  const emailDisabled = vercelEmailDisabled();
+  if (emailDisabled) return emailDisabled;
 
   try {
     const fromEmail = process.env.RESEND_FROM_EMAIL || 'onboarding@resend.dev';

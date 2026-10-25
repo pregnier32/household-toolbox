@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { getHouseholdDataSession } from '@/lib/session';
 import { denyLockedToolAccess, denyRemovedTool } from '@/lib/billing-access';
 import { supabaseServer } from '@/lib/supabaseServer';
+import { requireOwnedIds } from '@/lib/owned-record';
 import {
   attachmentsByEventIds,
   attachmentsByExpenseIds,
@@ -742,6 +743,22 @@ export async function POST(request: NextRequest) {
 
       if (!(await verifyEventOwnership(eventId, user.id, toolId))) {
         return NextResponse.json({ error: 'Event not found' }, { status: 404 });
+      }
+      if (!(await requireOwnedIds('tools_ebp_categories', [categoryId], user.id, { toolId }))) {
+        return NextResponse.json({ error: 'Category not found' }, { status: 404 });
+      }
+      if (!(await requireOwnedIds('tools_ebp_vendors', normalized.parts.map((part) => part.vendorId), user.id, { toolId }))) {
+        return NextResponse.json({ error: 'Vendor not found' }, { status: 404 });
+      }
+      if (action === 'updateExpense') {
+        if (!expenseId) return NextResponse.json({ error: 'Expense ID is required' }, { status: 400 });
+        const { data: existingExpense } = await supabaseServer
+          .from('tools_ebp_expenses')
+          .select('id')
+          .eq('id', expenseId)
+          .eq('event_id', eventId)
+          .maybeSingle();
+        if (!existingExpense) return NextResponse.json({ error: 'Expense not found' }, { status: 404 });
       }
 
       const primaryVendorId = normalized.parts[0].vendorId;

@@ -36,9 +36,9 @@ export async function GET(
     const expense = await loadOwnedExpense(attachment.expense_id, user.id);
     if (!expense) return NextResponse.json({ error: 'Expense not found' }, { status: 404 });
 
-    const storagePath = extractHsaStoragePath(attachment.file_url);
+    const storagePath = extractHsaStoragePath(attachment.file_url, user.id);
     if (!storagePath) {
-      return NextResponse.json({ error: 'Invalid file path' }, { status: 500 });
+      return NextResponse.json({ error: 'Invalid file path' }, { status: 404 });
     }
 
     const { data: fileData, error: downloadError } = await supabaseServer.storage.from(HSA_BUCKET).download(storagePath);

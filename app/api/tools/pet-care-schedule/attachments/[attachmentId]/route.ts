@@ -41,9 +41,9 @@ export async function GET(
     const record = await loadOwnedStoreRecord(found.store, found.ownerId, user.id);
     if (!record) return NextResponse.json({ error: 'Record not found' }, { status: 404 });
 
-    const storagePath = extractPetCareStoragePath(found.attachment.file_url);
+    const storagePath = extractPetCareStoragePath(found.attachment.file_url, user.id);
     if (!storagePath) {
-      return NextResponse.json({ error: 'Invalid file path' }, { status: 500 });
+      return NextResponse.json({ error: 'Invalid file path' }, { status: 404 });
     }
 
     const { data: fileData, error: downloadError } = await supabaseServer.storage

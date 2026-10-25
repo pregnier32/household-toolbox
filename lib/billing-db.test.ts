@@ -1,5 +1,6 @@
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
+import Module from 'node:module';
 import path from 'node:path';
 import { randomUUID } from 'node:crypto';
 import test from 'node:test';
@@ -24,9 +25,22 @@ function loadLocalEnv(): void {
 
 loadLocalEnv();
 
-const databaseReady = Boolean(process.env.NEXT_PUBLIC_SUPABASE_URL && process.env.SUPABASE_SERVICE_ROLE_KEY);
+const PRODUCTION_SUPABASE_REF = 'hjbneuicvfbihtbufrxq';
+const isolatedUrl = process.env.HTB_TEST_SUPABASE_URL ?? '';
+const isolatedAnon = process.env.HTB_TEST_SUPABASE_ANON_KEY ?? '';
+const isolatedService = process.env.HTB_TEST_SUPABASE_SERVICE_ROLE_KEY ?? '';
+const isolatedReady = Boolean(isolatedUrl && isolatedAnon && isolatedService) && !isolatedUrl.includes(PRODUCTION_SUPABASE_REF);
+if (isolatedReady) {
+  process.env.NEXT_PUBLIC_SUPABASE_URL = isolatedUrl;
+  process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY = isolatedAnon;
+  process.env.SUPABASE_SERVICE_ROLE_KEY = isolatedService;
+}
+const databaseReady = isolatedReady;
+const databaseSkip = isolatedUrl.includes(PRODUCTION_SUPABASE_REF)
+  ? 'HTB_TEST_SUPABASE_URL points at the production project.'
+  : 'Set HTB_TEST_SUPABASE_URL, HTB_TEST_SUPABASE_ANON_KEY, and HTB_TEST_SUPABASE_SERVICE_ROLE_KEY to an isolated project.';
 
-test('per-account leases, webhook completion, and operation recovery use the service-role client', { skip: databaseReady ? false : 'Supabase service role is not configured' }, async (t) => {
+test('per-account leases, webhook completion, and operation recovery use the service-role client', { skip: databaseReady ? false : databaseSkip }, async (t) => {
   const { supabaseServer } = await import('./supabaseServer');
   const { claimBillingLock, releaseBillingLock, claimStripeEvent, finishStripeEvent } = await import('./billing-lock');
   const { recoverBillingOperations } = await import('./billing-sync');
@@ -139,16 +153,38 @@ test('per-account leases, webhook completion, and operation recovery use the ser
 test('cron authorization accepts the bearer secret on GET and rejects a missing or wrong secret', async () => {
   const previous = process.env.CRON_SECRET;
   delete process.env.CRON_SECRET;
-  const { cronAuthorization } = await import('./billing-reconcile');
-  assert.equal(cronAuthorization(new Request('http://localhost/api/cron/billing-reconcile')), 'missing');
-  process.env.CRON_SECRET = 'cron-test-secret';
-  const url = 'http://localhost/api/cron/billing-reconcile';
-  assert.equal(cronAuthorization(new Request(url, { headers: { authorization: 'Bearer cron-test-secret' } })), 'ok');
-  assert.equal(cronAuthorization(new Request(url, { method: 'POST', headers: { authorization: 'Bearer cron-test-secret' } })), 'ok');
-  assert.equal(cronAuthorization(new Request(url, { headers: { authorization: 'Bearer nope' } })), 'rejected');
-  assert.equal(cronAuthorization(new Request(url, { headers: { authorization: 'Bearer wrong-secret-val' } })), 'rejected');
-  if (previous == null) delete process.env.CRON_SECRET;
-  else process.env.CRON_SECRET = previous;
+  const loader = Module as unknown as {
+    _load: (request: string, parent: unknown, isMain: boolean) => unknown;
+  };
+  const originalLoad = loader._load;
+  loader._load = function (request: string, parent: unknown, isMain: boolean) {
+    const normalized = request.replace(/\\/g, '/');
+    if (normalized === 'server-only' || normalized.endsWith('/server-only')) return {};
+    if (normalized.includes('supabaseServer')) {
+      return {
+        supabaseServer: {
+          from() {
+            throw new Error('cron authorization must not query the database');
+          },
+        },
+      };
+    }
+    return originalLoad(request, parent, isMain);
+  };
+  try {
+    const { cronAuthorization } = await import('./billing-reconcile');
+    assert.equal(cronAuthorization(new Request('http://localhost/api/cron/billing-reconcile')), 'missing');
+    process.env.CRON_SECRET = 'cron-test-secret';
+    const url = 'http://localhost/api/cron/billing-reconcile';
+    assert.equal(cronAuthorization(new Request(url, { headers: { authorization: 'Bearer cron-test-secret' } })), 'ok');
+    assert.equal(cronAuthorization(new Request(url, { method: 'POST', headers: { authorization: 'Bearer cron-test-secret' } })), 'ok');
+    assert.equal(cronAuthorization(new Request(url, { headers: { authorization: 'Bearer nope' } })), 'rejected');
+    assert.equal(cronAuthorization(new Request(url, { headers: { authorization: 'Bearer wrong-secret-val' } })), 'rejected');
+  } finally {
+    loader._load = originalLoad;
+    if (previous == null) delete process.env.CRON_SECRET;
+    else process.env.CRON_SECRET = previous;
+  }
 });
 
 test('a non-sandbox Stripe secret is refused', async () => {
@@ -164,7 +200,7 @@ test('a non-sandbox Stripe secret is refused', async () => {
   }
 });
 
-test('a signed sandbox webhook is completed only after processing, and a live event is ignored', { skip: databaseReady && (process.env.STRIPE_SECRET_KEY ?? '').startsWith('sk_test_') ? false : 'Sandbox Stripe and Supabase are not both configured' }, async (t) => {
+test('a signed sandbox webhook is completed only after processing, and a live event is ignored', { skip: databaseReady && (process.env.STRIPE_SECRET_KEY ?? '').startsWith('sk_test_') ? false : databaseReady ? 'Sandbox Stripe is not configured' : databaseSkip }, async (t) => {
   const previous = process.env.STRIPE_WEBHOOK_SECRET;
   const secret = 'whsec_test_only_webhook_secret_value';
   process.env.STRIPE_WEBHOOK_SECRET = secret;
