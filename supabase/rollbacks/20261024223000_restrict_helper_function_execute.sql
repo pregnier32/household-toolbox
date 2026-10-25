@@ -57,7 +57,7 @@ BEGIN
       RAISE EXCEPTION 'Live signature for % is [%], expected [%]', fn.proname, live_args, fn.identity_args;
     END IF;
 
-    SELECT format('%I.%I(%s)', n.nspname, p.proname, pg_get_function_identity_arguments(p.oid))
+    SELECT p.oid::regprocedure::text
       INTO signature
     FROM pg_proc p
     JOIN pg_namespace n ON n.oid = p.pronamespace

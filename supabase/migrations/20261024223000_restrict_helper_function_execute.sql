@@ -97,7 +97,7 @@ BEGIN
   END IF;
 
   FOR fn IN SELECT proname, keep_authenticated FROM expected_fn LOOP
-    SELECT format('%I.%I(%s)', n.nspname, p.proname, pg_get_function_identity_arguments(p.oid))
+    SELECT p.oid::regprocedure::text
       INTO signature
     FROM pg_proc p
     JOIN pg_namespace n ON n.oid = p.pronamespace
@@ -114,7 +114,7 @@ BEGIN
   END LOOP;
 
   FOR fn IN SELECT proname, keep_authenticated FROM expected_fn LOOP
-    SELECT format('%I.%I(%s)', n.nspname, p.proname, pg_get_function_identity_arguments(p.oid))
+    SELECT p.oid::regprocedure::text
       INTO signature
     FROM pg_proc p
     JOIN pg_namespace n ON n.oid = p.pronamespace
