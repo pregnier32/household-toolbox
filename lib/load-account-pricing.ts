@@ -191,6 +191,20 @@ export async function getAccountPricingState(userId: string, effectiveAt: Date):
   return calculateAccountPricing(input, effectiveAt);
 }
 
+export function projectAccountPricing(input: AccountPricingInput, effectiveAt: Date): {
+  current: AccountPricingState;
+  input: AccountPricingInput;
+  upcoming: { at: string; state: AccountPricingState } | null;
+} {
+  const current = calculateAccountPricing(input, effectiveAt);
+  const next = nextPricingInstant(input, effectiveAt);
+  return {
+    current,
+    input,
+    upcoming: next ? { at: next.toISOString(), state: calculateAccountPricing(input, next) } : null,
+  };
+}
+
 export async function getAccountPricingProjection(userId: string, effectiveAt: Date): Promise<{
   current: AccountPricingState;
   input: AccountPricingInput;
@@ -199,11 +213,5 @@ export async function getAccountPricingProjection(userId: string, effectiveAt: D
   const inputs = await loadAccountPricingInputs([userId]);
   const input = inputs.get(userId);
   if (!input) return null;
-  const current = calculateAccountPricing(input, effectiveAt);
-  const next = nextPricingInstant(input, effectiveAt);
-  return {
-    current,
-    input,
-    upcoming: next ? { at: next.toISOString(), state: calculateAccountPricing(input, next) } : null,
-  };
+  return projectAccountPricing(input, effectiveAt);
 }

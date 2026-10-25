@@ -64,6 +64,25 @@ function missingRelation(error: { code?: string; message?: string } | null): boo
   return error.code === '42P01' || error.code === 'PGRST205' || message.includes('does not exist') || message.includes('schema cache');
 }
 
+export async function loadStripeObservedAt(userId: string): Promise<string | null> {
+  const { data, error } = await supabaseServer
+    .from('billing_accounts')
+    .select('stripe_observed_at')
+    .eq('user_id', userId)
+    .maybeSingle();
+  if (error) {
+    if (missingRelation(error) || /stripe_observed_at|schema cache/i.test(error.message || '')) return null;
+    throw error;
+  }
+  const value = data && typeof data === 'object' && 'stripe_observed_at' in data ? data.stripe_observed_at : null;
+  return typeof value === 'string' ? value : null;
+}
+
+export async function markStripeObserved(userId: string, at: string): Promise<void> {
+  const { error } = await supabaseServer.from('billing_accounts').update({ stripe_observed_at: at }).eq('user_id', userId);
+  if (error && !missingRelation(error) && !/stripe_observed_at|schema cache/i.test(error.message || '')) throw error;
+}
+
 export async function loadBillingAccount(userId: string): Promise<BillingAccountRow | null> {
   const { data, error } = await supabaseServer
     .from('billing_accounts')
@@ -90,8 +109,8 @@ export async function ensureBillingAccount(userId: string): Promise<void> {
   if (inserted.error && inserted.error.code !== '23505' && !missingRelation(inserted.error)) throw inserted.error;
 }
 
-export async function syncHouseholdToolAccess(userId: string, locked: boolean, reason: string): Promise<void> {
-  const account = await loadBillingAccount(userId);
+export async function syncHouseholdToolAccess(userId: string, locked: boolean, reason: string, known?: BillingAccountRow | null): Promise<void> {
+  const account = known === undefined ? await loadBillingAccount(userId) : known;
   if (account && Boolean(account.tool_access_locked) === locked && (account.tool_access_reason ?? 'open') === reason) return;
   if (!account) {
     const { error } = await supabaseServer.from('billing_accounts').insert(stripeMode() === 'live'

@@ -2,13 +2,30 @@
 
 import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { PlanBilling } from '@/app/components/plan/PlanBilling';
+import { PlanBilling, type PlanLoadSeed } from '@/app/components/plan/PlanBilling';
+
+function planRequestUrl(): string {
+  const checkout = new URLSearchParams(window.location.search).get('checkout');
+  return checkout === 'success' ? '/api/account/plan?checkout=success' : '/api/account/plan';
+}
 
 export default function PlanBillingPage() {
   const router = useRouter();
   const [userName, setUserName] = useState<string | null>(null);
+  const [seed, setSeed] = useState<PlanLoadSeed>({ status: 'loading', plan: null });
 
   useEffect(() => {
+    fetch(planRequestUrl(), { cache: 'no-store' })
+      .then((response) => response.json())
+      .then((data) => {
+        if (data.error) {
+          setSeed({ status: 'error', plan: null });
+          return;
+        }
+        setSeed({ status: 'ready', plan: data });
+      })
+      .catch(() => setSeed({ status: 'error', plan: null }));
+
     fetch('/api/auth/session')
       .then((response) => response.json())
       .then((data) => {
@@ -36,5 +53,5 @@ export default function PlanBillingPage() {
     );
   }
 
-  return <PlanBilling userName={userName} />;
+  return <PlanBilling userName={userName} seed={seed} />;
 }

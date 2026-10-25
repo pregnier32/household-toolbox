@@ -2,6 +2,7 @@ import { supabaseServer } from '@/lib/supabaseServer';
 import { PUBLIC_TOOLS } from '@/lib/public-tools';
 import type { DiscountCode, DiscountCodeDraft, DiscountRedemption, RedemptionSource } from '@/lib/discount-codes';
 import { draftAccountNotices } from '@/lib/account-notice-drafts';
+import type { AccountPricingInput } from '@/lib/account-pricing';
 import { ensureDefaultAccountEntitlements as ensureDefaultEntitlementWithDeps } from '@/lib/default-account-entitlements';
 import { loadAccountPricingInputs } from '@/lib/load-account-pricing';
 
@@ -485,9 +486,8 @@ export async function endAssignment(actorId: string, assignmentId: string, reaso
   return { ok: true as const };
 }
 
-export async function persistAccountNotices(userId: string, effectiveAt: Date) {
-  const inputs = await loadAccountPricingInputs([userId]);
-  const input = inputs.get(userId);
+export async function persistAccountNotices(userId: string, effectiveAt: Date, existing?: AccountPricingInput | null) {
+  const input = existing !== undefined ? existing : (await loadAccountPricingInputs([userId])).get(userId);
   if (!input) return [];
   const drafts = draftAccountNotices(input, effectiveAt);
   if (drafts.length === 0) return [];

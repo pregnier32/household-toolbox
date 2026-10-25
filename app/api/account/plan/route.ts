@@ -1,4 +1,4 @@
-import { NextResponse } from 'next/server';
+import { NextRequest, NextResponse } from 'next/server';
 import { getHouseholdDataSession } from '@/lib/session';
 import { supabaseServer } from '@/lib/supabaseServer';
 import { formatCents } from '@/lib/account-pricing';
@@ -6,17 +6,21 @@ import { buildCycleCustomerStatement, buildCustomerStatement, toolListCents } fr
 import { billingSchedule } from '@/lib/billing-cycle';
 import { loadFrozenPeriod, loadSignupAt, materializeBillingPeriod } from '@/lib/billing-period-store';
 import { formatStorageBytes } from '@/lib/user-storage';
-import { getAccountPricingProjection } from '@/lib/load-account-pricing';
+import { loadAccountPricingInputs, projectAccountPricing } from '@/lib/load-account-pricing';
 import { persistAccountNotices } from '@/lib/promotion-service';
 import { paidCents } from '@/lib/billing-ledger';
-import { listStoredInvoices, loadBillingAccount } from '@/lib/billing-store';
+import { listStoredInvoices, loadBillingAccount, loadStripeObservedAt } from '@/lib/billing-store';
 import { loadCollectibleSnapshot } from '@/lib/billing-amount';
 import { describePaymentWorkflow } from '@/lib/billing-payment-workflow';
 import { describePaymentMethod } from '@/lib/billing-card';
-import { syncSavedPaymentMethod, syncSubscriptionFromStripe } from '@/lib/billing-sync';
-import { billingAccountForMode } from '@/lib/billing-environment';
+import { refreshPlanBillingFromStripe, type SavedCardSync } from '@/lib/billing-sync';
+import { loadLiveCommencement, billingAccountForMode } from '@/lib/billing-environment';
 import { describeCancellationNotice } from '@/lib/billing-subscription';
 import { loadToolAccessPolicy } from '@/lib/billing-access';
+import { reconcileOpenCheckoutAttempts } from '@/lib/billing-payment-state';
+import { planStripeRefreshDue } from '@/lib/plan-stripe-refresh';
+import { stripeConfigured } from '@/lib/stripe-server';
+import { stripeIdForMode } from '@/lib/stripe-mode';
 import type { CustomerPlanBenefit, CustomerPlanSource } from '@/lib/customer-plan-preview';
 
 function day(value: string | null): string | null {
@@ -29,20 +33,28 @@ function sourceFor(source: string): CustomerPlanSource {
   return 'added';
 }
 
-export async function GET() {
+export async function GET(request: NextRequest) {
   const user = await getHouseholdDataSession();
   if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   if (user.householdRole !== 'admin') return NextResponse.json({ error: 'Only the household Admin can view plan and billing.' }, { status: 403 });
+  const checkoutSuccess = request.nextUrl.searchParams.get('checkout') === 'success';
   try {
     const now = new Date();
-    await persistAccountNotices(user.id, now);
-    const [projection, assignments, notice] = await Promise.all([
-      getAccountPricingProjection(user.id, now),
+    const [pricingMap, invoices, account, signupAt, assignments, commencement, observedAt] = await Promise.all([
+      loadAccountPricingInputs([user.id]),
+      listStoredInvoices(user.id),
+      loadBillingAccount(user.id),
+      loadSignupAt(user.id),
       supabaseServer.from('promotion_assignments').select('id, display_name, public_code, customer_description_snapshot, effective_at, expires_at, removed_at, source').eq('user_id', user.id).order('assigned_at', { ascending: false }),
-      supabaseServer.from('account_notices').select('title, body').eq('user_id', user.id).is('read_at', null).order('created_at', { ascending: false }).limit(1).maybeSingle(),
+      loadLiveCommencement(user.id),
+      loadStripeObservedAt(user.id),
     ]);
-    if (!projection) return NextResponse.json({ error: 'Account could not be loaded.' }, { status: 404 });
+    const input = pricingMap.get(user.id);
+    if (!input) return NextResponse.json({ error: 'Account could not be loaded.' }, { status: 404 });
     if (assignments.error) throw assignments.error;
+    await persistAccountNotices(user.id, now, input);
+    const notice = await supabaseServer.from('account_notices').select('title, body').eq('user_id', user.id).is('read_at', null).order('created_at', { ascending: false }).limit(1).maybeSingle();
+    const projection = projectAccountPricing(input, now);
     const benefits: CustomerPlanBenefit[] = (assignments.data ?? []).map((row) => {
       return {
         id: row.id,
@@ -57,22 +69,37 @@ export async function GET() {
       };
     });
     const state = projection.current;
-    const signupAt = await loadSignupAt(user.id);
-    const invoices = await listStoredInvoices(user.id);
-    const collectible = await loadCollectibleSnapshot(user.id, now);
-    let statement = buildCustomerStatement(projection.input, state);
-    let billingCycle = null;
+    let frozen = null;
     if (signupAt) {
       const schedule = billingSchedule(signupAt, now);
-      let frozen = null;
       if (schedule.periodStart) {
         const loaded = await loadFrozenPeriod(user.id, schedule.periodStart);
         frozen = loaded.available && !loaded.frozen
           ? await materializeBillingPeriod(projection.input, signupAt, now)
           : loaded.frozen;
       }
+    }
+    const collectible = await loadCollectibleSnapshot(user.id, now, {
+      pricing: input,
+      signupAt,
+      frozen,
+      account,
+      commencement,
+    });
+    let ledger = invoices;
+    const checkoutAttempt = checkoutSuccess
+      ? await reconcileOpenCheckoutAttempts(user.id).catch((error: unknown) => {
+        console.error('Checkout payment state could not be read', error instanceof Error ? error.message : 'unknown');
+        return null;
+      })
+      : null;
+    if (checkoutSuccess) ledger = await listStoredInvoices(user.id);
+    let statement = buildCustomerStatement(projection.input, state);
+    let billingCycle = null;
+    if (signupAt) {
+      const schedule = billingSchedule(signupAt, now);
       const cycle = buildCycleCustomerStatement(projection.input, signupAt, now, frozen, {
-        paidTowardPeriodCents: paidCents(invoices, schedule.periodStart),
+        paidTowardPeriodCents: paidCents(ledger, schedule.periodStart),
         excludedOwedCents: collectible?.historicalOwedCents ?? 0,
         excludedScheduledCents: collectible?.historicalScheduledCents ?? 0,
         excludedToolIds: collectible?.excludedToolIds ?? [],
@@ -80,32 +107,49 @@ export async function GET() {
       statement = cycle.statement;
       billingCycle = cycle.billingCycle;
     }
-    const cardSync = await syncSavedPaymentMethod(user.id).catch(() => null);
-    await syncSubscriptionFromStripe(user.id).catch((error: unknown) => {
-      console.error('Subscription cancellation could not be synchronized', error instanceof Error ? error.message : 'unknown');
-    });
-    const account = billingAccountForMode(await loadBillingAccount(user.id));
-    const snapshot = collectible;
+    const hasSameModeCustomer = Boolean(
+      stripeIdForMode(account?.stripe_customer_id, account?.livemode)
+      || stripeIdForMode(account?.stripe_subscription_id, account?.livemode),
+    );
+    let currentAccount = account;
+    let cardSync: SavedCardSync | null = null;
+    if (stripeConfigured() && planStripeRefreshDue({
+      checkoutSuccess,
+      hasSameModeCustomer,
+      observedAt,
+      now: now.getTime(),
+    })) {
+      const refreshed = await refreshPlanBillingFromStripe(user.id).catch((error: unknown) => {
+        console.error('Plan billing could not be read from Stripe', error instanceof Error ? error.message : 'unknown');
+        return null;
+      });
+      if (refreshed) {
+        currentAccount = refreshed.account;
+        cardSync = refreshed.card;
+      }
+    }
+    const visible = billingAccountForMode(currentAccount);
     const paymentMethodStatus = cardSync?.state
-      ?? (account?.card_brand && account.card_last4 ? 'saved' : account?.stripe_customer_id ? 'pending' : 'absent');
+      ?? (visible?.card_brand && visible.card_last4 ? 'saved' : visible?.stripe_customer_id ? 'pending' : 'absent');
     const paymentMethodLabel = paymentMethodStatus === 'saved'
-      ? (cardSync?.label ?? (account?.card_brand && account.card_last4
-        ? describePaymentMethod('saved', { brand: account.card_brand, last4: account.card_last4 })
+      ? (cardSync?.label ?? (visible?.card_brand && visible.card_last4
+        ? describePaymentMethod('saved', { brand: visible.card_brand, last4: visible.card_last4 })
         : null))
       : null;
-    const card = describePaymentMethod(paymentMethodStatus, cardSync?.card ?? (account?.card_brand && account.card_last4
-      ? { brand: account.card_brand, last4: account.card_last4 }
+    const card = describePaymentMethod(paymentMethodStatus, cardSync?.card ?? (visible?.card_brand && visible.card_last4
+      ? { brand: visible.card_brand, last4: visible.card_last4 }
       : null));
+    const snapshot = collectible;
     const payment = describePaymentWorkflow({
       owedNowCents: snapshot?.owedNowCents ?? 0,
       nextAmountCents: snapshot?.nextAmountCents ?? 0,
       nextBillingAt: snapshot?.nextBillingAt ?? billingCycle?.nextBillingAt ?? null,
       periodStart: snapshot?.periodStart ?? null,
-      invoices,
-      account: account ? {
-        subscriptionStatus: account.subscription_status,
-        stripeCustomerId: account.stripe_customer_id,
-        stripeSubscriptionId: account.stripe_subscription_id,
+      invoices: ledger,
+      account: visible ? {
+        subscriptionStatus: visible.subscription_status,
+        stripeCustomerId: visible.stripe_customer_id,
+        stripeSubscriptionId: visible.stripe_subscription_id,
         hasSavedPaymentMethod: paymentMethodStatus === 'saved',
       } : null,
       paymentMethodLabel,
@@ -148,13 +192,20 @@ export async function GET() {
       nextAmountCents: payment.nextAmountCents,
       outstandingInvoiceCents: payment.outstandingInvoiceCents,
       paymentSecondary: payment.secondary,
-      subscriptionStatus: account?.subscription_status ?? null,
+      subscriptionStatus: visible?.subscription_status ?? null,
       cancellation: describeCancellationNotice({
-        scheduled: Boolean(account?.cancel_at_period_end),
-        effectiveAt: account?.cancel_at_period_end ? account.current_period_end : null,
+        scheduled: Boolean(visible?.cancel_at_period_end),
+        effectiveAt: visible?.cancel_at_period_end ? visible.current_period_end : null,
       }),
       paymentSetupWouldBeNeeded: state.paymentSetupWouldBeNeeded,
-      access: await loadToolAccessPolicy(user.id, now).then((policy) => ({
+      access: await loadToolAccessPolicy(user.id, now, {
+        snapshot: collectible,
+        account: visible,
+        invoices: ledger,
+        pricing: input,
+        frozen,
+        checkoutAttempt,
+      }).then((policy) => ({
         locked: policy.locked,
         pending: policy.pending,
         message: policy.adminMessage,

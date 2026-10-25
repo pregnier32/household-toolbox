@@ -19,6 +19,7 @@ import {
   listOpenOperations,
   listStoredInvoices,
   loadBillingAccount,
+  markStripeObserved,
   markOperationCompleted,
   markOperationFailed,
   markOperationStripeSucceeded,
@@ -753,6 +754,75 @@ export async function syncSavedPaymentMethod(userId: string): Promise<SavedCardS
   if (!owner) return storedCardSync(await loadBillingAccount(userId));
   try {
     return await refreshSavedPaymentMethod(userId);
+  } finally {
+    await releaseBillingLock(userId, owner);
+  }
+}
+
+/**
+ * Reads the customer and subscription once.
+ * Saves the card and a scheduled cancellation together. Does not create a charge.
+ */
+export async function refreshPlanBillingFromStripe(userId: string): Promise<{ account: BillingAccountRow | null; card: SavedCardSync }> {
+  const owner = await claimBillingLock(userId);
+  const account = await loadBillingAccount(userId);
+  if (!owner) return { account, card: storedCardSync(account) };
+  try {
+    const customerId = stripeIdForMode(account?.stripe_customer_id, account?.livemode);
+    const subscriptionId = stripeIdForMode(account?.stripe_subscription_id, account?.livemode);
+    if (!account || (!customerId && !subscriptionId) || !stripeConfigured()) {
+      return { account, card: storedCardSync(account) };
+    }
+    const stripe = stripeServer();
+    let subscription: Stripe.Subscription | null = null;
+    let subscriptionFailed = false;
+    if (subscriptionId) {
+      try {
+        const retrieved = await stripe.subscriptions.retrieve(subscriptionId, { expand: ['default_payment_method'] });
+        if (foreignStripeObject(retrieved.livemode)) subscriptionFailed = true;
+        else subscription = retrieved;
+      } catch (error) {
+        subscriptionFailed = true;
+        console.error('Subscription cancellation could not be read', error instanceof Error ? error.message : 'unknown');
+      }
+    }
+    let card = storedCardSync(account);
+    let customerFailed = false;
+    const patch: Partial<Omit<BillingAccountRow, 'user_id'>> = {};
+    if (customerId) {
+      try {
+        const customer = await stripe.customers.retrieve(customerId, {
+          expand: ['invoice_settings.default_payment_method'],
+        });
+        if (customer.deleted || foreignStripeObject(customer.livemode)) {
+          customerFailed = true;
+          card = { state: 'absent', card: null, label: null };
+        } else {
+          const subscriptionDefault: PaymentMethodSource = subscription?.default_payment_method ?? null;
+          const resolved = resolveEffectiveCard({
+            subscriptionDefault: await expandedPaymentMethod(stripe, subscriptionDefault),
+            customerDefault: await expandedPaymentMethod(stripe, customer.invoice_settings?.default_payment_method ?? null),
+          });
+          patch.card_brand = resolved?.brand ?? null;
+          patch.card_last4 = resolved?.last4 ?? null;
+          card = resolved
+            ? { state: 'saved', card: resolved, label: formatSavedCard(resolved) }
+            : { state: 'absent', card: null, label: null };
+        }
+      } catch (error) {
+        customerFailed = true;
+        console.error('Saved payment method sync failed', error instanceof Error ? error.message : 'unknown');
+        card = storedCardSync(account);
+      }
+    }
+    if (subscription) {
+      Object.assign(patch, subscriptionBillingPatch(subscription), {
+        subscription_event_created: Math.max(account.subscription_event_created ?? 0, Math.floor(Date.now() / 1000)),
+      });
+    }
+    if (Object.keys(patch).length > 0) await saveBillingAccount(userId, patch);
+    if (!customerFailed && !subscriptionFailed) await markStripeObserved(userId, new Date().toISOString());
+    return { account: (await loadBillingAccount(userId)) ?? account, card };
   } finally {
     await releaseBillingLock(userId, owner);
   }

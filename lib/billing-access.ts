@@ -1,7 +1,8 @@
 import { NextResponse } from 'next/server';
-import { loadCollectibleSnapshot } from './billing-amount';
+import type { AccountPricingInput } from './account-pricing';
+import { loadCollectibleSnapshot, type ChargeSnapshot } from './billing-amount';
 import { remainingDueCents } from './billing-ledger';
-import { describeBillingCycle } from './billing-cycle';
+import { describeBillingCycle, type PeriodToolRecord } from './billing-cycle';
 import { loadFrozenPeriod } from './billing-period-store';
 import { loadAccountPricingInputs } from './load-account-pricing';
 import {
@@ -9,8 +10,10 @@ import {
   listStoredInvoices,
   loadBillingAccount,
   syncHouseholdToolAccess,
+  type BillingAccountRow,
+  type StoredInvoice,
 } from './billing-store';
-import { collectionNeedsRefresh, reconcileCustomerPayments, reconcileOpenCheckoutAttempts } from './billing-payment-state';
+import { collectionNeedsRefresh, reconcileCustomerPayments, reconcileOpenCheckoutAttempts, type CheckoutAttempt } from './billing-payment-state';
 import { billingAccountForMode } from './billing-environment';
 import { supabaseServer } from './supabaseServer';
 import {
@@ -33,14 +36,27 @@ export {
 export async function loadToolAccessPolicy(
   userId: string,
   now = new Date(),
-  options?: { requireSavedLock?: boolean },
+  options?: {
+    requireSavedLock?: boolean;
+    snapshot?: ChargeSnapshot | null;
+    account?: BillingAccountRow | null;
+    invoices?: StoredInvoice[];
+    pricing?: AccountPricingInput | null;
+    frozen?: PeriodToolRecord[] | null;
+    checkoutAttempt?: CheckoutAttempt | null;
+  },
 ): Promise<ToolAccessPolicy> {
-  const checkoutAttempt = await reconcileOpenCheckoutAttempts(userId).catch((error: unknown) => {
-    console.error('Checkout payment state could not be read', error instanceof Error ? error.message : 'unknown');
-    return null;
-  });
-  const storedInvoices = await listStoredInvoices(userId);
-  const needsStripe = storedInvoices.some((invoice) => (
+  const supplied = Boolean(options && ('snapshot' in options || 'invoices' in options || 'checkoutAttempt' in options));
+  const checkoutAttempt = options && 'checkoutAttempt' in options
+    ? options.checkoutAttempt ?? null
+    : supplied
+      ? null
+      : await reconcileOpenCheckoutAttempts(userId).catch((error: unknown) => {
+        console.error('Checkout payment state could not be read', error instanceof Error ? error.message : 'unknown');
+        return null;
+      });
+  const storedInvoices = options && 'invoices' in options ? options.invoices ?? [] : await listStoredInvoices(userId);
+  const needsStripe = !supplied && storedInvoices.some((invoice) => (
     (invoice.status === 'open' || invoice.status === 'uncollectible')
     && collectionNeedsRefresh(invoice.collectionCheckedAt, now)
   ));
@@ -49,19 +65,24 @@ export async function loadToolAccessPolicy(
       console.error('Stripe payment state could not be reconciled', error instanceof Error ? error.message : 'unknown');
     });
   }
+  const accountPromise = options && 'account' in options
+    ? Promise.resolve(billingAccountForMode(options.account ?? null))
+    : loadBillingAccount(userId).then((row) => billingAccountForMode(row));
   const [snapshot, account, invoices, attention, pricing] = await Promise.all([
-    loadCollectibleSnapshot(userId, now),
-    billingAccountForMode(await loadBillingAccount(userId)),
+    options && 'snapshot' in options ? Promise.resolve(options.snapshot ?? null) : loadCollectibleSnapshot(userId, now),
+    accountPromise,
     needsStripe ? listStoredInvoices(userId) : Promise.resolve(storedInvoices),
     listPaymentAttention(userId),
-    loadAccountPricingInputs([userId]),
+    options && 'pricing' in options
+      ? Promise.resolve(options.pricing ? new Map([[userId, options.pricing]]) : new Map<string, AccountPricingInput>())
+      : loadAccountPricingInputs([userId]),
   ]);
   const input = pricing.get(userId) ?? null;
   let tools: Array<{ toolId: string; name: string; requiresPaymentNow: boolean }> = [];
   let trialActive = false;
   if (input && snapshot) {
-    let frozen = null;
-    if (snapshot.periodStart) {
+    let frozen = options && 'frozen' in options ? options.frozen ?? null : null;
+    if (!(options && 'frozen' in options) && snapshot.periodStart) {
       const loaded = await loadFrozenPeriod(userId, snapshot.periodStart);
       frozen = loaded.frozen;
     }
@@ -117,10 +138,11 @@ export async function loadToolAccessPolicy(
     checkoutAttempt,
     alreadyLocked: Boolean(account?.tool_access_locked),
   });
+  const saveLock = () => syncHouseholdToolAccess(userId, policy.locked, policy.reason, account);
   if (options?.requireSavedLock) {
-    await syncHouseholdToolAccess(userId, policy.locked, policy.reason);
+    await saveLock();
   } else {
-    await syncHouseholdToolAccess(userId, policy.locked, policy.reason).catch((error: unknown) => {
+    await saveLock().catch((error: unknown) => {
       console.error('Household tool access could not be saved', error instanceof Error ? error.message : 'unknown');
     });
   }

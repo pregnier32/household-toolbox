@@ -14,7 +14,7 @@ import {
 } from '@/lib/customer-plan-preview';
 import type { PlanStatementRow } from '@/lib/billing-preview';
 
-type PlanPayload = {
+export type PlanPayload = {
   accountType: 'personal' | 'business';
   freeSlots: number;
   freeSlotsUsed: number;
@@ -67,12 +67,24 @@ type PlanPayload = {
   } | null;
 };
 
+export type PlanLoadSeed = {
+  status: 'loading' | 'ready' | 'error';
+  plan: PlanPayload | null;
+};
+
+function planRequestUrl(): string {
+  const checkout = new URLSearchParams(window.location.search).get('checkout');
+  return checkout === 'success' ? '/api/account/plan?checkout=success' : '/api/account/plan';
+}
+
 export function PlanBilling({
   userName,
   preview,
+  seed,
 }: {
   userName: string;
   preview?: { plan: PlanPayload; asOf: string };
+  seed?: PlanLoadSeed;
 }) {
   const router = useRouter();
   const { resolvedTheme } = useTheme();
@@ -152,8 +164,9 @@ export function PlanBilling({
     ? 'rounded-lg border border-slate-300 bg-white px-4 py-2 text-sm font-medium text-slate-700 transition-colors hover:bg-slate-100'
     : 'rounded-lg border border-slate-700 bg-slate-800 px-4 py-2 text-sm font-medium text-slate-300 transition-colors hover:bg-slate-700';
 
+  const seeded = useRef(false);
   const load = () => {
-    return fetch('/api/account/plan', { cache: 'no-store' })
+    return fetch(planRequestUrl(), { cache: 'no-store' })
       .then((response) => response.json())
       .then((data) => {
         if (data.error) throw new Error(data.error);
@@ -167,13 +180,26 @@ export function PlanBilling({
 
   useEffect(() => {
     if (preview) return;
-    load();
     const refreshOnReturn = (event: PageTransitionEvent) => {
       if (event.persisted) load();
     };
     window.addEventListener('pageshow', refreshOnReturn);
+    if (seed?.status === 'loading') {
+      return () => window.removeEventListener('pageshow', refreshOnReturn);
+    }
+    if (seed && !seeded.current) {
+      seeded.current = true;
+      if (seed.status === 'ready' && seed.plan) {
+        setLoadError(null);
+        setLoadedPlan(seed.plan);
+      } else {
+        setLoadError('Plan and billing could not be loaded.');
+      }
+    } else if (!seed) {
+      load();
+    }
     return () => window.removeEventListener('pageshow', refreshOnReturn);
-  }, [preview]);
+  }, [preview, seed]);
 
   const asOf = preview?.asOf;
   const applyCode = async (event: FormEvent) => {

@@ -1,13 +1,13 @@
-import { describeBillingCycle, billingSchedule, paymentWaitsForTrial } from '@/lib/billing-cycle';
+import { describeBillingCycle, billingSchedule, paymentWaitsForTrial, type BillingSchedule, type PeriodToolRecord } from '@/lib/billing-cycle';
 import { STORAGE_ADDON_MONTHLY_CENTS } from '@/lib/billing-preview';
 import { describeBillingSummary } from '@/lib/billing-summary';
+import type { AccountPricingInput } from '@/lib/account-pricing';
 import { loadFrozenPeriod, loadSignupAt, materializeBillingPeriod } from '@/lib/billing-period-store';
 import { loadAccountPricingInputs } from '@/lib/load-account-pricing';
-import { historicalSummaryForCommencement, projectLiveCharges, sameExcludedPeriod } from '@/lib/billing-commencement';
+import { historicalSummaryForCommencement, projectLiveCharges, sameExcludedPeriod, type LiveCommencement } from '@/lib/billing-commencement';
 import { loadLiveCommencement } from '@/lib/billing-environment';
-import { loadBillingAccount } from '@/lib/billing-store';
+import { loadBillingAccount, type BillingAccountRow } from '@/lib/billing-store';
 import { stripeMode } from '@/lib/stripe-mode';
-import type { BillingSchedule } from '@/lib/billing-cycle';
 
 export type ChargeSnapshot = {
   signupAt: string;
@@ -29,19 +29,21 @@ function storageCents(gigabytes: number): number {
   return Math.round(Math.max(0, gigabytes) * STORAGE_ADDON_MONTHLY_CENTS);
 }
 
-export async function loadChargeSnapshot(userId: string, now = new Date()): Promise<ChargeSnapshot | null> {
-  const inputs = await loadAccountPricingInputs([userId]);
-  const input = inputs.get(userId);
-  const signupAt = await loadSignupAt(userId);
-  if (!input || !signupAt) return null;
+export type PreparedChargeInputs = {
+  pricing: AccountPricingInput;
+  signupAt: string | null;
+  frozen: PeriodToolRecord[] | null;
+  account: BillingAccountRow | null;
+  commencement: LiveCommencement | null;
+};
+
+function buildChargeSnapshot(
+  input: AccountPricingInput,
+  signupAt: string,
+  now: Date,
+  frozen: PeriodToolRecord[] | null,
+): ChargeSnapshot {
   const schedule = billingSchedule(signupAt, now);
-  let frozen = null;
-  if (schedule.periodStart) {
-    const loaded = await loadFrozenPeriod(userId, schedule.periodStart);
-    frozen = loaded.available && !loaded.frozen
-      ? await materializeBillingPeriod(input, signupAt, now)
-      : loaded.frozen;
-  }
   const current = describeBillingCycle(input, signupAt, now, frozen);
   const summary = describeBillingSummary(input, signupAt, now, frozen);
   const atStart = schedule.periodStart
@@ -65,25 +67,45 @@ export async function loadChargeSnapshot(userId: string, now = new Date()): Prom
   };
 }
 
+export async function loadChargeSnapshot(userId: string, now = new Date()): Promise<ChargeSnapshot | null> {
+  const inputs = await loadAccountPricingInputs([userId]);
+  const input = inputs.get(userId);
+  const signupAt = await loadSignupAt(userId);
+  if (!input || !signupAt) return null;
+  const schedule = billingSchedule(signupAt, now);
+  let frozen = null;
+  if (schedule.periodStart) {
+    const loaded = await loadFrozenPeriod(userId, schedule.periodStart);
+    frozen = loaded.available && !loaded.frozen
+      ? await materializeBillingPeriod(input, signupAt, now)
+      : loaded.frozen;
+  }
+  return buildChargeSnapshot(input, signupAt, now, frozen);
+}
+
 /** Test mode returns the priced snapshot. Live mode removes sandbox-era cents from what Checkout can collect. */
-export async function loadCollectibleSnapshot(userId: string, now = new Date()): Promise<ChargeSnapshot | null> {
-  const snapshot = await loadChargeSnapshot(userId, now);
+export async function loadCollectibleSnapshot(
+  userId: string,
+  now = new Date(),
+  prepared?: PreparedChargeInputs,
+): Promise<ChargeSnapshot | null> {
+  const snapshot = prepared
+    ? (prepared.signupAt ? buildChargeSnapshot(prepared.pricing, prepared.signupAt, now, prepared.frozen) : null)
+    : await loadChargeSnapshot(userId, now);
   if (!snapshot || stripeMode() !== 'live') return snapshot;
-  const account = await loadBillingAccount(userId);
-  const commencement = await loadLiveCommencement(userId);
+  const account = prepared ? prepared.account : await loadBillingAccount(userId);
+  const commencement = prepared ? prepared.commencement : await loadLiveCommencement(userId);
   const sandboxHistory = Boolean(account) && account?.livemode !== true && !commencement;
   const commenced = Boolean(commencement);
   const samePeriod = sameExcludedPeriod(snapshot.periodStart, commencement?.excludedPeriodStart ?? null);
   let historicalOwed = sandboxHistory ? snapshot.owedNowCents : 0;
   let historicalScheduled = sandboxHistory ? snapshot.scheduledChargeCents : 0;
   let excludedToolIds: string[] = [];
+  const pricing = prepared?.pricing ?? (await loadAccountPricingInputs([userId])).get(userId) ?? null;
   if (sandboxHistory) {
-    const inputs = await loadAccountPricingInputs([userId]);
-    excludedToolIds = inputs.get(userId)?.tools.map((tool) => tool.toolId) ?? [];
+    excludedToolIds = pricing?.tools.map((tool) => tool.toolId) ?? [];
   }
   if (commencement && samePeriod) {
-    const inputs = await loadAccountPricingInputs([userId]);
-    const pricing = inputs.get(userId);
     if (pricing) {
       const historical = historicalSummaryForCommencement(pricing, snapshot.signupAt, now, commencement);
       historicalOwed = historical.owedNowCents;

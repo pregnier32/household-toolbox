@@ -69,15 +69,18 @@ export async function loadSignupAt(userId: string): Promise<string | null> {
 }
 
 export async function loadFrozenPeriod(userId: string, periodStart: string): Promise<PeriodLoad> {
-  const { data, error } = await supabaseServer.from('billing_periods').select('id, period_start, tools').eq('user_id', userId);
+  const { data, error } = await supabaseServer
+    .from('billing_periods')
+    .select('id, period_start, tools')
+    .eq('user_id', userId)
+    .eq('period_start', periodStart)
+    .maybeSingle();
   if (error) {
     if (missingTable(error)) return { available: false, frozen: null };
     throw error;
   }
-  const target = Date.parse(periodStart);
-  const match = (data ?? []).find((row) => Date.parse(row.period_start) === target);
-  if (!match) return { available: true, frozen: null };
-  return { available: true, frozen: asRecords(match.tools) };
+  if (!data) return { available: true, frozen: null };
+  return { available: true, frozen: asRecords(data.tools) };
 }
 
 export async function materializeBillingPeriod(
@@ -108,13 +111,17 @@ export async function materializeBillingPeriod(
 }
 
 async function periodRowId(userId: string, periodStart: string): Promise<string | null> {
-  const row = await supabaseServer.from('billing_periods').select('id, period_start').eq('user_id', userId);
+  const row = await supabaseServer
+    .from('billing_periods')
+    .select('id')
+    .eq('user_id', userId)
+    .eq('period_start', periodStart)
+    .maybeSingle();
   if (row.error) {
     if (missingTable(row.error)) throw new BillingCommitmentError();
     throw row.error;
   }
-  const target = Date.parse(periodStart);
-  return (row.data ?? []).find((item) => Date.parse(item.period_start) === target)?.id ?? null;
+  return row.data?.id ?? null;
 }
 
 async function writePeriodTools(userId: string, periodStart: string, tools: PeriodToolRecord[], hadRow: boolean): Promise<void> {
