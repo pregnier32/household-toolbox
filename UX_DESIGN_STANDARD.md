@@ -1961,21 +1961,25 @@ For tools that use header/category records (for example Pet Care Schedule, Repai
 
 **Level:** MUST
 
-**Requirement:** Category/header three-dot menus use the same explicit light/dark panel as header dropdowns.
+**Requirement:** Category/header three-dot menus use the same explicit light/dark panel as header dropdowns, and always offer Edit, Change color, and Delete, in that order.
 
 **Pass criteria:**
 - Light panel is white with slate border; items are dark readable text.
+- Every header or category card menu lists **Edit**, **Change color**, and **Delete**. Color is not available only inside the rename form, and Delete is not omitted.
 
 **Fail examples:**
 - The menu stays on remapped `bg-slate-800` in light mode.
+- The menu offers only Edit, or combines rename and color into one action.
 
-**Exceptions:** None unless explicitly listed in Application-Specific UX Exceptions.
+**Exceptions:** None unless explicitly listed in Application-Specific UX Exceptions. A tool may still refuse to delete a required default category, but it must show Delete and explain the refusal in the app after confirmation.
 
 ### Three-dot menu
 
 Use the same **explicit light/dark panel** as [header dropdown menus](#header-dropdown-menus--light-mode). Do not rely on remapped `bg-slate-800` in light mode.
 
-- **Menu button:** absolutely positioned in the top-right of the card. Hit area at least 44×44px on touch (`min-h-11 min-w-11`). Include `aria-label` and `title` (for example “Header menu”).
+**Reference:** Calendar Events category cards.
+
+- **Menu button:** absolutely positioned in the top-right of the card. Hit area at least 44×44px on touch (`min-h-11 min-w-11`). Include `aria-label` and `title` (for example “Category options”).
 - **Menu icon:** vertical ellipsis (three dots)
 - **Menu popup:**
   - Position: `absolute top-10 right-0 z-50`
@@ -1983,18 +1987,25 @@ Use the same **explicit light/dark panel** as [header dropdown menus](#header-dr
   - **Dark panel:** `rounded-lg border border-slate-700 bg-slate-800 shadow-lg min-w-[160px] py-1`
   - **Light items:** `w-full px-4 py-2 text-left text-sm text-slate-700 hover:bg-slate-100 transition-colors flex items-center gap-2`
   - **Dark items:** `w-full px-4 py-2 text-left text-sm text-slate-200 hover:bg-slate-700 transition-colors flex items-center gap-2`
+- **Menu options, in this order:**
+  1. **Edit** — pencil icon. Renames the card. Does not include the color picker.
+  2. **Change color** — palette icon. Changes only the card color.
+  3. **Delete** — trash icon, danger styling. Opens the typed-delete confirmation. Do not hide this item.
 
 ### Edit functionality
 
 - **Menu option:** “Edit” with a pencil icon
-- **Edit mode:** inline editing replaces the card display
-  - Container: `px-4 py-3 rounded-lg border border-slate-600 bg-slate-800 min-w-[200px]`
-  - Border color: use `editingHeaderColor` for border and background
-  - Name input: `flex-1 px-2 py-1 rounded border border-slate-600 bg-slate-900 text-slate-100 text-sm`
-  - Color picker: `h-6 w-12 rounded border border-slate-600 cursor-pointer`
-  - Actions: Save and Cancel
+- **Edit mode:** inline editing replaces the card display. Name only.
+  - Container: `px-4 py-3 rounded-lg border border-slate-300 bg-slate-100 min-w-[180px]` in light mode, and `px-4 py-3 rounded-lg border border-slate-700 bg-slate-800/50 min-w-[180px]` in dark mode
+  - Name input, then Save and Cancel
 - **Save button:** use the [tight inline primary](#tight-inline-primary-save-on-small-category--chip-rows) recipe (light `emerald-600` + white text; dark `emerald-500` + `slate-950`).
 - **Cancel button:** use the [secondary button](#secondary-button-including-cancel) pattern, compact (`text-xs`).
+
+### Change color
+
+- **Menu option:** “Change color” with a palette icon
+- **Color mode:** inline editing replaces the card display. Color only. Show the current category name, a “Card Color” label, and a color input (`h-8 w-16`).
+- **Actions:** Save and Cancel. Save updates `card_color` and leaves the name unchanged.
 
 ### Delete functionality
 
@@ -2005,7 +2016,7 @@ See [Header / category delete modal](#header--category-delete-modal).
 All header/category records support:
 
 - Custom `card_color` (default `#10b981`)
-- Edit name and color together in one form
+- Edit the name and change the color as separate menu actions
 - Delete with a confirmation modal that requires “delete” to be typed
 
 State:
@@ -2013,6 +2024,7 @@ State:
 - `editingHeaderId` — which header is being edited
 - `editingHeaderName` — current name
 - `editingHeaderColor` — current color
+- `showColorPicker` — true while Change color is open instead of rename
 - `deleteConfirmHeaderId` — which deletion is being confirmed
 - `deleteConfirmText` — confirmation text
 - `menuOpenHeaderId` — which menu is open (for click-outside-to-close)
@@ -3167,8 +3179,7 @@ Event files and expense files. Do not attach files to vendors, categories, types
 - Queue files on create; persist immediately on saved records. `addExpense` returns `expenseId` so queued uploads can run after Save Expense.
 - Render `AttachmentModal` after the expense modal. The Attachment overlay uses **`z-[60]`** when it stacks on the expense modal.
 - No paperclip on Vendors, Categories, Types, category-budget rows, Calendar, or export.
-
-**Add-form control order exception (intentional):** On Add New Event, the Birthday starter template stays after the Dashboard Calendar switch. Do not move controls so the Dashboard Calendar switch is literally the final optional control. This is the exception for `UX-ADD-003`.
+- Add New Event does not offer a Birthday starter template. The Dashboard Calendar switch is the last optional control, per `UX-ADD-003`. An existing event can still apply the Birthday starter from its budget section.
 
 ### Meal Planner
 
@@ -3206,8 +3217,9 @@ Goal files and update files. Do not attach files to categories, phases, tasks, t
 - Queue files on create goal and until Add update. Persist immediately on saved goals and posted updates. Save / Add update does not require a file.
 - Render `AttachmentModal` after the Update history and Edit Goal modals. The Attachment overlay uses **`z-[60]`** when it stacks on those modals.
 - No paperclip on categories, phase/task rows, dashboard pin, or reminder controls.
+- Category cards use the header three-dot menu: Edit, Change color, then Delete. Default categories (Home, Finance, Health, Career, Personal) still cannot be deleted. After the typed confirmation, the app says that instead of hiding Delete.
 
-**Add control exception (intentional):** Goals Tracking keeps the filled **+ Add Goal** button and the inline New Goal card. Do not convert this tool to a section-title plus and add modal to satisfy `UX-ADD-002`.
+**Add control exception (intentional):** Goals Tracking keeps the filled **+ Add Goal** button. That button opens the New Goal popup. Do not replace the button with a section-title plus to satisfy `UX-ADD-002`.
 
 ### Healthcare Appointments & History
 

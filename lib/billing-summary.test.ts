@@ -72,6 +72,16 @@ function policyFor(summary: ReturnType<typeof describeBillingSummary>, now: Date
   });
 }
 
+test('a purchased storage gigabyte adds one dollar to the amount due and the renewal', () => {
+  const summary = describeBillingSummary({ ...account([addressBook(ANCHOR)]), storageAddonGb: 1 }, ANCHOR, NOW, null);
+  const statement = buildCycleCustomerStatement({ ...account([addressBook(ANCHOR)]), storageAddonGb: 1 }, ANCHOR, NOW, null);
+  assert.equal(summary.owedNowCents, 300);
+  assert.equal(summary.renewalCents, 300);
+  assert.equal(statement.billingCycle.renewalAmount, '$3.00');
+  assert.equal(statement.statement.find((row) => row.kind === 'storage')?.amount, '$1/month');
+  assert.equal(statement.statement.find((row) => row.kind === 'storage')?.label, 'Paid Acct');
+});
+
 test('the first tool without a trial is due immediately and locks every tool', () => {
   const summary = describeBillingSummary(account([addressBook(ANCHOR)]), ANCHOR, NOW, null);
   assert.equal(summary.anchorAt, ANCHOR);

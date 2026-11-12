@@ -230,10 +230,6 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ success: true });
     }
 
-    if (!mailingName || !String(mailingName).trim()) {
-      return NextResponse.json({ error: 'Mailing name is required' }, { status: 400 });
-    }
-
     const tagIds = Array.isArray(selectedTags) ? selectedTags : [];
     if (!(await requireOwnedIds('tools_ab_tags', tagIds, user.id, { toolId }))) {
       return NextResponse.json({ error: 'Tag not found' }, { status: 404 });
@@ -241,6 +237,10 @@ export async function POST(request: NextRequest) {
     if (addressId && action !== 'create') {
       const ownedAddress = await findOwnedRow('tools_ab_addresses', addressId, user.id, { toolId, columns: 'id' });
       if (!ownedAddress) return NextResponse.json({ error: 'Address not found' }, { status: 404 });
+    }
+
+    if (!String(lastName ?? '').trim() && !String(mailingName ?? '').trim()) {
+      return NextResponse.json({ error: 'Enter a last name or an alternative name.' }, { status: 400 });
     }
 
     const addressRow = buildAddressRow({

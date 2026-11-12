@@ -202,6 +202,7 @@ let redeem: typeof import('@/app/api/account/redeem/route');
 let buyTool: typeof import('@/app/api/tools/buy/route');
 let myTools: typeof import('@/app/api/my-tools/route');
 let householdUsers: typeof import('@/app/api/household/users/route');
+let storageApi: typeof import('@/app/api/account/storage/route');
 let saveEolPlan: typeof import('@/lib/end-of-life-planner-db').saveEolPlan;
 let emptyPlanData: typeof import('@/lib/end-of-life-planner').emptyPlanData;
 
@@ -230,6 +231,13 @@ const ready = (async () => {
         denyRemovedTool: async () => null,
       };
     }
+    if (normalized.includes('/lib/billing-sync')) {
+      return {
+        beginPayment: async () => ({ url: null, kind: 'none', explanation: 'mocked' }),
+        syncAccountBilling: async () => {},
+        refreshPlanBillingFromStripe: async () => null,
+      };
+    }
     return originalLoad.call(this, request, parent, isMain);
   };
   isolateEnv();
@@ -253,6 +261,7 @@ const ready = (async () => {
   buyTool = await import('@/app/api/tools/buy/route');
   myTools = await import('@/app/api/my-tools/route');
   householdUsers = await import('@/app/api/household/users/route');
+  storageApi = await import('@/app/api/account/storage/route');
   ({ saveEolPlan } = await import('@/lib/end-of-life-planner-db'));
   ({ emptyPlanData } = await import('@/lib/end-of-life-planner'));
   loader._load = originalLoad;
@@ -809,6 +818,11 @@ test('a household member resolved to the admin data owner does not receive admin
   assert.equal(removal.status, 403);
   assert.equal(read('users_tools', 'owned-tool')?.status, 'active');
 
+  seed('users', { id: OWNER_A, storage_addon_gb: 0, storage_plan: 'free', storage_used_bytes: 0, storage_usage_updated_at: '2026-01-01T00:00:00.000Z' });
+  const storageAdd = await storageApi.POST(post('http://local/storage', { action: 'add-gigabyte' }));
+  assert.equal(storageAdd.status, 403);
+  assert.equal(read('users', OWNER_A)?.storage_addon_gb, 0);
+
   const invite = await householdUsers.POST(post('http://local/household/users', {
     firstName: 'Sam',
     email: 'sam@household.test',
@@ -816,4 +830,16 @@ test('a household member resolved to the admin data owner does not receive admin
   assert.equal(invite.status, 403);
   assert.equal(count('household_invitations'), 1);
   assert.equal(read('household_invitations', 'invite-existing')?.invited_email, 'keep@household.test');
+});
+
+test('another household cannot add storage to this account', async () => {
+  seedHouseholds();
+  seed('users', { id: OWNER_A, storage_addon_gb: 1, storage_plan: 'free', storage_used_bytes: 0, storage_usage_updated_at: '2026-01-01T00:00:00.000Z' });
+  seed('users', { id: OWNER_B, storage_addon_gb: 0, storage_plan: 'free', storage_used_bytes: 0, storage_usage_updated_at: '2026-01-01T00:00:00.000Z' });
+  signIn(OWNER_B, 'admin');
+
+  const response = await storageApi.POST(post('http://local/storage', { action: 'add-gigabyte' }));
+  assert.equal(response.status, 200);
+  assert.equal(read('users', OWNER_A)?.storage_addon_gb, 1);
+  assert.equal(read('users', OWNER_B)?.storage_addon_gb, 1);
 });

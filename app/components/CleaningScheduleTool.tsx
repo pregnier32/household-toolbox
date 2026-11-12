@@ -660,6 +660,7 @@ export function CleaningScheduleTool({ toolId }: CleaningScheduleToolProps) {
     ? 'w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900 placeholder-slate-500 focus:border-red-500/50 focus:outline-none focus:ring-1 focus:ring-red-500/50 mb-4'
     : 'w-full rounded-lg border border-slate-700 bg-slate-900/70 px-3 py-2 text-sm text-slate-100 placeholder-slate-500 focus:border-red-500/50 focus:outline-none focus:ring-1 focus:ring-red-500/50 mb-4';
   const deleteButtonClass = 'px-4 py-2.5 rounded-lg bg-red-600 text-white font-semibold hover:bg-red-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed';
+  const rowIconDisabledClass = 'disabled:cursor-not-allowed disabled:opacity-50';
   const rowIconEmeraldClass = isLight
     ? 'inline-flex min-h-11 min-w-11 items-center justify-center rounded-lg border-2 border-emerald-700 bg-white p-2 text-emerald-700 transition-colors hover:bg-emerald-50 hover:text-emerald-900 focus:outline-none focus:ring-2 focus:ring-emerald-500/50 focus:ring-offset-2 focus:ring-offset-white'
     : 'inline-flex min-h-11 min-w-11 items-center justify-center rounded-lg border-2 border-emerald-500/50 bg-slate-800/50 p-2 text-emerald-300 transition-colors hover:border-emerald-400 hover:bg-emerald-500/20 focus:outline-none focus:ring-2 focus:ring-emerald-500/50 focus:ring-offset-2 focus:ring-offset-slate-900';
@@ -1489,6 +1490,25 @@ export function CleaningScheduleTool({ toolId }: CleaningScheduleToolProps) {
 
   const categoryUsage = (categoryId: string) => libraryItems.filter((item) => item.categoryId === categoryId).length;
 
+  const categoryDeleteBlock = (categoryId: string) => {
+    const items = libraryItems.filter((item) => item.categoryId === categoryId);
+    if (items.some((item) => !item.isDefault)) {
+      return 'Remove the items you added before deleting this category.';
+    }
+    const itemIds = new Set(items.map((item) => item.id));
+    const tasks = scheduledTasks.filter((task) => itemIds.has(task.libraryItemId));
+    if (tasks.some((task) => task.isActive)) {
+      return 'This category has a scheduled task. Remove that schedule before deleting the category.';
+    }
+    if (tasks.length > 0) {
+      return 'This category still has schedule history. It cannot be deleted.';
+    }
+    if (items.some((item) => item.attachments.length > 0)) {
+      return 'Remove the files on items in this category before deleting it.';
+    }
+    return null;
+  };
+
   const confirmDelete = async () => {
     if (!deleteTarget || deleteConfirmText.trim().toLowerCase() !== 'delete' || isSaving) return;
     setIsSaving(true);
@@ -1503,8 +1523,14 @@ export function CleaningScheduleTool({ toolId }: CleaningScheduleToolProps) {
         if (detailTaskId && taskIds.includes(detailTaskId)) setDetailTaskId(null);
       } else if (deleteTarget.kind === 'category') {
         const category = categories.find((entry) => entry.id === deleteTarget.id);
-        if (!category || category.isDefault || categoryUsage(category.id) > 0) return;
+        if (!category) throw new Error('Category not found');
+        const block = categoryDeleteBlock(category.id);
+        if (block) throw new Error(block);
         await postAction({ action: 'deleteCategory', categoryId: category.id });
+        if (editingCategoryId === category.id) {
+          setEditingCategoryId(null);
+          setEditingCategoryName('');
+        }
       } else {
         const task = scheduledTasks.find((entry) => entry.id === deleteTarget.id);
         const item = task ? libraryItems.find((entry) => entry.id === task.libraryItemId) : undefined;
@@ -1533,9 +1559,15 @@ export function CleaningScheduleTool({ toolId }: CleaningScheduleToolProps) {
     }
     if (deleteTarget.kind === 'category') {
       const category = categories.find((entry) => entry.id === deleteTarget.id);
+      const unusedDefaults = category
+        ? libraryItems.filter((item) => item.categoryId === category.id && item.isDefault).length
+        : 0;
       return {
         title: `Delete ${category?.name ?? 'this category'} permanently?`,
-        detail: 'This unused custom category will be removed. Defaults cannot be deleted.',
+        detail:
+          unusedDefaults > 0
+            ? `This category has no schedule, custom items, or files. It will be removed, along with ${unusedDefaults} unused default ${unusedDefaults === 1 ? 'item' : 'items'}.`
+            : 'This category has nothing connected to it and will be removed.',
       };
     }
     const task = scheduledTasks.find((entry) => entry.id === deleteTarget.id);
@@ -2612,6 +2644,8 @@ export function CleaningScheduleTool({ toolId }: CleaningScheduleToolProps) {
             <div className="space-y-3">
               {activeCategories.map((category) => {
                 const used = categoryUsage(category.id);
+                const deleteBlock = categoryDeleteBlock(category.id);
+                const deleteLabel = deleteBlock ?? 'Delete category';
                 return (
                   <div key={category.id} className={nestedCardClass}>
                     {editingCategoryId === category.id ? (
@@ -2653,32 +2687,44 @@ export function CleaningScheduleTool({ toolId }: CleaningScheduleToolProps) {
                             </span>
                           </div>
                         </div>
-                        {!category.isDefault && (
-                          <div className="flex shrink-0 items-center gap-2 ml-4">
+                        <div className="flex shrink-0 items-center gap-1.5 ml-4">
+                          {!category.isDefault && (
                             <button
                               type="button"
                               onClick={() => {
                                 setEditingCategoryId(category.id);
                                 setEditingCategoryName(category.name);
                               }}
-                              className={compactPrimaryClass}
-                              aria-label="Edit"
-                              title="Edit category name"
+                              className={rowIconEmeraldClass}
+                              aria-label="Edit category"
+                              title="Edit category"
                             >
-                              Edit
+                              <EditIcon />
                             </button>
+                          )}
+                          {!category.isDefault && (
                             <button
                               type="button"
                               onClick={() => archiveCategory(category.id)}
                               disabled={isSaving}
-                              className={secondaryButtonClass}
-                              aria-label="Archive"
-                              title="Archive category — keeps items and history"
+                              className={`${rowIconSecondaryClass} ${rowIconDisabledClass}`}
+                              aria-label="Archive category"
+                              title="Archive category"
                             >
-                              Archive
+                              <ArchiveIcon />
                             </button>
-                          </div>
-                        )}
+                          )}
+                          <button
+                            type="button"
+                            onClick={() => setDeleteTarget({ kind: 'category', id: category.id })}
+                            disabled={isSaving || deleteBlock !== null}
+                            className={`${rowIconDangerClass} ${rowIconDisabledClass}`}
+                            aria-label={deleteLabel}
+                            title={deleteLabel}
+                          >
+                            <DeleteIcon />
+                          </button>
+                        </div>
                       </div>
                     )}
                   </div>
@@ -2697,6 +2743,8 @@ export function CleaningScheduleTool({ toolId }: CleaningScheduleToolProps) {
               <div className="space-y-3">
                 {archivedCategories.map((category) => {
                   const used = categoryUsage(category.id);
+                  const deleteBlock = categoryDeleteBlock(category.id);
+                  const deleteLabel = deleteBlock ?? 'Delete category';
                   return (
                     <div key={category.id} className={nestedCardClass}>
                       <div className="flex items-start justify-between">
@@ -2709,14 +2757,28 @@ export function CleaningScheduleTool({ toolId }: CleaningScheduleToolProps) {
                             </span>
                           </div>
                         </div>
-                        <button
-                          type="button"
-                          onClick={() => reactivateCategory(category.id)}
-                          disabled={isSaving}
-                          className={compactPrimaryClass}
-                        >
-                          Reactivate
-                        </button>
+                        <div className="flex shrink-0 items-center gap-1.5 ml-4">
+                          <button
+                            type="button"
+                            onClick={() => reactivateCategory(category.id)}
+                            disabled={isSaving}
+                            className={`${rowIconEmeraldClass} ${rowIconDisabledClass}`}
+                            aria-label="Reactivate category"
+                            title="Reactivate category"
+                          >
+                            <RestoreIcon />
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => setDeleteTarget({ kind: 'category', id: category.id })}
+                            disabled={isSaving || deleteBlock !== null}
+                            className={`${rowIconDangerClass} ${rowIconDisabledClass}`}
+                            aria-label={deleteLabel}
+                            title={deleteLabel}
+                          >
+                            <DeleteIcon />
+                          </button>
+                        </div>
                       </div>
                     </div>
                   );

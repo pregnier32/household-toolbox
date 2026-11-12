@@ -323,9 +323,17 @@ export function AddressBookTool({ toolId }: AddressBookToolProps) {
     return matchesSearch && matchesTag;
   });
 
+  const compareAddresses = (a: AddressRecord, b: AddressRecord) => {
+    const byLast = a.lastName.localeCompare(b.lastName);
+    if (byLast !== 0) return byLast;
+    const byFirst = a.firstName.localeCompare(b.firstName);
+    if (byFirst !== 0) return byFirst;
+    return a.mailingName.localeCompare(b.mailingName);
+  };
+
   const activeAddresses = filteredAddresses
     .filter((a) => a.isActive)
-    .sort((a, b) => a.mailingName.localeCompare(b.mailingName));
+    .sort(compareAddresses);
   const inactiveAddresses = filteredAddresses.filter((a) => !a.isActive);
   const activeTags = tags.filter((t) => t.isActive).sort((a, b) => a.name.localeCompare(b.name));
   const inactiveTags = tags.filter((t) => !t.isActive).sort((a, b) => a.name.localeCompare(b.name));
@@ -375,8 +383,8 @@ export function AddressBookTool({ toolId }: AddressBookToolProps) {
   });
 
   const validateForm = (form: AddressFormState, requireTag = true): boolean => {
-    if (!form.mailingName.trim()) {
-      showError('Please enter a mailing name.');
+    if (!form.lastName.trim() && !form.mailingName.trim()) {
+      showError('Enter a last name or an alternative name.');
       return false;
     }
     if (requireTag && form.selectedTags.length === 0) {
@@ -927,35 +935,31 @@ export function AddressBookTool({ toolId }: AddressBookToolProps) {
   <div className="space-y-4">
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
         <div>
-          <label className={labelClass}>
-            Label <span className="text-red-400">*</span>
-          </label>
+          <label className={labelClass}>First Name</label>
           <input
             type="text"
-            value={form.mailingName}
-            onChange={(e) => setForm({ ...form, mailingName: e.target.value })}
-            placeholder="e.g., Grandma-Miller"
+            value={form.firstName}
+            onChange={(e) => setForm({ ...form, firstName: e.target.value })}
             className={inputClass}
           />
         </div>
         <div>
-          <label className={labelClass}>Addressee</label>
-          <div className="grid grid-cols-2 gap-2">
-            <input
-              type="text"
-              value={form.firstName}
-              onChange={(e) => setForm({ ...form, firstName: e.target.value })}
-              placeholder="First"
-              className={inputClass}
-            />
-            <input
-              type="text"
-              value={form.lastName}
-              onChange={(e) => setForm({ ...form, lastName: e.target.value })}
-              placeholder="Last"
-              className={inputClass}
-            />
-          </div>
+          <label className={labelClass}>Last Name</label>
+          <input
+            type="text"
+            value={form.lastName}
+            onChange={(e) => setForm({ ...form, lastName: e.target.value })}
+            className={inputClass}
+          />
+        </div>
+        <div className="md:col-span-2">
+          <label className={labelClass}>Alternative Name</label>
+          <input
+            type="text"
+            value={form.mailingName}
+            onChange={(e) => setForm({ ...form, mailingName: e.target.value })}
+            className={inputClass}
+          />
         </div>
         <div>
           <label className={labelClass}>Email</label>
@@ -1305,11 +1309,7 @@ export function AddressBookTool({ toolId }: AddressBookToolProps) {
       const matchesExportTags = (record: AddressRecord) =>
         exportAllTags || exportTagIds.some((tagId) => record.tags.includes(tagId));
 
-      const sortByName = (a: AddressRecord, b: AddressRecord) => {
-        const byLabel = a.mailingName.localeCompare(b.mailingName);
-        if (byLabel !== 0) return byLabel;
-        return formatAddressee(a).localeCompare(formatAddressee(b));
-      };
+      const sortByName = (a: AddressRecord, b: AddressRecord) => compareAddresses(a, b);
 
       const scoped = addresses.filter(matchesExportTags);
       const activeRecords = scoped.filter((record) => record.isActive).sort(sortByName);
@@ -2076,8 +2076,9 @@ export function AddressBookTool({ toolId }: AddressBookToolProps) {
             </div>
             <div className="space-y-3">
               {[
-                ['Label', viewAddressModal.mailingName],
-                ['Addressee', [viewAddressModal.firstName, viewAddressModal.lastName].filter(Boolean).join(' ')],
+                ['First Name', viewAddressModal.firstName],
+                ['Last Name', viewAddressModal.lastName],
+                ['Alternative Name', viewAddressModal.mailingName],
                 ['Email', viewAddressModal.email],
                 ['Phone', viewAddressModal.phone],
                 ['Street Address', viewAddressModal.streetAddress],

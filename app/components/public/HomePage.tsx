@@ -4,6 +4,7 @@ import { useState, useRef, useEffect, type ReactNode } from 'react'
 import Link from 'next/link'
 import { PLAN_BILLING_PATH } from '@/lib/auth-app-origin'
 import { signUp, signIn } from '../../actions/auth'
+import { rememberThemePreference } from '@/lib/theme-mode'
 import { PasswordField } from '../PasswordField'
 import { PublicFooter } from './PublicFooter'
 import { PublicHeader } from './PublicHeader'
@@ -177,6 +178,7 @@ export function HomePage({ explore, returnPath = null }: { explore?: ReactNode; 
                   setIsLoading(false);
 
                   if (result.success) {
+                    rememberThemePreference(result.themePreference);
                     // Save email if "Remember me" is checked
                     if (rememberMe && typeof window !== 'undefined') {
                       localStorage.setItem('rememberedEmail', email);

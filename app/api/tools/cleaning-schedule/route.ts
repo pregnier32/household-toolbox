@@ -157,7 +157,8 @@ async function ensureDefaults(userId: string, toolId: string) {
   const haveCategoryNames = new Set((existingCategories ?? []).map((row) => row.name.toLowerCase()));
   const categoriesToInsert = (defaultCategories ?? []).filter((row) => !haveCategoryNames.has(row.name.toLowerCase()));
 
-  if (categoriesToInsert.length > 0) {
+  // Seed the built-in list once. A category the household later deletes stays gone.
+  if ((existingCategories ?? []).length === 0 && categoriesToInsert.length > 0) {
     const { error } = await supabaseServer.from('tools_cs_categories').insert(
       categoriesToInsert.map((row) => ({
         user_id: userId,
@@ -171,13 +172,17 @@ async function ensureDefaults(userId: string, toolId: string) {
 
   const { data: userCategories, error: userCatError } = await supabaseServer
     .from('tools_cs_categories')
-    .select('id, name')
+    .select('id, name, is_default')
     .eq('user_id', userId)
     .eq('tool_id', toolId);
 
   if (userCatError) throw userCatError;
 
-  const categoryIdByName = new Map((userCategories ?? []).map((row) => [row.name.toLowerCase(), row.id]));
+  const categoryIdByName = new Map(
+    (userCategories ?? [])
+      .filter((row) => row.is_default)
+      .map((row) => [row.name.toLowerCase(), row.id])
+  );
 
   const { data: existingItems, error: existingItemError } = await supabaseServer
     .from('tools_cs_items')
@@ -594,19 +599,103 @@ export async function POST(request: NextRequest) {
       if (!category) {
         return NextResponse.json({ error: 'Category not found' }, { status: 404 });
       }
-      if (category.is_default) {
-        return NextResponse.json({ error: 'Default categories cannot be deleted' }, { status: 400 });
-      }
 
-      const { count } = await supabaseServer
+      const { data: categoryItems, error: itemsError } = await supabaseServer
         .from('tools_cs_items')
-        .select('id', { count: 'exact', head: true })
+        .select('id, is_default')
         .eq('category_id', categoryId)
         .eq('user_id', user.id)
         .eq('tool_id', toolId);
 
-      if ((count ?? 0) > 0) {
-        return NextResponse.json({ error: 'Category is still in use' }, { status: 400 });
+      if (itemsError) {
+        console.error('Error checking category items:', itemsError);
+        return NextResponse.json({ error: 'Failed to delete category' }, { status: 500 });
+      }
+
+      const itemRows = categoryItems ?? [];
+      if (itemRows.some((row) => !row.is_default)) {
+        return NextResponse.json(
+          { error: 'This category still has items you added. Remove them before deleting the category.' },
+          { status: 400 }
+        );
+      }
+
+      const itemIds = itemRows.map((row) => row.id);
+      if (itemIds.length > 0) {
+        const { count: taskCount, error: taskError } = await supabaseServer
+          .from('tools_cs_tasks')
+          .select('id', { count: 'exact', head: true })
+          .eq('user_id', user.id)
+          .eq('tool_id', toolId)
+          .in('item_id', itemIds);
+
+        if (taskError) {
+          console.error('Error checking category tasks:', taskError);
+          return NextResponse.json({ error: 'Failed to delete category' }, { status: 500 });
+        }
+        if ((taskCount ?? 0) > 0) {
+          return NextResponse.json(
+            { error: 'This category is still connected to a schedule. Remove that schedule before deleting the category.' },
+            { status: 400 }
+          );
+        }
+
+        const { count: fileCount, error: fileError } = await supabaseServer
+          .from('tools_cs_item_attachments')
+          .select('id', { count: 'exact', head: true })
+          .eq('user_id', user.id)
+          .in('item_id', itemIds);
+
+        if (fileError && !isMissingRelationError(fileError)) {
+          console.error('Error checking category files:', fileError);
+          return NextResponse.json({ error: 'Failed to delete category' }, { status: 500 });
+        }
+        if ((fileCount ?? 0) > 0) {
+          return NextResponse.json(
+            { error: 'This category still has files on an item. Remove those files before deleting the category.' },
+            { status: 400 }
+          );
+        }
+
+        const { error: clearItemsError } = await supabaseServer
+          .from('tools_cs_items')
+          .update({ is_default: false })
+          .in('id', itemIds)
+          .eq('user_id', user.id)
+          .eq('tool_id', toolId)
+          .eq('is_default', true);
+
+        if (clearItemsError) {
+          console.error('Error preparing category items for delete:', clearItemsError);
+          return NextResponse.json({ error: 'Failed to delete category' }, { status: 500 });
+        }
+
+        const { error: deleteItemsError } = await supabaseServer
+          .from('tools_cs_items')
+          .delete()
+          .in('id', itemIds)
+          .eq('user_id', user.id)
+          .eq('tool_id', toolId);
+
+        if (deleteItemsError) {
+          console.error('Error deleting unused category items:', deleteItemsError);
+          return NextResponse.json({ error: 'Failed to delete category' }, { status: 500 });
+        }
+      }
+
+      if (category.is_default) {
+        const { error: clearCategoryError } = await supabaseServer
+          .from('tools_cs_categories')
+          .update({ is_default: false })
+          .eq('id', categoryId)
+          .eq('user_id', user.id)
+          .eq('tool_id', toolId)
+          .eq('is_default', true);
+
+        if (clearCategoryError) {
+          console.error('Error preparing category for delete:', clearCategoryError);
+          return NextResponse.json({ error: 'Failed to delete category' }, { status: 500 });
+        }
       }
 
       const { error } = await supabaseServer

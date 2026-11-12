@@ -180,6 +180,12 @@ test('the customer statement lists tools alphabetically, then storage, promotion
   const catalogRows = buildCustomerStatement(catalogOnly, calculateAccountPricing(catalogOnly, NOW));
   assert.equal(catalogRows.find((row) => row.kind === 'tool')?.amount, '$2/month');
   assert.equal(catalogRows.find((row) => row.kind === 'storage')?.label, 'Free Acct');
+
+  const addonOnly = account({ storageAddonGb: 1, storageUsedBytes: 120 * 1024 });
+  const addonRow = buildCustomerStatement(addonOnly, calculateAccountPricing(addonOnly, NOW)).find((row) => row.kind === 'storage');
+  assert.equal(addonRow?.label, 'Paid Acct');
+  assert.equal(addonRow?.amount, '$1/month');
+  assert.equal(addonRow?.detail, '120 KB of 1.20 GB');
   assert.equal(catalogRows[catalogRows.length - 1].amount, '$2/month');
 });
 

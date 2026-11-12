@@ -4,6 +4,7 @@ import "./globals.css";
 import { AppThemeProvider } from "./components/AppThemeProvider";
 import { AppNoticeProvider } from "./components/AppNotice";
 import { getPublicSiteUrl, PUBLIC_OG_IMAGE_PATH, PUBLIC_SITE_NAME } from "@/lib/public-site";
+import { themeBootScript } from "@/lib/theme-mode";
 
 const geistSans = Geist({
   variable: "--font-geist-sans",
@@ -42,7 +43,7 @@ export default function RootLayout({
       <head>
         <script
           dangerouslySetInnerHTML={{
-            __html: `(function(){try{var r=document.documentElement;r.classList.remove('light','dark');r.classList.add('dark');r.setAttribute('data-theme','dark');}catch(e){document.documentElement.classList.add('dark');}})();`,
+            __html: themeBootScript(),
           }}
         />
       </head>

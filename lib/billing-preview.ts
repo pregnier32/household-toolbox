@@ -193,6 +193,11 @@ function personName(person: PreviewPerson): string {
   return [person.firstName, person.lastName].filter(Boolean).join(' ').trim() || person.email;
 }
 
+function storageAccountLabel(baseBytes: number, addonGb: number): 'Free Acct' | 'Paid Acct' {
+  if (baseBytes > STORAGE_FREE_BYTES || addonGb > 0) return 'Paid Acct';
+  return 'Free Acct';
+}
+
 function storageLabel(bytes: number): string {
   const safe = Math.max(0, bytes);
   if (safe < 1024) return `${safe} B`;
@@ -471,7 +476,7 @@ export function buildCustomerStatement(
   rows.push({
     id: 'storage',
     kind: 'storage',
-    label: state.baseStorageBytes > STORAGE_FREE_BYTES ? 'Paid Acct' : 'Free Acct',
+    label: storageAccountLabel(state.baseStorageBytes, input.storageAddonGb),
     detail: `${storageLabel(state.storageUsedBytes)} of ${storageLabel(state.effectiveStorageBytes)}`,
     amount: statementAmount(storageCents),
     benefitId: null,
@@ -641,7 +646,7 @@ export function buildCycleCustomerStatement(
 
   const storageRow = statement.find((row) => row.kind === 'storage');
   if (storageRow) {
-    storageRow.label = snapshot.current.baseStorageBytes > STORAGE_FREE_BYTES ? 'Paid Acct' : 'Free Acct';
+    storageRow.label = storageAccountLabel(snapshot.current.baseStorageBytes, input.storageAddonGb);
     storageRow.detail = `${storageLabel(snapshot.current.storageUsedBytes)} of ${storageLabel(snapshot.current.effectiveStorageBytes)}`;
   }
 

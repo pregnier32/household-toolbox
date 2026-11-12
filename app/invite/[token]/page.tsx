@@ -4,6 +4,7 @@ import { useEffect, useState } from 'react';
 import { useParams } from 'next/navigation';
 import { SideLogo } from '@/app/components/SideLogo';
 import { signIn } from '@/app/actions/auth';
+import { rememberThemePreference } from '@/lib/theme-mode';
 
 type Preview = {
   state: 'invalid' | 'cancelled' | 'accepted' | 'expired' | 'valid';
@@ -60,6 +61,7 @@ export default function AcceptInvitationPage() {
         setMessage('Check your email to confirm your account. After you confirm it, sign in and you will be in the household.');
         return;
       }
+      rememberThemePreference('light');
       window.location.assign('/dashboard');
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Could not create the account.');
@@ -74,6 +76,7 @@ export default function AcceptInvitationPage() {
     try {
       const result = await signIn({ email: preview?.email || '', password });
       if (!result.success) throw new Error(result.error || 'Could not sign in.');
+      rememberThemePreference(result.themePreference);
       if (result.needsMfa) {
         window.location.assign(`/auth/mfa?next=${encodeURIComponent(`/invite/${token}`)}`);
         return;

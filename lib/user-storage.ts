@@ -1,3 +1,5 @@
+import { calculateAccountPricing } from '@/lib/account-pricing';
+import { loadAccountPricingInputs } from '@/lib/load-account-pricing';
 import { storageObjectOwnedBy } from '@/lib/storage-owner';
 import { supabaseServer } from '@/lib/supabaseServer';
 
@@ -246,6 +248,42 @@ export async function getUserStorageQuota(userId: string, options?: { refresh?: 
     return recountUserStorage(userId);
   }
   return toQuota(row);
+}
+
+/** Adds one purchased gigabyte. Each gigabyte is $1 on the monthly billing total. */
+export async function purchaseStorageGigabyte(userId: string): Promise<StorageQuota> {
+  for (let attempt = 0; attempt < 2; attempt += 1) {
+    const row = await readUserStorageRow(userId);
+    const current = Math.max(0, row.storage_addon_gb ?? 0);
+    const { data, error } = await supabaseServer
+      .from('users')
+      .update({ storage_addon_gb: current + 1 })
+      .eq('id', userId)
+      .eq('storage_addon_gb', row.storage_addon_gb ?? 0)
+      .select('storage_addon_gb')
+      .maybeSingle();
+    if (error) throw new Error('Failed to add storage');
+    if (data) return getUserStorageQuota(userId);
+  }
+  throw new Error('Failed to add storage');
+}
+
+/**
+ * A paid account includes 1 GB. This does not add a storage charge.
+ * Accounts with no billable monthly cost still need a paid plan first.
+ */
+export async function includePaidStorageAllowance(userId: string): Promise<StorageQuota | null> {
+  const inputs = await loadAccountPricingInputs([userId]);
+  const input = inputs.get(userId);
+  if (!input) throw new Error('Account could not be loaded.');
+  const state = calculateAccountPricing(input, new Date());
+  if (state.effectiveMonthlyCents <= 0) return null;
+  const { error } = await supabaseServer
+    .from('users')
+    .update({ storage_plan: 'paid' })
+    .eq('id', userId);
+  if (error) throw new Error('Failed to update storage plan');
+  return getUserStorageQuota(userId);
 }
 
 export async function assertCanStoreBytes(userId: string, incomingBytes: number): Promise<StorageQuota> {

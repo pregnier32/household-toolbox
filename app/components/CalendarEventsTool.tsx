@@ -275,7 +275,8 @@ export function CalendarEventsTool({ toolId }: CalendarEventsToolProps) {
   const nestedCardClass = isLight
     ? 'p-4 rounded-lg border border-slate-200 bg-slate-50'
     : 'p-4 rounded-lg border border-slate-700 bg-slate-800/50';
-  const titleClass = isLight ? 'text-xl font-semibold text-slate-900' : 'text-xl font-semibold text-slate-50';
+  const titleClass = isLight ? 'text-2xl font-semibold text-slate-900 mb-2' : 'text-2xl font-semibold text-slate-50 mb-2';
+  const descClass = isLight ? 'text-slate-600 text-sm' : 'text-slate-400 text-sm';
   const subtitleClass = isLight ? 'text-lg font-semibold text-slate-900' : 'text-lg font-semibold text-slate-50';
   const bodyTextClass = isLight ? 'text-slate-700' : 'text-slate-300';
   const mutedTextClass = isLight ? 'text-slate-600' : 'text-slate-400';
@@ -1512,15 +1513,19 @@ export function CalendarEventsTool({ toolId }: CalendarEventsToolProps) {
         </div>
       )}
 
+      <div className="flex items-start justify-between gap-3">
+        <div>
+          <h2 className={titleClass}>Calendar Events</h2>
+          <p className={descClass}>Save household dates by category, including one-time and repeating events.</p>
+        </div>
+        <ExportPdfIconButton
+          title="Export calendar events to PDF"
+          onClick={() => setShowExportPopup(true)}
+        />
+      </div>
+
       {/* Categories List */}
       <div className={cardClass}>
-        <div className="flex items-center justify-between mb-4">
-          <h2 className={titleClass}>Calendar Events</h2>
-          <ExportPdfIconButton
-            title="Export calendar events to PDF"
-            onClick={() => setShowExportPopup(true)}
-          />
-        </div>
         {!isCreatingNewCategory ? (
           <div className="flex items-end gap-2 flex-wrap">
             {categories.map((category) => (

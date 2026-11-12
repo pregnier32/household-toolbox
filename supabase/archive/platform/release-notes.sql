@@ -184,18 +184,6 @@ INSERT INTO release_notes (
     'Go to Tool Box'
   ),
   (
-    'a1c0e001-0001-4000-8000-000000000004',
-    'Document Upload Improvements',
-    'Fixed an issue that could occasionally prevent larger documents from uploading successfully.',
-    'Uploads that previously stalled on larger files should now complete more reliably across document-based tools.',
-    'bug_fix',
-    DATE '2026-09-08',
-    'published',
-    false,
-    NULL,
-    NULL
-  ),
-  (
     'a1c0e001-0001-4000-8000-000000000005',
     'Draft: Internal preview only',
     'This draft should never appear on the customer What''s New page.',

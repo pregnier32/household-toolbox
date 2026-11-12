@@ -7,6 +7,7 @@ import { getSession, getSessionGate } from '@/lib/session';
 import { createSupabaseAuthServerClient } from '@/lib/supabaseAuthServer';
 import { authCallbackUrl } from '@/lib/auth-app-origin';
 import { sendWelcomeEmailForNewUser } from '@/lib/email';
+import { isThemeMode, type ThemeMode } from '@/lib/theme-mode';
 
 type SignUpData = {
   email: string;
@@ -31,6 +32,7 @@ type SignInResult = {
   success: boolean;
   error?: string;
   needsMfa?: boolean;
+  themePreference?: ThemeMode;
   user?: {
     id: string;
     email: string;
@@ -101,7 +103,7 @@ export async function signIn(data: SignInData): Promise<SignInResult> {
     const userId = signedIn.data.user.id;
     const { data: profile, error: profileError } = await supabaseServer
       .from('users')
-      .select('id, email, first_name, last_name, active')
+      .select('id, email, first_name, last_name, active, theme_preference')
       .eq('id', userId)
       .maybeSingle();
 
@@ -124,6 +126,7 @@ export async function signIn(data: SignInData): Promise<SignInResult> {
     return {
       success: true,
       needsMfa: gate.status === 'mfa_required' || gate.status === 'mfa_unknown',
+      themePreference: isThemeMode(profile.theme_preference) ? profile.theme_preference : undefined,
       user: {
         id: profile.id,
         email: profile.email,

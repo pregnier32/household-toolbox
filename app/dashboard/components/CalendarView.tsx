@@ -544,7 +544,11 @@ export function CalendarView({
                   {dayEvents.slice(0, 2).map((event) => (
                     <div
                       key={event.id}
-                      className="w-full px-1.5 py-0.5 bg-emerald-500/20 border border-emerald-500/50 rounded text-xs text-emerald-300 truncate"
+                      className={
+                        isLight
+                          ? 'w-full truncate rounded border border-emerald-600/40 bg-emerald-50 px-1.5 py-0.5 text-xs font-medium text-emerald-900'
+                          : 'w-full truncate rounded border border-emerald-500/50 bg-emerald-500/20 px-1.5 py-0.5 text-xs text-emerald-300'
+                      }
                       title={event.title}
                     >
                       {event.title}

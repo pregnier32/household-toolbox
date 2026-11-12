@@ -1,4 +1,5 @@
 import { createSupabaseAuthBrowserClient } from '@/lib/supabaseAuthBrowser';
+import { clearSignedInTheme } from '@/lib/theme-mode';
 
 /** Clears the Supabase Auth session and the legacy cookie, then leaves the page. */
 export async function completeSignOut() {
@@ -16,6 +17,7 @@ export async function completeSignOut() {
       cache: 'no-store',
     });
   } finally {
+    clearSignedInTheme();
     window.location.replace('/');
   }
 }

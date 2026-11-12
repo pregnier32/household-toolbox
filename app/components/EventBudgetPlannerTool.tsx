@@ -584,7 +584,6 @@ export function EventBudgetPlannerTool({ toolId }: EventBudgetPlannerToolProps) 
   const [showHistory, setShowHistory] = useState(false);
   const [isAddingEvent, setIsAddingEvent] = useState(false);
   const [editingEventId, setEditingEventId] = useState<string | null>(null);
-  const [applyBirthdayTemplateOnCreate, setApplyBirthdayTemplateOnCreate] = useState(false);
   const [eventForm, setEventForm] = useState(emptyEventForm);
   const [addEventTypeEpoch, setAddEventTypeEpoch] = useState(0);
   const addEventTypeTouchedRef = useRef(false);
@@ -665,14 +664,12 @@ export function EventBudgetPlannerTool({ toolId }: EventBudgetPlannerToolProps) 
   const resetEventForm = () => {
     addEventTypeTouchedRef.current = false;
     setEventForm(emptyEventForm());
-    setApplyBirthdayTemplateOnCreate(false);
   };
 
   const startAddingEvent = () => {
     addEventTypeTouchedRef.current = false;
     setAddEventTypeEpoch((n) => n + 1);
     setEventForm(emptyEventForm());
-    setApplyBirthdayTemplateOnCreate(false);
     setAddingEventCategoryForId(null);
     setEditingEventId(null);
     revokePending(pendingEventAttachments);
@@ -744,16 +741,7 @@ export function EventBudgetPlannerTool({ toolId }: EventBudgetPlannerToolProps) 
       setIsAddingEvent(false);
       setAddingEventCategoryForId(null);
       if (createdEventId) {
-        const shouldApplyBirthday = applyBirthdayTemplateOnCreate;
         setEditingEventId(createdEventId);
-        setApplyBirthdayTemplateOnCreate(false);
-        if (shouldApplyBirthday) {
-          try {
-            await applyBirthdayStarterBudgets(createdEventId, data.event);
-          } catch (templateError: unknown) {
-            showError(templateError instanceof Error ? templateError.message : 'Failed to apply Birthday starter template.');
-          }
-        }
       } else {
         resetEventForm();
       }
@@ -767,7 +755,6 @@ export function EventBudgetPlannerTool({ toolId }: EventBudgetPlannerToolProps) 
   const startEditingEvent = (event: EventRecord) => {
     setEditingEventId(event.id);
     setIsAddingEvent(false);
-    setApplyBirthdayTemplateOnCreate(false);
     setAddingEventCategoryForId(null);
     setNewCategoryBudget({ categoryId: '', budgetAmount: 0 });
     revokePending(pendingEventAttachments);
@@ -880,10 +867,6 @@ export function EventBudgetPlannerTool({ toolId }: EventBudgetPlannerToolProps) 
     } finally {
       setIsLoading(false);
     }
-  };
-
-  const toggleBirthdayStarterOnCreate = () => {
-    setApplyBirthdayTemplateOnCreate((on) => !on);
   };
 
   const addCategoryBudget = async () => {
@@ -2506,11 +2489,6 @@ export function EventBudgetPlannerTool({ toolId }: EventBudgetPlannerToolProps) 
                 />
               </div>
               {renderEventFormFields()}
-              <div className="flex justify-start mt-4">
-                <button type="button" onClick={toggleBirthdayStarterOnCreate} className={secondaryButtonClass}>
-                  {applyBirthdayTemplateOnCreate ? 'Birthday starter selected' : 'Use Birthday starter template'}
-                </button>
-              </div>
               <div className="flex gap-3 mt-6">
                 <button
                   type="button"
