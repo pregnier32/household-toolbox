@@ -587,7 +587,10 @@ export async function POST(request: NextRequest) {
         .eq('tool_id', toolId);
 
       if ((count ?? 0) > 0) {
-        return NextResponse.json({ error: 'Category is still in use' }, { status: 400 });
+        return NextResponse.json(
+          { error: 'This category still has items. Remove them before deleting the category.' },
+          { status: 400 }
+        );
       }
 
       const { error } = await supabaseServer

@@ -1175,7 +1175,7 @@ export const PUBLIC_TOOLS: PublicTool[] = [
       },
       {
         title: 'Save meals and ingredients',
-        description: 'Keep a meal library with ingredients, meal types, and a scale for the recipe.',
+        description: 'Keep a meal library with ingredients and meal types.',
       },
       {
         title: 'Attach recipe photos or PDFs',

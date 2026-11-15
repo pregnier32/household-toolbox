@@ -242,6 +242,7 @@ export function ToDoListTool({ toolId }: ToDoListToolProps) {
   const [editingCategoryId, setEditingCategoryId] = useState<string | null>(null);
   const [editingCategoryName, setEditingCategoryName] = useState('');
   const [editingCategoryColor, setEditingCategoryColor] = useState('#10b981');
+  const [showCategoryColorPicker, setShowCategoryColorPicker] = useState(false);
   const [menuOpenCategoryId, setMenuOpenCategoryId] = useState<string | null>(null);
 
   const [deleteConfirmCategoryId, setDeleteConfirmCategoryId] = useState<string | null>(null);
@@ -449,6 +450,7 @@ export function ToDoListTool({ toolId }: ToDoListToolProps) {
     setSelectedCategoryId(id);
     if (toolId) writeLastCategoryId(toolId, id);
     setEditingCategoryId(null);
+    setShowCategoryColorPicker(false);
     setMenuOpenCategoryId(null);
   };
 
@@ -456,10 +458,16 @@ export function ToDoListTool({ toolId }: ToDoListToolProps) {
     setEditingCategoryId(cat.id);
     setEditingCategoryName(cat.name);
     setEditingCategoryColor(cat.card_color);
+    setShowCategoryColorPicker(false);
     setMenuOpenCategoryId(null);
   };
 
-  const saveCategoryEdit = async () => {
+  const startChangingCategoryColor = (cat: Category) => {
+    startEditingCategory(cat);
+    setShowCategoryColorPicker(true);
+  };
+
+  const saveCategoryEdit = async (colorOnly = false) => {
     if (!editingCategoryId || !editingCategoryName.trim() || !toolId) return;
     setIsSaving(true);
     try {
@@ -482,7 +490,8 @@ export function ToDoListTool({ toolId }: ToDoListToolProps) {
         prev.map((c) => (c.id === editingCategoryId ? { ...c, ...updated } : c))
       );
       setEditingCategoryId(null);
-      showMessage('success', 'Category updated.');
+      setShowCategoryColorPicker(false);
+      showMessage('success', colorOnly ? 'Category color updated.' : 'Category updated.');
     } catch (e) {
       showMessage('error', e instanceof Error ? e.message : 'Failed to update category');
     } finally {
@@ -494,6 +503,7 @@ export function ToDoListTool({ toolId }: ToDoListToolProps) {
     setEditingCategoryId(null);
     setEditingCategoryName('');
     setEditingCategoryColor('#10b981');
+    setShowCategoryColorPicker(false);
     setMenuOpenCategoryId(null);
   };
 
@@ -1173,7 +1183,69 @@ export function ToDoListTool({ toolId }: ToDoListToolProps) {
 
         {!isCreatingCategory ? (
           <div className="flex items-center gap-3 flex-wrap">
-            {categories.map((cat) => (
+            {categories.map((cat) =>
+              editingCategoryId === cat.id && showCategoryColorPicker ? (
+                <div
+                  key={cat.id}
+                  className={isLight ? 'px-4 py-3 rounded-lg border border-slate-300 bg-slate-100 min-w-[180px]' : 'px-4 py-3 rounded-lg border border-slate-700 bg-slate-800/50 min-w-[180px]'}
+                >
+                  <div className="mb-3">
+                    <div className={isLight ? 'font-medium text-slate-800 mb-2 text-sm' : 'font-medium text-slate-200 mb-2 text-sm'}>{cat.name}</div>
+                    <div className="flex items-center gap-2">
+                      <label className={isLight ? 'text-xs text-slate-600' : 'text-xs text-slate-400'}>Card Color:</label>
+                      <input
+                        type="color"
+                        value={editingCategoryColor}
+                        onChange={(e) => setEditingCategoryColor(e.target.value)}
+                        className="h-8 w-16 rounded border border-slate-600 cursor-pointer"
+                      />
+                    </div>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <button
+                      type="button"
+                      onClick={() => saveCategoryEdit(true)}
+                      disabled={isSaving}
+                      className={isLight ? 'flex-1 px-2 py-1 rounded text-xs font-semibold text-white bg-emerald-600 hover:bg-emerald-500 disabled:opacity-50 disabled:cursor-not-allowed' : 'flex-1 px-2 py-1 rounded bg-emerald-500 text-slate-950 text-xs font-medium hover:bg-emerald-400 disabled:opacity-50 disabled:cursor-not-allowed'}
+                    >
+                      {isSaving ? 'Saving...' : 'Save'}
+                    </button>
+                    <button type="button" onClick={cancelEditingCategory} className={isLight ? 'px-2 py-1 rounded border border-slate-300 bg-white text-slate-700 text-xs hover:bg-slate-100 transition-colors' : 'px-2 py-1 rounded border border-slate-600 bg-slate-700 text-slate-200 text-xs hover:bg-slate-600 transition-colors'}>
+                      Cancel
+                    </button>
+                  </div>
+                </div>
+              ) : editingCategoryId === cat.id ? (
+                <div
+                  key={cat.id}
+                  className={isLight ? 'px-4 py-3 rounded-lg border border-slate-300 bg-slate-100 min-w-[180px]' : 'px-4 py-3 rounded-lg border border-slate-700 bg-slate-800/50 min-w-[180px]'}
+                >
+                  <input
+                    type="text"
+                    value={editingCategoryName}
+                    onChange={(e) => setEditingCategoryName(e.target.value)}
+                    className={isLight ? 'w-full px-2 py-1 rounded border border-slate-300 bg-white text-slate-900 text-sm mb-2 focus:border-emerald-500/50 focus:outline-none' : 'w-full px-2 py-1 rounded border border-slate-600 bg-slate-900 text-slate-100 text-sm mb-2 focus:border-emerald-500/50 focus:outline-none'}
+                    autoFocus
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter') saveCategoryEdit();
+                      if (e.key === 'Escape') cancelEditingCategory();
+                    }}
+                  />
+                  <div className="flex items-center gap-2">
+                    <button
+                      type="button"
+                      onClick={() => saveCategoryEdit()}
+                      disabled={isSaving || !editingCategoryName.trim()}
+                      className={isLight ? 'flex-1 px-2 py-1 rounded text-xs font-semibold text-white bg-emerald-600 hover:bg-emerald-500 disabled:opacity-50 disabled:cursor-not-allowed' : 'flex-1 px-2 py-1 rounded bg-emerald-500 text-slate-950 text-xs font-medium hover:bg-emerald-400 disabled:opacity-50 disabled:cursor-not-allowed'}
+                    >
+                      {isSaving ? 'Saving...' : 'Save'}
+                    </button>
+                    <button type="button" onClick={cancelEditingCategory} className={isLight ? 'px-2 py-1 rounded border border-slate-300 bg-white text-slate-700 text-xs hover:bg-slate-100 transition-colors' : 'px-2 py-1 rounded border border-slate-600 bg-slate-700 text-slate-200 text-xs hover:bg-slate-600 transition-colors'}>
+                      Cancel
+                    </button>
+                  </div>
+                </div>
+              ) : (
                 <div key={cat.id} className="relative">
                   <button
                     onClick={() => selectCategory(cat.id)}
@@ -1196,12 +1268,12 @@ export function ToDoListTool({ toolId }: ToDoListToolProps) {
                       e.stopPropagation();
                       setMenuOpenCategoryId(menuOpenCategoryId === cat.id ? null : cat.id);
                     }}
-                    className={isLight ? 'absolute top-1 right-1 p-1 rounded hover:bg-slate-200/80 transition-colors' : 'absolute top-1 right-1 p-1 rounded hover:bg-slate-700/50 transition-colors'}
+                    className={`absolute top-1 right-1 inline-flex min-h-11 min-w-11 items-center justify-center rounded transition-colors ${isLight ? 'text-slate-600 hover:bg-slate-200/80 hover:text-slate-900' : 'text-slate-400 hover:bg-slate-700/50 hover:text-slate-200'}`}
                     title="Category options"
                     aria-label="Category options"
                   >
                     <svg
-                      className={isLight ? 'h-4 w-4 text-slate-600 hover:text-slate-900' : 'h-4 w-4 text-slate-400 hover:text-slate-200'}
+                      className="h-4 w-4"
                       fill="currentColor"
                       viewBox="0 0 24 24"
                     >
@@ -1223,6 +1295,19 @@ export function ToDoListTool({ toolId }: ToDoListToolProps) {
                         Edit
                       </button>
                       <button
+                        type="button"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          startChangingCategoryColor(cat);
+                        }}
+                        className={popupMenuItemClass}
+                      >
+                        <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 21a4 4 0 01-4-4V5a2 2 0 012-2h4a2 2 0 012 2v12a4 4 0 01-4 4zm0 0h12a2 2 0 002-2v-4a2 2 0 00-2-2h-2.343M11 7.343l1.657-1.657a2 2 0 012.828 0l2.829 2.829a2 2 0 010 2.828l-8.486 8.485M7 17h.01" />
+                        </svg>
+                        Change color
+                      </button>
+                      <button
                         onClick={(e) => {
                           e.stopPropagation();
                           setMenuOpenCategoryId(null);
@@ -1239,7 +1324,8 @@ export function ToDoListTool({ toolId }: ToDoListToolProps) {
                     </div>
                   )}
                 </div>
-            ))}
+              )
+            )}
             <button
               onClick={() => {
                 setIsCreatingCategory(true);
@@ -1310,53 +1396,6 @@ export function ToDoListTool({ toolId }: ToDoListToolProps) {
           onClick={() => setMenuOpenCategoryId(null)}
           aria-hidden="true"
         />
-      )}
-
-      {editingCategoryId && (
-        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
-          <div className={isLight ? 'rounded-2xl border border-slate-200 bg-white p-6 max-w-md w-full mx-4 shadow-2xl' : 'rounded-2xl border border-slate-800 bg-slate-900 p-6 max-w-md w-full mx-4'}>
-            <h3 className={isLight ? 'text-xl font-semibold text-slate-900 mb-4' : 'text-xl font-semibold text-slate-50 mb-4'}>Edit category</h3>
-            <div className="flex items-end gap-2 flex-wrap">
-              <div className="flex-1 min-w-[200px]">
-                <label className={labelClass}>Category name</label>
-                <input
-                  type="text"
-                  value={editingCategoryName}
-                  onChange={(e) => setEditingCategoryName(e.target.value)}
-                  placeholder="Enter category name"
-                  className={inputClass}
-                  autoFocus
-                  onKeyDown={(e) => {
-                    if (e.key === 'Enter') saveCategoryEdit();
-                    if (e.key === 'Escape') cancelEditingCategory();
-                  }}
-                />
-              </div>
-              <div>
-                <label className={labelClass}>Color</label>
-                <input
-                  type="color"
-                  value={editingCategoryColor}
-                  onChange={(e) => setEditingCategoryColor(e.target.value)}
-                  className={isLight ? 'h-10 w-14 rounded border border-slate-300 cursor-pointer bg-white' : 'h-10 w-14 rounded border border-slate-600 cursor-pointer'}
-                />
-              </div>
-              <button
-                onClick={saveCategoryEdit}
-                disabled={!editingCategoryName.trim() || isSaving}
-                className={primaryButtonClass}
-              >
-                {isSaving ? 'Saving...' : 'Save'}
-              </button>
-              <button
-                onClick={cancelEditingCategory}
-                className={secondaryButtonClass}
-              >
-                Cancel
-              </button>
-            </div>
-          </div>
-        </div>
       )}
 
       {/* Delete category confirmation */}

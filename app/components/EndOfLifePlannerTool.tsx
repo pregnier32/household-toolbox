@@ -166,6 +166,8 @@ type FieldSpec = {
 
 const ICON = {
   edit: 'M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z',
+  palette:
+    'M7 21a4 4 0 01-4-4V5a2 2 0 012-2h4a2 2 0 012 2v12a4 4 0 01-4 4zm0 0h12a2 2 0 002-2v-4a2 2 0 00-2-2h-2.343M11 7.343l1.657-1.657a2 2 0 012.828 0l2.829 2.829a2 2 0 010 2.828l-8.486 8.485M7 17h.01',
   archive:
     'M20.25 7.5l-.625 10.632a2.25 2.25 0 01-2.247 2.118H6.622a2.25 2.25 0 01-2.247-2.118L3.75 7.5M10 11.25h4M3.375 7.5h17.25c.621 0 1.125-.504 1.125-1.125v-1.5c0-.621-.504-1.125-1.125-1.125H3.375c-.621 0-1.125.504-1.125 1.125v1.5c0 .621.504 1.125 1.125 1.125z',
   restore: 'M9 15L3 9m0 0l6-6M3 9h12a6 6 0 010 12h-3',
@@ -1026,6 +1028,7 @@ export function EndOfLifePlannerTool({ toolId }: EndOfLifePlannerToolProps) {
   const [editRelationshipCustom, setEditRelationshipCustom] = useState('');
   const [editDob, setEditDob] = useState('');
   const [editColor, setEditColor] = useState('#10b981');
+  const [showPlanColorPicker, setShowPlanColorPicker] = useState(false);
   const [menuOpenPlanId, setMenuOpenPlanId] = useState<string | null>(null);
   const [menuOpenTabId, setMenuOpenTabId] = useState<string | null>(null);
   const [activeTab, setActiveTab] = useState<TabId>('personal');
@@ -1560,8 +1563,27 @@ export function EndOfLifePlannerTool({ toolId }: EndOfLifePlannerToolProps) {
     setEditRelationshipCustom(plan.relationshipCustom);
     setEditDob(plan.dateOfBirth);
     setEditColor(plan.card_color);
+    setShowPlanColorPicker(false);
     setMenuOpenPlanId(null);
     setFormError('');
+  };
+
+  const startChangingPlanColor = (plan: EolPlan) => {
+    startEditPlan(plan);
+    setShowPlanColorPicker(true);
+  };
+
+  const savePlanColor = () => {
+    if (!editingPlanId) return;
+    const next = plans.map((plan) =>
+      plan.id === editingPlanId
+        ? appendPlanHistory({ ...plan, card_color: editColor }, 'edit', 'Changed plan color')
+        : plan
+    );
+    setEditingPlanId(null);
+    setShowPlanColorPicker(false);
+    setFormError('');
+    commitPlans(next, { immediate: true });
   };
 
   const savePlanEdit = () => {
@@ -1580,7 +1602,7 @@ export function EndOfLifePlannerTool({ toolId }: EndOfLifePlannerToolProps) {
               relationship: editRelationship,
               relationshipCustom: editRelationshipCustom.trim(),
               dateOfBirth: editDob,
-              card_color: editColor,
+              card_color: plan.card_color,
             },
             'edit',
             'Edited plan details'
@@ -3406,11 +3428,51 @@ export function EndOfLifePlannerTool({ toolId }: EndOfLifePlannerToolProps) {
           <>
             <div className="flex items-center gap-3 flex-wrap">
               {visiblePlans.map((plan) =>
-                editingPlanId === plan.id ? (
+                showPlanColorPicker && editingPlanId === plan.id ? (
+                  <div
+                    key={plan.id}
+                    className={isLight ? 'px-4 py-3 rounded-lg border border-slate-300 bg-slate-100 min-w-[180px]' : 'px-4 py-3 rounded-lg border border-slate-700 bg-slate-800/50 min-w-[180px]'}
+                  >
+                    <div className="mb-3">
+                      <div className={isLight ? 'mb-2 text-sm font-medium text-slate-800' : 'mb-2 text-sm font-medium text-slate-200'}>{plan.name}</div>
+                      <div className="flex items-center gap-2">
+                        <label htmlFor="plan-card-color" className={isLight ? 'text-xs text-slate-600' : 'text-xs text-slate-400'}>
+                          Card Color:
+                        </label>
+                        <input
+                          id="plan-card-color"
+                          type="color"
+                          value={editColor}
+                          onChange={(event) => setEditColor(event.target.value)}
+                          className="h-8 w-16 cursor-pointer rounded border border-slate-600"
+                        />
+                      </div>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <button
+                        type="button"
+                        onClick={savePlanColor}
+                        className={isLight ? 'flex-1 rounded bg-emerald-600 px-2 py-1 text-xs font-semibold text-white hover:bg-emerald-500' : 'flex-1 rounded bg-emerald-500 px-2 py-1 text-xs font-medium text-slate-950 hover:bg-emerald-400'}
+                      >
+                        Save
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setEditingPlanId(null);
+                          setShowPlanColorPicker(false);
+                        }}
+                        className={isLight ? 'rounded border border-slate-300 bg-white px-2 py-1 text-xs text-slate-700 hover:bg-slate-100' : 'rounded border border-slate-600 bg-slate-700 px-2 py-1 text-xs text-slate-200 hover:bg-slate-600'}
+                      >
+                        Cancel
+                      </button>
+                    </div>
+                  </div>
+                ) : editingPlanId === plan.id ? (
                   <div
                     key={plan.id}
                     className="px-4 py-3 rounded-lg border min-w-[280px] max-w-md"
-                    style={{ borderColor: editColor, backgroundColor: `${editColor}15` }}
+                    style={{ borderColor: plan.card_color || '#10b981', backgroundColor: `${plan.card_color || '#10b981'}15` }}
                   >
                     <div className="space-y-3">
                       <div>
@@ -3432,18 +3494,19 @@ export function EndOfLifePlannerTool({ toolId }: EndOfLifePlannerToolProps) {
                         </label>
                         <input id="edit-dob" type="date" value={editDob} onChange={(event) => setEditDob(event.target.value)} className={inputClass} />
                       </div>
-                      <div className="flex items-center gap-2">
-                        <label htmlFor="edit-color" className={labelClass}>
-                          Color
-                        </label>
-                        <input id="edit-color" type="color" value={editColor} onChange={(event) => setEditColor(event.target.value)} className="h-8 w-14 rounded border border-slate-400 cursor-pointer" />
-                      </div>
                       <p className={helperClass}>Created {formatDisplayDate(plan.dateCreated.split('T')[0])} · Last updated {formatDateTimeDisplay(plan.lastUpdated)}</p>
                       <div className="flex gap-2">
                         <button type="button" onClick={savePlanEdit} disabled={!editName.trim() || !editPersonName.trim()} className={primaryButtonClass}>
                           Save
                         </button>
-                        <button type="button" onClick={() => setEditingPlanId(null)} className={secondaryButtonClass}>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setEditingPlanId(null);
+                            setShowPlanColorPicker(false);
+                          }}
+                          className={secondaryButtonClass}
+                        >
                           Cancel
                         </button>
                       </div>
@@ -3491,7 +3554,7 @@ export function EndOfLifePlannerTool({ toolId }: EndOfLifePlannerToolProps) {
                         setMenuOpenTabId(null);
                         setMenuOpenSubsectionId(null);
                       }}
-                      className={isLight ? 'absolute top-1 right-1 p-1 rounded hover:bg-slate-100 transition-colors' : 'absolute top-1 right-1 p-1 rounded hover:bg-slate-700/50 transition-colors'}
+                      className={`absolute top-1 right-1 inline-flex min-h-11 min-w-11 items-center justify-center rounded transition-colors ${isLight ? 'text-slate-600 hover:bg-slate-200/80 hover:text-slate-900' : 'text-slate-400 hover:bg-slate-700/50 hover:text-slate-200'}`}
                       aria-label="Plan options"
                       title="Plan options"
                     >
@@ -3504,6 +3567,10 @@ export function EndOfLifePlannerTool({ toolId }: EndOfLifePlannerToolProps) {
                         <button type="button" className={popupMenuItemClass} onClick={() => startEditPlan(plan)}>
                           <OutlineIcon d={ICON.edit} className="h-4 w-4" />
                           Edit
+                        </button>
+                        <button type="button" className={popupMenuItemClass} onClick={() => startChangingPlanColor(plan)}>
+                          <OutlineIcon d={ICON.palette} className="h-4 w-4" />
+                          Change color
                         </button>
                         {plan.status === 'Active' ? (
                           <button type="button" className={popupMenuItemClass} onClick={() => archivePlan(plan.id, true)}>

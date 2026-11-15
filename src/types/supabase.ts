@@ -6521,7 +6521,6 @@ export type Database = {
           name: string
           prep_time_minutes: number | null
           rating: number
-          scale: number
           tool_id: string
           updated_at: string | null
           user_id: string
@@ -6537,7 +6536,6 @@ export type Database = {
           name: string
           prep_time_minutes?: number | null
           rating?: number
-          scale?: number
           tool_id: string
           updated_at?: string | null
           user_id: string
@@ -6553,7 +6551,6 @@ export type Database = {
           name?: string
           prep_time_minutes?: number | null
           rating?: number
-          scale?: number
           tool_id?: string
           updated_at?: string | null
           user_id?: string

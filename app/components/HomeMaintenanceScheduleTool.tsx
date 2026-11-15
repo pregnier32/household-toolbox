@@ -1670,6 +1670,12 @@ export function HomeMaintenanceScheduleTool({ toolId }: HomeMaintenanceScheduleT
 
   const categoryUsage = (categoryId: string) => libraryItems.filter((item) => item.categoryId === categoryId).length;
 
+  const categoryDeleteRefusal = (category: HmsCategory) => {
+    if (category.isDefault) return 'Default categories cannot be deleted.';
+    if (categoryUsage(category.id) > 0) return 'This category still has items. Remove them before deleting the category.';
+    return null;
+  };
+
   const confirmDelete = async () => {
     if (!deleteTarget || deleteConfirmText.trim().toLowerCase() !== 'delete' || isSaving) return;
     setIsSaving(true);
@@ -1682,7 +1688,9 @@ export function HomeMaintenanceScheduleTool({ toolId }: HomeMaintenanceScheduleT
         if (detailTaskId && taskIds.includes(detailTaskId)) setDetailTaskId(null);
       } else if (deleteTarget.kind === 'category') {
         const category = categories.find((entry) => entry.id === deleteTarget.id);
-        if (!category || category.isDefault || categoryUsage(category.id) > 0) return;
+        if (!category) throw new Error('Category not found.');
+        const refusal = categoryDeleteRefusal(category);
+        if (refusal) throw new Error(refusal);
         await postAction({ action: 'deleteCategory', categoryId: category.id });
       } else {
         const task = scheduledTasks.find((entry) => entry.id === deleteTarget.id);
@@ -1702,19 +1710,22 @@ export function HomeMaintenanceScheduleTool({ toolId }: HomeMaintenanceScheduleT
   };
 
   const deleteCopy = () => {
-    if (!deleteTarget) return { title: '', detail: '' };
+    if (!deleteTarget) return { title: '', detail: '', blocked: false };
     if (deleteTarget.kind === 'item') {
       const item = libraryItems.find((entry) => entry.id === deleteTarget.id);
       return {
         title: `Delete ${item?.name ?? 'this item'} permanently?`,
         detail: 'This custom maintenance item and any schedule or completion history for it will be removed.',
+        blocked: false,
       };
     }
     if (deleteTarget.kind === 'category') {
       const category = categories.find((entry) => entry.id === deleteTarget.id);
+      const refusal = category ? categoryDeleteRefusal(category) : 'Category not found.';
       return {
         title: `Delete ${category?.name ?? 'this category'} permanently?`,
-        detail: 'This unused custom category will be removed. Defaults cannot be deleted.',
+        detail: refusal ?? 'This unused category will be removed.',
+        blocked: refusal !== null,
       };
     }
     const task = scheduledTasks.find((entry) => entry.id === deleteTarget.id);
@@ -1722,6 +1733,7 @@ export function HomeMaintenanceScheduleTool({ toolId }: HomeMaintenanceScheduleT
     return {
       title: `Delete ${item?.name ?? 'this scheduled task'} permanently?`,
       detail: 'This scheduled task and its completion history will be removed. The library item will remain.',
+      blocked: false,
     };
   };
 
@@ -2893,31 +2905,27 @@ export function HomeMaintenanceScheduleTool({ toolId }: HomeMaintenanceScheduleT
                           </div>
                         </div>
                         <div className="flex shrink-0 items-center gap-1.5 ml-4">
-                          {!category.isDefault && (
-                            <button
-                              type="button"
-                              onClick={() => {
-                                setEditingCategoryId(category.id);
-                                setEditingCategoryName(category.name);
-                              }}
-                              className={rowIconEmeraldClass}
-                              aria-label="Rename category"
-                              title="Rename category"
-                            >
-                              <EditIcon />
-                            </button>
-                          )}
-                          {!category.isDefault && used === 0 && (
-                            <button
-                              type="button"
-                              onClick={() => setDeleteTarget({ kind: 'category', id: category.id })}
-                              className={rowIconDangerClass}
-                              aria-label="Delete category"
-                              title="Delete category"
-                            >
-                              <DeleteIcon />
-                            </button>
-                          )}
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setEditingCategoryId(category.id);
+                              setEditingCategoryName(category.name);
+                            }}
+                            className={rowIconEmeraldClass}
+                            aria-label="Edit category"
+                            title="Edit category"
+                          >
+                            <EditIcon />
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => setDeleteTarget({ kind: 'category', id: category.id })}
+                            className={rowIconDangerClass}
+                            aria-label="Delete category"
+                            title="Delete category"
+                          >
+                            <DeleteIcon />
+                          </button>
                         </div>
                       </div>
                     )}
@@ -3531,7 +3539,9 @@ export function HomeMaintenanceScheduleTool({ toolId }: HomeMaintenanceScheduleT
         <div className={overlayClass}>
           <div className={modalCardClass}>
             <div className={deleteWarningBoxClass}>
-              <p className={deleteWarningTextClass}>⚠️ This action cannot be undone</p>
+              <p className={deleteWarningTextClass}>
+                {deleteCopy().blocked ? 'This category cannot be deleted' : '⚠️ This action cannot be undone'}
+              </p>
               <p className={deleteWarningDetailClass}>{deleteCopy().detail}</p>
             </div>
             <h3 className={isLight ? 'text-xl font-semibold text-slate-900 mb-2' : 'text-xl font-semibold text-slate-50 mb-2'}>

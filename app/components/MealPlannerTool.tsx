@@ -48,7 +48,6 @@ type Meal = {
   instructions: string;
   ingredientIds: string[];
   prepTimeMinutes: number | null;
-  scale: number;
   difficulty: 'easy' | 'medium' | 'hard' | '';
   rating: number; // 0-5
   isActive?: boolean;
@@ -184,11 +183,6 @@ function hasLeftoverWithoutCook(assignments: DayAssignments): boolean {
   return false;
 }
 
-function mealScale(meal: { scale?: number } | undefined): number {
-  const n = Number(meal?.scale);
-  return Number.isFinite(n) && n > 0 ? n : 1;
-}
-
 type MealPlanRecord = {
   id: string;
   name: string;
@@ -273,6 +267,118 @@ function getDatesForWeek(startMonday: string): { key: DayKey; date: string; labe
     const labels = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
     return { key, date: dateStr, label: labels[i] };
   });
+}
+
+function WeekPlanGrid({
+  isLight,
+  dates,
+  assignments,
+  meals,
+  planId,
+  isEditing,
+  onRemoveMeal,
+  onAddMeal,
+}: {
+  isLight: boolean;
+  dates: { key: DayKey; date: string; label: string }[];
+  assignments: DayAssignments;
+  meals: Meal[];
+  planId: string;
+  isEditing: boolean;
+  onRemoveMeal: (planId: string, day: DayKey, slot: DaySlot, isEditing: boolean) => void;
+  onAddMeal: (day: DayKey, slot: DaySlot) => void;
+}) {
+  return (
+    <div className="min-w-0 overflow-x-auto">
+    <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:min-w-[64rem] lg:grid-cols-7">
+      {dates.map(({ key, date, label }) => (
+        <div
+          key={key}
+          className={`min-w-0 rounded-lg px-2.5 py-3 ${
+            isLight ? 'border border-slate-300 bg-slate-50' : 'border border-slate-700 bg-slate-800/50'
+          }`}
+        >
+          <div className="mb-2">
+            <p className={`text-xs font-semibold uppercase tracking-wider ${isLight ? 'text-emerald-700' : 'text-emerald-300'}`}>
+              {label}
+            </p>
+            <p className={`mt-0.5 text-xs ${isLight ? 'text-slate-600' : 'text-slate-400'}`}>{formatDateDisplay(date)}</p>
+          </div>
+          <div className="space-y-3">
+            {DAY_SLOTS.map(({ key: slot, label: slotLabel }) => {
+              const value = assignments[key]?.[slot];
+              const mealId = slotMealId(value);
+              const isLeftover = slotIsLeftover(value);
+              const meal = mealId ? meals.find((item) => item.id === mealId) : undefined;
+              return (
+                <div key={slot} className="min-w-0">
+                  <p className={`text-[10px] font-semibold uppercase tracking-wider ${isLight ? 'text-slate-500' : 'text-slate-400'}`}>
+                    {slotLabel}
+                  </p>
+                  {meal ? (
+                    <div
+                      className={`relative mt-1 min-w-0 rounded-md border px-2 py-1.5 pr-7 ${isLeftover ? 'pb-6' : ''} ${
+                        isLight ? 'border-slate-300 bg-white' : 'border-slate-600 bg-slate-700/40'
+                      }`}
+                    >
+                      <button
+                        type="button"
+                        onClick={() => onRemoveMeal(planId, key, slot, isEditing)}
+                        aria-label={`Remove ${meal.name}`}
+                        title={`Remove ${meal.name}`}
+                        className={`absolute right-0.5 top-0.5 inline-flex h-6 w-6 items-center justify-center rounded text-base leading-none ${
+                          isLight ? 'text-slate-500 hover:bg-red-50 hover:text-red-700' : 'text-slate-400 hover:bg-red-500/20 hover:text-red-300'
+                        }`}
+                      >
+                        ×
+                      </button>
+                      <p
+                        className={`break-words text-sm font-medium leading-snug ${isLight ? 'text-slate-900' : 'text-slate-100'}`}
+                        title={meal.name}
+                      >
+                        {meal.name}
+                      </p>
+                      {isLeftover ? (
+                        <span
+                          className="absolute bottom-1 right-1 text-yellow-500"
+                          title="Leftover"
+                          aria-label="Leftover"
+                        >
+                          <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden>
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 19H4.815a1.83 1.83 0 0 1-1.57-.881 1.785 1.785 0 0 1-.004-1.784L7.196 9.5" />
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 19h8.203a1.83 1.83 0 0 0 1.556-.89 1.784 1.784 0 0 0 0-1.775l-1.226-2.12" />
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="m14 16-3 3 3 3" />
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8.293 13.596 7.196 9.5 3.1 10.598" />
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="m9.344 5.811 1.093-1.892A1.83 1.83 0 0 1 11.985 3a1.784 1.784 0 0 1 1.546.89l3.943 6.843" />
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="m13.378 9.633 4.096 1.098 1.097-4.096" />
+                          </svg>
+                        </span>
+                      ) : null}
+                    </div>
+                  ) : (
+                    <button
+                      type="button"
+                      onClick={() => onAddMeal(key, slot)}
+                      aria-label={`Add ${slotLabel}`}
+                      title={`Add ${slotLabel}`}
+                      className={`mt-1 w-full rounded-md border border-dashed px-2 py-1.5 text-left text-xs ${
+                        isLight
+                          ? 'border-slate-300 text-slate-500 hover:border-emerald-600 hover:text-emerald-800'
+                          : 'border-slate-600 text-slate-400 hover:border-emerald-400 hover:text-emerald-200'
+                      }`}
+                    >
+                      Add
+                    </button>
+                  )}
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      ))}
+    </div>
+    </div>
+  );
 }
 
 type MealPlannerToolProps = {
@@ -383,7 +489,7 @@ export function MealPlannerTool({ toolId }: MealPlannerToolProps) {
       const res = await fetch(`${API_BASE}?toolId=${encodeURIComponent(toolId)}&resource=meals`);
       if (!res.ok) throw new Error('Failed to fetch meals');
       const data = await res.json();
-      setMeals((data.meals ?? []).map((m: Meal) => ({ ...m, scale: mealScale(m), attachments: m.attachments ?? [] })));
+      setMeals((data.meals ?? []).map((m: Meal) => ({ ...m, attachments: m.attachments ?? [] })));
     } catch (e) {
       console.error('Fetch meals error:', e);
     } finally {
@@ -606,7 +712,6 @@ export function MealPlannerTool({ toolId }: MealPlannerToolProps) {
     instructions: '',
     ingredientIds: [] as string[],
     prepTimeMinutes: '' as number | '',
-    scale: 1 as number | '',
     difficulty: '' as Meal['difficulty'],
     rating: 0,
   });
@@ -648,7 +753,6 @@ export function MealPlannerTool({ toolId }: MealPlannerToolProps) {
       instructions: '',
       ingredientIds: [],
       prepTimeMinutes: '',
-      scale: 1,
       difficulty: '',
       rating: 0,
     });
@@ -667,11 +771,6 @@ export function MealPlannerTool({ toolId }: MealPlannerToolProps) {
     const diff = mealForm.difficulty || '';
     if (!mealForm.name.trim() || !toolId) return;
     const prepVal = prep === null || isNaN(prep) ? null : prep;
-    const scaleVal = mealForm.scale === '' ? 1 : Number(mealForm.scale);
-    if (!Number.isFinite(scaleVal) || scaleVal <= 0) {
-      showError('Scale must be a number greater than 0.');
-      return;
-    }
     setIsSavingMeal(true);
     try {
       if (editingMealId) {
@@ -688,7 +787,6 @@ export function MealPlannerTool({ toolId }: MealPlannerToolProps) {
             instructions: mealForm.instructions.trim(),
             ingredientIds: mealForm.ingredientIds,
             prepTimeMinutes: prepVal,
-            scale: scaleVal,
             difficulty: diff || null,
             rating: mealForm.rating,
           }),
@@ -707,7 +805,6 @@ export function MealPlannerTool({ toolId }: MealPlannerToolProps) {
             instructions: mealForm.instructions.trim(),
             ingredientIds: mealForm.ingredientIds,
             prepTimeMinutes: prepVal,
-            scale: scaleVal,
             difficulty: diff || null,
             rating: mealForm.rating,
           }),
@@ -756,7 +853,6 @@ export function MealPlannerTool({ toolId }: MealPlannerToolProps) {
       instructions: meal.instructions,
       ingredientIds: [...meal.ingredientIds],
       prepTimeMinutes: meal.prepTimeMinutes ?? '',
-      scale: mealScale(meal),
       difficulty: meal.difficulty,
       rating: meal.rating,
     });
@@ -1067,7 +1163,15 @@ export function MealPlannerTool({ toolId }: MealPlannerToolProps) {
   const [editingPlanAssignments, setEditingPlanAssignments] = useState<DayAssignments | null>(null);
   const [mealPickerOpenFor, setMealPickerOpenFor] = useState<{ planId: string; day: DayKey; slot: DaySlot } | null>(null);
   const [mealPickerSearch, setMealPickerSearch] = useState('');
+  const [mealPickerIsLeftover, setMealPickerIsLeftover] = useState(false);
   const [mealPickerTypeFilter, setMealPickerTypeFilter] = useState('');
+  const openMealPicker = (planId: string, day: DayKey, slot: DaySlot) => {
+    const slotLabel = DAY_SLOTS.find((entry) => entry.key === slot)?.label ?? '';
+    const matchingType = mealTypes.find((type) => type.name.trim().toLowerCase() === slotLabel.toLowerCase());
+    setMealPickerIsLeftover(false);
+    setMealPickerTypeFilter(matchingType?.id ?? '');
+    setMealPickerOpenFor({ planId, day, slot });
+  };
   const [deleteConfirmPlanId, setDeleteConfirmPlanId] = useState<string | null>(null);
   const [deleteConfirmPlanText, setDeleteConfirmPlanText] = useState('');
   const [cartOpenPlanId, setCartOpenPlanId] = useState<string | null>(null);
@@ -1108,8 +1212,11 @@ export function MealPlannerTool({ toolId }: MealPlannerToolProps) {
     }
   };
 
-  const addMealToDay = async (planId: string, day: DayKey, slot: DaySlot, mealId: string, isEditing: boolean) => {
+  const addMealToDay = async (planId: string, day: DayKey, slot: DaySlot, mealId: string, isEditing: boolean, isLeftover = false) => {
     const plan = mealPlans.find((p) => p.id === planId);
+    const week = isEditing
+      ? editingPlanAssignments ?? plan?.assignments
+      : plan?.assignments ?? newPlanAssignments;
     const current = normalizeDaySlots(
       isEditing
         ? editingPlanAssignments?.[day] ?? plan?.assignments[day]
@@ -1117,8 +1224,15 @@ export function MealPlannerTool({ toolId }: MealPlannerToolProps) {
           ? plan.assignments[day]
           : newPlanAssignments[day]
     );
-    if (slotMealId(current[slot]) === mealId) return;
-    const next = { ...current, [slot]: toSlotAssignment(mealId) };
+    if (slotMealId(current[slot]) === mealId && slotIsLeftover(current[slot]) === isLeftover) return true;
+    if (isLeftover) {
+      const allAssignments = week ? normalizeWeekAssignments(week) : emptyDayAssignments();
+      if (!hasCookOccurrence(allAssignments, mealId, day, slot)) {
+        showError(LEFTOVER_ONLY_ALERT);
+        return false;
+      }
+    }
+    const next = { ...current, [slot]: toSlotAssignment(mealId, isLeftover) };
     if (isEditing) {
       setPlanAssignment(planId, day, next, true);
     } else if (plan && toolId) {
@@ -1133,10 +1247,12 @@ export function MealPlannerTool({ toolId }: MealPlannerToolProps) {
         await fetchPlans();
       } catch (e) {
         console.error('Add meal to day error:', e);
+        return false;
       }
     } else {
       setPlanAssignment(planId, day, next, false);
     }
+    return true;
   };
 
   const removeMealFromDay = async (planId: string, day: DayKey, slot: DaySlot, isEditing: boolean) => {
@@ -1171,45 +1287,6 @@ export function MealPlannerTool({ toolId }: MealPlannerToolProps) {
         await fetchPlans();
       } catch (e) {
         console.error('Remove meal from day error:', e);
-      }
-    } else {
-      setPlanAssignment(planId, day, next, false);
-    }
-  };
-
-  const toggleLeftover = async (planId: string, day: DayKey, slot: DaySlot, isEditing: boolean) => {
-    const plan = mealPlans.find((p) => p.id === planId);
-    const week = isEditing
-      ? editingPlanAssignments ?? plan?.assignments
-      : plan?.assignments ?? newPlanAssignments;
-    const current = normalizeDaySlots(week?.[day]);
-    const mealId = slotMealId(current[slot]);
-    if (!mealId) return;
-    const makingLeftover = !slotIsLeftover(current[slot]);
-    const allAssignments = (week ? normalizeWeekAssignments(week) : emptyDayAssignments());
-    if (makingLeftover && !hasCookOccurrence(allAssignments, mealId, day, slot)) {
-      showError(LEFTOVER_ONLY_ALERT);
-      return;
-    }
-    const next = { ...current, [slot]: toSlotAssignment(mealId, makingLeftover) };
-    if (isEditing) {
-      setPlanAssignment(planId, day, next, true);
-    } else if (plan && toolId) {
-      const newAssignments = { ...plan.assignments, [day]: next };
-      try {
-        const res = await fetch(API_BASE, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ action: 'updatePlan', toolId, planId, assignments: newAssignments }),
-        });
-        if (!res.ok) {
-          const err = await res.json().catch(() => ({}));
-          showError((err as { error?: string }).error || 'Failed to update leftover');
-          return;
-        }
-        await fetchPlans();
-      } catch (e) {
-        console.error('Toggle leftover error:', e);
       }
     } else {
       setPlanAssignment(planId, day, next, false);
@@ -1452,9 +1529,8 @@ export function MealPlannerTool({ toolId }: MealPlannerToolProps) {
         if (!mealId || slotIsLeftover(value)) continue;
         const meal = meals.find((m) => m.id === mealId);
         if (meal) {
-          const scale = mealScale(meal);
           for (const itemId of meal.ingredientIds) {
-            countByItemId.set(itemId, (countByItemId.get(itemId) ?? 0) + scale);
+            countByItemId.set(itemId, (countByItemId.get(itemId) ?? 0) + 1);
           }
         }
       }
@@ -1489,7 +1565,10 @@ export function MealPlannerTool({ toolId }: MealPlannerToolProps) {
   useEffect(() => {
     if (!mealPickerOpenFor) return;
     const onKeyDown = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') setMealPickerOpenFor(null);
+      if (e.key === 'Escape') {
+        setMealPickerOpenFor(null);
+        setMealPickerIsLeftover(false);
+      }
     };
     window.addEventListener('keydown', onKeyDown);
     return () => window.removeEventListener('keydown', onKeyDown);
@@ -1671,9 +1750,8 @@ export function MealPlannerTool({ toolId }: MealPlannerToolProps) {
             if (!mealId || slotIsLeftover(value)) continue;
             const meal = meals.find((entry) => entry.id === mealId);
             if (!meal) continue;
-            const scale = mealScale(meal);
             for (const itemId of meal.ingredientIds) {
-              countByItemId.set(itemId, (countByItemId.get(itemId) ?? 0) + scale);
+              countByItemId.set(itemId, (countByItemId.get(itemId) ?? 0) + 1);
             }
           }
         }
@@ -1821,7 +1899,6 @@ export function MealPlannerTool({ toolId }: MealPlannerToolProps) {
             if (meal.prepTimeMinutes != null) {
               recipeLines.push({ text: `Prep time: ${meal.prepTimeMinutes} min`, fontSize: 9, isBold: false, indent: 10 });
             }
-            recipeLines.push({ text: `Scale: ${mealScale(meal)}`, fontSize: 9, isBold: false, indent: 10 });
             if (meal.difficulty) {
               recipeLines.push({
                 text: `Difficulty: ${meal.difficulty.charAt(0).toUpperCase()}${meal.difficulty.slice(1)}`,
@@ -1925,18 +2002,30 @@ export function MealPlannerTool({ toolId }: MealPlannerToolProps) {
               dangerouslySetInnerHTML={{
                 __html: `
                   @media print {
-                    @page { size: landscape; }
-                    html, body { background: white !important; color: black !important; }
-                    body * { visibility: hidden; }
-                    .meal-plan-full-print, .meal-plan-full-print * { visibility: visible; }
+                    @page { size: landscape; margin: 0.5in; }
+                    html, body {
+                      background: white !important;
+                      color: black !important;
+                      height: auto !important;
+                      min-height: 0 !important;
+                      overflow: visible !important;
+                    }
+                    body > *:not(.meal-plan-full-print) { display: none !important; }
+                    .meal-plan-full-print, .meal-plan-full-print * { visibility: visible !important; }
                     .meal-plan-full-print {
                       display: block !important;
-                      position: absolute !important; left: 0 !important; top: 0 !important;
-                      width: 100% !important; max-width: none !important; height: auto !important;
+                      position: static !important;
+                      width: 100% !important;
+                      max-width: none !important;
+                      height: auto !important;
                       overflow: visible !important;
-                      background: white !important; color: black !important;
-                      padding: 1rem !important; font-size: 12px;
-                      border: none !important; border-radius: 0 !important; box-shadow: none !important;
+                      background: white !important;
+                      color: black !important;
+                      padding: 0 !important;
+                      font-size: 12px;
+                      border: none !important;
+                      border-radius: 0 !important;
+                      box-shadow: none !important;
                     }
                     .meal-plan-full-print .print-title { color: black !important; }
                     .meal-plan-full-print .print-week-grid { display: grid; grid-template-columns: repeat(7, 1fr); gap: 8px; margin-top: 8px; }
@@ -2500,7 +2589,7 @@ export function MealPlannerTool({ toolId }: MealPlannerToolProps) {
                   rows={4}
                 />
               </div>
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div>
                   <label className="block text-xs font-medium text-slate-300 mb-1.5">Estimated prep time (minutes)</label>
                   <input
@@ -2514,23 +2603,6 @@ export function MealPlannerTool({ toolId }: MealPlannerToolProps) {
                       }))
                     }
                     placeholder="e.g., 30"
-                    className="w-full rounded-lg border border-slate-700 bg-slate-900/70 px-3 py-2 text-sm text-slate-100 placeholder-slate-500 focus:border-emerald-500/50 focus:outline-none focus:ring-1 focus:ring-emerald-500/50"
-                  />
-                </div>
-                <div>
-                  <label className="block text-xs font-medium text-slate-300 mb-1.5">Scale</label>
-                  <input
-                    type="number"
-                    min={0.01}
-                    step="any"
-                    value={mealForm.scale === '' ? '' : mealForm.scale}
-                    onChange={(e) =>
-                      setMealForm((f) => ({
-                        ...f,
-                        scale: e.target.value === '' ? '' : Number(e.target.value),
-                      }))
-                    }
-                    placeholder="1"
                     className="w-full rounded-lg border border-slate-700 bg-slate-900/70 px-3 py-2 text-sm text-slate-100 placeholder-slate-500 focus:border-emerald-500/50 focus:outline-none focus:ring-1 focus:ring-emerald-500/50"
                   />
                 </div>
@@ -3075,85 +3147,16 @@ export function MealPlannerTool({ toolId }: MealPlannerToolProps) {
                           )}
                         </div>
                       </div>
-                      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-7 gap-3">
-                        {dates.map(({ key, date, label }) => (
-                          <div
-                            key={key}
-                            className={`rounded-lg p-3 ${
-                              isLight
-                                ? 'border border-slate-300 bg-slate-50'
-                                : 'border border-slate-700 bg-slate-800/50'
-                            }`}
-                          >
-                            <div className="mb-2">
-                              <p
-                                className={`text-xs font-semibold uppercase tracking-wider ${
-                                  isLight ? 'text-emerald-700' : 'text-emerald-300'
-                                }`}
-                              >
-                                {label}
-                              </p>
-                              <p className="text-xs text-slate-500 mt-0.5">{formatDateDisplay(date)}</p>
-                            </div>
-                            <div className="space-y-2 min-h-[44px]">
-                              {DAY_SLOTS.map(({ key: slot, label: slotLabel }) => {
-                                const value = assignments[key]?.[slot];
-                                const mealId = slotMealId(value);
-                                const isLeftover = slotIsLeftover(value);
-                                const meal = mealId ? meals.find((m) => m.id === mealId) : undefined;
-                                const leftoverLabel = isLeftover ? 'Mark as cook' : 'Mark as leftover';
-                                return (
-                                  <div key={slot} className="space-y-0.5">
-                                    <p className="text-[10px] font-semibold uppercase tracking-wider text-slate-500">{slotLabel}</p>
-                                    {meal ? (
-                                      <div
-                                        className={`flex items-center justify-between gap-1 text-sm rounded px-2 py-1 ${
-                                          isLight
-                                            ? 'text-slate-800 bg-white border border-slate-300'
-                                            : 'text-slate-200 bg-slate-700/50'
-                                        }`}
-                                      >
-                                        <span className="min-w-0 break-words" title={isLeftover ? `${meal.name} (Leftover)` : meal.name}>
-                                          {meal.name}
-                                          {isLeftover ? ' (Leftover)' : ''}
-                                        </span>
-                                        <button
-                                          type="button"
-                                          onClick={() => toggleLeftover(plan.id, key, slot, isEditing)}
-                                          aria-label={leftoverLabel}
-                                          title={leftoverLabel}
-                                          className="text-[10px] uppercase tracking-wider text-slate-400 hover:text-slate-200 flex-shrink-0"
-                                        >
-                                          Leftover
-                                        </button>
-                                        <button
-                                          type="button"
-                                          onClick={() => removeMealFromDay(plan.id, key, slot, isEditing)}
-                                          aria-label={`Remove ${meal.name}`}
-                                          title={`Remove ${meal.name}`}
-                                          className="rounded p-0.5 text-slate-400 hover:text-red-300 flex-shrink-0"
-                                        >
-                                          ×
-                                        </button>
-                                      </div>
-                                    ) : (
-                                      <button
-                                        type="button"
-                                        onClick={() => setMealPickerOpenFor({ planId: plan.id, day: key, slot })}
-                                        aria-label={`Add ${slotLabel}`}
-                                        title={`Add ${slotLabel}`}
-                                        className="text-xs text-slate-400 hover:text-slate-200"
-                                      >
-                                        Add
-                                      </button>
-                                    )}
-                                  </div>
-                                );
-                              })}
-                            </div>
-                          </div>
-                        ))}
-                      </div>
+                      <WeekPlanGrid
+                        isLight={isLight}
+                        dates={dates}
+                        assignments={assignments}
+                        meals={meals}
+                        planId={plan.id}
+                        isEditing={isEditing}
+                        onRemoveMeal={removeMealFromDay}
+                        onAddMeal={(day, slot) => openMealPicker(plan.id, day, slot)}
+                      />
                     </div>
                   );
                 })}
@@ -3270,85 +3273,16 @@ export function MealPlannerTool({ toolId }: MealPlannerToolProps) {
                           )}
                         </div>
                       </div>
-                      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-7 gap-3">
-                        {dates.map(({ key, date, label }) => (
-                          <div
-                            key={key}
-                            className={`rounded-lg p-3 ${
-                              isLight
-                                ? 'border border-slate-300 bg-slate-50'
-                                : 'border border-slate-700 bg-slate-800/50'
-                            }`}
-                          >
-                            <div className="mb-2">
-                              <p
-                                className={`text-xs font-semibold uppercase tracking-wider ${
-                                  isLight ? 'text-emerald-700' : 'text-emerald-300'
-                                }`}
-                              >
-                                {label}
-                              </p>
-                              <p className="text-xs text-slate-500 mt-0.5">{formatDateDisplay(date)}</p>
-                            </div>
-                            <div className="space-y-2 min-h-[44px]">
-                              {DAY_SLOTS.map(({ key: slot, label: slotLabel }) => {
-                                const value = assignments[key]?.[slot];
-                                const mealId = slotMealId(value);
-                                const isLeftover = slotIsLeftover(value);
-                                const meal = mealId ? meals.find((m) => m.id === mealId) : undefined;
-                                const leftoverLabel = isLeftover ? 'Mark as cook' : 'Mark as leftover';
-                                return (
-                                  <div key={slot} className="space-y-0.5">
-                                    <p className="text-[10px] font-semibold uppercase tracking-wider text-slate-500">{slotLabel}</p>
-                                    {meal ? (
-                                      <div
-                                        className={`flex items-center justify-between gap-1 text-sm rounded px-2 py-1 ${
-                                          isLight
-                                            ? 'text-slate-800 bg-white border border-slate-300'
-                                            : 'text-slate-200 bg-slate-700/50'
-                                        }`}
-                                      >
-                                        <span className="min-w-0 break-words" title={isLeftover ? `${meal.name} (Leftover)` : meal.name}>
-                                          {meal.name}
-                                          {isLeftover ? ' (Leftover)' : ''}
-                                        </span>
-                                        <button
-                                          type="button"
-                                          onClick={() => toggleLeftover(plan.id, key, slot, isEditing)}
-                                          aria-label={leftoverLabel}
-                                          title={leftoverLabel}
-                                          className="text-[10px] uppercase tracking-wider text-slate-400 hover:text-slate-200 flex-shrink-0"
-                                        >
-                                          Leftover
-                                        </button>
-                                        <button
-                                          type="button"
-                                          onClick={() => removeMealFromDay(plan.id, key, slot, isEditing)}
-                                          aria-label={`Remove ${meal.name}`}
-                                          title={`Remove ${meal.name}`}
-                                          className="rounded p-0.5 text-slate-400 hover:text-red-300 flex-shrink-0"
-                                        >
-                                          ×
-                                        </button>
-                                      </div>
-                                    ) : (
-                                      <button
-                                        type="button"
-                                        onClick={() => setMealPickerOpenFor({ planId: plan.id, day: key, slot })}
-                                        aria-label={`Add ${slotLabel}`}
-                                        title={`Add ${slotLabel}`}
-                                        className="text-xs text-slate-400 hover:text-slate-200"
-                                      >
-                                        Add
-                                      </button>
-                                    )}
-                                  </div>
-                                );
-                              })}
-                            </div>
-                          </div>
-                        ))}
-                      </div>
+                      <WeekPlanGrid
+                        isLight={isLight}
+                        dates={dates}
+                        assignments={assignments}
+                        meals={meals}
+                        planId={plan.id}
+                        isEditing={isEditing}
+                        onRemoveMeal={removeMealFromDay}
+                        onAddMeal={(day, slot) => openMealPicker(plan.id, day, slot)}
+                      />
                     </div>
                   );
                 })}
@@ -3362,7 +3296,10 @@ export function MealPlannerTool({ toolId }: MealPlannerToolProps) {
       {mealPickerOpenFor && (
         <div
           className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm"
-          onClick={() => setMealPickerOpenFor(null)}
+          onClick={() => {
+            setMealPickerOpenFor(null);
+            setMealPickerIsLeftover(false);
+          }}
         >
           <div
             className={`${isLight ? 'w-full max-w-md rounded-2xl border border-slate-200 bg-white p-6 shadow-2xl mx-4 max-h-[80vh] flex flex-col' : 'w-full max-w-md rounded-2xl border border-slate-800 bg-slate-900 p-6 shadow-2xl mx-4 max-h-[80vh] flex flex-col'}`}
@@ -3374,7 +3311,10 @@ export function MealPlannerTool({ toolId }: MealPlannerToolProps) {
               </h3>
               <button
                 type="button"
-                onClick={() => setMealPickerOpenFor(null)}
+                onClick={() => {
+                  setMealPickerOpenFor(null);
+                  setMealPickerIsLeftover(false);
+                }}
                 aria-label="Close modal"
                 title="Close modal"
                 className={isLight ? 'rounded-lg p-2 text-slate-600 hover:bg-slate-100 hover:text-slate-900 transition-colors' : 'rounded-lg p-2 text-slate-400 hover:bg-slate-800 hover:text-slate-200 transition-colors'}
@@ -3404,6 +3344,15 @@ export function MealPlannerTool({ toolId }: MealPlannerToolProps) {
                   </option>
                 ))}
               </select>
+              <label className={`flex items-center gap-2 text-sm ${isLight ? 'text-slate-800' : 'text-slate-200'}`}>
+                <input
+                  type="checkbox"
+                  checked={mealPickerIsLeftover}
+                  onChange={(e) => setMealPickerIsLeftover(e.target.checked)}
+                  className="h-4 w-4 rounded border-slate-400 text-emerald-600 focus:ring-emerald-500"
+                />
+                Is this meal a Leftover
+              </label>
             </div>
             <div className="overflow-y-auto flex-1 min-h-0 space-y-1">
               {filteredMealsForPicker.length === 0 ? (
@@ -3415,15 +3364,39 @@ export function MealPlannerTool({ toolId }: MealPlannerToolProps) {
                     <button
                       key={meal.id}
                       type="button"
-                      onClick={() => {
+                      onClick={async () => {
                         const plan = mealPlans.find((p) => p.id === mealPickerOpenFor.planId);
                         const isEditing = plan && editingPlanId === plan.id;
-                        addMealToDay(mealPickerOpenFor.planId, mealPickerOpenFor.day, mealPickerOpenFor.slot, meal.id, !!isEditing);
+                        const added = await addMealToDay(
+                          mealPickerOpenFor.planId,
+                          mealPickerOpenFor.day,
+                          mealPickerOpenFor.slot,
+                          meal.id,
+                          !!isEditing,
+                          mealPickerIsLeftover
+                        );
+                        if (!added) return;
                         setMealPickerOpenFor(null);
+                        setMealPickerIsLeftover(false);
                       }}
+                      aria-label={`${meal.name}${typeName ? `, ${typeName}` : ''}, ${meal.rating} of 5 stars`}
                       className="w-full text-left px-4 py-3 rounded-lg border border-slate-700 bg-slate-800/50 hover:bg-slate-700 text-slate-200 transition-colors"
                     >
-                      <span className="font-medium">{meal.name}</span>
+                      <span className="flex items-start justify-between gap-3">
+                        <span className="min-w-0 break-words font-medium">{meal.name}</span>
+                        <span className="flex shrink-0 items-center gap-0.5" aria-hidden>
+                          {[1, 2, 3, 4, 5].map((star) => (
+                            <svg
+                              key={star}
+                              className={`h-4 w-4 ${meal.rating >= star ? 'text-amber-500' : isLight ? 'text-slate-400' : 'text-slate-600'}`}
+                              fill="currentColor"
+                              viewBox="0 0 24 24"
+                            >
+                              <path d="M11.049 2.927c.3-.921 1.603-.921 1.902 0l1.519 4.674a1 1 0 00.95.69h4.915c.969 0 1.371 1.24.588 1.81l-3.976 2.888a1 1 0 00-.363 1.118l1.518 4.674c.3.922-.755 1.688-1.538 1.118l-3.976-2.888a1 1 0 00-1.176 0l-3.976 2.888c-.783.57-1.838-.197-1.538-1.118l1.518-4.674a1 1 0 00-.363-1.118l-3.976-2.888c-.784-.57-.38-1.81.588-1.81h4.914a1 1 0 00.951-.69l1.519-4.674z" />
+                            </svg>
+                          ))}
+                        </span>
+                      </span>
                       {typeName && (
                         <span className="text-slate-400 text-sm block mt-0.5">{typeName}</span>
                       )}
@@ -3448,16 +3421,28 @@ export function MealPlannerTool({ toolId }: MealPlannerToolProps) {
               dangerouslySetInnerHTML={{
                 __html: `
                   @media print {
-                    html, body { background: white !important; color: black !important; }
-                    body * { visibility: hidden; }
-                    .meal-plan-cart-print, .meal-plan-cart-print * { visibility: visible; }
+                    html, body {
+                      background: white !important;
+                      color: black !important;
+                      height: auto !important;
+                      min-height: 0 !important;
+                      overflow: visible !important;
+                    }
+                    body > *:not(.meal-plan-cart-print) { display: none !important; }
+                    .meal-plan-cart-print, .meal-plan-cart-print * { visibility: visible !important; }
                     .meal-plan-cart-print {
                       display: block !important;
-                      position: absolute !important; left: 0 !important; top: 0 !important;
-                      width: 100% !important; max-width: none !important; height: auto !important;
+                      position: static !important;
+                      width: 100% !important;
+                      max-width: none !important;
+                      height: auto !important;
                       overflow: visible !important;
-                      background: white !important; color: black !important; padding: 1rem !important;
-                      border: none !important; border-radius: 0 !important; box-shadow: none !important;
+                      background: white !important;
+                      color: black !important;
+                      padding: 0 !important;
+                      border: none !important;
+                      border-radius: 0 !important;
+                      box-shadow: none !important;
                     }
                     .meal-plan-cart-print .print-title { display: block !important; color: black !important; }
                     .meal-plan-cart-print .report-category { color: #059669; }

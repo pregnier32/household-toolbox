@@ -309,9 +309,7 @@ export function HSATrackerTool({ toolId }: HSATrackerToolProps) {
   const nestedRowCardClass = isLight
     ? 'rounded-xl border border-slate-200 bg-slate-50/80 p-4 shadow-sm'
     : 'rounded-xl border border-slate-700/80 bg-slate-800/40 p-4';
-  const kpiCardClass = isLight
-    ? 'rounded-xl border border-slate-200 bg-white p-4 shadow-sm'
-    : 'rounded-xl border border-slate-800 bg-slate-900/60 p-4';
+  const summaryDividerClass = isLight ? 'mt-4 border-t border-slate-200 pt-4' : 'mt-4 border-t border-slate-700 pt-4';
   const currencyFieldWrapClass = isLight
     ? 'flex items-stretch overflow-hidden rounded-lg border border-slate-300 bg-white focus-within:border-emerald-500/50 focus-within:ring-1 focus-within:ring-emerald-500/50'
     : 'flex items-stretch overflow-hidden rounded-lg border border-slate-700 bg-slate-900/70 focus-within:border-emerald-500/50 focus-within:ring-1 focus-within:ring-emerald-500/50';
@@ -441,6 +439,7 @@ export function HSATrackerTool({ toolId }: HSATrackerToolProps) {
   const [editingAccountId, setEditingAccountId] = useState<string | null>(null);
   const [editingAccountName, setEditingAccountName] = useState('');
   const [editingAccountColor, setEditingAccountColor] = useState('#10b981');
+  const [showAccountColorPicker, setShowAccountColorPicker] = useState(false);
 
   const [deleteConfirmAccountId, setDeleteConfirmAccountId] = useState<string | null>(null);
   const [deleteConfirmText, setDeleteConfirmText] = useState('');
@@ -586,6 +585,7 @@ export function HSATrackerTool({ toolId }: HSATrackerToolProps) {
 
   const [deleteDepositId, setDeleteDepositId] = useState<string | null>(null);
   const [deleteExpenseId, setDeleteExpenseId] = useState<string | null>(null);
+  const [depositDeleteConfirmText, setDepositDeleteConfirmText] = useState('');
   const [expenseDeleteConfirmText, setExpenseDeleteConfirmText] = useState('');
 
   const [reportYear, setReportYear] = useState(currentYear);
@@ -639,6 +639,7 @@ export function HSATrackerTool({ toolId }: HSATrackerToolProps) {
     if (toolId) writeLastAccountId(toolId, id);
     setMenuOpenAccountId(null);
     setEditingAccountId(null);
+    setShowAccountColorPicker(false);
     setIsCreatingAccount(false);
   };
 
@@ -646,6 +647,7 @@ export function HSATrackerTool({ toolId }: HSATrackerToolProps) {
     setIsCreatingAccount(true);
     setSelectedAccountId(null);
     setEditingAccountId(null);
+    setShowAccountColorPicker(false);
     setNewAccountName('');
     setNewAccountColor('#10b981');
   };
@@ -676,10 +678,26 @@ export function HSATrackerTool({ toolId }: HSATrackerToolProps) {
     setIsCreatingAccount(false);
   };
 
+  const cancelEditingAccount = () => {
+    setEditingAccountId(null);
+    setEditingAccountName('');
+    setEditingAccountColor('#10b981');
+    setShowAccountColorPicker(false);
+  };
+
   const startEditingAccount = (acc: HsaAccount) => {
     setEditingAccountId(acc.id);
     setEditingAccountName(acc.name);
     setEditingAccountColor(acc.card_color);
+    setShowAccountColorPicker(false);
+    setMenuOpenAccountId(null);
+  };
+
+  const startChangingAccountColor = (acc: HsaAccount) => {
+    setEditingAccountId(acc.id);
+    setEditingAccountName(acc.name);
+    setEditingAccountColor(acc.card_color || '#10b981');
+    setShowAccountColorPicker(true);
     setMenuOpenAccountId(null);
   };
 
@@ -703,7 +721,7 @@ export function HSATrackerTool({ toolId }: HSATrackerToolProps) {
             : a
         )
       );
-      setEditingAccountId(null);
+      cancelEditingAccount();
       showMessage('success', 'Account updated');
       return;
     }
@@ -713,11 +731,48 @@ export function HSATrackerTool({ toolId }: HSATrackerToolProps) {
         a.id === editingAccountId ? { ...a, name, card_color: editingAccountColor } : a
       )
     );
-    setEditingAccountId(null);
+    cancelEditingAccount();
+  };
+
+  const saveAccountColor = async () => {
+    if (!editingAccountId) return;
+    const current = accounts.find((a) => a.id === editingAccountId);
+    if (!current) return;
+
+    if (toolId) {
+      const data = await apiPost('account', 'update', {
+        accountId: editingAccountId,
+        name: current.name,
+        card_color: editingAccountColor,
+      });
+      if (!data?.account) return;
+      const updated = data.account as { id: string; name: string; card_color: string };
+      setAccounts((prev) =>
+        prev.map((a) =>
+          a.id === editingAccountId
+            ? { ...a, name: updated.name, card_color: updated.card_color }
+            : a
+        )
+      );
+      cancelEditingAccount();
+      showMessage('success', 'Account color updated');
+      return;
+    }
+
+    setAccounts((prev) =>
+      prev.map((a) => (a.id === editingAccountId ? { ...a, card_color: editingAccountColor } : a))
+    );
+    cancelEditingAccount();
   };
 
   const confirmDeleteAccount = async () => {
-    if (!deleteConfirmAccountId || accounts.length <= 1) return;
+    if (!deleteConfirmAccountId || deleteConfirmText.trim().toLowerCase() !== 'delete') return;
+    if (accounts.length <= 1) {
+      showMessage('error', 'At least one HSA account is required');
+      setDeleteConfirmAccountId(null);
+      setDeleteConfirmText('');
+      return;
+    }
 
     if (toolId) {
       const data = await apiPost('account', 'delete', { accountId: deleteConfirmAccountId });
@@ -835,6 +890,7 @@ export function HSATrackerTool({ toolId }: HSATrackerToolProps) {
 
   const removeDeposit = async () => {
     if (!deleteDepositId || !selectedAccountId) return;
+    if (depositDeleteConfirmText.trim().toLowerCase() !== 'delete') return;
 
     if (toolId) {
       const data = await apiPost('deposit', 'delete', { depositId: deleteDepositId });
@@ -847,6 +903,7 @@ export function HSATrackerTool({ toolId }: HSATrackerToolProps) {
         )
       );
       setDeleteDepositId(null);
+      setDepositDeleteConfirmText('');
       showMessage('success', 'Deposit deleted');
       return;
     }
@@ -859,6 +916,7 @@ export function HSATrackerTool({ toolId }: HSATrackerToolProps) {
       )
     );
     setDeleteDepositId(null);
+    setDepositDeleteConfirmText('');
   };
 
   const saveExpense = async () => {
@@ -1543,6 +1601,7 @@ export function HSATrackerTool({ toolId }: HSATrackerToolProps) {
         if (showReportModal && !isExportingPdf) setShowReportModal(false);
         setDeleteConfirmAccountId(null);
         setDeleteDepositId(null);
+        setDepositDeleteConfirmText('');
         setDeleteExpenseId(null);
         setExpenseDeleteConfirmText('');
       }
@@ -1610,34 +1669,64 @@ export function HSATrackerTool({ toolId }: HSATrackerToolProps) {
         {!isCreatingAccount ? (
           <div className="flex items-center gap-3 flex-wrap">
             {accounts.map((acc) =>
-              editingAccountId === acc.id ? (
+              editingAccountId === acc.id && showAccountColorPicker ? (
                 <div
                   key={acc.id}
-                  className={`px-4 py-3 rounded-lg border min-w-[200px] ${isLight ? 'bg-white' : 'border-slate-600 bg-slate-800'}`}
-                  style={{
-                    borderColor: editingAccountColor,
-                    backgroundColor: isLight ? `${editingAccountColor}12` : `${editingAccountColor}15`,
-                  }}
+                  className={
+                    isLight
+                      ? 'px-4 py-3 rounded-lg border border-slate-300 bg-slate-100 min-w-[180px]'
+                      : 'px-4 py-3 rounded-lg border border-slate-700 bg-slate-800/50 min-w-[180px]'
+                  }
                 >
-                  <div className="flex items-center gap-2 mb-2">
-                    <input
-                      type="text"
-                      value={editingAccountName}
-                      onChange={(e) => setEditingAccountName(e.target.value)}
-                      className={`flex-1 px-2 py-1 rounded border text-sm focus:border-emerald-500/50 focus:outline-none ${isLight ? 'border-slate-300 bg-white text-slate-900' : 'border-slate-600 bg-slate-900 text-slate-100'}`}
-                      placeholder="Account name"
-                      autoFocus
-                    />
+                  <div className="mb-3">
+                    <div className={isLight ? 'mb-2 text-sm font-medium text-slate-800' : 'mb-2 text-sm font-medium text-slate-200'}>
+                      {acc.name}
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <label className={isLight ? 'text-xs text-slate-600' : 'text-xs text-slate-400'}>Card Color:</label>
+                      <input
+                        type="color"
+                        value={editingAccountColor}
+                        onChange={(e) => setEditingAccountColor(e.target.value)}
+                        className="h-8 w-16 cursor-pointer rounded border border-slate-600"
+                      />
+                    </div>
                   </div>
-                  <div className="flex items-center gap-2 mb-2">
-                    <span className={mutedSmallClass}>Color:</span>
-                    <input
-                      type="color"
-                      value={editingAccountColor}
-                      onChange={(e) => setEditingAccountColor(e.target.value)}
-                      className={`h-6 w-12 rounded cursor-pointer ${isLight ? 'border border-slate-300' : 'border border-slate-600'}`}
-                    />
+                  <div className="flex items-center gap-2">
+                    <button
+                      type="button"
+                      onClick={() => void runSaving(saveAccountColor)}
+                      disabled={isSavingRecord}
+                      className={primaryButtonXsClass}
+                    >
+                      {isSavingRecord ? 'Saving...' : 'Save'}
+                    </button>
+                    <button type="button" onClick={cancelEditingAccount} className={secondaryButtonSmClass}>
+                      Cancel
+                    </button>
                   </div>
+                </div>
+              ) : editingAccountId === acc.id ? (
+                <div
+                  key={acc.id}
+                  className={
+                    isLight
+                      ? 'px-4 py-3 rounded-lg border border-slate-300 bg-slate-100 min-w-[180px]'
+                      : 'px-4 py-3 rounded-lg border border-slate-700 bg-slate-800/50 min-w-[180px]'
+                  }
+                >
+                  <input
+                    type="text"
+                    value={editingAccountName}
+                    onChange={(e) => setEditingAccountName(e.target.value)}
+                    className={`mb-2 w-full rounded border px-2 py-1 text-sm focus:border-emerald-500/50 focus:outline-none ${isLight ? 'border-slate-300 bg-white text-slate-900' : 'border-slate-600 bg-slate-900 text-slate-100'}`}
+                    placeholder="Account name"
+                    autoFocus
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter') void runSaving(saveAccountEdit);
+                      else if (e.key === 'Escape') cancelEditingAccount();
+                    }}
+                  />
                   <div className="flex items-center gap-2">
                     <button
                       type="button"
@@ -1647,7 +1736,7 @@ export function HSATrackerTool({ toolId }: HSATrackerToolProps) {
                     >
                       {isSavingRecord ? 'Saving...' : 'Save'}
                     </button>
-                    <button type="button" onClick={() => setEditingAccountId(null)} className={secondaryButtonSmClass}>
+                    <button type="button" onClick={cancelEditingAccount} className={secondaryButtonSmClass}>
                       Cancel
                     </button>
                   </div>
@@ -1657,7 +1746,7 @@ export function HSATrackerTool({ toolId }: HSATrackerToolProps) {
                   <button
                     type="button"
                     onClick={() => selectAccount(acc.id)}
-                    className={`px-4 py-3 rounded-lg border transition-all duration-200 min-w-[120px] relative ${
+                    className={`relative min-w-[120px] rounded-lg border py-3 pl-4 pr-14 transition-all duration-200 ${
                       selectedAccountId === acc.id
                         ? 'shadow-lg'
                         : isLight
@@ -1670,7 +1759,7 @@ export function HSATrackerTool({ toolId }: HSATrackerToolProps) {
                       color: acc.card_color,
                     }}
                   >
-                    <div className="font-medium text-center">{acc.name}</div>
+                    <div className="text-center font-medium">{acc.name}</div>
                   </button>
                   <button
                     type="button"
@@ -1678,7 +1767,7 @@ export function HSATrackerTool({ toolId }: HSATrackerToolProps) {
                       e.stopPropagation();
                       setMenuOpenAccountId(menuOpenAccountId === acc.id ? null : acc.id);
                     }}
-                    className={`absolute top-1 right-1 p-1 rounded transition-colors ${isLight ? 'hover:bg-slate-200/80' : 'hover:bg-slate-700/50'}`}
+                    className={`absolute top-1 right-1 inline-flex min-h-11 min-w-11 items-center justify-center rounded transition-colors ${isLight ? 'text-slate-600 hover:bg-slate-200/80 hover:text-slate-900' : 'text-slate-400 hover:bg-slate-700/50 hover:text-slate-200'}`}
                     title="Account options"
                     aria-label="Account options"
                   >
@@ -1708,14 +1797,31 @@ export function HSATrackerTool({ toolId }: HSATrackerToolProps) {
                       </button>
                       <button
                         type="button"
-                        disabled={accounts.length <= 1}
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          startChangingAccountColor(acc);
+                        }}
+                        className={popupItemClass}
+                      >
+                        <svg className="h-4 w-4 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path
+                            strokeLinecap="round"
+                            strokeLinejoin="round"
+                            strokeWidth={2}
+                            d="M7 21a4 4 0 01-4-4V5a2 2 0 012-2h4a2 2 0 012 2v12a4 4 0 01-4 4zm0 0h12a2 2 0 002-2v-4a2 2 0 00-2-2h-2.343M11 7.343l1.657-1.657a2 2 0 012.828 0l2.829 2.829a2 2 0 010 2.828l-8.486 8.485M7 17h.01"
+                          />
+                        </svg>
+                        Change color
+                      </button>
+                      <button
+                        type="button"
                         onClick={(e) => {
                           e.stopPropagation();
                           setMenuOpenAccountId(null);
                           setDeleteConfirmAccountId(acc.id);
                           setDeleteConfirmText('');
                         }}
-                        className={`${popupItemDangerClass} disabled:opacity-40 disabled:cursor-not-allowed`}
+                        className={popupItemDangerClass}
                       >
                         <svg className="h-4 w-4 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                           <path
@@ -1822,8 +1928,8 @@ export function HSATrackerTool({ toolId }: HSATrackerToolProps) {
           </div>
 
           {mainTab === 'summary' && (
-            <div className="space-y-6">
-              <div className={cardClass} role="group" aria-label="Summary year filter">
+            <div className={cardClass} aria-label="HSA summary">
+              <div role="group" aria-label="Summary year filter">
                 <div className="flex flex-nowrap items-center gap-3">
                   <label
                     htmlFor="hsa-summary-year"
@@ -1853,8 +1959,25 @@ export function HSATrackerTool({ toolId }: HSATrackerToolProps) {
                   <span className={`${mutedSmallClass} min-w-0 whitespace-nowrap`}>
                     KPI amounts use calendar year {summaryYear}. Balance is as of {formatDateForDisplay(`${summaryYear}-12-31`)}.
                   </span>
-                  <button type="button" onClick={() => exportReportCsv(summaryYear)} className={`${secondaryButtonClass} shrink-0`}>
-                    Export CSV
+                  <button
+                    type="button"
+                    onClick={() => exportReportCsv(summaryYear)}
+                    className={
+                      isLight
+                        ? 'ml-auto inline-flex min-h-11 min-w-11 shrink-0 items-center justify-center rounded-lg p-2 text-emerald-700 transition-colors hover:bg-emerald-100 hover:text-emerald-900'
+                        : 'ml-auto inline-flex min-h-11 min-w-11 shrink-0 items-center justify-center rounded-lg p-2 text-emerald-400 transition-colors hover:bg-emerald-500/10 hover:text-emerald-300'
+                    }
+                    title="Export CSV"
+                    aria-label="Export CSV"
+                  >
+                    <svg className="h-6 w-6" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
+                      <path
+                        strokeLinecap="round"
+                        strokeLinejoin="round"
+                        strokeWidth={2}
+                        d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"
+                      />
+                    </svg>
                   </button>
                 </div>
                 {csvExportMessage ? (
@@ -1864,17 +1987,54 @@ export function HSATrackerTool({ toolId }: HSATrackerToolProps) {
                 ) : null}
               </div>
 
-              <div className={cardClass} aria-label="Rollover balances">
-                <p className={isLight ? 'text-sm text-slate-800' : 'text-sm text-slate-200'}>
-                  Starting {formatDateForDisplay(`${summaryYear}-01-01`)}: {formatMoney(summaryMetrics.startingBalance)}
-                </p>
-                <p className={`mt-1 ${isLight ? 'text-sm text-slate-800' : 'text-sm text-slate-200'}`}>
-                  Matches ending {formatDateForDisplay(`${summaryYear - 1}-12-31`)}: {formatMoney(summaryMetrics.startingBalance)}
-                </p>
+              <div className={`${summaryDividerClass} grid gap-4 sm:grid-cols-2 lg:grid-cols-4`}>
+                <div>
+                  <p className={`text-xs font-semibold uppercase tracking-[0.18em] ${isLight ? 'text-emerald-800' : 'text-emerald-300'}`}>
+                    Current balance
+                  </p>
+                  <p
+                    className={`mt-2 text-2xl font-semibold tabular-nums ${isLight ? 'text-slate-900' : 'text-slate-50'}`}
+                  >
+                    {formatMoney(summaryMetrics.balanceEndOfYear)}
+                  </p>
+                </div>
+                <div>
+                  <p className={`text-xs font-semibold uppercase tracking-[0.18em] ${isLight ? 'text-emerald-800' : 'text-emerald-300'}`}>
+                    Deposits YTD
+                  </p>
+                  <p
+                    className={`mt-2 text-2xl font-semibold tabular-nums ${isLight ? 'text-slate-900' : 'text-slate-50'}`}
+                  >
+                    {formatMoney(summaryMetrics.depositsYtd)}
+                  </p>
+                </div>
+                <div>
+                  <p className={`text-xs font-semibold uppercase tracking-[0.18em] ${isLight ? 'text-emerald-800' : 'text-emerald-300'}`}>
+                    Expenses YTD
+                  </p>
+                  <p
+                    className={`mt-2 text-2xl font-semibold tabular-nums ${isLight ? 'text-slate-900' : 'text-slate-50'}`}
+                  >
+                    {formatMoney(summaryMetrics.expensesYtd)}
+                  </p>
+                </div>
+                <div>
+                  <p className={`text-xs font-semibold uppercase tracking-[0.18em] ${isLight ? 'text-emerald-800' : 'text-emerald-300'}`}>
+                    Reimbursable pending
+                  </p>
+                  <p
+                    className={`mt-2 text-2xl font-semibold tabular-nums ${isLight ? 'text-slate-900' : 'text-slate-50'}`}
+                  >
+                    {formatMoney(summaryMetrics.reimbursablePending)}
+                  </p>
+                  <p className={`${mutedSmallClass} mt-2`}>
+                    Unreimbursed out-of-pocket $ — not receipt status.
+                  </p>
+                </div>
               </div>
 
-              <div className={cardClass} aria-label="Annual contribution limit">
-                <div className="max-w-xs">
+              <div className={`${summaryDividerClass} grid md:grid-cols-2`}>
+                <div className="md:pr-6" aria-label="Annual contribution limit">
                   <label htmlFor="hsa-contribution-limit" className={labelClassSm}>
                     Annual contribution limit (optional)
                   </label>
@@ -1898,57 +2058,29 @@ export function HSATrackerTool({ toolId }: HSATrackerToolProps) {
                       aria-label="Annual contribution limit in USD"
                     />
                   </div>
-                </div>
-                {effectiveContributionLimit != null ? (
-                  <p className={`mt-2 ${isLight ? 'text-sm text-slate-800' : 'text-sm text-slate-200'}`}>
-                    Remaining: {formatMoney(effectiveContributionLimit - summaryMetrics.depositsYtd)}{' '}
-                    (limit − Deposits YTD)
-                  </p>
-                ) : null}
-              </div>
-
-              <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-                <div className={kpiCardClass}>
-                  <p className={`text-xs font-semibold uppercase tracking-[0.18em] ${isLight ? 'text-emerald-800' : 'text-emerald-300'}`}>
-                    Current balance
-                  </p>
-                  <p
-                    className={`mt-2 text-2xl font-semibold tabular-nums ${isLight ? 'text-slate-900' : 'text-slate-50'}`}
-                  >
-                    {formatMoney(summaryMetrics.balanceEndOfYear)}
-                  </p>
-                </div>
-                <div className={kpiCardClass}>
-                  <p className={`text-xs font-semibold uppercase tracking-[0.18em] ${isLight ? 'text-emerald-800' : 'text-emerald-300'}`}>
-                    Deposits YTD
-                  </p>
-                  <p
-                    className={`mt-2 text-2xl font-semibold tabular-nums ${isLight ? 'text-slate-900' : 'text-slate-50'}`}
-                  >
-                    {formatMoney(summaryMetrics.depositsYtd)}
-                  </p>
-                </div>
-                <div className={kpiCardClass}>
-                  <p className={`text-xs font-semibold uppercase tracking-[0.18em] ${isLight ? 'text-emerald-800' : 'text-emerald-300'}`}>
-                    Expenses YTD
-                  </p>
-                  <p
-                    className={`mt-2 text-2xl font-semibold tabular-nums ${isLight ? 'text-slate-900' : 'text-slate-50'}`}
-                  >
-                    {formatMoney(summaryMetrics.expensesYtd)}
-                  </p>
-                </div>
-                <div className={kpiCardClass}>
-                  <p className={`text-xs font-semibold uppercase tracking-[0.18em] ${isLight ? 'text-emerald-800' : 'text-emerald-300'}`}>
-                    Reimbursable pending
-                  </p>
-                  <p
-                    className={`mt-2 text-2xl font-semibold tabular-nums ${isLight ? 'text-slate-900' : 'text-slate-50'}`}
-                  >
-                    {formatMoney(summaryMetrics.reimbursablePending)}
-                  </p>
                   <p className={`${mutedSmallClass} mt-2`}>
-                    Unreimbursed out-of-pocket $ — not receipt status.
+                    Enter the most you can contribute to this account in the selected year, or leave it blank. This does not change the balance. Remaining is this amount minus deposits dated in that year.
+                  </p>
+                  {effectiveContributionLimit != null ? (
+                    <p className={`mt-2 ${isLight ? 'text-sm text-slate-800' : 'text-sm text-slate-200'}`}>
+                      Remaining: {formatMoney(effectiveContributionLimit - summaryMetrics.depositsYtd)}{' '}
+                      (limit − Deposits YTD)
+                    </p>
+                  ) : null}
+                </div>
+                <div
+                  className={
+                    isLight
+                      ? 'mt-4 border-t border-slate-200 pt-4 md:mt-0 md:border-l md:border-t-0 md:pl-6 md:pt-0'
+                      : 'mt-4 border-t border-slate-700 pt-4 md:mt-0 md:border-l md:border-t-0 md:pl-6 md:pt-0'
+                  }
+                  aria-label="Rollover balances"
+                >
+                  <p className={isLight ? 'text-sm text-slate-800' : 'text-sm text-slate-200'}>
+                    Starting {formatDateForDisplay(`${summaryYear}-01-01`)}: {formatMoney(summaryMetrics.startingBalance)}
+                  </p>
+                  <p className={`mt-1 ${isLight ? 'text-sm text-slate-800' : 'text-sm text-slate-200'}`}>
+                    Matches ending {formatDateForDisplay(`${summaryYear - 1}-12-31`)}: {formatMoney(summaryMetrics.startingBalance)}
                   </p>
                 </div>
               </div>
@@ -2187,7 +2319,10 @@ export function HSATrackerTool({ toolId }: HSATrackerToolProps) {
                           </button>
                           <button
                             type="button"
-                            onClick={() => setDeleteDepositId(d.id)}
+                            onClick={() => {
+                              setDepositDeleteConfirmText('');
+                              setDeleteDepositId(d.id);
+                            }}
                             className={rowIconDangerClass}
                             aria-label="Delete deposit"
                             title="Delete deposit"
@@ -2638,13 +2773,44 @@ export function HSATrackerTool({ toolId }: HSATrackerToolProps) {
       {deleteDepositId && (
         <div className={modalBackdropClass}>
           <div className={modalCardConfirmClass}>
-            <h3 className={modalTitleClass}>Delete deposit?</h3>
-            <p className={`${deleteInstructionTextClass} mt-2`}>This cannot be undone.</p>
-            <div className="flex gap-2 mt-4">
-              <button type="button" onClick={removeDeposit} className="flex-1 rounded-lg bg-red-600 px-4 py-2 text-white font-semibold hover:bg-red-700">
+            <div className={deleteWarningBoxClass}>
+              <p className={deleteWarningTextClass}>⚠️ This action cannot be undone</p>
+              <p className={isLight ? 'text-red-600 text-sm' : 'text-red-200 text-sm'}>
+                This will permanently remove this deposit.
+              </p>
+            </div>
+            <h3 className={`${modalTitleClass} mb-2`}>Delete deposit?</h3>
+            <p className={deleteInstructionTextClass}>
+              Type <span className="font-semibold">delete</span> to confirm.
+            </p>
+            <input
+              key={`hsa-deposit-delete-${deleteDepositId}`}
+              id={`hsa-deposit-delete-confirm-${deleteDepositId}`}
+              name={`hsa-deposit-delete-confirm-${deleteDepositId}`}
+              type="text"
+              autoComplete="off"
+              value={depositDeleteConfirmText}
+              onChange={(e) => setDepositDeleteConfirmText(e.target.value)}
+              placeholder="Type 'delete' to confirm"
+              className={deleteConfirmInputClass}
+            />
+            <div className="flex gap-2">
+              <button
+                type="button"
+                onClick={() => void removeDeposit()}
+                disabled={depositDeleteConfirmText.trim().toLowerCase() !== 'delete'}
+                className="flex-1 rounded-lg bg-red-600 px-4 py-2.5 text-sm font-semibold text-white hover:bg-red-700 disabled:cursor-not-allowed disabled:opacity-50"
+              >
                 Delete
               </button>
-              <button type="button" onClick={() => setDeleteDepositId(null)} className={secondaryButtonClass}>
+              <button
+                type="button"
+                onClick={() => {
+                  setDeleteDepositId(null);
+                  setDepositDeleteConfirmText('');
+                }}
+                className={secondaryButtonClass}
+              >
                 Cancel
               </button>
             </div>

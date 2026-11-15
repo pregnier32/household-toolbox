@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useMemo, useEffect } from 'react';
+import { createPortal } from 'react-dom';
 import { useTheme } from './AppThemeProvider';
 import { useAppNotice } from './AppNotice';
 import { AttachmentButton } from './AttachmentButton';
@@ -1876,65 +1877,65 @@ export function ShoppingListTool({ toolId }: ShoppingListToolProps) {
         const list = shoppingLists.find((l) => l.id === viewListId);
         if (!list) return null;
         const groups = groupListItemsByCategory(list.items);
-        return (
+        const printSheet = (
           <>
             <style
               dangerouslySetInnerHTML={{
                 __html: `
                   @media print {
-                    body * { visibility: hidden; }
-                    .shopping-list-view-print, .shopping-list-view-print * { visibility: visible; }
-                    .shopping-list-print-overlay {
-                      position: static !important;
-                      inset: auto !important;
-                      background: transparent !important;
-                      backdrop-filter: none !important;
-                      display: block !important;
+                    html, body {
+                      background: white !important;
+                      color: black !important;
+                      height: auto !important;
+                      min-height: 0 !important;
+                      overflow: visible !important;
                     }
-                    .shopping-list-print-overlay > * {
-                      background: transparent !important;
-                      border: none !important;
-                      box-shadow: none !important;
-                      max-height: none !important;
-                      max-width: none !important;
+                    body > *:not(.shopping-list-print-sheet) { display: none !important; }
+                    .shopping-list-print-sheet,
+                    .shopping-list-print-sheet * { visibility: visible !important; color: black !important; }
+                    .shopping-list-print-sheet {
+                      display: block !important;
+                      position: static !important;
                       width: 100% !important;
-                      margin: 0 !important;
+                      height: auto !important;
+                      overflow: visible !important;
+                      background: white !important;
+                      color: black !important;
                       padding: 0 !important;
                     }
-                    .shopping-list-print-overlay .print-only-hidden {
-                      display: none !important;
-                      visibility: hidden !important;
-                    }
-                    .shopping-list-view-print {
-                      position: absolute;
-                      left: 0;
-                      top: 0;
-                      width: 100%;
-                      max-height: none !important;
-                      overflow: visible !important;
-                      background: white;
-                      color: black;
-                      padding: 1rem;
-                      box-shadow: none;
-                      border: none;
-                    }
-                    .shopping-list-view-print,
-                    .shopping-list-view-print p,
-                    .shopping-list-view-print li,
-                    .shopping-list-view-print span,
-                    .shopping-list-view-print ul {
-                      color: black !important;
-                      background: transparent !important;
-                    }
-                    .shopping-list-view-print .print-title {
-                      display: block !important;
-                      visibility: visible !important;
-                      color: black !important;
-                    }
+                    .shopping-list-print-sheet .print-title { display: block !important; }
                   }
                 `,
               }}
             />
+            <div className="shopping-list-print-sheet hidden" aria-hidden>
+              <div className="print-title mb-2 text-lg font-semibold">
+                {list.name} — {formatPdfDate(list.date)}
+              </div>
+              {list.items.length === 0 ? (
+                <p className="text-sm">No items</p>
+              ) : (
+                <div className="space-y-4">
+                  {groups.map(({ category, items: categoryItems }) => (
+                    <div key={`print-${category}`}>
+                      <p className="text-xs font-semibold uppercase tracking-[0.18em] mb-1">{category}</p>
+                      <ul className="list-disc list-inside text-sm">
+                        {categoryItems.map((ref) => {
+                          const name = ref.name || (masterItems.find((i) => i.id === ref.itemId)?.name ?? 'Unknown item');
+                          const label = formatLineItemLabel(ref, name);
+                          return <li key={ref.itemId}>{label}</li>;
+                        })}
+                      </ul>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          </>
+        );
+        return (
+          <>
+            {typeof document !== 'undefined' ? createPortal(printSheet, document.body) : null}
             <div className="shopping-list-print-overlay fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm">
               <div className={modalCardClass}>
                 <div className="flex items-center justify-between gap-4 mb-4 print-only-hidden">

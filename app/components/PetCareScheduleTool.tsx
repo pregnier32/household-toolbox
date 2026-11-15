@@ -1222,6 +1222,8 @@ export function PetCareScheduleTool({ toolId }: PetCareScheduleToolProps) {
     setEditingPetId(pet.id);
     setEditingPetName(pet.name);
     setEditingPetColor(pet.card_color || '#10b981');
+    setShowColorPicker(false);
+    setMenuOpenPetId(null);
   };
 
   const cancelEditingPet = () => {
@@ -2662,33 +2664,24 @@ export function PetCareScheduleTool({ toolId }: PetCareScheduleToolProps) {
           <div className="flex items-center gap-3 flex-wrap">
             {/* Pet Cards */}
             {pets.map(pet => (
-              editingPetId === pet.id ? (
+              editingPetId === pet.id && !showColorPicker ? (
                 // Edit mode
                 <div
                   key={pet.id}
-                  className="px-4 py-3 rounded-lg border border-slate-600 bg-slate-800 min-w-[200px]"
-                  style={{
-                    borderColor: editingPetColor,
-                    backgroundColor: `${editingPetColor}15`,
-                  }}
+                  className={isLight ? 'px-4 py-3 rounded-lg border border-slate-300 bg-slate-100 min-w-[180px]' : 'px-4 py-3 rounded-lg border border-slate-700 bg-slate-800/50 min-w-[180px]'}
                 >
                   <div className="flex items-center gap-2 mb-2">
                     <input
                       type="text"
                       value={editingPetName}
                       onChange={(e) => setEditingPetName(e.target.value)}
-                      className="flex-1 px-2 py-1 rounded border border-slate-600 bg-slate-900 text-slate-100 text-sm focus:border-emerald-500/50 focus:outline-none"
+                      className={isLight ? 'flex-1 px-2 py-1 rounded border border-slate-300 bg-white text-slate-900 text-sm focus:border-emerald-500/50 focus:outline-none' : 'flex-1 px-2 py-1 rounded border border-slate-600 bg-slate-900 text-slate-100 text-sm focus:border-emerald-500/50 focus:outline-none'}
                       placeholder="Pet name"
                       autoFocus
-                    />
-                  </div>
-                  <div className="flex items-center gap-2 mb-2">
-                    <label className="text-xs text-slate-400">Color:</label>
-                    <input
-                      type="color"
-                      value={editingPetColor}
-                      onChange={(e) => setEditingPetColor(e.target.value)}
-                      className="h-6 w-12 rounded border border-slate-600 cursor-pointer"
+                      onKeyDown={(e) => {
+                        if (e.key === 'Enter') savePetEdit();
+                        if (e.key === 'Escape') cancelEditingPet();
+                      }}
                     />
                   </div>
                   <div className="flex items-center gap-2">
@@ -2715,16 +2708,12 @@ export function PetCareScheduleTool({ toolId }: PetCareScheduleToolProps) {
                 // Color picker mode
                 <div
                   key={pet.id}
-                  className="px-4 py-3 rounded-lg border border-slate-600 bg-slate-800 min-w-[200px]"
-                  style={{
-                    borderColor: editingPetColor,
-                    backgroundColor: `${editingPetColor}15`,
-                  }}
+                  className={isLight ? 'px-4 py-3 rounded-lg border border-slate-300 bg-slate-100 min-w-[180px]' : 'px-4 py-3 rounded-lg border border-slate-700 bg-slate-800/50 min-w-[180px]'}
                 >
                   <div className="mb-3">
-                    <div className="font-medium text-slate-200 mb-2 text-sm">{pet.name}</div>
+                    <div className={isLight ? 'font-medium text-slate-800 mb-2 text-sm' : 'font-medium text-slate-200 mb-2 text-sm'}>{pet.name}</div>
                     <div className="flex items-center gap-2">
-                      <label className="text-xs text-slate-400">Card Color:</label>
+                      <label className={isLight ? 'text-xs text-slate-600' : 'text-xs text-slate-400'}>Card Color:</label>
                       <input
                         type="color"
                         value={editingPetColor}
@@ -2790,11 +2779,11 @@ export function PetCareScheduleTool({ toolId }: PetCareScheduleToolProps) {
                       e.stopPropagation();
                       setMenuOpenPetId(menuOpenPetId === pet.id ? null : pet.id);
                     }}
-                    className={isLight ? 'absolute top-1 right-1 p-1 rounded hover:bg-slate-100 transition-colors' : 'absolute top-1 right-1 p-1 rounded hover:bg-slate-700/50 transition-colors'}
+                    className={`absolute top-1 right-1 inline-flex min-h-11 min-w-11 items-center justify-center rounded transition-colors ${isLight ? 'text-slate-600 hover:bg-slate-200/80 hover:text-slate-900' : 'text-slate-400 hover:bg-slate-700/50 hover:text-slate-200'}`}
                     title="Pet options"
                     aria-label="Pet options"
                   >
-                    <svg className={isLight ? 'h-4 w-4 text-slate-600 hover:text-slate-900' : 'h-4 w-4 text-slate-400 hover:text-slate-200'} fill="currentColor" viewBox="0 0 24 24">
+                    <svg className="h-4 w-4" fill="currentColor" viewBox="0 0 24 24">
                       <path d="M12 8c1.1 0 2-.9 2-2s-.9-2-2-2-2 .9-2 2 .9 2 2 2zm0 2c-1.1 0-2 .9-2 2s.9 2 2 2 2-.9 2-2-.9-2-2-2zm0 6c-1.1 0-2 .9-2 2s.9 2 2 2 2-.9 2-2-.9-2-2-2z" />
                     </svg>
                   </button>
@@ -2802,9 +2791,10 @@ export function PetCareScheduleTool({ toolId }: PetCareScheduleToolProps) {
                   {menuOpenPetId === pet.id && (
                     <div className={popupMenuClass}>
                       <button
+                        type="button"
                         onClick={(e) => {
                           e.stopPropagation();
-                          handleChangeColor(pet);
+                          startEditingPet(pet);
                         }}
                         className={popupMenuItemClass}
                       >
@@ -2812,6 +2802,19 @@ export function PetCareScheduleTool({ toolId }: PetCareScheduleToolProps) {
                           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
                         </svg>
                         Edit
+                      </button>
+                      <button
+                        type="button"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          handleChangeColor(pet);
+                        }}
+                        className={popupMenuItemClass}
+                      >
+                        <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 21a4 4 0 01-4-4V5a2 2 0 012-2h4a2 2 0 012 2v12a4 4 0 01-4 4zm0 0h12a2 2 0 002-2v-4a2 2 0 00-2-2h-2.343M11 7.343l1.657-1.657a2 2 0 012.828 0l2.829 2.829a2 2 0 010 2.828l-8.486 8.485M7 17h.01" />
+                        </svg>
+                        Change color
                       </button>
                       <button
                         onClick={(e) => {

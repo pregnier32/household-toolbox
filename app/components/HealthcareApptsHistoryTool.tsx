@@ -358,6 +358,7 @@ export function HealthcareApptsHistoryTool({ toolId }: HealthcareApptsHistoryToo
   const [editingHeaderId, setEditingHeaderId] = useState<string | null>(null);
   const [editingHeaderName, setEditingHeaderName] = useState('');
   const [editingHeaderColor, setEditingHeaderColor] = useState('#10b981');
+  const [showHeaderColorPicker, setShowHeaderColorPicker] = useState(false);
   const [menuOpenHeaderId, setMenuOpenHeaderId] = useState<string | null>(null);
 
   const [deleteConfirmHeaderId, setDeleteConfirmHeaderId] = useState<string | null>(null);
@@ -658,6 +659,7 @@ export function HealthcareApptsHistoryTool({ toolId }: HealthcareApptsHistoryToo
   const selectHeader = (headerId: string) => {
     setSelectedHeaderId(headerId);
     setEditingHeaderId(null);
+    setShowHeaderColorPicker(false);
     setMenuOpenHeaderId(null);
   };
 
@@ -700,17 +702,24 @@ export function HealthcareApptsHistoryTool({ toolId }: HealthcareApptsHistoryToo
     setEditingHeaderId(header.id);
     setEditingHeaderName(header.name);
     setEditingHeaderColor(header.card_color || '#10b981');
+    setShowHeaderColorPicker(false);
     setMenuOpenHeaderId(null);
+  };
+
+  const startChangingHeaderColor = (header: HeaderRecord) => {
+    startEditingHeader(header);
+    setShowHeaderColorPicker(true);
   };
 
   const cancelEditingHeader = () => {
     setEditingHeaderId(null);
     setEditingHeaderName('');
     setEditingHeaderColor('#10b981');
+    setShowHeaderColorPicker(false);
     setMenuOpenHeaderId(null);
   };
 
-  const saveHeaderEdit = async () => {
+  const saveHeaderEdit = async (colorOnly = false) => {
     if (!editingHeaderId || !editingHeaderName.trim() || !toolId) return;
     setIsSaving(true);
     setSaveMessage(null);
@@ -733,7 +742,7 @@ export function HealthcareApptsHistoryTool({ toolId }: HealthcareApptsHistoryToo
         )
       );
       cancelEditingHeader();
-      showMessage('success', 'Saved.');
+      showMessage('success', colorOnly ? 'Card color updated.' : 'Saved.');
     } catch (e) {
       setSaveMessage({ type: 'error', text: e instanceof Error ? e.message : 'Failed to update header' });
     } finally {
@@ -1367,14 +1376,50 @@ export function HealthcareApptsHistoryTool({ toolId }: HealthcareApptsHistoryToo
           <div className="flex items-center gap-3 flex-wrap">
             {/* Family member cards */}
             {headers.map((header) =>
-              editingHeaderId === header.id ? (
+              editingHeaderId === header.id && showHeaderColorPicker ? (
                 <div
                   key={header.id}
-                  className="px-4 py-3 rounded-lg border border-slate-600 bg-slate-800 min-w-[200px]"
-                  style={{
-                    borderColor: editingHeaderColor,
-                    backgroundColor: `${editingHeaderColor}15`,
-                  }}
+                  className={isLight ? 'px-4 py-3 rounded-lg border border-slate-300 bg-slate-100 min-w-[180px]' : 'px-4 py-3 rounded-lg border border-slate-700 bg-slate-800/50 min-w-[180px]'}
+                >
+                  <div className="mb-3">
+                    <div className={isLight ? 'font-medium text-slate-800 mb-2 text-sm' : 'font-medium text-slate-200 mb-2 text-sm'}>{header.name}</div>
+                    <div className="flex items-center gap-2">
+                      <label className={isLight ? 'text-xs text-slate-600' : 'text-xs text-slate-400'}>Card Color:</label>
+                      <input
+                        type="color"
+                        value={editingHeaderColor}
+                        onChange={(e) => setEditingHeaderColor(e.target.value)}
+                        className="h-8 w-16 rounded border border-slate-600 cursor-pointer"
+                      />
+                    </div>
+                  </div>
+                  <div className="flex gap-2">
+                    <button
+                      type="button"
+                      onClick={() => saveHeaderEdit(true)}
+                      disabled={isSaving}
+                      className={isLight
+                        ? 'flex-1 px-2 py-1 rounded text-xs font-semibold text-white bg-emerald-600 hover:bg-emerald-500 disabled:opacity-50 disabled:cursor-not-allowed'
+                        : 'flex-1 px-2 py-1 rounded bg-emerald-500 text-slate-950 text-xs font-medium hover:bg-emerald-400 disabled:opacity-50 disabled:cursor-not-allowed'}
+                    >
+                      {isSaving ? 'Saving...' : 'Save'}
+                    </button>
+                    <button
+                      type="button"
+                      onClick={cancelEditingHeader}
+                      disabled={isSaving}
+                      className={isLight
+                        ? 'px-2 py-1 rounded border-2 border-slate-400 bg-slate-100 text-slate-800 text-xs hover:bg-slate-200 transition-colors disabled:opacity-50'
+                        : 'px-2 py-1 rounded border border-slate-600 bg-slate-700 text-slate-200 text-xs hover:bg-slate-600 transition-colors disabled:opacity-50'}
+                    >
+                      Cancel
+                    </button>
+                  </div>
+                </div>
+              ) : editingHeaderId === header.id ? (
+                <div
+                  key={header.id}
+                  className={isLight ? 'px-4 py-3 rounded-lg border border-slate-300 bg-slate-100 min-w-[180px]' : 'px-4 py-3 rounded-lg border border-slate-700 bg-slate-800/50 min-w-[180px]'}
                 >
                   <input
                     type="text"
@@ -1383,19 +1428,14 @@ export function HealthcareApptsHistoryTool({ toolId }: HealthcareApptsHistoryToo
                     className={`${inputClass} px-2 py-1 mb-2`}
                     placeholder="Name"
                     autoFocus
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter') saveHeaderEdit();
+                      if (e.key === 'Escape') cancelEditingHeader();
+                    }}
                   />
-                  <div className="flex items-center gap-2 mb-2">
-                    <label className={isLight ? 'text-xs text-slate-600' : 'text-xs text-slate-400'}>Color:</label>
-                    <input
-                      type="color"
-                      value={editingHeaderColor}
-                      onChange={(e) => setEditingHeaderColor(e.target.value)}
-                      className={`h-6 w-12 rounded cursor-pointer ${isLight ? 'border border-slate-300' : 'border border-slate-600'}`}
-                    />
-                  </div>
                   <div className="flex gap-2">
                     <button
-                      onClick={saveHeaderEdit}
+                      onClick={() => saveHeaderEdit()}
                       disabled={!editingHeaderName.trim() || isSaving}
                       className={isLight
                         ? 'flex-1 px-2 py-1 rounded text-xs font-semibold text-white bg-emerald-600 hover:bg-emerald-500 disabled:opacity-50 disabled:cursor-not-allowed'
@@ -1437,11 +1477,11 @@ export function HealthcareApptsHistoryTool({ toolId }: HealthcareApptsHistoryToo
                       e.stopPropagation();
                       setMenuOpenHeaderId(menuOpenHeaderId === header.id ? null : header.id);
                     }}
-                    className={`absolute top-1 right-1 p-1 rounded transition-colors ${isLight ? 'hover:bg-slate-200' : 'hover:bg-slate-700/50'}`}
-                    aria-label="Options"
-                    title="Options"
+                    className={`absolute top-1 right-1 inline-flex min-h-11 min-w-11 items-center justify-center rounded transition-colors ${isLight ? 'text-slate-600 hover:bg-slate-200 hover:text-slate-900' : 'text-slate-400 hover:bg-slate-700/50 hover:text-slate-200'}`}
+                    aria-label="Family member options"
+                    title="Family member options"
                   >
-                    <svg className={`h-4 w-4 ${isLight ? 'text-slate-600 hover:text-slate-900' : 'text-slate-400 hover:text-slate-200'}`} fill="currentColor" viewBox="0 0 24 24">
+                    <svg className="h-4 w-4" fill="currentColor" viewBox="0 0 24 24">
                       <path d="M12 8c1.1 0 2-.9 2-2s-.9-2-2-2-2 .9-2 2 .9 2 2 2zm0 2c-1.1 0-2 .9-2 2s.9 2 2 2 2-.9 2-2-.9-2-2-2zm0 6c-1.1 0-2 .9-2 2s.9 2 2 2 2-.9 2-2-.9-2-2-2z" />
                     </svg>
                   </button>
@@ -1459,6 +1499,19 @@ export function HealthcareApptsHistoryTool({ toolId }: HealthcareApptsHistoryToo
                           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
                         </svg>
                         Edit
+                      </button>
+                      <button
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          startChangingHeaderColor(header);
+                        }}
+                        className={popupItemClass}
+                        type="button"
+                      >
+                        <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 21a4 4 0 01-4-4V5a2 2 0 012-2h4a2 2 0 012 2v12a4 4 0 01-4 4zm0 0h12a2 2 0 002-2v-4a2 2 0 00-2-2h-2.343M11 7.343l1.657-1.657a2 2 0 012.828 0l2.829 2.829a2 2 0 010 2.828l-8.486 8.485M7 17h.01" />
+                        </svg>
+                        Change color
                       </button>
                       <button
                         onClick={(e) => {

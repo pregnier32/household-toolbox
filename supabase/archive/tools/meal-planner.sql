@@ -302,13 +302,6 @@ ALTER TABLE tools_mp_meals ADD COLUMN IF NOT EXISTS is_active BOOLEAN NOT NULL D
 CREATE INDEX IF NOT EXISTS idx_mp_meals_is_active ON tools_mp_meals(is_active);
 
 
--- Recipe scale factor for Meal Planner grocery quantities.
--- Safe to rerun. Old meals without scale read as 1.
-
-ALTER TABLE tools_mp_meals
-  ADD COLUMN IF NOT EXISTS scale NUMERIC NOT NULL DEFAULT 1;
-
-
 -- Named day slots for Meal Planner (Breakfast / Lunch / Dinner).
 -- Safe to rerun. Legacy rows with NULL slot_key still read (single meal → Dinner).
 

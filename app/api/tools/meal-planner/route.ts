@@ -17,12 +17,6 @@ function asIdList(value: unknown): string[] {
   return value.filter((id): id is string => typeof id === 'string' && id.length > 0);
 }
 
-function parseScale(value: unknown): number {
-  const n = typeof value === 'number' ? value : Number(value);
-  if (!Number.isFinite(n) || n <= 0) return 1;
-  return n;
-}
-
 function emptySlots(): DaySlotMeals {
   return { breakfast: '', lunch: '', dinner: '' };
 }
@@ -274,22 +268,11 @@ export async function GET(request: NextRequest) {
     }
 
     if (resource === 'meals') {
-      let { data: meals, error: mealsError } = await supabaseServer
+      const { data: meals, error: mealsError } = await supabaseServer
         .from('tools_mp_meals')
-        .select('id, meal_type_id, name, description, instructions, prep_time_minutes, difficulty, rating, is_active, scale')
+        .select('id, meal_type_id, name, description, instructions, prep_time_minutes, difficulty, rating, is_active')
         .eq('user_id', user.id)
         .eq('tool_id', toolId);
-
-      // Fallback if tools_mp_meals.scale is not applied yet.
-      if (mealsError && /scale/.test(mealsError.message ?? '')) {
-        const retry = await supabaseServer
-          .from('tools_mp_meals')
-          .select('id, meal_type_id, name, description, instructions, prep_time_minutes, difficulty, rating, is_active')
-          .eq('user_id', user.id)
-          .eq('tool_id', toolId);
-        meals = (retry.data ?? []).map((row) => ({ ...row, scale: null })) as typeof meals;
-        mealsError = retry.error;
-      }
 
       if (mealsError) {
         console.error('Meal planner fetch meals:', mealsError);
@@ -304,7 +287,6 @@ export async function GET(request: NextRequest) {
         instructions: string;
         ingredientIds: string[];
         prepTimeMinutes: number | null;
-        scale: number;
         difficulty: string;
         rating: number;
         isActive: boolean;
@@ -329,7 +311,6 @@ export async function GET(request: NextRequest) {
           instructions: m.instructions ?? '',
           ingredientIds,
           prepTimeMinutes: m.prep_time_minutes ?? null,
-          scale: parseScale((m as { scale?: unknown }).scale),
           difficulty: m.difficulty ?? '',
           rating: m.rating ?? 0,
           isActive: m.is_active !== false,
@@ -649,7 +630,6 @@ export async function POST(request: NextRequest) {
         instructions,
         ingredientIds,
         prepTimeMinutes,
-        scale,
         difficulty,
         rating,
       } = body as {
@@ -659,7 +639,6 @@ export async function POST(request: NextRequest) {
         instructions?: string;
         ingredientIds?: string[];
         prepTimeMinutes?: number | null;
-        scale?: number;
         difficulty?: string | null;
         rating?: number;
       };
@@ -683,7 +662,6 @@ export async function POST(request: NextRequest) {
           description: (description ?? '').trim(),
           instructions: (instructions ?? '').trim(),
           prep_time_minutes: prepTimeMinutes ?? null,
-          scale: parseScale(scale),
           difficulty: difficulty || null,
           rating: rating ?? 0,
           is_active: true,
@@ -710,7 +688,6 @@ export async function POST(request: NextRequest) {
           instructions: meal.instructions ?? '',
           ingredientIds: itemIds,
           prepTimeMinutes: meal.prep_time_minutes ?? null,
-          scale: parseScale(meal.scale),
           difficulty: meal.difficulty ?? '',
           rating: meal.rating ?? 0,
           attachments: [],
@@ -727,7 +704,6 @@ export async function POST(request: NextRequest) {
         instructions,
         ingredientIds,
         prepTimeMinutes,
-        scale,
         difficulty,
         rating,
       } = body as {
@@ -738,7 +714,6 @@ export async function POST(request: NextRequest) {
         instructions?: string;
         ingredientIds?: string[];
         prepTimeMinutes?: number | null;
-        scale?: number;
         difficulty?: string | null;
         rating?: number;
       };
@@ -759,7 +734,6 @@ export async function POST(request: NextRequest) {
       if (description !== undefined) updates.description = (description ?? '').trim();
       if (instructions !== undefined) updates.instructions = (instructions ?? '').trim();
       if (prepTimeMinutes !== undefined) updates.prep_time_minutes = prepTimeMinutes ?? null;
-      if (scale !== undefined) updates.scale = parseScale(scale);
       if (difficulty !== undefined) updates.difficulty = difficulty || null;
       if (rating !== undefined) updates.rating = rating ?? 0;
       if (Object.keys(updates).length > 0) {
