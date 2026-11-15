@@ -482,6 +482,10 @@ export function PetCareScheduleTool({ toolId }: PetCareScheduleToolProps) {
   // Pet management
   const [pets, setPets] = useState<Pet[]>([]);
   const [selectedPetId, setSelectedPetId] = useState<string | null>(null);
+  const selectedPetIdRef = useRef<string | null>(null);
+  const petLoadRequestRef = useRef(0);
+  const [petInfoLoadedForId, setPetInfoLoadedForId] = useState<string | null>(null);
+  selectedPetIdRef.current = selectedPetId;
   const [isCreatingNewPet, setIsCreatingNewPet] = useState(false);
   const [newPetName, setNewPetName] = useState('');
   const [isLoading, setIsLoading] = useState(true);
@@ -727,20 +731,44 @@ export function PetCareScheduleTool({ toolId }: PetCareScheduleToolProps) {
     }
   };
 
-  const loadPetData = async (petId: string) => {
+  const clearPetInfoFields = () => {
+    setPetName('');
+    setPetType(null);
+    setCustomPetType('');
+    setShowCustomPetType(false);
+    setBirthdate('');
+    setBreed('');
+    setWhereGotPet('');
+    setWeight('');
+    setColor('');
+    setMicrochipNumber('');
+  };
+
+  const loadPetData = async (petId: string, requestId?: number) => {
+    if (requestId == null) {
+      if (selectedPetIdRef.current !== petId) return;
+      requestId = ++petLoadRequestRef.current;
+    }
+    const loadId = requestId;
     if (!toolId) return;
+
+    const stillSelected = () =>
+      loadId === petLoadRequestRef.current && selectedPetIdRef.current === petId;
     
     try {
       const response = await fetch(`/api/tools/pet-care-schedule?toolId=${toolId}&petId=${petId}`, { cache: 'no-store' });
       const data = await response.json();
+
+      if (!stillSelected()) return;
       
       if (!response.ok) {
         throw new Error(data.error || 'Failed to load pet data');
       }
       
       const pet = data.pet;
-      if (pet) {
-        // Load pet's basic info
+      if (!pet || pet.id !== petId || !stillSelected()) return;
+
+      // Load pet's basic info
         setPetName(pet.name);
         setPetType(pet.pet_type ? { id: pet.pet_type.toLowerCase(), name: pet.pet_type, isCustom: false } : null);
         setCustomPetType(pet.custom_pet_type || '');
@@ -818,15 +846,17 @@ export function PetCareScheduleTool({ toolId }: PetCareScheduleToolProps) {
         }));
         notesRef.current = loadedNotes;
         setNotes(loadedNotes);
+        setPetInfoLoadedForId(petId);
         
         // Set last saved data snapshot after loading - wait for state to update first
         // Use setTimeout to ensure all state updates have completed
         setTimeout(() => {
+          if (!stillSelected()) return;
           const loadedDataSnapshot = createDataSnapshot();
           setLastSavedData(loadedDataSnapshot);
         }, 300);
-      }
     } catch (error) {
+      if (!stillSelected()) return;
       console.error('Error loading pet data:', error);
       setSaveMessage({ type: 'error', text: 'Failed to load pet data' });
     }
@@ -841,10 +871,13 @@ export function PetCareScheduleTool({ toolId }: PetCareScheduleToolProps) {
     documentsToSave?: typeof documents,
     notesToSave?: typeof notes
   ) => {
-    if (!selectedPetId || !toolId) {
+    const petIdForSave = selectedPetId;
+    if (!petIdForSave || !toolId) {
       setSaveMessage({ type: 'error', text: 'Please select a pet first' });
       return;
     }
+    // Fields are cleared on pet switch and are not saved until this pet's load has landed.
+    if (petInfoLoadedForId !== petIdForSave) return;
 
     isSavingRef.current = true;
     setIsSaving(true);
@@ -860,7 +893,7 @@ export function PetCareScheduleTool({ toolId }: PetCareScheduleToolProps) {
     const notesToUse = notesToSave ?? notesRef.current;
     notesRef.current = notesToUse;
     
-    console.log(`[savePetData] Starting save for pet ${selectedPetId}, care plan items count: ${itemsToUse.length}`);
+    console.log(`[savePetData] Starting save for pet ${petIdForSave}, care plan items count: ${itemsToUse.length}`);
     console.log(`[savePetData] Care plan items:`, itemsToUse.map(c => ({ name: c.name, notes: c.notes })));
 
     try {
@@ -883,7 +916,7 @@ export function PetCareScheduleTool({ toolId }: PetCareScheduleToolProps) {
           'Content-Type': 'application/json',
         },
         body: JSON.stringify({
-          petId: selectedPetId,
+          petId: petIdForSave,
           toolId: toolId,
           petData,
           foods: foodsToUse.map(f => ({
@@ -966,10 +999,11 @@ export function PetCareScheduleTool({ toolId }: PetCareScheduleToolProps) {
       
       // Reload pets to get updated data (this will also update the snapshot after load)
       await loadPets();
-      if (selectedPetId) await loadPetData(selectedPetId);
+      if (selectedPetIdRef.current === petIdForSave) await loadPetData(petIdForSave);
       
       // After reload, update snapshot again to ensure it matches loaded data
       setTimeout(() => {
+        if (selectedPetIdRef.current !== petIdForSave) return;
         const updatedSnapshot = createDataSnapshot();
         setLastSavedData(updatedSnapshot);
       }, 100);
@@ -1197,8 +1231,12 @@ export function PetCareScheduleTool({ toolId }: PetCareScheduleToolProps) {
           await persistPendingFiles('pet', data.petId, pendingPetAttachments);
           setPendingPetAttachments([]);
         }
+        selectedPetIdRef.current = data.petId;
+        const loadId = ++petLoadRequestRef.current;
         setSelectedPetId(data.petId);
-        await loadPetData(data.petId);
+        setPetInfoLoadedForId(null);
+        clearPetInfoFields();
+        await loadPetData(data.petId, loadId);
       }
       
       setIsCreatingNewPet(false);
@@ -1217,9 +1255,16 @@ export function PetCareScheduleTool({ toolId }: PetCareScheduleToolProps) {
   };
 
   const selectPet = async (petId: string) => {
-    setSelectedPetId(petId);
-    setEditingPetId(null); // Close any open edit mode
-    // Load pet data from API
+    setEditingPetId(null);
+    if (selectedPetIdRef.current !== petId) {
+      selectedPetIdRef.current = petId;
+      const loadId = ++petLoadRequestRef.current;
+      setSelectedPetId(petId);
+      setPetInfoLoadedForId(null);
+      clearPetInfoFields();
+      await loadPetData(petId, loadId);
+      return;
+    }
     await loadPetData(petId);
   };
 
@@ -2578,6 +2623,7 @@ export function PetCareScheduleTool({ toolId }: PetCareScheduleToolProps) {
   };
 
   const selectedPet = pets.find(p => p.id === selectedPetId);
+  const petInfoReady = petInfoLoadedForId === selectedPetId && selectedPetId !== null;
   const selectedPetAttachments = selectedPetId
     ? (pets.find((pet) => pet.id === selectedPetId)?.attachments || [])
     : [];
@@ -3100,6 +3146,7 @@ export function PetCareScheduleTool({ toolId }: PetCareScheduleToolProps) {
                   value={petName}
                   onChange={(e) => setPetName(e.target.value)}
                   placeholder="Enter pet's name"
+                  disabled={!petInfoReady}
                   className={inputClass}
                 />
               </div>
@@ -3110,6 +3157,7 @@ export function PetCareScheduleTool({ toolId }: PetCareScheduleToolProps) {
                 <select
                   value={petType?.name || ''}
                   onChange={(e) => handlePetTypeChange(e.target.value)}
+                  disabled={!petInfoReady}
                   className={selectClass}
                 >
                   <option value="">Select pet type</option>
@@ -3124,6 +3172,7 @@ export function PetCareScheduleTool({ toolId }: PetCareScheduleToolProps) {
                     onChange={(e) => setCustomPetType(e.target.value)}
                     onBlur={handleCustomPetTypeBlur}
                     placeholder="Enter custom pet type"
+                    disabled={!petInfoReady}
                     className={`${inputClass} mt-2`}
                   />
                 )}
@@ -3134,6 +3183,7 @@ export function PetCareScheduleTool({ toolId }: PetCareScheduleToolProps) {
                   type="date"
                   value={birthdate}
                   onChange={(e) => setBirthdate(e.target.value)}
+                  disabled={!petInfoReady}
                   className={selectClass}
                 />
               </div>
@@ -3144,6 +3194,7 @@ export function PetCareScheduleTool({ toolId }: PetCareScheduleToolProps) {
                   value={breed}
                   onChange={(e) => setBreed(e.target.value)}
                   placeholder="Enter breed"
+                  disabled={!petInfoReady}
                   className={inputClass}
                 />
               </div>
@@ -3154,6 +3205,7 @@ export function PetCareScheduleTool({ toolId }: PetCareScheduleToolProps) {
                   value={whereGotPet}
                   onChange={(e) => setWhereGotPet(e.target.value)}
                   placeholder="e.g., Animal shelter, breeder, pet store"
+                  disabled={!petInfoReady}
                   className={inputClass}
                 />
               </div>
@@ -3164,6 +3216,7 @@ export function PetCareScheduleTool({ toolId }: PetCareScheduleToolProps) {
                   value={weight}
                   onChange={(e) => setWeight(e.target.value)}
                   placeholder="e.g., 25 lbs or 11 kg"
+                  disabled={!petInfoReady}
                   className={inputClass}
                 />
               </div>
@@ -3174,6 +3227,7 @@ export function PetCareScheduleTool({ toolId }: PetCareScheduleToolProps) {
                   value={color}
                   onChange={(e) => setColor(e.target.value)}
                   placeholder="Enter color or markings"
+                  disabled={!petInfoReady}
                   className={inputClass}
                 />
               </div>
@@ -3184,6 +3238,7 @@ export function PetCareScheduleTool({ toolId }: PetCareScheduleToolProps) {
                   value={microchipNumber}
                   onChange={(e) => setMicrochipNumber(e.target.value)}
                   placeholder="Enter microchip number"
+                  disabled={!petInfoReady}
                   className={inputClass}
                 />
               </div>
@@ -3193,7 +3248,7 @@ export function PetCareScheduleTool({ toolId }: PetCareScheduleToolProps) {
             <div className="flex justify-start mt-6">
               <button
                 onClick={() => savePetData()}
-                disabled={isSaving}
+                disabled={isSaving || !petInfoReady}
                 className={isLight ? 'px-6 py-2 rounded-lg font-medium transition-colors disabled:opacity-50 disabled:cursor-not-allowed bg-emerald-600 text-white hover:bg-emerald-500' : 'px-6 py-2 rounded-lg font-medium transition-colors disabled:opacity-50 disabled:cursor-not-allowed bg-emerald-500 text-slate-950 hover:bg-emerald-400'}
               >
                 {isSaving ? 'Saving...' : 'Save Pet Info'}

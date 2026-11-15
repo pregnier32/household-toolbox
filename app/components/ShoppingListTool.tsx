@@ -245,6 +245,7 @@ export function ShoppingListTool({ toolId }: ShoppingListToolProps) {
   const [editingListName, setEditingListName] = useState('');
   const [editingListDate, setEditingListDate] = useState('');
   const [editingListItems, setEditingListItems] = useState<ShoppingListItemRef[]>([]);
+  const [expandedHistoryIds, setExpandedHistoryIds] = useState<Set<string>>(new Set());
 
   // Delete list confirmation
   const [deleteConfirmListId, setDeleteConfirmListId] = useState<string | null>(null);
@@ -1786,39 +1787,35 @@ export function ShoppingListTool({ toolId }: ShoppingListToolProps) {
                   ) : (
                     <div
                       key={list.id}
-                      className="rounded-2xl border border-slate-800 bg-slate-900/70 p-4"
+                      className="rounded-2xl border border-slate-800 bg-slate-900/70 p-3"
                     >
-                      <div className="flex items-start justify-between gap-4">
-                        <div className="flex-1 min-w-0">
-                          <h4 className="text-base font-semibold text-slate-50">
-                            {list.name}
-                            <span className="text-slate-400 font-normal"> — {formatDateDisplay(list.date)}</span>
-                          </h4>
-                          {list.items.length > 0 ? (() => {
-                            const groups = groupListItemsByCategory(list.items);
-                            return (
-                              <div
-                                className="mt-3 grid gap-x-6 gap-y-3"
-                                style={{ gridTemplateColumns: 'repeat(5, minmax(0, 1fr))' }}
-                              >
-                                {groups.map(({ category, items: categoryItems }) => (
-                                  <div key={category} className="min-w-0">
-                                    <p className={groupedCategoryHeadingClass}>
-                                      {category}
-                                    </p>
-                                    <ul className={groupedCategoryListClass}>
-                                      {categoryItems.map((ref) => (
-                                        <li key={ref.itemId}>{formatLineItemLabel(ref)}</li>
-                                      ))}
-                                    </ul>
-                                  </div>
-                                ))}
-                              </div>
-                            );
-                          })() : (
-                            <p className="text-slate-500 text-sm mt-1">No items</p>
-                          )}
-                        </div>
+                      <div className="flex items-center justify-between gap-3">
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setExpandedHistoryIds((prev) => {
+                              const next = new Set(prev);
+                              if (next.has(list.id)) next.delete(list.id);
+                              else next.add(list.id);
+                              return next;
+                            });
+                          }}
+                          aria-expanded={expandedHistoryIds.has(list.id)}
+                          aria-label={`${expandedHistoryIds.has(list.id) ? 'Collapse' : 'Expand'} ${list.name}`}
+                          className="flex min-h-11 min-w-0 flex-1 items-center gap-2 rounded-lg text-left"
+                        >
+                          <svg
+                            className={`h-5 w-5 shrink-0 text-slate-400 transition-transform ${expandedHistoryIds.has(list.id) ? 'rotate-90' : ''}`}
+                            fill="none"
+                            stroke="currentColor"
+                            viewBox="0 0 24 24"
+                            aria-hidden="true"
+                          >
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+                          </svg>
+                          <span className="truncate text-base font-semibold text-slate-50">{list.name}</span>
+                          <span className="shrink-0 text-sm font-normal text-slate-400">{formatDateDisplay(list.date)}</span>
+                        </button>
                         <div className="flex items-center gap-1 flex-shrink-0">
                           <AttachmentButton
                             count={list.attachments?.length || 0}
@@ -1877,6 +1874,32 @@ export function ShoppingListTool({ toolId }: ShoppingListToolProps) {
                           </button>
                         </div>
                       </div>
+                      {expandedHistoryIds.has(list.id) && (
+                        list.items.length > 0 ? (() => {
+                          const groups = groupListItemsByCategory(list.items);
+                          return (
+                            <div
+                              className="mt-3 grid gap-x-6 gap-y-3 border-t border-slate-800 pt-3"
+                              style={{ gridTemplateColumns: 'repeat(5, minmax(0, 1fr))' }}
+                            >
+                              {groups.map(({ category, items: categoryItems }) => (
+                                <div key={category} className="min-w-0">
+                                  <p className={groupedCategoryHeadingClass}>
+                                    {category}
+                                  </p>
+                                  <ul className={groupedCategoryListClass}>
+                                    {categoryItems.map((ref) => (
+                                      <li key={ref.itemId}>{formatLineItemLabel(ref)}</li>
+                                    ))}
+                                  </ul>
+                                </div>
+                              ))}
+                            </div>
+                          );
+                        })() : (
+                          <p className="mt-3 border-t border-slate-800 pt-3 text-sm text-slate-500">No items</p>
+                        )
+                      )}
                     </div>
                   )
                 )}

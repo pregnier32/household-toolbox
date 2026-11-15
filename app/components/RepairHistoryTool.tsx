@@ -440,6 +440,19 @@ export function RepairHistoryTool({ toolId }: RepairHistoryToolProps) {
   const rowIconDangerClass = isLight
     ? 'inline-flex min-h-11 min-w-11 items-center justify-center rounded-lg border-2 border-red-300 bg-white p-2 text-red-700 transition-colors hover:bg-red-50 hover:border-red-400'
     : 'inline-flex min-h-11 min-w-11 items-center justify-center rounded-lg border-2 border-red-500/50 bg-slate-800/50 p-2 text-red-400 transition-colors hover:border-red-400 hover:bg-red-500/20';
+  const categoryPickerSelectedClass = isLight ? 'bg-emerald-100 text-emerald-900' : 'bg-emerald-500/20 text-emerald-300';
+  const categoryPickerUnselectedClass = isLight
+    ? 'text-slate-700 hover:bg-slate-100 hover:text-slate-900'
+    : 'text-slate-300 hover:bg-slate-700 hover:text-slate-100';
+  const itemRowClass = isLight
+    ? 'flex items-center justify-between p-2 rounded-lg border border-slate-300 bg-white hover:bg-slate-100 transition-colors'
+    : 'flex items-center justify-between p-2 rounded-lg border border-slate-700 bg-slate-800/50 hover:bg-slate-800 transition-colors';
+  const itemRowIconEmeraldClass = isLight
+    ? 'inline-flex min-h-11 min-w-11 items-center justify-center rounded-lg border border-emerald-300 bg-emerald-50 text-emerald-700 hover:bg-emerald-100 transition-colors'
+    : 'inline-flex min-h-11 min-w-11 items-center justify-center rounded-lg border border-emerald-500/50 bg-emerald-500/10 text-emerald-300 hover:bg-emerald-500/20 transition-colors';
+  const itemRowIconDangerClass = isLight
+    ? 'inline-flex min-h-11 min-w-11 items-center justify-center rounded-lg border border-red-300 bg-red-50 text-red-700 hover:bg-red-100 transition-colors'
+    : 'inline-flex min-h-11 min-w-11 items-center justify-center rounded-lg border border-red-500/50 bg-red-500/10 text-red-300 hover:bg-red-500/20 transition-colors';
   const checkboxClass = isLight
     ? 'w-5 h-5 rounded border-slate-400 bg-white text-emerald-600 focus:ring-emerald-500 focus:ring-offset-white'
     : 'w-5 h-5 rounded border-slate-600 bg-slate-700 text-emerald-500 focus:ring-emerald-500 focus:ring-offset-slate-800';
@@ -540,7 +553,7 @@ export function RepairHistoryTool({ toolId }: RepairHistoryToolProps) {
   const [editingItemArea, setEditingItemArea] = useState('');
   const [deleteConfirmItemId, setDeleteConfirmItemId] = useState<string | null>(null);
   const [deleteConfirmItemText, setDeleteConfirmItemText] = useState('');
-  const [expandedAreas, setExpandedAreas] = useState<Set<string>>(new Set());
+  const [selectedItemsArea, setSelectedItemsArea] = useState<string | null>(null);
   
   // Export
   const [showExportPopup, setShowExportPopup] = useState(false);
@@ -842,18 +855,11 @@ export function RepairHistoryTool({ toolId }: RepairHistoryToolProps) {
   }, [highlightRecordId, historyRecords, searchQuery]);
 
   useEffect(() => {
-    if (activeTab !== 'items') return;
-    const usedItemNames = new Set(
-      historyRecords.filter((r) => r.headerId === selectedHeaderId).map((r) => r.itemName)
-    );
-    const next = new Set<string>();
-    for (const item of items) {
-      if (!item.isDefault || usedItemNames.has(item.name)) {
-        next.add(item.area);
-      }
+    const areas = Array.from(new Set(items.map((item) => item.area)));
+    if (selectedItemsArea && !areas.includes(selectedItemsArea)) {
+      setSelectedItemsArea(null);
     }
-    setExpandedAreas(next);
-  }, [activeTab, selectedHeaderId, items, historyRecords]);
+  }, [items, selectedItemsArea]);
 
   // Header management functions
   const createNewHeader = async () => {
@@ -1292,22 +1298,6 @@ export function RepairHistoryTool({ toolId }: RepairHistoryToolProps) {
     return items.filter(item => item.area === area).sort((a, b) => a.name.localeCompare(b.name));
   };
 
-  const toggleArea = (area: string) => {
-    setExpandedAreas(prev => {
-      const newSet = new Set(prev);
-      if (newSet.has(area)) {
-        newSet.delete(area);
-      } else {
-        newSet.add(area);
-      }
-      return newSet;
-    });
-  };
-
-  const isAreaExpanded = (area: string) => {
-    return expandedAreas.has(area);
-  };
-
   const startAddingItem = () => {
     setIsAddingItem(true);
     setNewItemName('');
@@ -1352,6 +1342,7 @@ export function RepairHistoryTool({ toolId }: RepairHistoryToolProps) {
       if (response.ok) {
         // Reload items to get the new one
         await loadItems(selectedHeader.categoryType);
+        setSelectedItemsArea(newItemArea.trim());
         setIsAddingItem(false);
         setNewItemName('');
         setNewItemArea('');
@@ -1421,6 +1412,7 @@ export function RepairHistoryTool({ toolId }: RepairHistoryToolProps) {
       if (response.ok) {
         // Reload items to get updated data
         await loadItems(selectedHeader.categoryType);
+        setSelectedItemsArea(editingItemArea.trim());
         setEditingItemId(null);
         setEditingItemName('');
         setEditingItemArea('');
@@ -3011,120 +3003,145 @@ export function RepairHistoryTool({ toolId }: RepairHistoryToolProps) {
                 </div>
               )}
 
-              {/* Items by Area */}
-              {!isAddingItem && (
-                <div className="space-y-6">
-                  {getUniqueAreas().map((area) => {
-                    const areaItems = getItemsByArea(area);
-                    const isExpanded = isAreaExpanded(area);
-                    return (
-                      <div key={area} className={cardClass}>
-                        <button
-                          onClick={() => toggleArea(area)}
-                          className="w-full flex items-center justify-between mb-4 hover:opacity-80 transition-opacity"
-                        >
-                          <h3 className={sectionTitleClass}>{area}</h3>
-                          <svg
-                            className={`h-5 w-5 text-slate-400 transition-transform ${isExpanded ? 'rotate-180' : ''}`}
-                            fill="none"
-                            stroke="currentColor"
-                            viewBox="0 0 24 24"
-                          >
-                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
-                          </svg>
-                        </button>
-                        {isExpanded && (
-                          <div className="space-y-2">
-                            {areaItems.map((item) => (
-                            editingItemId === item.id ? (
-                              // Edit mode
-                              <div key={item.id} className={isLight ? 'space-y-2 p-3 rounded-lg border border-slate-200 bg-slate-50' : 'space-y-2 p-3 rounded-lg border border-slate-700 bg-slate-800/50'}>
-                                <div>
-                                  <label className="block text-xs font-medium text-slate-300 mb-1.5">
-                                    Area <span className="text-red-400">*</span>
-                                  </label>
-                                  <select
-                                    value={editingItemArea}
-                                    onChange={(e) => setEditingItemArea(e.target.value)}
-                                    className={selectClass}
-                                  >
-                                    <option value="">Select an area...</option>
-                                    {getUniqueAreas().map(area => (
-                                      <option key={area} value={area}>
-                                        {area}
-                                      </option>
-                                    ))}
-                                  </select>
-                                </div>
-                                <div>
-                                  <label className="block text-xs font-medium text-slate-300 mb-1.5">
-                                    Item Name <span className="text-red-400">*</span>
-                                  </label>
-                                  <input
-                                    type="text"
-                                    value={editingItemName}
-                                    onChange={(e) => setEditingItemName(e.target.value)}
-                                    className={isLight ? 'w-full px-3 py-1.5 rounded-lg border border-slate-300 bg-white text-slate-900 text-sm focus:border-emerald-500/50 focus:outline-none focus:ring-1 focus:ring-emerald-500/50' : 'w-full px-3 py-1.5 rounded-lg border border-slate-700 bg-slate-900 text-slate-100 text-sm focus:border-emerald-500/50 focus:outline-none focus:ring-1 focus:ring-emerald-500/50'}
-                                    onKeyDown={(e) => {
-                                      if (e.key === 'Enter') {
-                                        saveItemEdit();
-                                      } else if (e.key === 'Escape') {
-                                        cancelEditingItem();
-                                      }
-                                    }}
-                                    autoFocus
-                                  />
-                                </div>
-                                <div className="flex gap-2 justify-end">
-                                  <button onClick={cancelEditingItem} className={isLight ? 'px-3 py-1.5 rounded border-2 border-slate-400 bg-slate-100 text-slate-800 text-xs hover:bg-slate-200 transition-colors' : 'px-3 py-1.5 rounded border border-slate-600 bg-slate-700 text-slate-200 text-xs hover:bg-slate-600 transition-colors'}>
-                                    Cancel
-                                  </button>
-                                  <button onClick={saveItemEdit} disabled={isSaving || !editingItemName.trim() || !editingItemArea.trim()} className={isLight ? 'px-3 py-1.5 rounded bg-emerald-600 text-white text-xs font-medium hover:bg-emerald-500 transition-colors disabled:opacity-50 disabled:cursor-not-allowed' : 'px-3 py-1.5 rounded bg-emerald-500 text-slate-950 text-xs font-medium hover:bg-emerald-400 transition-colors disabled:opacity-50 disabled:cursor-not-allowed'}>
-                                    Save
-                                  </button>
-                                </div>
-                              </div>
-                            ) : (
-                              // Display mode
-                              <div key={item.id} className={isLight ? 'flex items-center justify-between p-2 rounded-lg border border-slate-200 bg-white hover:bg-slate-50 transition-colors' : 'flex items-center justify-between p-2 rounded-lg border border-slate-700 bg-slate-800/50 hover:bg-slate-800 transition-colors'}>
-                                <span className={isLight ? 'text-sm text-slate-800' : 'text-sm text-slate-200'}>{item.name}</span>
-                                <div className="flex items-center gap-1.5">
-                                  <button
-                                    type="button"
-                                    onClick={() => startEditingItem(item)}
-                                    className={rowIconEmeraldClass}
-                                    title="Edit item"
-                                    aria-label="Edit item"
-                                  >
-                                    <svg className="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
-                                    </svg>
-                                  </button>
-                                  <button
-                                    type="button"
-                                    onClick={() => {
-                                      setDeleteConfirmItemId(item.id);
-                                      setDeleteConfirmItemText('');
-                                    }}
-                                    className={rowIconDangerClass}
-                                    title="Delete item"
-                                    aria-label="Delete item"
-                                  >
-                                    <svg className="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
-                                    </svg>
-                                  </button>
-                                </div>
-                              </div>
-                            )
-                          ))}
-                          </div>
+              {!isAddingItem && (() => {
+                const areas = getUniqueAreas();
+                const displayArea = selectedItemsArea && areas.includes(selectedItemsArea) ? selectedItemsArea : areas[0] ?? null;
+                const areaItems = displayArea ? getItemsByArea(displayArea) : [];
+                return (
+                  <div className={isLight ? 'flex gap-4 rounded-2xl border border-slate-300 bg-slate-50 overflow-hidden' : 'flex gap-4 rounded-2xl border border-slate-800 bg-slate-900/70 overflow-hidden'}>
+                    <div className={isLight ? 'w-1/4 min-w-0 flex-shrink-0 border-r border-slate-300 bg-white' : 'w-1/4 min-w-0 flex-shrink-0 border-r border-slate-800 bg-slate-900/50'}>
+                      <div className="p-3">
+                        <h3 className={isLight ? 'text-xs font-semibold uppercase tracking-wider text-slate-600 mb-2 px-2' : 'text-xs font-semibold uppercase tracking-wider text-slate-400 mb-2 px-2'}>
+                          Categories
+                        </h3>
+                        {areas.length === 0 ? (
+                          <p className="text-slate-500 text-sm px-2 py-4">No categories yet. Click + to add one.</p>
+                        ) : (
+                          <nav className="space-y-0.5" aria-label="Item categories">
+                            {areas.map((area) => (
+                              <button
+                                key={area}
+                                type="button"
+                                onClick={() => setSelectedItemsArea(area)}
+                                className={`w-full text-left px-3 py-2 rounded-lg text-sm font-medium transition-colors ${
+                                  displayArea === area ? categoryPickerSelectedClass : categoryPickerUnselectedClass
+                                }`}
+                              >
+                                {area}
+                              </button>
+                            ))}
+                          </nav>
                         )}
                       </div>
-                    );
-                  })}
-                </div>
-              )}
+                    </div>
+
+                    <div className="flex-1 min-w-0 p-6">
+                      {!displayArea ? (
+                        <p className="text-slate-500 text-sm">Select a category to view and manage items.</p>
+                      ) : (
+                        <>
+                          <h3 className={isLight ? 'text-lg font-semibold text-emerald-800 mb-4' : 'text-lg font-semibold text-emerald-300 mb-4'}>{displayArea}</h3>
+                          {areaItems.length === 0 ? (
+                            <p className="text-slate-500 text-sm">No items in this category. Use “Add New Item” above.</p>
+                          ) : (
+                            <ul className="space-y-2" role="list">
+                              {areaItems.map((item) =>
+                                editingItemId === item.id ? (
+                                  <li key={item.id} className={isLight ? 'space-y-2 p-3 rounded-lg border border-slate-300 bg-white' : 'space-y-2 p-3 rounded-lg border border-slate-700 bg-slate-800/50'}>
+                                    <div>
+                                      <label className={labelClass}>
+                                        Area <span className="text-red-400">*</span>
+                                      </label>
+                                      <select
+                                        value={editingItemArea}
+                                        onChange={(e) => setEditingItemArea(e.target.value)}
+                                        className={selectClass}
+                                      >
+                                        <option value="">Select an area...</option>
+                                        {areas.map((area) => (
+                                          <option key={area} value={area}>
+                                            {area}
+                                          </option>
+                                        ))}
+                                      </select>
+                                    </div>
+                                    <div>
+                                      <label className={labelClass}>
+                                        Item Name <span className="text-red-400">*</span>
+                                      </label>
+                                      <input
+                                        type="text"
+                                        value={editingItemName}
+                                        onChange={(e) => setEditingItemName(e.target.value)}
+                                        className={inputClass}
+                                        onKeyDown={(e) => {
+                                          if (e.key === 'Enter') saveItemEdit();
+                                          if (e.key === 'Escape') cancelEditingItem();
+                                        }}
+                                        autoFocus
+                                      />
+                                    </div>
+                                    <div className="flex gap-2 justify-end">
+                                      <button
+                                        type="button"
+                                        onClick={cancelEditingItem}
+                                        className={isLight ? 'px-3 py-1.5 rounded border-2 border-slate-400 bg-slate-100 text-slate-800 text-xs hover:bg-slate-200' : 'px-3 py-1.5 rounded border border-slate-600 bg-slate-700 text-slate-200 text-xs hover:bg-slate-600'}
+                                      >
+                                        Cancel
+                                      </button>
+                                      <button
+                                        type="button"
+                                        onClick={saveItemEdit}
+                                        disabled={isSaving || !editingItemName.trim() || !editingItemArea.trim()}
+                                        className="px-3 py-1.5 rounded bg-emerald-500 text-slate-950 text-xs font-medium hover:bg-emerald-400 disabled:opacity-50 disabled:cursor-not-allowed"
+                                      >
+                                        Save
+                                      </button>
+                                    </div>
+                                  </li>
+                                ) : (
+                                  <li key={item.id}>
+                                    <div className={itemRowClass}>
+                                      <span className={isLight ? 'text-sm text-slate-800' : 'text-sm text-slate-200'}>{item.name}</span>
+                                      <div className="flex items-center gap-1">
+                                        <button
+                                          type="button"
+                                          onClick={() => startEditingItem(item)}
+                                          aria-label={`Edit ${item.name}`}
+                                          title={`Edit ${item.name}`}
+                                          className={itemRowIconEmeraldClass}
+                                        >
+                                          <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
+                                          </svg>
+                                        </button>
+                                        <button
+                                          type="button"
+                                          onClick={() => {
+                                            setDeleteConfirmItemId(item.id);
+                                            setDeleteConfirmItemText('');
+                                          }}
+                                          aria-label={`Delete ${item.name}`}
+                                          title={`Delete ${item.name}`}
+                                          className={itemRowIconDangerClass}
+                                        >
+                                          <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                                          </svg>
+                                        </button>
+                                      </div>
+                                    </div>
+                                  </li>
+                                )
+                              )}
+                            </ul>
+                          )}
+                        </>
+                      )}
+                    </div>
+                  </div>
+                );
+              })()}
             </div>
           )}
 

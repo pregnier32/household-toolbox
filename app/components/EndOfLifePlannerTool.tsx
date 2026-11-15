@@ -141,6 +141,28 @@ async function eolPlannerRequest<T>(input: RequestInfo | URL, init?: RequestInit
   return payload;
 }
 
+function sameSavedText(left: string | null | undefined, right: string | null | undefined) {
+  return (left || '') === (right || '');
+}
+
+function savedPlanConfirmsWrite(sent: EolPlan, saved: EolPlan) {
+  if (!saved?.id || saved.id !== sent.id || !saved.data || !sent.data) return false;
+  const sentPersonal = sent.data.personal;
+  const savedPersonal = saved.data.personal;
+  return (
+    sameSavedText(sentPersonal.fullLegalName, savedPersonal.fullLegalName) &&
+    sameSavedText(sentPersonal.preferredName, savedPersonal.preferredName) &&
+    sameSavedText(sentPersonal.previousNames, savedPersonal.previousNames) &&
+    sameSavedText(sentPersonal.placeOfBirth, savedPersonal.placeOfBirth) &&
+    sameSavedText(sentPersonal.maritalStatus, savedPersonal.maritalStatus) &&
+    sameSavedText(sentPersonal.spousePartner, savedPersonal.spousePartner) &&
+    sameSavedText(sent.data.personalNotes, saved.data.personalNotes) &&
+    sameSavedText(sent.data.devicesNotes, saved.data.devicesNotes) &&
+    sameSavedText(sent.data.onlineNotes, saved.data.onlineNotes) &&
+    sameSavedText(sent.data.documentsNotes, saved.data.documentsNotes)
+  );
+}
+
 type TabId = EolBuiltInSectionId | `custom:${string}`;
 
 type DeleteTarget =
@@ -1063,6 +1085,8 @@ export function EndOfLifePlannerTool({ toolId }: EndOfLifePlannerToolProps) {
   const [attachmentBusy, setAttachmentBusy] = useState(false);
   const [viewPreview, setViewPreview] = useState<AttachmentItem | null>(null);
 
+  const plansRef = useRef<EolPlan[]>(plans);
+  plansRef.current = plans;
   const persistTimer = useRef<number | null>(null);
   const persistGeneration = useRef(0);
   const selectedPlanIdRef = useRef<string | null>(null);
@@ -1074,24 +1098,34 @@ export function EndOfLifePlannerTool({ toolId }: EndOfLifePlannerToolProps) {
     immediate: boolean,
     options?: { selectionOnly?: boolean; planIds?: string[] }
   ) => {
+    const generation = ++persistGeneration.current;
     const write = async () => {
+      if (generation !== persistGeneration.current) return;
       if (!toolId) {
         setSaveStatus('error');
         return;
       }
-      const generation = ++persistGeneration.current;
       try {
         const savedPlans: EolPlan[] = [];
-        if (!options?.selectionOnly) {
-          const ids = new Set(options?.planIds || nextPlans.map((plan) => plan.id));
-          for (const plan of nextPlans.filter((item) => ids.has(item.id))) {
-            const result = await eolPlannerRequest<{ plan: EolPlan }>(eolPlannerUrl(toolId), {
-              method: 'PUT',
-              headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({ toolId, plan }),
-            });
-            savedPlans.push(result.plan);
+        const plansToSave = options?.selectionOnly
+          ? []
+          : nextPlans.filter((plan) => !options?.planIds || options.planIds.includes(plan.id));
+        for (const plan of plansToSave) {
+          const result = await eolPlannerRequest<{ plan: EolPlan }>(eolPlannerUrl(toolId), {
+            method: 'PUT',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ toolId, plan }),
+          });
+          if (generation !== persistGeneration.current) return;
+          if (!result.plan || !savedPlanConfirmsWrite(plan, result.plan)) {
+            setSaveStatus('error');
+            return;
           }
+          savedPlans.push(result.plan);
+        }
+        if (!options?.selectionOnly && plansToSave.length === 0) {
+          setSaveStatus('error');
+          return;
         }
         await eolPlannerRequest<{ ok: true }>(eolPlannerUrl(toolId), {
           method: 'PATCH',
@@ -1242,15 +1276,13 @@ export function EndOfLifePlannerTool({ toolId }: EndOfLifePlannerToolProps) {
     (updater: (plan: EolPlan) => EolPlan, immediate = false) => {
       const currentId = selectedPlanIdRef.current;
       if (!currentId) return Promise.resolve();
-      let nextPlans: EolPlan[] = [];
-      setPlans((prev) => {
-        nextPlans = prev.map((plan) => {
-          if (plan.id !== currentId) return plan;
-          const updated = touchPlan(updater(plan));
-          return immediate ? appendPlanHistory(updated, 'edit', 'Edited plan') : updated;
-        });
-        return nextPlans;
+      const nextPlans = plansRef.current.map((plan) => {
+        if (plan.id !== currentId) return plan;
+        const updated = touchPlan(updater(plan));
+        return immediate ? appendPlanHistory(updated, 'edit', 'Edited plan') : updated;
       });
+      plansRef.current = nextPlans;
+      setPlans(nextPlans);
       return persist(nextPlans, currentId, immediate, { planIds: [currentId] });
     },
     [persist]
