@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useLayoutEffect, useMemo, useCallback, useRef } from 'react';
 import { useTheme } from './AppThemeProvider';
+import { ToolDataLoadingBox } from './ToolDataLoadingBox';
 import { useAppNotice } from './AppNotice';
 import { AttachmentButton } from './AttachmentButton';
 import { AttachmentModal } from './AttachmentModal';
@@ -463,6 +464,7 @@ export function EventBudgetPlannerTool({ toolId }: EventBudgetPlannerToolProps) 
   const [vendors, setVendors] = useState<Vendor[]>([]);
   const [events, setEvents] = useState<EventRecord[]>([]);
   const [isLoading, setIsLoading] = useState(false);
+  const [awaitingInitialData, setAwaitingInitialData] = useState(true);
 
   const applyData = useCallback((data: ApiData) => {
     setCategories(data.categories ?? []);
@@ -522,6 +524,7 @@ export function EventBudgetPlannerTool({ toolId }: EventBudgetPlannerToolProps) 
         setTypes([]);
         setVendors([]);
         setEvents([]);
+        setAwaitingInitialData(false);
         return;
       }
 
@@ -535,6 +538,7 @@ export function EventBudgetPlannerTool({ toolId }: EventBudgetPlannerToolProps) 
         setEvents([]);
       } finally {
         setIsLoading(false);
+        setAwaitingInitialData(false);
       }
     };
 
@@ -2426,6 +2430,10 @@ export function EventBudgetPlannerTool({ toolId }: EventBudgetPlannerToolProps) 
       setIsExportingPdf(false);
     }
   };
+
+  if (awaitingInitialData) {
+    return <ToolDataLoadingBox />;
+  }
 
   return (
     <div className="space-y-6">

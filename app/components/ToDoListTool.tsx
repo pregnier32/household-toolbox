@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useRef } from 'react';
 import { useTheme } from './AppThemeProvider';
+import { ToolDataLoadingBox } from './ToolDataLoadingBox';
 import { useAppNotice } from './AppNotice';
 import { AttachmentButton } from './AttachmentButton';
 import { AttachmentModal } from './AttachmentModal';
@@ -234,6 +235,7 @@ export function ToDoListTool({ toolId }: ToDoListToolProps) {
     : 'inline-flex min-h-11 min-w-11 items-center justify-center rounded-lg border-2 border-red-500/50 bg-slate-800/50 p-1.5 text-red-400 hover:bg-red-500/20 transition-colors';
   const [categories, setCategories] = useState<Category[]>([]);
   const [isLoadingCategories, setIsLoadingCategories] = useState(true);
+  const [awaitingInitialData, setAwaitingInitialData] = useState(true);
   const [selectedCategoryId, setSelectedCategoryId] = useState<string | null>(null);
   const [isCreatingCategory, setIsCreatingCategory] = useState(false);
   const [newCategoryName, setNewCategoryName] = useState('');
@@ -306,6 +308,7 @@ export function ToDoListTool({ toolId }: ToDoListToolProps) {
       setCategories([]);
     } finally {
       setIsLoadingCategories(false);
+      setAwaitingInitialData(false);
     }
   };
 
@@ -335,6 +338,7 @@ export function ToDoListTool({ toolId }: ToDoListToolProps) {
 
   useEffect(() => {
     if (toolId) loadCategories();
+    else setAwaitingInitialData(false);
   }, [toolId]);
 
   useEffect(() => {
@@ -1140,6 +1144,10 @@ export function ToDoListTool({ toolId }: ToDoListToolProps) {
     }
   };
 
+  if (awaitingInitialData) {
+    return <ToolDataLoadingBox />;
+  }
+
   return (
     <div className="min-w-0 space-y-6">
       <div className="flex min-w-0 flex-wrap items-start justify-between gap-3">
@@ -1246,10 +1254,10 @@ export function ToDoListTool({ toolId }: ToDoListToolProps) {
                   </div>
                 </div>
               ) : (
-                <div key={cat.id} className="relative">
+                <div key={cat.id} className="relative shrink-0">
                   <button
                     onClick={() => selectCategory(cat.id)}
-                    className={`px-4 py-3 rounded-lg border transition-all duration-200 min-w-[120px] relative ${
+                    className={`rounded-lg border py-3 pl-4 pr-14 transition-all duration-200 min-w-[120px] ${
                       selectedCategoryId === cat.id ? 'shadow-lg' : 'hover:border-slate-600'
                     }`}
                     style={{
@@ -1261,14 +1269,14 @@ export function ToDoListTool({ toolId }: ToDoListToolProps) {
                       color: cat.card_color,
                     }}
                   >
-                    <div className="font-medium text-center">{cat.name}</div>
+                    <div className="whitespace-nowrap text-center font-medium">{cat.name}</div>
                   </button>
                   <button
                     onClick={(e) => {
                       e.stopPropagation();
                       setMenuOpenCategoryId(menuOpenCategoryId === cat.id ? null : cat.id);
                     }}
-                    className={`absolute top-1 right-1 inline-flex min-h-11 min-w-11 items-center justify-center rounded transition-colors ${isLight ? 'text-slate-600 hover:bg-slate-200/80 hover:text-slate-900' : 'text-slate-400 hover:bg-slate-700/50 hover:text-slate-200'}`}
+                    className={`absolute right-0.5 top-1/2 inline-flex min-h-11 min-w-11 -translate-y-1/2 items-center justify-center rounded transition-colors ${isLight ? 'text-slate-600 hover:bg-slate-200/80 hover:text-slate-900' : 'text-slate-400 hover:bg-slate-700/50 hover:text-slate-200'}`}
                     title="Category options"
                     aria-label="Category options"
                   >

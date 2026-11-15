@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from 'react';
 import { useTheme } from './AppThemeProvider';
+import { ToolDataLoadingBox } from './ToolDataLoadingBox';
 import { useAppNotice } from './AppNotice';
 import { AttachmentButton } from './AttachmentButton';
 import { AttachmentModal } from './AttachmentModal';
@@ -264,6 +265,7 @@ export function ImportantDocumentsTool({ toolId }: ImportantDocumentsToolProps) 
   const [tags, setTags] = useState<DocumentTag[]>([]);
   const [activeTab, setActiveTab] = useState<'documents' | 'tags'>('documents');
   const [isLoading, setIsLoading] = useState(false);
+  const [awaitingInitialData, setAwaitingInitialData] = useState(true);
   const [hasLoadedDocuments, setHasLoadedDocuments] = useState(false);
   
   // Search and filter state
@@ -381,7 +383,10 @@ export function ImportantDocumentsTool({ toolId }: ImportantDocumentsToolProps) 
   // Load documents and tags from API
   useEffect(() => {
     const loadData = async () => {
-      if (!toolId) return;
+      if (!toolId) {
+        setAwaitingInitialData(false);
+        return;
+      }
       
       setIsLoading(true);
       try {
@@ -467,6 +472,7 @@ export function ImportantDocumentsTool({ toolId }: ImportantDocumentsToolProps) 
       } finally {
         setHasLoadedDocuments(true);
         setIsLoading(false);
+        setAwaitingInitialData(false);
       }
     };
 
@@ -1952,6 +1958,10 @@ export function ImportantDocumentsTool({ toolId }: ImportantDocumentsToolProps) 
       : savedAttachmentDoc
         ? savedDocumentToAttachment(savedAttachmentDoc)
         : [];
+
+  if (awaitingInitialData) {
+    return <ToolDataLoadingBox />;
+  }
 
   return (
     <div className="min-w-0 space-y-6">

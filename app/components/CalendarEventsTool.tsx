@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { useTheme } from './AppThemeProvider';
+import { ToolDataLoadingBox } from './ToolDataLoadingBox';
 import { useAppNotice } from './AppNotice';
 import { AttachmentButton } from './AttachmentButton';
 import { AttachmentModal } from './AttachmentModal';
@@ -345,6 +346,7 @@ export function CalendarEventsTool({ toolId }: CalendarEventsToolProps) {
   const [isCreatingNewCategory, setIsCreatingNewCategory] = useState(false);
   const [newCategoryName, setNewCategoryName] = useState('');
   const [isLoading, setIsLoading] = useState(true);
+  const [awaitingInitialData, setAwaitingInitialData] = useState(true);
   
   // Category editing
   const [editingCategoryId, setEditingCategoryId] = useState<string | null>(null);
@@ -395,6 +397,7 @@ export function CalendarEventsTool({ toolId }: CalendarEventsToolProps) {
       loadCategories();
     } else {
       setIsLoading(false);
+      setAwaitingInitialData(false);
       setSaveMessage({ type: 'error', text: 'Tool ID is missing. Please refresh the page.' });
     }
   }, [toolId]);
@@ -425,6 +428,7 @@ export function CalendarEventsTool({ toolId }: CalendarEventsToolProps) {
     if (!toolId) {
       setSaveMessage({ type: 'error', text: 'Tool ID is missing. Please refresh the page.' });
       setIsLoading(false);
+      setAwaitingInitialData(false);
       return;
     }
     
@@ -495,6 +499,7 @@ export function CalendarEventsTool({ toolId }: CalendarEventsToolProps) {
       setCategories([]);
     } finally {
       setIsLoading(false);
+      setAwaitingInitialData(false);
     }
   };
 
@@ -1499,6 +1504,10 @@ export function CalendarEventsTool({ toolId }: CalendarEventsToolProps) {
             type: item.type,
           }))
         : [];
+
+  if (awaitingInitialData) {
+    return <ToolDataLoadingBox />;
+  }
 
   return (
     <div className="space-y-6">

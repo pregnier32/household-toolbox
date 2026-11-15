@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useTheme } from './AppThemeProvider';
+import { ToolDataLoadingBox } from './ToolDataLoadingBox';
 import { useAppNotice } from './AppNotice';
 import { AttachmentButton } from './AttachmentButton';
 import { AttachmentModal } from './AttachmentModal';
@@ -339,6 +340,7 @@ export function HSATrackerTool({ toolId }: HSATrackerToolProps) {
   const [selectedAccountId, setSelectedAccountId] = useState<string | null>(null);
   const [accountsLoadOk, setAccountsLoadOk] = useState(false);
   const [isLoadingData, setIsLoadingData] = useState(false);
+  const [awaitingInitialData, setAwaitingInitialData] = useState(true);
   const [saveMessage, setSaveMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
   const accountsRef = useRef<HsaAccount[]>([]);
   const loadGenRef = useRef(0);
@@ -350,7 +352,10 @@ export function HSATrackerTool({ toolId }: HSATrackerToolProps) {
   }, []);
 
   const loadHsaData = useCallback(async () => {
-    if (!toolId) return;
+    if (!toolId) {
+      setAwaitingInitialData(false);
+      return;
+    }
     const gen = ++loadGenRef.current;
     setIsLoadingData(true);
     try {
@@ -380,12 +385,18 @@ export function HSATrackerTool({ toolId }: HSATrackerToolProps) {
       }
       showMessage('error', e instanceof Error ? e.message : 'Failed to load HSA data');
     } finally {
-      if (gen === loadGenRef.current) setIsLoadingData(false);
+      if (gen === loadGenRef.current) {
+        setIsLoadingData(false);
+        setAwaitingInitialData(false);
+      }
     }
   }, [toolId, showMessage]);
 
   useEffect(() => {
-    if (!toolId) return;
+    if (!toolId) {
+      setAwaitingInitialData(false);
+      return;
+    }
     const cached = readAccountsCache(toolId);
     if (cached.length > 0) {
       setAccounts(cached);
@@ -1619,6 +1630,10 @@ export function HSATrackerTool({ toolId }: HSATrackerToolProps) {
 
   const depositListEmpty = !selectedAccount || selectedAccount.deposits.length === 0;
   const expenseListEmpty = !selectedAccount || selectedAccount.expenses.length === 0;
+
+  if (awaitingInitialData) {
+    return <ToolDataLoadingBox />;
+  }
 
   return (
     <div className="space-y-6 relative">

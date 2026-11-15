@@ -3,6 +3,7 @@
 import { useState, useMemo, useEffect } from 'react';
 import { createPortal } from 'react-dom';
 import { useTheme } from './AppThemeProvider';
+import { ToolDataLoadingBox } from './ToolDataLoadingBox';
 import { useAppNotice } from './AppNotice';
 import { AttachmentButton } from './AttachmentButton';
 import { AttachmentModal } from './AttachmentModal';
@@ -451,6 +452,7 @@ export function MealPlannerTool({ toolId }: MealPlannerToolProps) {
   const [mealTypesLoading, setMealTypesLoading] = useState(false);
   const [mealsLoading, setMealsLoading] = useState(false);
   const [plansLoading, setPlansLoading] = useState(false);
+  const [awaitingInitialData, setAwaitingInitialData] = useState(true);
 
   const fetchItems = async () => {
     if (!toolId) return;
@@ -518,11 +520,17 @@ export function MealPlannerTool({ toolId }: MealPlannerToolProps) {
   };
 
   useEffect(() => {
-    if (!toolId) return;
-    fetchItems();
-    fetchMealTypes();
-    fetchMeals();
-    fetchPlans();
+    if (!toolId) {
+      setAwaitingInitialData(false);
+      return;
+    }
+    let cancelled = false;
+    Promise.all([fetchItems(), fetchMealTypes(), fetchMeals(), fetchPlans()]).finally(() => {
+      if (!cancelled) setAwaitingInitialData(false);
+    });
+    return () => {
+      cancelled = true;
+    };
   }, [toolId]);
 
   // --- Items tab state ---
@@ -1986,6 +1994,10 @@ export function MealPlannerTool({ toolId }: MealPlannerToolProps) {
   };
 
   const isLoading = toolId && (itemsLoading || mealTypesLoading || mealsLoading || plansLoading);
+
+  if (awaitingInitialData) {
+    return <ToolDataLoadingBox />;
+  }
 
   return (
     <>

@@ -3,6 +3,7 @@
 import { useState, useEffect, useRef } from 'react';
 import { formatDisplayDate } from '@/lib/format-display-date';
 import { useTheme } from './AppThemeProvider';
+import { ToolDataLoadingBox } from './ToolDataLoadingBox';
 import { useAppNotice } from './AppNotice';
 import { AttachmentButton } from './AttachmentButton';
 import { AttachmentModal } from './AttachmentModal';
@@ -387,6 +388,7 @@ export function HealthcareApptsHistoryTool({ toolId }: HealthcareApptsHistoryToo
   const [isExportingPdf, setIsExportingPdf] = useState(false);
 
   const [isLoadingHeaders, setIsLoadingHeaders] = useState(false);
+  const [awaitingInitialData, setAwaitingInitialData] = useState(true);
   const [isLoadingRecords, setIsLoadingRecords] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
   const [addingToHsaRecordId, setAddingToHsaRecordId] = useState<string | null>(null);
@@ -429,7 +431,10 @@ export function HealthcareApptsHistoryTool({ toolId }: HealthcareApptsHistoryToo
   });
 
   const loadHeaders = async () => {
-    if (!toolId) return;
+    if (!toolId) {
+      setAwaitingInitialData(false);
+      return;
+    }
     setIsLoadingHeaders(true);
     try {
       const response = await fetch(`${API_BASE}?toolId=${encodeURIComponent(toolId)}&resource=headers`);
@@ -463,6 +468,7 @@ export function HealthcareApptsHistoryTool({ toolId }: HealthcareApptsHistoryToo
       setSaveMessage({ type: 'error', text: e instanceof Error ? e.message : 'Failed to load headers' });
     } finally {
       setIsLoadingHeaders(false);
+      setAwaitingInitialData(false);
     }
   };
 
@@ -634,6 +640,7 @@ export function HealthcareApptsHistoryTool({ toolId }: HealthcareApptsHistoryToo
 
   useEffect(() => {
     if (toolId) loadHeaders();
+    else setAwaitingInitialData(false);
   }, [toolId]);
 
   useEffect(() => {
@@ -1337,6 +1344,10 @@ export function HealthcareApptsHistoryTool({ toolId }: HealthcareApptsHistoryToo
             type: item.type,
           }))
         : [];
+
+  if (awaitingInitialData) {
+    return <ToolDataLoadingBox />;
+  }
 
   return (
     <div className="space-y-6">

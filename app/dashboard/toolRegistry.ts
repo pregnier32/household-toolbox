@@ -2,11 +2,12 @@
 
 import { createElement, type ComponentType } from 'react';
 import dynamic from 'next/dynamic';
+import { ToolDataLoadingBox } from '../components/ToolDataLoadingBox';
 
 export type ToolComponent = ComponentType<{ toolId?: string }>;
 
 function ToolLoading() {
-  return createElement('p', { className: 'text-slate-400' }, 'Loading...');
+  return createElement(ToolDataLoadingBox);
 }
 
 const PercentOfOrderTool = dynamic(

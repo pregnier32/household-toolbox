@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { useTheme } from './AppThemeProvider';
+import { ToolDataLoadingBox } from './ToolDataLoadingBox';
 import { useAppNotice } from './AppNotice';
 import { AttachmentButton } from './AttachmentButton';
 import { AttachmentModal } from './AttachmentModal';
@@ -484,6 +485,7 @@ export function PetCareScheduleTool({ toolId }: PetCareScheduleToolProps) {
   const [isCreatingNewPet, setIsCreatingNewPet] = useState(false);
   const [newPetName, setNewPetName] = useState('');
   const [isLoading, setIsLoading] = useState(true);
+  const [awaitingInitialData, setAwaitingInitialData] = useState(true);
   
   // Pet editing
   const [editingPetId, setEditingPetId] = useState<string | null>(null);
@@ -601,6 +603,7 @@ export function PetCareScheduleTool({ toolId }: PetCareScheduleToolProps) {
       loadPets();
     } else {
       setIsLoading(false);
+      setAwaitingInitialData(false);
       setSaveMessage({ type: 'error', text: 'Tool ID is missing. Please refresh the page.' });
     }
   }, [toolId]);
@@ -693,6 +696,7 @@ export function PetCareScheduleTool({ toolId }: PetCareScheduleToolProps) {
     if (!toolId) {
       setSaveMessage({ type: 'error', text: 'Tool ID is missing. Please refresh the page.' });
       setIsLoading(false);
+      setAwaitingInitialData(false);
       return;
     }
     
@@ -719,6 +723,7 @@ export function PetCareScheduleTool({ toolId }: PetCareScheduleToolProps) {
       setPets([]);
     } finally {
       setIsLoading(false);
+      setAwaitingInitialData(false);
     }
   };
 
@@ -2619,6 +2624,10 @@ export function PetCareScheduleTool({ toolId }: PetCareScheduleToolProps) {
   const filteredDocuments = documents.filter((doc) =>
     documentNeedle === '' || doc.name.toLowerCase().includes(documentNeedle)
   );
+
+  if (awaitingInitialData) {
+    return <ToolDataLoadingBox />;
+  }
 
   return (
     <div className="min-w-0 space-y-6">

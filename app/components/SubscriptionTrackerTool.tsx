@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useRef } from 'react';
 import { useTheme } from './AppThemeProvider';
+import { ToolDataLoadingBox } from './ToolDataLoadingBox';
 import { useAppNotice } from './AppNotice';
 import { AttachmentButton } from './AttachmentButton';
 import { AttachmentModal } from './AttachmentModal';
@@ -338,6 +339,7 @@ export function SubscriptionTrackerTool({ toolId }: SubscriptionTrackerToolProps
     : 'inline-flex min-h-11 min-w-11 items-center justify-center rounded-lg border-2 border-red-500/50 bg-slate-800/50 p-2 text-red-400 transition-colors hover:border-red-400 hover:bg-red-500/20';
   const [subscriptions, setSubscriptions] = useState<Subscription[]>([]);
   const [isLoading, setIsLoading] = useState(false);
+  const [awaitingInitialData, setAwaitingInitialData] = useState(true);
   const [isSavingForm, setIsSavingForm] = useState(false);
   const [showExportPopup, setShowExportPopup] = useState(false);
   const [exportAllSubscriptions, setExportAllSubscriptions] = useState(false);
@@ -357,6 +359,7 @@ export function SubscriptionTrackerTool({ toolId }: SubscriptionTrackerToolProps
   const [showCustomCategoryEdit, setShowCustomCategoryEdit] = useState(false);
   
   const [searchQuery, setSearchQuery] = useState('');
+  const [showCategorySpend, setShowCategorySpend] = useState(false);
   const [sortBy, setSortBy] = useState<'name' | 'renewal' | 'amount'>('name');
 
   // History state
@@ -510,7 +513,10 @@ export function SubscriptionTrackerTool({ toolId }: SubscriptionTrackerToolProps
   // Load subscriptions from API
   useEffect(() => {
     const loadSubscriptions = async () => {
-      if (!toolId) return;
+      if (!toolId) {
+        setAwaitingInitialData(false);
+        return;
+      }
       
       setIsLoading(true);
       try {
@@ -519,6 +525,7 @@ export function SubscriptionTrackerTool({ toolId }: SubscriptionTrackerToolProps
         console.error('Error loading subscriptions:', error);
       } finally {
         setIsLoading(false);
+        setAwaitingInitialData(false);
       }
     };
 
@@ -527,13 +534,18 @@ export function SubscriptionTrackerTool({ toolId }: SubscriptionTrackerToolProps
 
   useEffect(() => {
     const onKeyDown = (e: KeyboardEvent) => {
-      if (e.key === 'Escape' && showExportPopup && !isExportingPdf) {
+      if (e.key !== 'Escape') return;
+      if (showCategorySpend) {
+        setShowCategorySpend(false);
+        return;
+      }
+      if (showExportPopup && !isExportingPdf) {
         setShowExportPopup(false);
       }
     };
     window.addEventListener('keydown', onKeyDown);
     return () => window.removeEventListener('keydown', onKeyDown);
-  }, [showExportPopup, isExportingPdf]);
+  }, [showExportPopup, isExportingPdf, showCategorySpend]);
 
   useEffect(() => {
     if (!historyConfirmId) return;
@@ -1317,6 +1329,10 @@ export function SubscriptionTrackerTool({ toolId }: SubscriptionTrackerToolProps
           }))
         : [];
 
+  if (awaitingInitialData) {
+    return <ToolDataLoadingBox />;
+  }
+
   return (
     <div className="min-w-0 space-y-6">
       {/* Header */}
@@ -1586,26 +1602,23 @@ export function SubscriptionTrackerTool({ toolId }: SubscriptionTrackerToolProps
                 </select>
               </div>
             </div>
-          </div>
-
-          <div className={cardClass}>
-            <h3 className={isLight ? 'text-lg font-semibold text-slate-900 mb-4' : 'text-lg font-semibold text-slate-50 mb-4'}>Monthly Spend by Category</h3>
-            {categorySpend.length > 0 ? (
-              <div className="space-y-2">
-                {categorySpend.map((category) => (
-                  <div key={category.name} className="flex items-center justify-between text-sm">
-                    <span className={isLight ? 'text-slate-700' : 'text-slate-300'}>{category.name}</span>
-                    <span className={isLight ? 'text-slate-900' : 'text-slate-100'}>${category.value.toFixed(2)}</span>
-                  </div>
-                ))}
-                <div className={`flex items-center justify-between text-sm pt-2 ${isLight ? 'border-t border-slate-200' : 'border-t border-slate-700'}`}>
-                  <span className={isLight ? 'font-medium text-slate-900' : 'font-medium text-slate-50'}>Total Monthly Spend</span>
-                  <span className={isLight ? 'font-medium text-slate-900' : 'font-medium text-slate-50'}>${totalMonthlySpend.toFixed(2)}</span>
-                </div>
+            <div className={`mt-4 border-t pt-4 ${isLight ? 'border-slate-200' : 'border-slate-700'}`}>
+              <div className="flex items-baseline justify-between gap-4">
+                <span className={isLight ? 'text-base font-semibold text-slate-900' : 'text-base font-semibold text-slate-50'}>
+                  Monthly Spend
+                </span>
+                <span className={isLight ? 'text-base font-semibold text-slate-900' : 'text-base font-semibold text-slate-50'}>
+                  {formatMoney(totalMonthlySpend)}
+                </span>
               </div>
-            ) : (
-              <p className={isLight ? 'text-slate-600 text-sm' : 'text-slate-400 text-sm'}>No active subscriptions.</p>
-            )}
+              <button
+                type="button"
+                onClick={() => setShowCategorySpend(true)}
+                className={`mt-1 text-left text-sm underline-offset-2 hover:underline ${isLight ? 'text-slate-600' : 'text-slate-400'}`}
+              >
+                Click to see your monthly spend by category
+              </button>
+            </div>
           </div>
 
           {/* Active Subscriptions */}
@@ -2014,6 +2027,52 @@ export function SubscriptionTrackerTool({ toolId }: SubscriptionTrackerToolProps
             )}
           </div>
       </div>
+
+      {showCategorySpend && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4 backdrop-blur-sm">
+          <div
+            className={isLight
+              ? 'max-h-[90vh] w-full max-w-md overflow-y-auto rounded-2xl border border-slate-200 bg-white p-6 shadow-2xl'
+              : 'max-h-[90vh] w-full max-w-md overflow-y-auto rounded-2xl border border-slate-700 bg-slate-800 p-6'}
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="st-category-spend-title"
+          >
+            <div className="mb-4 flex items-center justify-between gap-3">
+              <h3 id="st-category-spend-title" className={isLight ? 'text-lg font-semibold text-slate-900' : 'text-lg font-semibold text-slate-50'}>
+                Monthly Spend by Category
+              </h3>
+              <button
+                type="button"
+                onClick={() => setShowCategorySpend(false)}
+                className={`inline-flex min-h-11 min-w-11 items-center justify-center rounded-lg ${isLight ? 'text-slate-600 transition-colors hover:bg-slate-100 hover:text-slate-900' : 'text-slate-400 transition-colors hover:bg-slate-700 hover:text-slate-200'}`}
+                aria-label="Close"
+                title="Close"
+              >
+                <svg className="h-6 w-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                </svg>
+              </button>
+            </div>
+            {categorySpend.length > 0 ? (
+              <div className="space-y-2">
+                {categorySpend.map((category) => (
+                  <div key={category.name} className="flex items-center justify-between text-sm">
+                    <span className={isLight ? 'text-slate-700' : 'text-slate-300'}>{category.name}</span>
+                    <span className={isLight ? 'text-slate-900' : 'text-slate-100'}>{formatMoney(category.value)}</span>
+                  </div>
+                ))}
+                <div className={`flex items-center justify-between pt-2 text-sm ${isLight ? 'border-t border-slate-200' : 'border-t border-slate-700'}`}>
+                  <span className={isLight ? 'font-medium text-slate-900' : 'font-medium text-slate-50'}>Total Monthly Spend</span>
+                  <span className={isLight ? 'font-medium text-slate-900' : 'font-medium text-slate-50'}>{formatMoney(totalMonthlySpend)}</span>
+                </div>
+              </div>
+            ) : (
+              <p className={isLight ? 'text-sm text-slate-600' : 'text-sm text-slate-400'}>No active subscriptions.</p>
+            )}
+          </div>
+        </div>
+      )}
 
       {showExportPopup && (
         <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">

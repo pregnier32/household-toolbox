@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useMemo, useCallback } from 'react';
 import { useTheme } from './AppThemeProvider';
+import { ToolDataLoadingBox } from './ToolDataLoadingBox';
 import { useAppNotice } from './AppNotice';
 import { AttachmentButton } from './AttachmentButton';
 import { AttachmentModal } from './AttachmentModal';
@@ -1199,6 +1200,7 @@ export function TravelLogTool({ toolId }: TravelLogToolProps) {
 
   const [trips, setTrips] = useState<TripRecord[]>([]);
   const [isLoading, setIsLoading] = useState(false);
+  const [awaitingInitialData, setAwaitingInitialData] = useState(true);
   const [searchQuery, setSearchQuery] = useState('');
   const [isAdding, setIsAdding] = useState(false);
   const [newTrip, setNewTrip] = useState<TripFormState>(emptyTripForm());
@@ -1216,7 +1218,10 @@ export function TravelLogTool({ toolId }: TravelLogToolProps) {
   const [viewPreview, setViewPreview] = useState<AttachmentItem | null>(null);
 
   const loadTrips = useCallback(async () => {
-    if (!toolId) return;
+    if (!toolId) {
+      setAwaitingInitialData(false);
+      return;
+    }
     setIsLoading(true);
     try {
       const response = await fetch(`/api/tools/travel-log?toolId=${toolId}`);
@@ -1230,6 +1235,7 @@ export function TravelLogTool({ toolId }: TravelLogToolProps) {
       setTrips([]);
     } finally {
       setIsLoading(false);
+      setAwaitingInitialData(false);
     }
   }, [toolId]);
 
@@ -2410,6 +2416,10 @@ export function TravelLogTool({ toolId }: TravelLogToolProps) {
       setIsExportingPdf(false);
     }
   };
+
+  if (awaitingInitialData) {
+    return <ToolDataLoadingBox />;
+  }
 
   return (
     <div className="space-y-6">

@@ -8,6 +8,7 @@
 
 import { useCallback, useEffect, useId, useMemo, useRef, useState, type ReactNode } from 'react';
 import { useTheme } from './AppThemeProvider';
+import { ToolDataLoadingBox } from './ToolDataLoadingBox';
 import { useAppNotice } from './AppNotice';
 import { AttachmentButton } from './AttachmentButton';
 import { AttachmentModal } from './AttachmentModal';
@@ -1011,6 +1012,7 @@ export function EndOfLifePlannerTool({ toolId }: EndOfLifePlannerToolProps) {
   const [plans, setPlans] = useState<EolPlan[]>([]);
   const [selectedPlanId, setSelectedPlanId] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(true);
+  const [awaitingInitialData, setAwaitingInitialData] = useState(true);
   const [saveStatus, setSaveStatus] = useState<'idle' | 'saving' | 'saved' | 'error'>('idle');
   const [formError, setFormError] = useState('');
   const [showArchived, setShowArchived] = useState(false);
@@ -1129,6 +1131,7 @@ export function EndOfLifePlannerTool({ toolId }: EndOfLifePlannerToolProps) {
       if (!toolId) {
         setFormError('This tool is missing its workspace id.');
         setIsLoading(false);
+        setAwaitingInitialData(false);
         return;
       }
       try {
@@ -1158,7 +1161,10 @@ export function EndOfLifePlannerTool({ toolId }: EndOfLifePlannerToolProps) {
       } catch {
         if (!cancelled) setFormError('Could not load plans from the database.');
       } finally {
-        if (!cancelled) setIsLoading(false);
+        if (!cancelled) {
+          setIsLoading(false);
+          setAwaitingInitialData(false);
+        }
       }
     };
     void load();
@@ -3374,6 +3380,10 @@ export function EndOfLifePlannerTool({ toolId }: EndOfLifePlannerToolProps) {
       setIsExportingPdf(false);
     }
   };
+
+  if (awaitingInitialData) {
+    return <ToolDataLoadingBox />;
+  }
 
   return (
     <div className="min-w-0 space-y-6">

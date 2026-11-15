@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useTheme } from './AppThemeProvider';
+import { ToolDataLoadingBox } from './ToolDataLoadingBox';
 import { useAppNotice } from './AppNotice';
 import { AttachmentButton } from './AttachmentButton';
 import { AttachmentModal } from './AttachmentModal';
@@ -900,6 +901,7 @@ export function HomeMaintenanceScheduleTool({ toolId }: HomeMaintenanceScheduleT
   const [scheduledTasks, setScheduledTasks] = useState<HmsScheduledTask[]>([]);
   const [completions, setCompletions] = useState<HmsCompletion[]>([]);
   const [isLoading, setIsLoading] = useState(false);
+  const [awaitingInitialData, setAwaitingInitialData] = useState(true);
   const [isSaving, setIsSaving] = useState(false);
 
   const [activeTab, setActiveTab] = useState<TabId>('schedule');
@@ -1029,6 +1031,7 @@ export function HomeMaintenanceScheduleTool({ toolId }: HomeMaintenanceScheduleT
         setLibraryItems([]);
         setScheduledTasks([]);
         setCompletions([]);
+        setAwaitingInitialData(false);
         return;
       }
       setIsLoading(true);
@@ -1042,6 +1045,7 @@ export function HomeMaintenanceScheduleTool({ toolId }: HomeMaintenanceScheduleT
         showBanner('error', error instanceof Error ? error.message : 'Failed to load Home Maintenance Schedule');
       } finally {
         setIsLoading(false);
+        setAwaitingInitialData(false);
       }
     };
     loadData();
@@ -2369,6 +2373,10 @@ export function HomeMaintenanceScheduleTool({ toolId }: HomeMaintenanceScheduleT
       setIsExportingPdf(false);
     }
   };
+
+  if (awaitingInitialData) {
+    return <ToolDataLoadingBox />;
+  }
 
   return (
     <div className="space-y-6">

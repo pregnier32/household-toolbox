@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useTheme } from './AppThemeProvider';
+import { ToolDataLoadingBox } from './ToolDataLoadingBox';
 import { useAppNotice } from './AppNotice';
 import { AttachmentButton } from './AttachmentButton';
 import { AttachmentModal } from './AttachmentModal';
@@ -698,6 +699,7 @@ export function CleaningScheduleTool({ toolId }: CleaningScheduleToolProps) {
   const [scheduledTasks, setScheduledTasks] = useState<CleaningScheduledTask[]>([]);
   const [completions, setCompletions] = useState<CleaningCompletion[]>([]);
   const [isLoading, setIsLoading] = useState(false);
+  const [awaitingInitialData, setAwaitingInitialData] = useState(true);
   const [isSaving, setIsSaving] = useState(false);
 
   const [activeTab, setActiveTab] = useState<TabId>('schedule');
@@ -826,6 +828,7 @@ export function CleaningScheduleTool({ toolId }: CleaningScheduleToolProps) {
         setLibraryItems([]);
         setScheduledTasks([]);
         setCompletions([]);
+        setAwaitingInitialData(false);
         return;
       }
       setIsLoading(true);
@@ -839,6 +842,7 @@ export function CleaningScheduleTool({ toolId }: CleaningScheduleToolProps) {
         showBanner('error', error instanceof Error ? error.message : 'Failed to load Cleaning Schedule');
       } finally {
         setIsLoading(false);
+        setAwaitingInitialData(false);
       }
     };
     loadData();
@@ -2221,6 +2225,10 @@ export function CleaningScheduleTool({ toolId }: CleaningScheduleToolProps) {
       setIsExportingPdf(false);
     }
   };
+
+  if (awaitingInitialData) {
+    return <ToolDataLoadingBox />;
+  }
 
   return (
     <div className="space-y-6">

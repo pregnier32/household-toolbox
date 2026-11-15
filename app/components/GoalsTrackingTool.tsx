@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { useTheme } from './AppThemeProvider';
+import { ToolDataLoadingBox } from './ToolDataLoadingBox';
 import { useAppNotice } from './AppNotice';
 import { AttachmentButton } from './AttachmentButton';
 import { AttachmentModal } from './AttachmentModal';
@@ -323,10 +324,14 @@ export function GoalsTrackingTool({ toolId }: GoalsTrackingToolProps) {
   const setCategories = ctx ? ctx.setCategories : setLocalCategories;
 
   const [isLoadingData, setIsLoadingData] = useState(false);
+  const [awaitingInitialData, setAwaitingInitialData] = useState(true);
   const [saveMessage, setSaveMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
 
   const loadGoalsData = useCallback(async () => {
-    if (!toolId) return;
+    if (!toolId) {
+      setAwaitingInitialData(false);
+      return;
+    }
     setIsLoadingData(true);
     try {
       const res = await fetch(`/api/tools/goals-tracking?toolId=${encodeURIComponent(toolId)}`);
@@ -338,11 +343,13 @@ export function GoalsTrackingTool({ toolId }: GoalsTrackingToolProps) {
       setSaveMessage({ type: 'error', text: e instanceof Error ? e.message : 'Failed to load goals' });
     } finally {
       setIsLoadingData(false);
+      setAwaitingInitialData(false);
     }
   }, [toolId, setCategories, setGoals]);
 
   useEffect(() => {
     if (toolId) loadGoalsData();
+    else setAwaitingInitialData(false);
   }, [toolId, loadGoalsData]);
 
   const showMessage = useCallback((type: 'success' | 'error', text: string) => {
@@ -1504,6 +1511,10 @@ export function GoalsTrackingTool({ toolId }: GoalsTrackingToolProps) {
       setIsExportingPdf(false);
     }
   };
+
+  if (awaitingInitialData) {
+    return <ToolDataLoadingBox />;
+  }
 
   return (
     <div className="space-y-6 relative">

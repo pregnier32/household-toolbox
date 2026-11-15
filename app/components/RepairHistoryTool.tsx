@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from 'react';
 import { useTheme } from './AppThemeProvider';
+import { ToolDataLoadingBox } from './ToolDataLoadingBox';
 import { useAppNotice } from './AppNotice';
 import { AttachmentButton } from './AttachmentButton';
 import { AttachmentModal } from './AttachmentModal';
@@ -486,6 +487,7 @@ export function RepairHistoryTool({ toolId }: RepairHistoryToolProps) {
   const [newHeaderName, setNewHeaderName] = useState('');
   const [newHeaderCategoryType, setNewHeaderCategoryType] = useState<'Home' | 'Auto'>('Home');
   const [isLoading, setIsLoading] = useState(true);
+  const [awaitingInitialData, setAwaitingInitialData] = useState(true);
   
   // Header editing
   const [editingHeaderId, setEditingHeaderId] = useState<string | null>(null);
@@ -568,7 +570,10 @@ export function RepairHistoryTool({ toolId }: RepairHistoryToolProps) {
 
   // Load headers from API
   const loadHeaders = async () => {
-    if (!toolId) return;
+    if (!toolId) {
+      setAwaitingInitialData(false);
+      return;
+    }
     
     setIsLoading(true);
     try {
@@ -607,6 +612,7 @@ export function RepairHistoryTool({ toolId }: RepairHistoryToolProps) {
       setSaveMessage({ type: 'error', text: 'Failed to load headers' });
     } finally {
       setIsLoading(false);
+      setAwaitingInitialData(false);
     }
   };
 
@@ -807,6 +813,8 @@ export function RepairHistoryTool({ toolId }: RepairHistoryToolProps) {
   useEffect(() => {
     if (toolId) {
       loadHeaders();
+    } else {
+      setAwaitingInitialData(false);
     }
   }, [toolId]);
 
@@ -1732,6 +1740,10 @@ export function RepairHistoryTool({ toolId }: RepairHistoryToolProps) {
   };
 
   const selectedHeader = headers.find(h => h.id === selectedHeaderId);
+
+  if (awaitingInitialData) {
+    return <ToolDataLoadingBox />;
+  }
 
   return (
     <div className="space-y-6">

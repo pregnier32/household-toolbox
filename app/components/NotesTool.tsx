@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from 'react';
 import { useTheme } from './AppThemeProvider';
+import { ToolDataLoadingBox } from './ToolDataLoadingBox';
 import { useAppNotice } from './AppNotice';
 import { AttachmentButton } from './AttachmentButton';
 import { AttachmentModal } from './AttachmentModal';
@@ -217,6 +218,7 @@ export function NotesTool({ toolId }: NotesToolProps) {
   const [tags, setTags] = useState<NoteTag[]>([]);
   const [activeTab, setActiveTab] = useState<'notes' | 'tags'>('notes');
   const [isLoading, setIsLoading] = useState(false);
+  const [awaitingInitialData, setAwaitingInitialData] = useState(true);
   
   // Search and filter state
   const [searchQuery, setSearchQuery] = useState('');
@@ -299,7 +301,10 @@ export function NotesTool({ toolId }: NotesToolProps) {
   // Load notes and tags from API
   useEffect(() => {
     const loadData = async () => {
-      if (!toolId) return;
+      if (!toolId) {
+        setAwaitingInitialData(false);
+        return;
+      }
       
       setIsLoading(true);
       try {
@@ -402,6 +407,7 @@ export function NotesTool({ toolId }: NotesToolProps) {
         setTags(defaultTagsForUI);
       } finally {
         setIsLoading(false);
+        setAwaitingInitialData(false);
       }
     };
     
@@ -1896,6 +1902,10 @@ export function NotesTool({ toolId }: NotesToolProps) {
       setIsExportingPdf(false);
     }
   };
+
+  if (awaitingInitialData) {
+    return <ToolDataLoadingBox />;
+  }
 
   return (
     <div className="space-y-6">

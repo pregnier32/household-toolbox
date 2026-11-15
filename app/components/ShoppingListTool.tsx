@@ -3,6 +3,7 @@
 import { useState, useMemo, useEffect } from 'react';
 import { createPortal } from 'react-dom';
 import { useTheme } from './AppThemeProvider';
+import { ToolDataLoadingBox } from './ToolDataLoadingBox';
 import { useAppNotice } from './AppNotice';
 import { AttachmentButton } from './AttachmentButton';
 import { AttachmentModal } from './AttachmentModal';
@@ -226,6 +227,7 @@ export function ShoppingListTool({ toolId }: ShoppingListToolProps) {
   const [masterItems, setMasterItems] = useState<MasterItem[]>([]);
   const [itemsLoading, setItemsLoading] = useState(false);
   const [listsLoading, setListsLoading] = useState(false);
+  const [awaitingInitialData, setAwaitingInitialData] = useState(true);
 
   // Shopping lists (Active vs History)
   const [shoppingLists, setShoppingLists] = useState<ShoppingListRecord[]>([]);
@@ -322,9 +324,17 @@ export function ShoppingListTool({ toolId }: ShoppingListToolProps) {
   };
 
   useEffect(() => {
-    if (!toolId) return;
-    fetchItems();
-    fetchLists();
+    if (!toolId) {
+      setAwaitingInitialData(false);
+      return;
+    }
+    let cancelled = false;
+    Promise.all([fetchItems(), fetchLists()]).finally(() => {
+      if (!cancelled) setAwaitingInitialData(false);
+    });
+    return () => {
+      cancelled = true;
+    };
   }, [toolId]);
 
   useEffect(() => {
@@ -1131,6 +1141,10 @@ export function ShoppingListTool({ toolId }: ShoppingListToolProps) {
   };
 
   const isLoading = toolId && (itemsLoading || listsLoading);
+
+  if (awaitingInitialData) {
+    return <ToolDataLoadingBox />;
+  }
 
   return (
     <div className="space-y-6">

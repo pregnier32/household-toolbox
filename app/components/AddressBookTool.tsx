@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useCallback } from 'react';
 import { useTheme } from './AppThemeProvider';
+import { ToolDataLoadingBox } from './ToolDataLoadingBox';
 import { useAppNotice } from './AppNotice';
 import { AttachmentButton } from './AttachmentButton';
 import { AttachmentModal } from './AttachmentModal';
@@ -245,6 +246,7 @@ export function AddressBookTool({ toolId }: AddressBookToolProps) {
   const [addresses, setAddresses] = useState<AddressRecord[]>([]);
   const [tags, setTags] = useState<AddressTag[]>([]);
   const [isLoading, setIsLoading] = useState(false);
+  const [awaitingInitialData, setAwaitingInitialData] = useState(true);
   const [activeTab, setActiveTab] = useState<'addresses' | 'tags'>('addresses');
 
   const [searchQuery, setSearchQuery] = useState('');
@@ -550,7 +552,10 @@ export function AddressBookTool({ toolId }: AddressBookToolProps) {
 
   useEffect(() => {
     const loadData = async () => {
-      if (!toolId) return;
+      if (!toolId) {
+        setAwaitingInitialData(false);
+        return;
+      }
 
       setIsLoading(true);
       try {
@@ -577,6 +582,7 @@ export function AddressBookTool({ toolId }: AddressBookToolProps) {
         setTags([]);
       } finally {
         setIsLoading(false);
+        setAwaitingInitialData(false);
       }
     };
 
@@ -1496,6 +1502,10 @@ export function AddressBookTool({ toolId }: AddressBookToolProps) {
       setIsExportingPdf(false);
     }
   };
+
+  if (awaitingInitialData) {
+    return <ToolDataLoadingBox />;
+  }
 
   return (
     <div className="space-y-6">
