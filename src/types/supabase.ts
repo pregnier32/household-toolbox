@@ -5322,6 +5322,7 @@ export type Database = {
       tools_hcah_records: {
         Row: {
           appointment_date: string
+          appointment_time: string | null
           care_facility: string | null
           created_at: string | null
           current_amount_due: string | null
@@ -5340,6 +5341,7 @@ export type Database = {
         }
         Insert: {
           appointment_date: string
+          appointment_time?: string | null
           care_facility?: string | null
           created_at?: string | null
           current_amount_due?: string | null
@@ -5358,6 +5360,7 @@ export type Database = {
         }
         Update: {
           appointment_date?: string
+          appointment_time?: string | null
           care_facility?: string | null
           created_at?: string | null
           current_amount_due?: string | null

@@ -11,6 +11,16 @@ import {
   syncCalendarPin,
 } from '@/lib/calendarPinsServer';
 
+function normalizeAppointmentTime(value: FormDataEntryValue | null): string | null {
+  if (typeof value !== 'string') return null;
+  const match = /^(\d{2}):(\d{2})/.exec(value.trim());
+  if (!match) return null;
+  const hours = Number(match[1]);
+  const minutes = Number(match[2]);
+  if (hours > 23 || minutes > 59) return null;
+  return `${match[1]}:${match[2]}`;
+}
+
 async function attachDashboardFlags<T extends { id: string }>(
   records: T[],
   userId: string,
@@ -221,6 +231,7 @@ export async function POST(request: NextRequest) {
       const recordId = formData.get('recordId') as string | null;
       const headerId = formData.get('headerId') as string;
       const appointmentDate = formData.get('appointmentDate') as string;
+      const appointmentTime = normalizeAppointmentTime(formData.get('appointmentTime'));
       const isUpcoming = formData.get('isUpcoming') === 'true';
       const careFacility = (formData.get('careFacility') as string)?.trim() || null;
       const providerInfo = (formData.get('providerInfo') as string)?.trim() || null;
@@ -260,6 +271,7 @@ export async function POST(request: NextRequest) {
         user_id: user.id,
         tool_id: toolId,
         appointment_date: appointmentDate,
+        appointment_time: appointmentTime,
         is_upcoming: isUpcoming,
         care_facility: careFacility,
         provider_info: providerInfo,

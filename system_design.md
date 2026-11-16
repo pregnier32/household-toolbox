@@ -1492,7 +1492,7 @@ Appointment files only. Wrap the existing `tools_hcah_documents` store. Do not a
 - Upcoming vs History is `is_upcoming` on the same record, not Notes-style History. Files stay editable.
 - Remove the body “Documents” picker, “Add more files”, the in-form View/Delete list, and file-name chips on cards. Badge only.
 - Queue files on create; persist immediately on saved appointments. Save does not require a file.
-- Add to HSA creates an HSA expense only. Do not copy files and do not add a second upload shortcut.
+- Healthcare does not create records in HSA Tracker. Do not add an action that copies a visit into another tool.
 - View/Download go through the authenticated route (`inline=1` vs download). Existing objects may still live at `documents/{userId}/...`.
 - No paperclip on family-member chips, Report/Export, or the dashboard pin.
 

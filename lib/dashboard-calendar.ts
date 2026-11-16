@@ -10,6 +10,7 @@ import {
   CALENDAR_SOURCE_HEALTHCARE_APPOINTMENT,
   CALENDAR_SOURCE_HOME_MAINTENANCE_TASK,
   CALENDAR_SOURCE_PET_APPOINTMENT,
+  CALENDAR_SOURCE_PET_CARE_PLAN,
   CALENDAR_SOURCE_REPAIR_WARRANTY,
   CALENDAR_SOURCE_SUBSCRIPTION,
   CALENDAR_SOURCE_TODO_TASK,
@@ -652,7 +653,7 @@ export async function loadHealthcareItems({
 
   let query = supabaseServer
     .from('tools_hcah_records')
-    .select('id, appointment_date, reason_for_visit, care_facility, provider_info, tool_id, header_id')
+    .select('id, appointment_date, appointment_time, reason_for_visit, care_facility, provider_info, tool_id, header_id')
     .eq('user_id', userId)
     .in('id', Array.from(pinnedIds));
   query = applyToolId(query, toolId);
@@ -682,13 +683,20 @@ export async function loadHealthcareItems({
     if (!appointmentDate || !inMonth(appointmentDate, year, month)) return [];
     const reasonText = record.reason_for_visit?.trim();
     const facilityText = record.care_facility?.trim();
+    const timeMatch = /^(\d{2}):(\d{2})/.exec(String(record.appointment_time || ''));
+    const hours = timeMatch ? Number(timeMatch[1]) : null;
+    const minutes = timeMatch ? Number(timeMatch[2]) : null;
+    const scheduledDate =
+      hours != null && minutes != null && hours <= 23 && minutes <= 59
+        ? wallClock(appointmentDate, hours, minutes)
+        : localIsoAtNine(appointmentDate);
     return [
       {
         id: `${record.id}-${appointmentDate}`,
         title: reasonText || facilityText || 'Appointment',
         description: record.provider_info || undefined,
         type: 'calendar_event',
-        scheduled_date: localIsoAtNine(appointmentDate),
+        scheduled_date: scheduledDate,
         status: 'pending',
         metadata: {
           referenceType: 'healthcare_appointment',
@@ -890,6 +898,139 @@ export async function loadPetAppointmentItems({
   });
 }
 
+function carePlanIso(year: number, monthIndex: number, day: number): string {
+  const date = new Date(year, monthIndex, day);
+  const monthText = String(date.getMonth() + 1).padStart(2, '0');
+  const dayText = String(date.getDate()).padStart(2, '0');
+  return `${date.getFullYear()}-${monthText}-${dayText}`;
+}
+
+function carePlanOccurrences(
+  startIso: string,
+  endIso: string | null,
+  frequency: string,
+  year: number,
+  month: number
+): string[] {
+  const start = asDateOnly(startIso);
+  if (!start) return [];
+  const end = endIso ? asDateOnly(endIso) : '';
+  const monthStart = carePlanIso(year, month, 1);
+  const monthEnd = carePlanIso(year, month + 1, 0);
+  const windowStart = start > monthStart ? start : monthStart;
+  const windowEnd = end && end < monthEnd ? end : monthEnd;
+  if (windowStart > windowEnd) return [];
+
+  const dayStep: Record<string, number> = {
+    Daily: 1,
+    'Every 2 Days': 2,
+    'Every 3 Days': 3,
+    Weekly: 7,
+    'Every 2 Weeks': 14,
+  };
+  const monthStep: Record<string, number> = {
+    Monthly: 1,
+    'Every 3 Months': 3,
+    'Every 6 Months': 6,
+    Yearly: 12,
+  };
+
+  if (frequency === 'As Needed') {
+    return start >= windowStart && start <= windowEnd ? [start] : [];
+  }
+
+  const dates: string[] = [];
+  const stepDays = dayStep[frequency];
+  if (stepDays) {
+    const startDate = parseLocalDate(start);
+    const cursor = parseLocalDate(windowStart);
+    const endDate = parseLocalDate(windowEnd);
+    const diffDays = Math.round((cursor.getTime() - startDate.getTime()) / 86400000);
+    const remainder = ((diffDays % stepDays) + stepDays) % stepDays;
+    if (remainder !== 0) cursor.setDate(cursor.getDate() + (stepDays - remainder));
+    while (cursor <= endDate) {
+      dates.push(carePlanIso(cursor.getFullYear(), cursor.getMonth(), cursor.getDate()));
+      cursor.setDate(cursor.getDate() + stepDays);
+    }
+    return dates;
+  }
+
+  const stepMonths = monthStep[frequency];
+  if (!stepMonths) return [];
+  const [startYear, startMonth, startDay] = start.split('-').map(Number);
+  const endDate = parseLocalDate(windowEnd);
+  for (let index = 0; index < 2400; index += 1) {
+    const cursor = new Date(startYear, startMonth - 1 + index * stepMonths, startDay);
+    const iso = carePlanIso(cursor.getFullYear(), cursor.getMonth(), cursor.getDate());
+    if (parseLocalDate(iso) > endDate) break;
+    if (iso >= windowStart) dates.push(iso);
+  }
+  return dates;
+}
+
+export async function loadPetCarePlanItems({
+  userId,
+  year,
+  month,
+  toolId,
+  pinnedIds,
+}: CalendarLoadArgs): Promise<DashboardCalendarItem[]> {
+  if (pinnedIds.size === 0) return [];
+
+  const { data: items, error } = await supabaseServer
+    .from('tools_pcs_care_plan_items')
+    .select(`
+      id,
+      pet_id,
+      name,
+      frequency,
+      start_date,
+      end_date,
+      notes,
+      is_active,
+      tools_pcs_pets!pet_id (
+        id,
+        name,
+        tool_id,
+        user_id
+      )
+    `)
+    .eq('is_active', true)
+    .in('id', Array.from(pinnedIds));
+
+  if (error) {
+    console.error('Error fetching pet care plan calendar items:', error);
+    if (isMissingTable(error)) return [];
+    throw new CalendarSourceError('Failed to fetch pet care plan items');
+  }
+
+  return (items || []).flatMap((record) => {
+    const pet = Array.isArray(record.tools_pcs_pets) ? record.tools_pcs_pets[0] : record.tools_pcs_pets;
+    if (!pet || pet.user_id !== userId) return [];
+    if (toolId && pet.tool_id !== toolId) return [];
+    if (record.is_active === false) return [];
+    const dates = carePlanOccurrences(record.start_date, record.end_date, record.frequency || '', year, month);
+    const petName = pet.name?.trim() || '';
+    const title = record.name?.trim() || 'Care plan';
+    return dates.map((date) => ({
+      id: `${record.id}-${date}`,
+      title: petName ? `${petName}: ${title}` : title,
+      description: [record.frequency, record.notes].filter(Boolean).join(' · ') || undefined,
+      type: 'calendar_event' as const,
+      scheduled_date: wallClock(date),
+      status: 'pending' as const,
+      metadata: {
+        referenceType: 'pet_care_plan',
+        referenceId: record.id,
+        petId: record.pet_id,
+        petName,
+        frequency: record.frequency,
+      },
+      tools: pet.tool_id ? { id: pet.tool_id, name: 'Pet Care Schedule' } : undefined,
+    }));
+  });
+}
+
 export async function loadTravelItems({
   userId,
   year,
@@ -966,6 +1107,7 @@ const CALENDAR_TOOL_NAMES: Record<string, string> = {
   [CALENDAR_SOURCE_HEALTHCARE_APPOINTMENT]: 'Healthcare Appts & History',
   [CALENDAR_SOURCE_HOME_MAINTENANCE_TASK]: 'Home Maintenance Schedule',
   [CALENDAR_SOURCE_PET_APPOINTMENT]: 'Pet Care Schedule',
+  [CALENDAR_SOURCE_PET_CARE_PLAN]: 'Pet Care Schedule',
   [CALENDAR_SOURCE_REPAIR_WARRANTY]: 'Repair History',
   [CALENDAR_SOURCE_SUBSCRIPTION]: 'Subscription Tracker',
   [CALENDAR_SOURCE_TODO_TASK]: 'To Do List',
@@ -999,6 +1141,7 @@ const CALENDAR_LOADERS: Array<{
   { sourceType: CALENDAR_SOURCE_HEALTHCARE_APPOINTMENT, load: loadHealthcareItems },
   { sourceType: CALENDAR_SOURCE_HOME_MAINTENANCE_TASK, load: loadHomeMaintenanceItems },
   { sourceType: CALENDAR_SOURCE_PET_APPOINTMENT, load: loadPetAppointmentItems },
+  { sourceType: CALENDAR_SOURCE_PET_CARE_PLAN, load: loadPetCarePlanItems },
   { sourceType: CALENDAR_SOURCE_REPAIR_WARRANTY, load: loadRepairItems },
   { sourceType: CALENDAR_SOURCE_SUBSCRIPTION, load: loadSubscriptionItems },
   { sourceType: CALENDAR_SOURCE_TODO_TASK, load: loadTodoItems },

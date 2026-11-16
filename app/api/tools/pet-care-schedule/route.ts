@@ -14,7 +14,7 @@ import {
   deleteVaccinationFileRows,
   deleteVeterinaryFileRows,
 } from '@/lib/pet-care-storage';
-import { CALENDAR_SOURCE_PET_APPOINTMENT } from '@/lib/calendarPins';
+import { CALENDAR_SOURCE_PET_APPOINTMENT, CALENDAR_SOURCE_PET_CARE_PLAN } from '@/lib/calendarPins';
 import {
   deleteCalendarPinsForSources,
   getPinnedSourceIds,
@@ -133,7 +133,7 @@ export async function GET(request: NextRequest) {
       const documents = documentsResult.data || [];
       const notes = notesResult.data || [];
 
-      const [petFiles, documentFiles, veterinaryFiles, vaccinationFiles, appointmentFiles, pinned] = await Promise.all([
+      const [petFiles, documentFiles, veterinaryFiles, vaccinationFiles, appointmentFiles, appointmentPins, carePlanPins] = await Promise.all([
         attachmentsByPetIds([petId], user.id),
         attachmentsByDocumentIds(documents.map((row) => row.id), user.id),
         attachmentsByVeterinaryIds(vetRecords.map((row) => row.id), user.id),
@@ -145,6 +145,12 @@ export async function GET(request: NextRequest) {
           sourceIds: appointments.map((row) => row.id),
           toolId,
         }),
+        getPinnedSourceIds({
+          userId: user.id,
+          sourceType: CALENDAR_SOURCE_PET_CARE_PLAN,
+          sourceIds: careItems.map((row) => row.id),
+          toolId,
+        }),
       ]);
 
       return NextResponse.json({
@@ -153,12 +159,15 @@ export async function GET(request: NextRequest) {
           attachments: petFiles[petId] || [],
           foods: foods,
           veterinaryRecords: vetRecords.map((row) => ({ ...row, attachments: veterinaryFiles[row.id] || [] })),
-          carePlanItems: careItems,
+          carePlanItems: careItems.map((row) => ({
+            ...row,
+            addToDashboard: row.is_active !== false && carePlanPins.ids.has(row.id),
+          })),
           vaccinations: vaccinations.map((row) => ({ ...row, attachments: vaccinationFiles[row.id] || [] })),
           appointments: appointments.map((row) => ({
             ...row,
             attachments: appointmentFiles[row.id] || [],
-            addToDashboard: pinned.ids.has(row.id),
+            addToDashboard: appointmentPins.ids.has(row.id),
           })),
           documents: documents.map((row) => ({ ...row, attachments: documentFiles[row.id] || [] })),
           notes: notes
@@ -354,69 +363,65 @@ export async function POST(request: NextRequest) {
     }
 
     if (carePlanItems && Array.isArray(carePlanItems)) {
-      console.log(`[API] Deleting all care plan items for pet ${finalPetId} before inserting ${carePlanItems.length} items`);
-      const { error: deleteError } = await supabaseServer.from('tools_pcs_care_plan_items').delete().eq('pet_id', finalPetId);
-      if (deleteError) {
-        console.error('Error deleting care plan items:', deleteError);
-        return NextResponse.json({ error: 'Failed to delete existing care plan items' }, { status: 500 });
-      }
-      console.log(`[API] Successfully deleted existing care plan items for pet ${finalPetId}`);
-      
-      if (carePlanItems.length > 0) {
-        const carePlanData = carePlanItems.map((c: any) => {
-          const isActive = c.isActive !== undefined ? c.isActive : true;
-          // Handle notes: preserve non-empty strings, convert empty strings to null
-          let notesValue = null;
-          if (c.notes !== undefined && c.notes !== null) {
-            if (typeof c.notes === 'string') {
-              const trimmed = c.notes.trim();
-              notesValue = trimmed.length > 0 ? trimmed : null;
-            } else {
-              notesValue = c.notes;
-            }
+      try {
+        await upsertPetChildren(
+          'tools_pcs_care_plan_items',
+          finalPetId,
+          carePlanItems
+            .filter((c: { name?: string }) => String(c.name || '').trim())
+            .map((c: {
+              id?: string;
+              name?: string;
+              frequency?: string;
+              isActive?: boolean;
+              startDate?: string;
+              endDate?: string | null;
+              notes?: string | null;
+              priority?: string;
+            }) => {
+              const notes = typeof c.notes === 'string' ? c.notes.trim() : '';
+              const priority = c.priority === 'low' || c.priority === 'high' ? c.priority : 'medium';
+              return {
+                id: c.id,
+                payload: {
+                  name: String(c.name).trim(),
+                  frequency: c.frequency || 'Daily',
+                  is_active: c.isActive !== false,
+                  start_date: c.startDate || new Date().toISOString().split('T')[0],
+                  end_date: c.endDate || null,
+                  notes: notes || null,
+                  priority,
+                },
+              };
+            }),
+          async (ids) => {
+            await deleteCalendarPinsForSources({
+              userId: user.id,
+              sourceType: CALENDAR_SOURCE_PET_CARE_PLAN,
+              sourceIds: ids,
+            });
           }
-          console.log(`Mapping care plan item: ${c.name}, frequency: ${c.frequency}, isActive: ${isActive}`);
-          console.log(`  - Raw notes value: ${JSON.stringify(c.notes)}, type: ${typeof c.notes}`);
-          console.log(`  - Processed notes value: ${JSON.stringify(notesValue)}`);
-          
-          const priorityValue = (c.priority && ['low', 'medium', 'high'].includes(c.priority)) ? c.priority : 'medium';
-          
-          return {
-            pet_id: finalPetId,
-            name: c.name,
-            frequency: c.frequency,
-            is_active: isActive,
-            start_date: c.startDate || new Date().toISOString().split('T')[0],
-            end_date: c.endDate || null,
-            notes: notesValue,
-            priority: priorityValue,
-          };
-        });
-        
-        console.log('Inserting care plan items:', JSON.stringify(carePlanData, null, 2));
-        
-        const insertedCareItems = await supabaseServer.from('tools_pcs_care_plan_items').insert(carePlanData).select();
-        
-        if (insertedCareItems.error) {
-          console.error('Error inserting care plan items:', insertedCareItems.error);
+        );
+
+        for (const item of carePlanItems) {
+          if (!isUuid(item?.id)) continue;
+          const pinResult = await syncCalendarPin({
+            userId: user.id,
+            toolId,
+            sourceType: CALENDAR_SOURCE_PET_CARE_PLAN,
+            sourceId: item.id,
+            pinned: item.addToDashboard === true && item.isActive !== false,
+          });
+          if (pinResult.error) {
+            return NextResponse.json(
+              { error: 'Care plan saved, but failed to update the dashboard calendar' },
+              { status: 500 }
+            );
+          }
         }
-        
-        if (insertedCareItems.data) {
-          console.log('Inserted care plan items with notes:', insertedCareItems.data.map((item: any) => ({
-            id: item.id,
-            name: item.name,
-            notes: item.notes,
-            notesType: typeof item.notes
-          })));
-        } else {
-          console.log('No data returned from insert operation');
-        }
-        
-        if (insertedCareItems.error) {
-          console.error('Error inserting care plan items:', insertedCareItems.error);
-        } else {
-          console.log(`Successfully inserted ${insertedCareItems.data?.length || 0} care plan items`);
-        }
+      } catch (carePlanError) {
+        console.error('Error saving care plan items:', carePlanError);
+        return NextResponse.json({ error: 'Failed to save care plan items' }, { status: 500 });
       }
     }
 
@@ -563,15 +568,20 @@ export async function DELETE(request: NextRequest) {
       return NextResponse.json({ error: 'Pet not found' }, { status: 404 });
     }
 
-    const { data: petAppointments } = await supabaseServer
-      .from('tools_pcs_appointments')
-      .select('id')
-      .eq('pet_id', petId);
+    const [{ data: petAppointments }, { data: petCarePlans }] = await Promise.all([
+      supabaseServer.from('tools_pcs_appointments').select('id').eq('pet_id', petId),
+      supabaseServer.from('tools_pcs_care_plan_items').select('id').eq('pet_id', petId),
+    ]);
 
     await deleteCalendarPinsForSources({
       userId: user.id,
       sourceType: CALENDAR_SOURCE_PET_APPOINTMENT,
       sourceIds: (petAppointments || []).map((row) => row.id),
+    });
+    await deleteCalendarPinsForSources({
+      userId: user.id,
+      sourceType: CALENDAR_SOURCE_PET_CARE_PLAN,
+      sourceIds: (petCarePlans || []).map((row) => row.id),
     });
 
     await deleteAllPetStorageFiles(petId, user.id);

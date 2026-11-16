@@ -1037,8 +1037,6 @@ export async function deleteUserTool(userId: string, toolId: string): Promise<De
       queueRowDelete('tools_eolp_plans', userId, toolId);
       break;
     }
-    case 'Percent of my Order':
-      break;
     default:
       throw new Error(`delete_user_tool has no wipe mapping for tool "${toolName}"`);
   }

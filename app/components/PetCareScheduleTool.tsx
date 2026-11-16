@@ -58,6 +58,7 @@ type CarePlanItem = {
   endDate: string | null;
   notes: string;
   priority: 'low' | 'medium' | 'high';
+  addToDashboard: boolean;
 };
 
 type Vaccination = {
@@ -317,6 +318,7 @@ function mapPetReport(pet: {
       endDate: item.end_date ? String(item.end_date) : null,
       notes: String(item.notes || '').trim(),
       priority: item.priority === 'low' || item.priority === 'high' ? item.priority : 'medium',
+      addToDashboard: item.addToDashboard === true && item.is_active !== false,
     })),
     vaccinations: (pet.vaccinations || []).map((item) => ({
       id: String(item.id || ''),
@@ -562,9 +564,9 @@ export function PetCareScheduleTool({ toolId }: PetCareScheduleToolProps) {
   
   // Care Plan
   const [carePlanItems, setCarePlanItems] = useState<CarePlanItem[]>([]);
-  const [newCareItem, setNewCareItem] = useState({ name: '', frequency: 'Daily', notes: '', priority: 'medium' as 'low' | 'medium' | 'high' });
+  const [newCareItem, setNewCareItem] = useState({ name: '', frequency: 'Daily', notes: '', priority: 'medium' as 'low' | 'medium' | 'high', addToDashboard: false });
   const [editingCareItemId, setEditingCareItemId] = useState<string | null>(null);
-  const [editingCareItem, setEditingCareItem] = useState({ name: '', frequency: 'Daily', notes: '', priority: 'medium' as 'low' | 'medium' | 'high' });
+  const [editingCareItem, setEditingCareItem] = useState({ name: '', frequency: 'Daily', notes: '', priority: 'medium' as 'low' | 'medium' | 'high', addToDashboard: false });
   
   // Vaccinations
   const [vaccinations, setVaccinations] = useState<Vaccination[]>([]);
@@ -663,6 +665,7 @@ export function PetCareScheduleTool({ toolId }: PetCareScheduleToolProps) {
         startDate: c.startDate,
         endDate: c.endDate,
         notes: c.notes || '',
+        addToDashboard: c.addToDashboard === true,
       })).sort((a, b) => a.name.localeCompare(b.name)),
       vaccinations: vaccinations.map(v => ({
         name: v.name.trim(),
@@ -814,6 +817,7 @@ export function PetCareScheduleTool({ toolId }: PetCareScheduleToolProps) {
             endDate: c.end_date,
             notes: (c.notes && c.notes.trim()) ? c.notes.trim() : '',
             priority: (c.priority && ['low', 'medium', 'high'].includes(c.priority)) ? c.priority : 'medium' as 'low' | 'medium' | 'high',
+            addToDashboard: c.addToDashboard === true && c.is_active !== false,
           };
           console.log(`Loading care plan item: ${mappedItem.name}, notes: "${mappedItem.notes}"`);
           return mappedItem;
@@ -943,6 +947,7 @@ export function PetCareScheduleTool({ toolId }: PetCareScheduleToolProps) {
             const notesValue = (c.notes && typeof c.notes === 'string' && c.notes.trim()) ? c.notes.trim() : '';
             console.log(`Saving care plan item: ${c.name}, notes: "${notesValue}", priority: "${c.priority || 'medium'}"`);
             return {
+              id: c.id,
               name: c.name,
               frequency: c.frequency,
               isActive: c.isActive,
@@ -950,6 +955,7 @@ export function PetCareScheduleTool({ toolId }: PetCareScheduleToolProps) {
               endDate: c.endDate,
               notes: notesValue,
               priority: (c.priority && ['low', 'medium', 'high'].includes(c.priority)) ? c.priority : 'medium',
+              addToDashboard: c.addToDashboard === true && c.isActive !== false,
             };
           }),
           vaccinations: vaccinationsToUse.map(v => ({
@@ -1349,12 +1355,15 @@ export function PetCareScheduleTool({ toolId }: PetCareScheduleToolProps) {
             notes: v.notes || '',
           })),
           carePlanItems: (currentPet.carePlanItems || []).map((c: any) => ({
+            id: c.id,
             name: c.name,
             frequency: c.frequency,
             isActive: c.is_active,
             startDate: c.start_date,
             endDate: c.end_date,
             notes: c.notes || '',
+            priority: c.priority === 'low' || c.priority === 'high' ? c.priority : 'medium',
+            addToDashboard: c.addToDashboard === true && c.is_active !== false,
           })),
           vaccinations: (currentPet.vaccinations || []).map((v: any) => ({
             id: v.id,
@@ -1466,12 +1475,15 @@ export function PetCareScheduleTool({ toolId }: PetCareScheduleToolProps) {
             notes: v.notes || '',
           })),
           carePlanItems: (currentPet.carePlanItems || []).map((c: any) => ({
+            id: c.id,
             name: c.name,
             frequency: c.frequency,
             isActive: c.is_active,
             startDate: c.start_date,
             endDate: c.end_date,
             notes: c.notes || '',
+            priority: c.priority === 'low' || c.priority === 'high' ? c.priority : 'medium',
+            addToDashboard: c.addToDashboard === true && c.is_active !== false,
           })),
           vaccinations: (currentPet.vaccinations || []).map((v: any) => ({
             id: v.id,
@@ -1692,18 +1704,19 @@ export function PetCareScheduleTool({ toolId }: PetCareScheduleToolProps) {
   const addCarePlanItem = async () => {
     if (newCareItem.name.trim()) {
       const newItem: CarePlanItem = {
-        id: Date.now().toString(),
+        id: crypto.randomUUID(),
         name: newCareItem.name,
         frequency: newCareItem.frequency,
         isActive: true,
         startDate: localToday(),
         endDate: null,
         notes: newCareItem.notes || '',
-        priority: newCareItem.priority || 'medium'
+        priority: newCareItem.priority || 'medium',
+        addToDashboard: newCareItem.addToDashboard === true,
       };
       const updatedItems = [...carePlanItems, newItem];
       setCarePlanItems(updatedItems);
-      setNewCareItem({ name: '', frequency: 'Daily', notes: '', priority: 'medium' });
+      setNewCareItem({ name: '', frequency: 'Daily', notes: '', priority: 'medium', addToDashboard: false });
       setAddingSection(null);
       setTimeout(() => savePetData(updatedItems), 100);
     }
@@ -1715,7 +1728,8 @@ export function PetCareScheduleTool({ toolId }: PetCareScheduleToolProps) {
         ? {
             ...item,
             isActive: !item.isActive,
-            endDate: item.isActive ? localToday() : null
+            endDate: item.isActive ? localToday() : null,
+            addToDashboard: item.isActive ? false : item.addToDashboard,
           }
         : item
     );
@@ -1730,13 +1744,14 @@ export function PetCareScheduleTool({ toolId }: PetCareScheduleToolProps) {
       name: item.name, 
       frequency: item.frequency, 
       notes: item.notes || '',
-      priority: item.priority || 'medium'
+      priority: item.priority || 'medium',
+      addToDashboard: item.isActive && item.addToDashboard === true,
     });
   };
 
   const cancelEditingCareItem = () => {
     setEditingCareItemId(null);
-    setEditingCareItem({ name: '', frequency: 'Daily', notes: '', priority: 'medium' });
+    setEditingCareItem({ name: '', frequency: 'Daily', notes: '', priority: 'medium', addToDashboard: false });
   };
 
   const saveCareItemEdit = async () => {
@@ -1753,7 +1768,8 @@ export function PetCareScheduleTool({ toolId }: PetCareScheduleToolProps) {
             name: editingCareItem.name.trim(),
             frequency: editingCareItem.frequency,
             notes: notesValue,
-            priority: editingCareItem.priority || 'medium'
+            priority: editingCareItem.priority || 'medium',
+            addToDashboard: item.isActive && editingCareItem.addToDashboard === true,
           }
         : item
     );
@@ -1766,7 +1782,7 @@ export function PetCareScheduleTool({ toolId }: PetCareScheduleToolProps) {
     setCarePlanItems(updatedItems);
     
     setEditingCareItemId(null);
-    setEditingCareItem({ name: '', frequency: 'Daily', notes: '', priority: 'medium' });
+    setEditingCareItem({ name: '', frequency: 'Daily', notes: '', priority: 'medium', addToDashboard: false });
     
     // Save to database using the updated items (after state update)
     setTimeout(() => {
@@ -2627,6 +2643,12 @@ export function PetCareScheduleTool({ toolId }: PetCareScheduleToolProps) {
   const selectedPetAttachments = selectedPetId
     ? (pets.find((pet) => pet.id === selectedPetId)?.attachments || [])
     : [];
+  const petFileButton = selectedPetId ? (
+    <AttachmentButton
+      count={selectedPetAttachments.length}
+      onClick={() => setAttachmentModal({ kind: 'pet', id: selectedPetId })}
+    />
+  ) : null;
   const savedModalRecord =
     attachmentModal && attachmentModal.id !== 'add'
       ? attachmentModal.kind === 'pet'
@@ -2740,10 +2762,6 @@ export function PetCareScheduleTool({ toolId }: PetCareScheduleToolProps) {
                     />
                   </div>
                   <div className="flex items-center gap-2">
-                    <AttachmentButton
-                      count={(pets.find((item) => item.id === pet.id)?.attachments || []).length}
-                      onClick={() => setAttachmentModal({ kind: 'pet', id: pet.id })}
-                    />
                     <button
                       onClick={savePetEdit}
                       disabled={isSaving || !editingPetName.trim()}
@@ -2800,11 +2818,12 @@ export function PetCareScheduleTool({ toolId }: PetCareScheduleToolProps) {
                 // Display mode
                 <div
                   key={pet.id}
-                  className="relative"
+                  className="relative shrink-0"
                 >
                   <button
+                    type="button"
                     onClick={() => selectPet(pet.id)}
-                    className={`relative max-w-full min-w-[120px] rounded-lg border px-4 py-3 transition-all duration-200 ${
+                    className={`min-w-[120px] rounded-lg border py-3 pl-4 pr-14 transition-all duration-200 ${
                       selectedPetId === pet.id
                         ? 'shadow-lg'
                         : 'hover:border-slate-600'
@@ -2817,24 +2836,15 @@ export function PetCareScheduleTool({ toolId }: PetCareScheduleToolProps) {
                       color: pet.card_color || '#10b981',
                     }}
                   >
-                    <div className="break-words px-8 text-center font-medium">{pet.name}</div>
-                    <div className={isLight ? 'text-xs text-center text-slate-600 mt-0.5' : 'text-xs text-center text-slate-300 mt-0.5 opacity-80'}>
-                      {pet.custom_pet_type || pet.pet_type || '—'}
-                    </div>
+                    <div className="whitespace-nowrap text-center font-medium">{pet.name}</div>
                   </button>
-                  <div className="absolute top-1 left-1" onClick={(e) => e.stopPropagation()}>
-                    <AttachmentButton
-                      count={(pet.attachments || []).length}
-                      onClick={() => setAttachmentModal({ kind: 'pet', id: pet.id })}
-                    />
-                  </div>
-                  {/* Ellipsis Menu Button */}
                   <button
+                    type="button"
                     onClick={(e) => {
                       e.stopPropagation();
                       setMenuOpenPetId(menuOpenPetId === pet.id ? null : pet.id);
                     }}
-                    className={`absolute top-1 right-1 inline-flex min-h-11 min-w-11 items-center justify-center rounded transition-colors ${isLight ? 'text-slate-600 hover:bg-slate-200/80 hover:text-slate-900' : 'text-slate-400 hover:bg-slate-700/50 hover:text-slate-200'}`}
+                    className={`absolute right-0.5 top-1/2 z-10 inline-flex min-h-11 min-w-11 -translate-y-1/2 items-center justify-center rounded transition-colors ${isLight ? 'text-slate-600 hover:bg-slate-200/80 hover:text-slate-900' : 'text-slate-400 hover:bg-slate-700/50 hover:text-slate-200'}`}
                     title="Pet options"
                     aria-label="Pet options"
                   >
@@ -2898,7 +2908,7 @@ export function PetCareScheduleTool({ toolId }: PetCareScheduleToolProps) {
                 setSelectedPetId(null);
                 setEditingPetId(null);
               }}
-              className={isLight ? 'px-4 py-3 rounded-lg border-2 border-slate-400 bg-slate-100 text-slate-700 hover:bg-slate-200 hover:text-slate-900 transition-all duration-200 flex items-center justify-center min-w-[60px]' : 'px-4 py-3 rounded-lg border border-slate-700 bg-slate-800/50 text-slate-300 hover:border-emerald-500/50 hover:bg-emerald-500/10 hover:text-emerald-300 transition-all duration-200 flex items-center justify-center min-w-[60px]'}
+              className={isLight ? 'flex min-w-[60px] items-center justify-center rounded-lg border border-slate-300 bg-white px-4 py-3 text-slate-700 transition-all duration-200 hover:border-emerald-500/50 hover:bg-emerald-50 hover:text-emerald-800' : 'flex min-w-[60px] items-center justify-center rounded-lg border border-slate-700 bg-slate-800/50 px-4 py-3 text-slate-300 transition-all duration-200 hover:border-emerald-500/50 hover:bg-emerald-500/10 hover:text-emerald-300'}
               title="Add New Pet"
               aria-label="Add New Pet"
             >
@@ -2930,10 +2940,6 @@ export function PetCareScheduleTool({ toolId }: PetCareScheduleToolProps) {
                 autoFocus
               />
             </div>
-            <AttachmentButton
-              count={pendingPetAttachments.length}
-              onClick={() => setAttachmentModal({ kind: 'pet', id: 'add' })}
-            />
             <button
               onClick={createNewPet}
               disabled={!newPetName.trim()}
@@ -3128,12 +3134,7 @@ export function PetCareScheduleTool({ toolId }: PetCareScheduleToolProps) {
                     Editing: <span className="text-emerald-400 font-medium">{selectedPet.name}</span>
                   </span>
                 )}
-                {selectedPetId && (
-                  <AttachmentButton
-                    count={selectedPetAttachments.length}
-                    onClick={() => setAttachmentModal({ kind: 'pet', id: selectedPetId })}
-                  />
-                )}
+                {petFileButton}
               </div>
             </div>
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -3321,7 +3322,10 @@ export function PetCareScheduleTool({ toolId }: PetCareScheduleToolProps) {
 
           {foods.filter(f => f.isCurrent).length > 0 && (
             <div className="rounded-2xl border border-slate-800 bg-slate-900/70 p-6">
-              <h3 className="text-lg font-semibold text-slate-50 mb-4">Active Foods</h3>
+              <div className="mb-4 flex items-center justify-between gap-3">
+                <h3 className="text-lg font-semibold text-slate-50">Active Foods</h3>
+                {petFileButton}
+              </div>
               <div className="space-y-4">
                 {foods.filter(f => f.isCurrent).map(food => (
                   <div key={food.id} className={nestedCardClass}>
@@ -3422,7 +3426,10 @@ export function PetCareScheduleTool({ toolId }: PetCareScheduleToolProps) {
 
           {foods.filter(f => !f.isCurrent).length > 0 && (
             <div className="rounded-2xl border border-slate-800 bg-slate-900/70 p-6">
-              <h3 className="text-lg font-semibold text-slate-50 mb-4">Food History</h3>
+              <div className="mb-4 flex items-center justify-between gap-3">
+                <h3 className="text-lg font-semibold text-slate-50">Food History</h3>
+                {foods.filter((f) => f.isCurrent).length === 0 && petFileButton}
+              </div>
               <div className="space-y-4">
                 {foods.filter(f => !f.isCurrent).map(food => (
                   <div key={food.id} className={nestedCardClass}>
@@ -3658,7 +3665,7 @@ export function PetCareScheduleTool({ toolId }: PetCareScheduleToolProps) {
 
           {veterinaryRecords.filter(r => r.status === 'Active').length > 0 && (
             <div className={cardClass}>
-              <h3 className={sectionTitleClass}>Active Veterinary Contacts</h3>
+              <h3 className={`mb-4 text-lg font-semibold ${isLight ? 'text-slate-900' : 'text-slate-50'}`}>Active Veterinary Contacts</h3>
               <div className="space-y-4">
                 {veterinaryRecords
                   .filter(r => r.status === 'Active')
@@ -3829,7 +3836,7 @@ export function PetCareScheduleTool({ toolId }: PetCareScheduleToolProps) {
 
           {veterinaryRecords.filter(r => r.status === 'History').length > 0 && (
             <div className={cardClass}>
-              <h3 className={sectionTitleClass}>Veterinary Contact History</h3>
+              <h3 className={`mb-4 text-lg font-semibold ${isLight ? 'text-slate-900' : 'text-slate-50'}`}>Veterinary Contact History</h3>
               <div className="space-y-4">
                 {veterinaryRecords
                   .filter(r => r.status === 'History')
@@ -4034,6 +4041,13 @@ export function PetCareScheduleTool({ toolId }: PetCareScheduleToolProps) {
                     <option key={freq} value={freq}>{freq}</option>
                   ))}
                 </select>
+                <div className="mt-3">
+                  <DashboardCalendarSwitch
+                    isOn={newCareItem.addToDashboard}
+                    onToggle={() => setNewCareItem({ ...newCareItem, addToDashboard: !newCareItem.addToDashboard })}
+                    isLight={isLight}
+                  />
+                </div>
               </div>
               <div>
                 <label className={labelClass}>Priority</label>
@@ -4069,7 +4083,7 @@ export function PetCareScheduleTool({ toolId }: PetCareScheduleToolProps) {
                 type="button"
                 onClick={() => {
                   setAddingSection(null);
-                  setNewCareItem({ name: '', frequency: 'Daily', notes: '', priority: 'medium' });
+                  setNewCareItem({ name: '', frequency: 'Daily', notes: '', priority: 'medium', addToDashboard: false });
                 }}
                 className={secondaryButtonClass}
               >
@@ -4081,7 +4095,10 @@ export function PetCareScheduleTool({ toolId }: PetCareScheduleToolProps) {
 
           {carePlanItems.filter(item => item.isActive).length > 0 && (
             <div className="rounded-2xl border border-slate-800 bg-slate-900/70 p-6">
-              <h3 className="text-lg font-semibold text-slate-50 mb-4">Active Care Plan</h3>
+              <div className="mb-4 flex items-center justify-between gap-3">
+                <h3 className="text-lg font-semibold text-slate-50">Active Care Plan</h3>
+                {petFileButton}
+              </div>
               <div className="space-y-3">
                 {carePlanItems.filter(item => item.isActive).map(item => (
                   <div key={item.id} className={nestedCardClass}>
@@ -4109,6 +4126,13 @@ export function PetCareScheduleTool({ toolId }: PetCareScheduleToolProps) {
                                 <option key={freq} value={freq}>{freq}</option>
                               ))}
                             </select>
+                            <div className="mt-3">
+                              <DashboardCalendarSwitch
+                                isOn={editingCareItem.addToDashboard}
+                                onToggle={() => setEditingCareItem({ ...editingCareItem, addToDashboard: !editingCareItem.addToDashboard })}
+                                isLight={isLight}
+                              />
+                            </div>
                           </div>
                           <div>
                             <label className="block text-sm font-medium text-slate-300 mb-2">Priority</label>
@@ -4152,7 +4176,10 @@ export function PetCareScheduleTool({ toolId }: PetCareScheduleToolProps) {
                     ) : (
                       <div className="flex items-start justify-between gap-4">
                         <div className="flex-1">
-                          <h4 className="text-slate-100 font-medium mb-3">{item.name}</h4>
+                          <div className="mb-3 flex flex-wrap items-center gap-2">
+                            <h4 className="font-medium text-slate-100">{item.name}</h4>
+                            {item.addToDashboard && <OnCalendarChip isLight={isLight} />}
+                          </div>
                           <div className="grid grid-cols-3 gap-4 mb-3">
                             <div>
                               <p className="text-xs text-slate-400 uppercase mb-1">Frequency</p>
@@ -4207,7 +4234,10 @@ export function PetCareScheduleTool({ toolId }: PetCareScheduleToolProps) {
 
           {carePlanItems.filter(item => !item.isActive).length > 0 && (
             <div className="rounded-2xl border border-slate-800 bg-slate-900/70 p-6">
-              <h3 className="text-lg font-semibold text-slate-50 mb-4">Care Plan History</h3>
+              <div className="mb-4 flex items-center justify-between gap-3">
+                <h3 className="text-lg font-semibold text-slate-50">Care Plan History</h3>
+                {carePlanItems.filter((item) => item.isActive).length === 0 && petFileButton}
+              </div>
               <div className="space-y-3">
                 {carePlanItems.filter(item => !item.isActive).map(item => (
                   <div key={item.id} className={nestedCardClass}>
@@ -4278,7 +4308,10 @@ export function PetCareScheduleTool({ toolId }: PetCareScheduleToolProps) {
                     ) : (
                       <div className="flex items-start justify-between gap-4">
                         <div className="flex-1">
-                          <h4 className="text-slate-100 font-medium mb-3">{item.name}</h4>
+                          <div className="mb-3 flex flex-wrap items-center gap-2">
+                            <h4 className="font-medium text-slate-100">{item.name}</h4>
+                            {item.addToDashboard && <OnCalendarChip isLight={isLight} />}
+                          </div>
                           <div className="grid grid-cols-3 gap-4 mb-3">
                             <div>
                               <p className="text-xs text-slate-400 uppercase mb-1">Frequency</p>
@@ -4419,7 +4452,7 @@ export function PetCareScheduleTool({ toolId }: PetCareScheduleToolProps) {
 
           {vaccinations.length > 0 && (
             <div className={cardClass}>
-              <h3 className={sectionTitleClass}>Vaccination History</h3>
+              <h3 className={`mb-4 text-lg font-semibold ${isLight ? 'text-slate-900' : 'text-slate-50'}`}>Vaccination History</h3>
               <div className="space-y-3">
                 {vaccinations
                   .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime())
@@ -4655,7 +4688,7 @@ export function PetCareScheduleTool({ toolId }: PetCareScheduleToolProps) {
 
           {upcomingAppointments.length > 0 && (
             <div className={cardClass}>
-              <h3 className={sectionTitleClass}>Upcoming Appointments</h3>
+              <h3 className={`mb-4 text-lg font-semibold ${isLight ? 'text-slate-900' : 'text-slate-50'}`}>Upcoming Appointments</h3>
               <div className="space-y-3">
                 {upcomingAppointments.map(appointment => (
                     <div key={appointment.id} className={nestedCardClass}>
@@ -4785,7 +4818,7 @@ export function PetCareScheduleTool({ toolId }: PetCareScheduleToolProps) {
 
           {historyAppointments.length > 0 && (
             <div className={cardClass}>
-              <h3 className={sectionTitleClass}>Appointment History</h3>
+              <h3 className={`mb-4 text-lg font-semibold ${isLight ? 'text-slate-900' : 'text-slate-50'}`}>Appointment History</h3>
               <div className="space-y-3">
                 {historyAppointments.map(appointment => (
                     <div key={appointment.id} className={nestedCardClass}>
@@ -5003,7 +5036,7 @@ export function PetCareScheduleTool({ toolId }: PetCareScheduleToolProps) {
 
           {filteredDocuments.length > 0 && (
             <div className={cardClass}>
-              <h3 className={sectionTitleClass}>Documents</h3>
+              <h3 className={`mb-4 text-lg font-semibold ${isLight ? 'text-slate-900' : 'text-slate-50'}`}>Documents</h3>
               <div className="space-y-3">
                 {filteredDocuments
                   .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime())
@@ -5147,7 +5180,10 @@ export function PetCareScheduleTool({ toolId }: PetCareScheduleToolProps) {
 
           {notes.filter(n => n.isCurrent).length > 0 && (
             <div className={cardClass}>
-              <h3 className={sectionTitleClass}>Current Notes</h3>
+              <div className="mb-4 flex items-center justify-between gap-3">
+                <h3 className={isLight ? 'text-lg font-semibold text-slate-900' : 'text-lg font-semibold text-slate-50'}>Current Notes</h3>
+                {petFileButton}
+              </div>
               <div className="space-y-3">
                 {notes
                   .filter(n => n.isCurrent)
@@ -5221,7 +5257,10 @@ export function PetCareScheduleTool({ toolId }: PetCareScheduleToolProps) {
 
           {notes.filter(n => !n.isCurrent).length > 0 && (
             <div className={cardClass}>
-              <h3 className={sectionTitleClass}>Note History</h3>
+              <div className="mb-4 flex items-center justify-between gap-3">
+                <h3 className={isLight ? 'text-lg font-semibold text-slate-900' : 'text-lg font-semibold text-slate-50'}>Note History</h3>
+                {notes.filter((n) => n.isCurrent).length === 0 && petFileButton}
+              </div>
               <div className="space-y-3">
                 {notes
                   .filter(n => !n.isCurrent)

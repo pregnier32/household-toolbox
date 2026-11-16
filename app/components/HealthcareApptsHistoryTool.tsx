@@ -34,6 +34,7 @@ type AppointmentRecord = {
   headerId: string;
   isUpcoming: boolean;
   appointmentDate: string;
+  appointmentTime: string;
   careFacility: string;
   providerInfo: string;
   reasonForVisit: string;
@@ -76,6 +77,7 @@ function mapApiRecordToRecord(r: {
   id: string;
   header_id: string;
   appointment_date: string;
+  appointment_time?: string | null;
   is_upcoming: boolean;
   care_facility: string | null;
   provider_info: string | null;
@@ -92,6 +94,7 @@ function mapApiRecordToRecord(r: {
     id: r.id,
     headerId: r.header_id,
     appointmentDate: r.appointment_date,
+    appointmentTime: r.appointment_time || '',
     isUpcoming: r.is_upcoming,
     careFacility: r.care_facility ?? '',
     providerInfo: r.provider_info ?? '',
@@ -140,6 +143,23 @@ function formatDateDisplay(dateStr: string): string {
   return `${m}/${d}/${y}`;
 }
 
+function formatTimeDisplay(timeStr: string): string {
+  const match = /^(\d{2}):(\d{2})/.exec(timeStr);
+  if (!match) return '';
+  const hours = Number(match[1]);
+  const minutes = Number(match[2]);
+  if (hours > 23 || minutes > 59) return '';
+  const clock = new Date();
+  clock.setHours(hours, minutes, 0, 0);
+  return clock.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' });
+}
+
+function formatVisitWhen(record: Pick<AppointmentRecord, 'appointmentDate' | 'appointmentTime'>): string {
+  const dateLabel = formatDateDisplay(record.appointmentDate);
+  const timeLabel = formatTimeDisplay(record.appointmentTime);
+  return [dateLabel, timeLabel].filter(Boolean).join(' · ');
+}
+
 function formatReportDate(date: Date): string {
   return formatDisplayDate(date);
 }
@@ -152,11 +172,15 @@ function localCalendarDayIso(date = new Date()): string {
 }
 
 function compareUpcomingForExport(a: AppointmentRecord, b: AppointmentRecord): number {
-  return (a.appointmentDate || '').localeCompare(b.appointmentDate || '');
+  const byDate = (a.appointmentDate || '').localeCompare(b.appointmentDate || '');
+  if (byDate !== 0) return byDate;
+  return (a.appointmentTime || '99:99').localeCompare(b.appointmentTime || '99:99');
 }
 
 function compareHistoryForExport(a: AppointmentRecord, b: AppointmentRecord): number {
-  return (b.appointmentDate || '').localeCompare(a.appointmentDate || '');
+  const byDate = (b.appointmentDate || '').localeCompare(a.appointmentDate || '');
+  if (byDate !== 0) return byDate;
+  return (b.appointmentTime || '').localeCompare(a.appointmentTime || '');
 }
 
 function parseCurrency(value: string): number {
@@ -187,45 +211,28 @@ function formatHistoryBalanceLine(record: Pick<AppointmentRecord, 'totalBilled' 
     .join(' · ');
 }
 
-function readHsaLastAccountId(hsaToolId: string): string | null {
-  try {
-    return localStorage.getItem(`hsa-last-account:${hsaToolId}`);
-  } catch {
-    return null;
-  }
+function memberAppointmentSummary(memberRecords: AppointmentRecord[]): { upcoming: number; history: number; due: number } {
+  return {
+    upcoming: memberRecords.filter((r) => r.isUpcoming).length,
+    history: memberRecords.filter((r) => !r.isUpcoming).length,
+    due: memberRecords.reduce((sum, r) => sum + parseCurrency(r.currentAmountDue), 0),
+  };
 }
 
-function pickHsaAccountId(accounts: { id: string; name: string }[], hsaToolId: string): string | null {
-  if (!accounts.length) return null;
-  const ids = new Set(accounts.map((a) => a.id));
-  const lastUsed = readHsaLastAccountId(hsaToolId);
-  if (lastUsed && ids.has(lastUsed)) return lastUsed;
-  if (accounts.length === 1) return accounts[0].id;
-  const self = accounts.find((a) => a.name === 'Self');
-  if (self) return self.id;
-  return accounts[0].id;
-}
-
-function hsaAmountFromHealthcare(record: AppointmentRecord): number {
-  const due = parseCurrency(record.currentAmountDue);
-  if (due > 0) return due;
-  const responsibility = Math.max(0, parseCurrency(record.totalBilled) - parseCurrency(record.insurancePaid));
-  if (responsibility > 0) return responsibility;
-  return parseCurrency(record.totalBilled);
-}
-
-function formatMemberRollupLine(memberRecords: AppointmentRecord[]): string {
-  const upcoming = memberRecords.filter((r) => r.isUpcoming).length;
-  const history = memberRecords.filter((r) => !r.isUpcoming).length;
-  const due = memberRecords.reduce((sum, r) => sum + parseCurrency(r.currentAmountDue), 0);
-  const dueText = due > 0 ? ` · Due ${formatCurrencyDisplay(String(due))}` : '';
-  return `Upcoming ${upcoming} · History ${history}${dueText}`;
+function formatSummaryAmount(amount: number): string {
+  return new Intl.NumberFormat('en-US', {
+    style: 'currency',
+    currency: 'USD',
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 2,
+  }).format(amount);
 }
 
 const defaultRecord = (headerId: string): Omit<AppointmentRecord, 'id'> => ({
   headerId,
   isUpcoming: true,
   appointmentDate: new Date().toISOString().split('T')[0],
+  appointmentTime: '',
   careFacility: '',
   providerInfo: '',
   reasonForVisit: '',
@@ -305,6 +312,12 @@ export function HealthcareApptsHistoryTool({ toolId }: HealthcareApptsHistoryToo
     : 'rounded-2xl border border-slate-800 bg-slate-900/70 p-8 text-center text-slate-400';
   const labelClass = isLight ? 'block text-sm font-medium text-slate-700 mb-3' : 'block text-sm font-medium text-slate-300 mb-3';
   const labelClassSm = isLight ? 'block text-xs font-medium text-slate-700 mb-1.5' : 'block text-xs font-medium text-slate-300 mb-1.5';
+  const summaryHeadClass = isLight
+    ? 'px-3 py-3 text-left text-xs font-semibold uppercase tracking-wider text-slate-600'
+    : 'px-3 py-3 text-left text-xs font-semibold uppercase tracking-wider text-slate-400';
+  const summaryHeadRightClass = isLight
+    ? 'px-3 py-3 text-right text-xs font-semibold uppercase tracking-wider text-slate-600'
+    : 'px-3 py-3 text-right text-xs font-semibold uppercase tracking-wider text-slate-400';
   const inputClass = isLight
     ? 'w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900 placeholder-slate-500 focus:border-emerald-500/50 focus:outline-none focus:ring-1 focus:ring-emerald-500/50'
     : 'w-full rounded-lg border border-slate-700 bg-slate-900/70 px-3 py-2 text-sm text-slate-100 placeholder-slate-500 focus:border-emerald-500/50 focus:outline-none focus:ring-1 focus:ring-emerald-500/50';
@@ -326,6 +339,9 @@ export function HealthcareApptsHistoryTool({ toolId }: HealthcareApptsHistoryToo
   const modalCardClass = isLight
     ? 'rounded-2xl border border-slate-200 bg-white p-6 max-w-md w-full mx-4 shadow-xl'
     : 'rounded-2xl border border-slate-800 bg-slate-900 p-6 max-w-md w-full mx-4';
+  const summaryModalClass = isLight
+    ? 'max-h-[90vh] w-full max-w-3xl overflow-y-auto rounded-2xl border border-slate-200 bg-white p-6 mx-4 shadow-xl'
+    : 'max-h-[90vh] w-full max-w-3xl overflow-y-auto rounded-2xl border border-slate-800 bg-slate-900 p-6 mx-4';
   const modalTitleClass = isLight ? 'text-xl font-semibold text-slate-900 mb-2' : 'text-xl font-semibold text-slate-50 mb-2';
   const deleteModalCardClass = isLight
     ? 'rounded-2xl border border-slate-200 bg-white p-6 max-w-md w-full mx-4 shadow-2xl'
@@ -381,6 +397,7 @@ export function HealthcareApptsHistoryTool({ toolId }: HealthcareApptsHistoryToo
   const [filterType, setFilterType] = useState<'all' | 'upcoming' | 'history'>('all');
 
   const [showExportPopup, setShowExportPopup] = useState(false);
+  const [showSummaryView, setShowSummaryView] = useState(false);
   const [exportAllMembers, setExportAllMembers] = useState(true);
   const [exportIncludeUpcoming, setExportIncludeUpcoming] = useState(true);
   const [exportHistoryScope, setExportHistoryScope] = useState<string>('all');
@@ -391,7 +408,6 @@ export function HealthcareApptsHistoryTool({ toolId }: HealthcareApptsHistoryToo
   const [awaitingInitialData, setAwaitingInitialData] = useState(true);
   const [isLoadingRecords, setIsLoadingRecords] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
-  const [addingToHsaRecordId, setAddingToHsaRecordId] = useState<string | null>(null);
   const [saveMessage, setSaveMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
   const [pendingAttachments, setPendingAttachments] = useState<AttachmentItem[]>([]);
   const [attachmentModal, setAttachmentModal] = useState<null | 'add' | string>(null);
@@ -428,6 +444,10 @@ export function HealthcareApptsHistoryTool({ toolId }: HealthcareApptsHistoryToo
       r.preVisitNotes.toLowerCase().includes(q) ||
       r.postVisitNotes.toLowerCase().includes(q)
     );
+  }).sort((a, b) => {
+    const byDate = (b.appointmentDate || '').localeCompare(a.appointmentDate || '');
+    if (byDate !== 0) return byDate;
+    return (a.appointmentTime || '99:99').localeCompare(b.appointmentTime || '99:99');
   });
 
   const loadHeaders = async () => {
@@ -825,6 +845,15 @@ export function HealthcareApptsHistoryTool({ toolId }: HealthcareApptsHistoryToo
     return () => window.removeEventListener('keydown', onKey);
   }, [showExportPopup, isExportingPdf]);
 
+  useEffect(() => {
+    if (!showSummaryView) return undefined;
+    const onKey = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') setShowSummaryView(false);
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [showSummaryView]);
+
   const addRecord = async () => {
     if (!selectedHeaderId || !toolId) return;
     setIsSaving(true);
@@ -836,6 +865,7 @@ export function HealthcareApptsHistoryTool({ toolId }: HealthcareApptsHistoryToo
       formData.append('action', 'create');
       formData.append('headerId', selectedHeaderId);
       formData.append('appointmentDate', newRecord.appointmentDate);
+      formData.append('appointmentTime', newRecord.appointmentTime);
       formData.append('isUpcoming', String(newRecord.isUpcoming));
       formData.append('careFacility', newRecord.careFacility);
       formData.append('providerInfo', newRecord.providerInfo);
@@ -910,6 +940,7 @@ export function HealthcareApptsHistoryTool({ toolId }: HealthcareApptsHistoryToo
       formData.append('recordId', editingRecord.id);
       formData.append('headerId', editingRecord.headerId);
       formData.append('appointmentDate', editingRecord.appointmentDate);
+      formData.append('appointmentTime', editingRecord.appointmentTime);
       formData.append('isUpcoming', String(editingRecord.isUpcoming));
       formData.append('careFacility', editingRecord.careFacility);
       formData.append('providerInfo', editingRecord.providerInfo);
@@ -960,65 +991,6 @@ export function HealthcareApptsHistoryTool({ toolId }: HealthcareApptsHistoryToo
       setSaveMessage({ type: 'error', text: e instanceof Error ? e.message : 'Failed to delete' });
     } finally {
       setIsSaving(false);
-    }
-  };
-
-  const addToHsa = async (record: AppointmentRecord) => {
-    const amount = hsaAmountFromHealthcare(record);
-    if (!record.appointmentDate || amount <= 0) {
-      const msg = 'Add to HSA needs a date and an amount (Due, or billed minus insurance).';
-      showError(msg);
-      showMessage('error', msg);
-      return;
-    }
-
-    setAddingToHsaRecordId(record.id);
-    try {
-      const toolsRes = await fetch('/api/tools');
-      const toolsData = await toolsRes.json().catch(() => ({}));
-      if (!toolsRes.ok) throw new Error((toolsData as { error?: string }).error || 'Failed to find HSA Tracker');
-      const hsaTool = ((toolsData.tools ?? []) as { id: string; name: string }[]).find(
-        (t) => t.name === 'HSA Tracker'
-      );
-      if (!hsaTool) throw new Error('HSA Tracker is not available.');
-
-      const hsaRes = await fetch(`/api/tools/hsa-tracker?toolId=${encodeURIComponent(hsaTool.id)}`);
-      const hsaData = await hsaRes.json().catch(() => ({}));
-      if (!hsaRes.ok) throw new Error((hsaData as { error?: string }).error || 'Failed to load HSA accounts');
-      const accounts = (hsaData.accounts ?? []) as { id: string; name: string }[];
-      const accountId = pickHsaAccountId(accounts, hsaTool.id);
-      if (!accountId) throw new Error('No HSA account available. Open HSA Tracker once to create one.');
-
-      const name = record.reasonForVisit.trim() || record.careFacility.trim() || record.providerInfo.trim() || 'Healthcare visit';
-      const providerOrStore = record.providerInfo.trim() || record.careFacility.trim();
-      const createRes = await fetch('/api/tools/hsa-tracker', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          resource: 'expense',
-          action: 'create',
-          toolId: hsaTool.id,
-          accountId,
-          name,
-          date: record.appointmentDate,
-          amount,
-          providerOrStore,
-          category: 'Doctor Visit',
-          paymentMethod: 'Out of Pocket',
-          reimbursedYet: 'No',
-          notes: `From Healthcare. Record ${record.id}`,
-          healthcareRecordId: record.id,
-        }),
-      });
-      const createData = await createRes.json().catch(() => ({}));
-      if (!createRes.ok) throw new Error((createData as { error?: string }).error || 'Failed to create HSA expense');
-      showMessage('success', 'Added to HSA Tracker.');
-    } catch (e) {
-      const msg = e instanceof Error ? e.message : 'Failed to add to HSA';
-      showError(msg);
-      showMessage('error', msg);
-    } finally {
-      setAddingToHsaRecordId(null);
     }
   };
 
@@ -1178,7 +1150,7 @@ export function HealthcareApptsHistoryTool({ toolId }: HealthcareApptsHistoryToo
         const kind = record.isUpcoming ? 'Upcoming' : 'History';
         const visitLines: { text: string; fontSize: number; isBold: boolean; indent: number }[] = [
           {
-            text: `${formatDateDisplay(record.appointmentDate) || 'No date'}  ·  ${kind}`,
+            text: `${formatVisitWhen(record) || 'No date'}  ·  ${kind}`,
             fontSize: 11,
             isBold: true,
             indent: 5,
@@ -1297,7 +1269,7 @@ export function HealthcareApptsHistoryTool({ toolId }: HealthcareApptsHistoryToo
       const attachmentRefs = exportedRecords.flatMap((record) => {
         const memberName =
           headers.find((header) => header.id === record.headerId)?.name || 'Unassigned';
-        const dateLabel = formatDateDisplay(record.appointmentDate) || 'No date';
+        const dateLabel = formatVisitWhen(record) || 'No date';
         return (record.documents || [])
           .map((file) => file.name?.trim())
           .filter((name): name is string => Boolean(name))
@@ -1348,6 +1320,19 @@ export function HealthcareApptsHistoryTool({ toolId }: HealthcareApptsHistoryToo
   if (awaitingInitialData) {
     return <ToolDataLoadingBox />;
   }
+
+  const summaryRows = headers.map((header) => ({
+    header,
+    ...memberAppointmentSummary(records.filter((record) => record.headerId === header.id)),
+  }));
+  const summaryTotals = summaryRows.reduce(
+    (totals, row) => ({
+      upcoming: totals.upcoming + row.upcoming,
+      history: totals.history + row.history,
+      due: totals.due + row.due,
+    }),
+    { upcoming: 0, history: 0, due: 0 }
+  );
 
   return (
     <div className="space-y-6">
@@ -1466,10 +1451,11 @@ export function HealthcareApptsHistoryTool({ toolId }: HealthcareApptsHistoryToo
                   </div>
                 </div>
               ) : (
-                <div key={header.id} className="relative">
+                <div key={header.id} className="relative shrink-0">
                   <button
+                    type="button"
                     onClick={() => selectHeader(header.id)}
-                    className={`px-4 py-3 rounded-lg border transition-all duration-200 min-w-[120px] relative ${
+                    className={`min-w-[120px] rounded-lg border py-3 pl-4 pr-14 transition-all duration-200 ${
                       selectedHeaderId === header.id ? 'shadow-lg' : 'hover:border-slate-600'
                     }`}
                     style={{
@@ -1481,14 +1467,15 @@ export function HealthcareApptsHistoryTool({ toolId }: HealthcareApptsHistoryToo
                       color: header.card_color || '#10b981',
                     }}
                   >
-                    <div className="font-medium text-center">{header.name}</div>
+                    <div className="whitespace-nowrap text-center font-medium">{header.name}</div>
                   </button>
                   <button
+                    type="button"
                     onClick={(e) => {
                       e.stopPropagation();
                       setMenuOpenHeaderId(menuOpenHeaderId === header.id ? null : header.id);
                     }}
-                    className={`absolute top-1 right-1 inline-flex min-h-11 min-w-11 items-center justify-center rounded transition-colors ${isLight ? 'text-slate-600 hover:bg-slate-200 hover:text-slate-900' : 'text-slate-400 hover:bg-slate-700/50 hover:text-slate-200'}`}
+                    className={`absolute right-0.5 top-1/2 z-10 inline-flex min-h-11 min-w-11 -translate-y-1/2 items-center justify-center rounded transition-colors ${isLight ? 'text-slate-600 hover:bg-slate-200/80 hover:text-slate-900' : 'text-slate-400 hover:bg-slate-700/50 hover:text-slate-200'}`}
                     aria-label="Family member options"
                     title="Family member options"
                   >
@@ -1563,34 +1550,14 @@ export function HealthcareApptsHistoryTool({ toolId }: HealthcareApptsHistoryToo
               </svg>
             </button>
           </div>
-          {headers.length >= 2 && (
-            <div className="mt-4 space-y-1">
-              <p className={labelClassSm}>Household</p>
-              {headers.map((header) => {
-                const summary = formatMemberRollupLine(records.filter((r) => r.headerId === header.id));
-                return (
-                  <button
-                    key={header.id}
-                    type="button"
-                    onClick={() => selectHeader(header.id)}
-                    className={`w-full flex items-center justify-between gap-3 rounded-lg border px-3 py-2 text-left text-sm transition-all duration-200 ${
-                      selectedHeaderId === header.id ? 'shadow-lg' : isLight ? 'hover:bg-slate-50' : 'hover:bg-slate-800/50'
-                    }`}
-                    style={{
-                      borderColor: header.card_color || '#10b981',
-                      backgroundColor:
-                        selectedHeaderId === header.id
-                          ? `${header.card_color || '#10b981'}15`
-                          : `${header.card_color || '#10b981'}08`,
-                      color: header.card_color || '#10b981',
-                    }}
-                  >
-                    <span className="font-medium">{header.name}</span>
-                    <span className={isLight ? 'text-xs text-slate-600' : 'text-xs text-slate-400'}>{summary}</span>
-                  </button>
-                );
-              })}
-            </div>
+          {headers.length > 0 && (
+            <button
+              type="button"
+              onClick={() => setShowSummaryView(true)}
+              className={`mt-3 text-left text-sm font-medium ${isLight ? 'text-emerald-700 hover:text-emerald-800' : 'text-emerald-300 hover:text-emerald-200'}`}
+            >
+              Click for Summary View
+            </button>
           )}
           </div>
         ) : (
@@ -1638,6 +1605,112 @@ export function HealthcareApptsHistoryTool({ toolId }: HealthcareApptsHistoryToo
           </div>
         ) }
       </div>
+
+      {showSummaryView && headers.length > 0 && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4"
+          onClick={() => setShowSummaryView(false)}
+        >
+        <div
+          className={summaryModalClass}
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="hcah-summary-title"
+          onClick={(event) => event.stopPropagation()}
+        >
+          <div className="mb-4 flex items-center justify-between gap-3">
+            <h3 id="hcah-summary-title" className={`text-lg font-semibold ${isLight ? 'text-slate-900' : 'text-slate-50'}`}>Summary View</h3>
+            <button
+              type="button"
+              onClick={() => setShowSummaryView(false)}
+              className={isLight ? 'text-slate-600 hover:text-slate-900 transition-colors' : 'text-slate-400 hover:text-slate-200 transition-colors'}
+              aria-label="Close"
+              title="Close"
+            >
+              <svg className="h-6 w-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+              </svg>
+            </button>
+          </div>
+          <div className="min-w-0 max-w-full">
+            <table className="block w-full max-w-full border-collapse md:table">
+              <thead className="hidden md:table-header-group">
+                <tr className={isLight ? 'border-b border-slate-200' : 'border-b border-slate-700'}>
+                  <th className={summaryHeadClass}>Family member</th>
+                  <th className={summaryHeadRightClass}>Upcoming</th>
+                  <th className={summaryHeadRightClass}>History</th>
+                  <th className={summaryHeadRightClass}>Amount due</th>
+                </tr>
+              </thead>
+              <tbody className="block space-y-3 md:table-row-group md:space-y-0">
+                {summaryRows.map(({ header, upcoming, history, due }) => {
+                  const selected = selectedHeaderId === header.id;
+                  return (
+                    <tr
+                      key={header.id}
+                      tabIndex={0}
+                      aria-label={`Select ${header.name}`}
+                      onClick={() => {
+                        selectHeader(header.id);
+                        setShowSummaryView(false);
+                      }}
+                      onKeyDown={(event) => {
+                        if (event.key === 'Enter' || event.key === ' ') {
+                          event.preventDefault();
+                          selectHeader(header.id);
+                          setShowSummaryView(false);
+                        }
+                      }}
+                      className={
+                        isLight
+                          ? `block cursor-pointer rounded-lg border border-slate-200 md:table-row md:rounded-none md:border-0 md:border-b ${selected ? 'bg-emerald-50' : 'hover:bg-slate-50'}`
+                          : `block cursor-pointer rounded-lg border border-slate-700 md:table-row md:rounded-none md:border-0 md:border-b md:border-slate-800 ${selected ? 'bg-emerald-500/10' : 'hover:bg-slate-800/40'}`
+                      }
+                    >
+                      <td className="block px-3 py-3 md:table-cell">
+                        <div className={`mb-1 text-xs font-semibold uppercase tracking-wider md:hidden ${isLight ? 'text-slate-500' : 'text-slate-400'}`}>Family member</div>
+                        <span className="font-medium" style={{ color: header.card_color || '#10b981' }}>
+                          {header.name}
+                        </span>
+                      </td>
+                      <td className={`block px-3 py-1 text-sm md:table-cell md:py-3 md:text-right ${isLight ? 'text-slate-700' : 'text-slate-300'}`}>
+                        <span className={`mr-2 text-xs font-semibold uppercase tracking-wider md:hidden ${isLight ? 'text-slate-500' : 'text-slate-400'}`}>Upcoming</span>
+                        {upcoming}
+                      </td>
+                      <td className={`block px-3 py-1 text-sm md:table-cell md:py-3 md:text-right ${isLight ? 'text-slate-700' : 'text-slate-300'}`}>
+                        <span className={`mr-2 text-xs font-semibold uppercase tracking-wider md:hidden ${isLight ? 'text-slate-500' : 'text-slate-400'}`}>History</span>
+                        {history}
+                      </td>
+                      <td className={`block px-3 py-3 text-sm md:table-cell md:text-right ${isLight ? 'text-slate-700' : 'text-slate-300'}`}>
+                        <span className={`mr-2 text-xs font-semibold uppercase tracking-wider md:hidden ${isLight ? 'text-slate-500' : 'text-slate-400'}`}>Amount due</span>
+                        {formatSummaryAmount(due)}
+                      </td>
+                    </tr>
+                  );
+                })}
+                {summaryRows.length >= 2 && (
+                  <tr className={isLight ? 'mt-3 block rounded-lg border border-slate-200 bg-slate-50 md:table-row md:border-0 md:bg-transparent' : 'mt-3 block rounded-lg border border-slate-700 bg-slate-800/40 md:table-row md:border-0 md:bg-transparent'}>
+                    <td className={`block px-3 py-3 text-sm font-semibold md:table-cell ${isLight ? 'text-slate-900' : 'text-slate-100'}`}>Total</td>
+                    <td className={`block px-3 py-1 text-sm font-semibold md:table-cell md:py-3 md:text-right ${isLight ? 'text-slate-900' : 'text-slate-100'}`}>
+                      <span className={`mr-2 text-xs font-semibold uppercase tracking-wider md:hidden ${isLight ? 'text-slate-500' : 'text-slate-400'}`}>Upcoming</span>
+                      {summaryTotals.upcoming}
+                    </td>
+                    <td className={`block px-3 py-1 text-sm font-semibold md:table-cell md:py-3 md:text-right ${isLight ? 'text-slate-900' : 'text-slate-100'}`}>
+                      <span className={`mr-2 text-xs font-semibold uppercase tracking-wider md:hidden ${isLight ? 'text-slate-500' : 'text-slate-400'}`}>History</span>
+                      {summaryTotals.history}
+                    </td>
+                    <td className={`block px-3 py-3 text-sm font-semibold md:table-cell md:text-right ${isLight ? 'text-slate-900' : 'text-slate-100'}`}>
+                      <span className={`mr-2 text-xs font-semibold uppercase tracking-wider md:hidden ${isLight ? 'text-slate-500' : 'text-slate-400'}`}>Amount due</span>
+                      {formatSummaryAmount(summaryTotals.due)}
+                    </td>
+                  </tr>
+                )}
+              </tbody>
+            </table>
+          </div>
+        </div>
+        </div>
+      )}
 
       {menuOpenHeaderId && (
         <div className="fixed inset-0 z-40" onClick={() => setMenuOpenHeaderId(null)} />
@@ -1808,6 +1881,15 @@ export function HealthcareApptsHistoryTool({ toolId }: HealthcareApptsHistoryToo
                       />
                     </div>
                     <div>
+                      <label className="block text-xs font-medium text-slate-300 mb-1.5">Appointment time</label>
+                      <input
+                        type="time"
+                        value={newRecord.appointmentTime}
+                        onChange={(e) => setNewRecord({ ...newRecord, appointmentTime: e.target.value })}
+                        className="w-full rounded-lg border border-slate-700 bg-slate-900/70 px-3 py-2 text-sm text-slate-100 focus:border-emerald-500/50 focus:outline-none focus:ring-1 focus:ring-emerald-500/50"
+                      />
+                    </div>
+                    <div className="md:col-span-2">
                       <label className="block text-xs font-medium text-slate-300 mb-1.5">Care facility</label>
                       <input
                         type="text"
@@ -1980,6 +2062,15 @@ export function HealthcareApptsHistoryTool({ toolId }: HealthcareApptsHistoryToo
                       />
                     </div>
                     <div>
+                      <label className="block text-xs font-medium text-slate-300 mb-1.5">Appointment time</label>
+                      <input
+                        type="time"
+                        value={editingRecord.appointmentTime}
+                        onChange={(e) => setEditingRecord({ ...editingRecord, appointmentTime: e.target.value })}
+                        className="w-full rounded-lg border border-slate-700 bg-slate-900/70 px-3 py-2 text-sm text-slate-100 focus:border-emerald-500/50 focus:outline-none focus:ring-1 focus:ring-emerald-500/50"
+                      />
+                    </div>
+                    <div className="md:col-span-2">
                       <label className="block text-xs font-medium text-slate-300 mb-1.5">Care facility</label>
                       <input
                         type="text"
@@ -2099,15 +2190,6 @@ export function HealthcareApptsHistoryTool({ toolId }: HealthcareApptsHistoryToo
                   />
                   <div className="flex gap-3 justify-end flex-wrap">
                     <button
-                      type="button"
-                      onClick={() => void addToHsa(editingRecord)}
-                      disabled={isSaving || addingToHsaRecordId === editingRecord.id}
-                      className={secondaryButtonClass}
-                      aria-label="Add to HSA"
-                    >
-                      {addingToHsaRecordId === editingRecord.id ? 'Adding…' : 'Add to HSA'}
-                    </button>
-                    <button
                       onClick={cancelEditingRecord}
                       disabled={isSaving}
                       className={secondaryButtonClass}
@@ -2139,7 +2221,7 @@ export function HealthcareApptsHistoryTool({ toolId }: HealthcareApptsHistoryToo
                           <div>
                             <div className="flex items-center gap-2 flex-wrap">
                               <span className="font-medium text-slate-100">
-                                {formatDateDisplay(record.appointmentDate)}
+                                {formatVisitWhen(record) || formatDateDisplay(record.appointmentDate)}
                                 {record.careFacility && ` · ${record.careFacility}`}
                               </span>
                               <span
@@ -2172,16 +2254,6 @@ export function HealthcareApptsHistoryTool({ toolId }: HealthcareApptsHistoryToo
                               count={record.documents.length}
                               onClick={() => setAttachmentModal(record.id)}
                             />
-                            <button
-                              type="button"
-                              onClick={() => void addToHsa(record)}
-                              disabled={addingToHsaRecordId === record.id}
-                              className={`${rowIconEmeraldClass} gap-1.5 px-2.5 text-xs font-semibold whitespace-nowrap disabled:opacity-50 disabled:cursor-not-allowed`}
-                              aria-label="Add to HSA"
-                              title="Add to HSA"
-                            >
-                              {addingToHsaRecordId === record.id ? 'Adding…' : 'Add to HSA'}
-                            </button>
                             <button
                               type="button"
                               onClick={() => startEditingRecord(record)}

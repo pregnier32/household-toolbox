@@ -3229,14 +3229,14 @@ Appointment files only. The existing `tools_hcah_documents` store is the attachm
 - Upcoming vs History is `is_upcoming` on the same record, not Notes-style History. Files stay editable.
 - Do not use a body “Documents” picker, “Add more files”, an in-form View/Delete list, or file-name chips on cards. Badge only.
 - Queue files on create; persist immediately on saved appointments. Save does not require a file.
-- Add to HSA creates an HSA expense only. Do not copy files and do not add a second upload shortcut.
+- Healthcare does not create records in HSA Tracker. Do not add an action that copies a visit into another tool.
 - View/Download go through the authenticated route (`inline=1` vs download).
 - No paperclip on family-member chips, Report/Export, or the dashboard pin.
 - Family-member selection uses the header card pattern (“Select family member”).
 
 **Add control exception (intentional):** Healthcare Appointments & History keeps the filled **+ Add Appointment** button and the inline New upcoming appointment card. Do not convert this add workflow to the section-plus and add-modal pattern to satisfy `UX-ADD-002`.
 
-**Row action exception (intentional):** Appointment rows may keep the text **Add to HSA** action. Do not replace it with an icon-only control to satisfy `UX-LST-001`. Paperclip, edit, and delete stay in their current order.
+Appointment row actions are the paperclip, edit, and delete. Do not add a control that sends the visit to another tool.
 
 ### Pet Care Schedule
 

@@ -36,6 +36,7 @@ CREATE TABLE IF NOT EXISTS tools_hcah_records (
   user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
   tool_id UUID NOT NULL REFERENCES tools(id) ON DELETE CASCADE,
   appointment_date DATE NOT NULL,
+  appointment_time TEXT,
   is_upcoming BOOLEAN NOT NULL DEFAULT true,
   care_facility TEXT,
   provider_info TEXT,

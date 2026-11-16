@@ -438,11 +438,6 @@ export const PUBLIC_TOOLS: PublicTool[] = [
         description: 'Pin an appointment date to the household dashboard calendar.',
       },
       {
-        title: 'Create an HSA expense from a visit',
-        description:
-          'Add to HSA creates an expense in HSA Tracker. Files stay on the appointment and are not copied to the expense.',
-      },
-      {
         title: 'Export the appointment list',
         description: 'Export a PDF of the healthcare appointments you choose.',
       },
@@ -483,11 +478,6 @@ export const PUBLIC_TOOLS: PublicTool[] = [
       {
         question: 'Can I save bills with the visit?',
         answer: 'Yes. You can attach bills, explanations of benefits, referrals, and photos to the appointment.',
-      },
-      {
-        question: 'Can a visit be added to my HSA records?',
-        answer:
-          'Yes. Add to HSA creates an HSA expense from the visit. The appointment files stay on the appointment and are not copied over.',
       },
       {
         question: 'Can I export healthcare appointments?',

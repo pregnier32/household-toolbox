@@ -10,10 +10,6 @@ function ToolLoading() {
   return createElement(ToolDataLoadingBox);
 }
 
-const PercentOfOrderTool = dynamic(
-  () => import('../components/PercentOfOrderTool').then((mod) => mod.PercentOfOrderTool),
-  { loading: ToolLoading }
-);
 const PetCareScheduleTool = dynamic(
   () => import('../components/PetCareScheduleTool').then((mod) => mod.PetCareScheduleTool),
   { loading: ToolLoading }
@@ -88,7 +84,6 @@ const EndOfLifePlannerTool = dynamic(
 );
 
 const TOOL_COMPONENTS: Record<string, ToolComponent> = {
-  'Percent of my Order': PercentOfOrderTool,
   'Pet Care Schedule': PetCareScheduleTool,
   'Subscription Tracker': SubscriptionTrackerTool,
   'Calendar Events': CalendarEventsTool,
