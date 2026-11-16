@@ -739,7 +739,7 @@ Never use the browser’s `alert()`, `confirm()`, or `prompt()`. Those Chrome/si
 - Wrong attachment password: error inside the password overlay; leave the overlay open so the user can retry.
 
 **Confirmations (the user must choose):** Use an in-app modal, not `window.confirm()`.
-- **Non-destructive / reversible:** Title, one-sentence question, primary confirm + Cancel. Escape and Cancel dismiss without doing the work. The confirm button is the user gesture that starts the action (needed for `keepalive` fetches). Examples: Meal Planner “Create Shopping List”, End of Life Planner “Archive Plan”.
+- **Non-destructive / reversible:** Title, one-sentence question, primary confirm + Cancel. Escape and Cancel dismiss without doing the work. The confirm button is the user gesture that starts the action (needed for `keepalive` fetches). Examples: Meal Planner “Create Shopping List”.
 - **Permanent / destructive:** Typed-delete modal. Warning box (“This action cannot be undone”), instruction to type **delete**, confirm disabled until the field matches `delete` (case-insensitive). Examples: Profile “Delete Account”, Admin Tools “Delete Tool”, and existing record/plan deletes.
 
 **What not to do**
@@ -1407,7 +1407,7 @@ Five file stores on list rows that already had a place for scans. Do not attach 
 - **Personal item files** (`tools_eolp_personal_item_attachments`, path `{userId}/personal-items/{itemId}/...`): multiple photos/docs on My Wishes → Personal Items.
 - **Other record files** (`tools_eolp_other_record_attachments`, path `{userId}/other/{recordId}/...`): multiple files on the Other record, never on custom fields (those rebuild on save).
 - Keep `digital_location`, `document_location`, and `photo_reference` as optional text. Paperclip is the only file control.
-- Archived plans stay editable (Show archived plans still has Edit). Files stay editable. No paperclip on Archive / Restore.
+- Plans are updated or deleted. There is no archive control on a plan. The plan-card three-dot control opens one edit popup with the plan fields, the card color picker, and Delete at the bottom. Files stay editable.
 - No record-password overlay. Secret fields stay as they are.
 - No paperclip on Categories-style chrome, Export, search, or plan History.
 

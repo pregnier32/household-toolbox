@@ -1707,7 +1707,7 @@ export const PUBLIC_TOOLS: PublicTool[] = [
     features: [
       {
         title: 'One plan per person',
-        description: 'Create a plan for someone in the household and archive a plan you are not actively editing.',
+        description: 'Create a plan for someone in the household. Update it, or delete it when you no longer need it.',
       },
       {
         title: 'Personal and contact details',
@@ -1768,7 +1768,7 @@ export const PUBLIC_TOOLS: PublicTool[] = [
       },
       {
         question: 'Can I make a plan for more than one person?',
-        answer: 'Yes. You can create a plan for each person and archive a plan you are not currently using.',
+        answer: 'Yes. You can create a plan for each person. Update a plan, or delete it when you no longer need it.',
       },
       {
         question: 'What sections are included?',

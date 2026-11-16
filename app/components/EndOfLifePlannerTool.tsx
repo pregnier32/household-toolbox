@@ -970,13 +970,12 @@ export function EndOfLifePlannerTool({ toolId }: EndOfLifePlannerToolProps) {
   const secondaryButtonClass = isLight
     ? 'px-4 py-2 rounded-lg border-2 border-slate-400 bg-slate-100 text-slate-800 hover:bg-slate-200 transition-colors disabled:opacity-50 disabled:cursor-not-allowed'
     : 'px-4 py-2 rounded-lg border border-slate-700 bg-slate-800 text-slate-200 hover:bg-slate-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed';
-  const tabStripClass = isLight ? 'border-b border-slate-200 pb-3' : 'border-b border-slate-800 pb-3';
+  const tabStripClass = isLight ? 'border-b-2 border-slate-300' : 'border-b border-slate-800';
   const tabActiveClass = isLight
-    ? 'rounded-lg border-2 border-emerald-700 bg-emerald-600 px-3 py-1.5 text-sm font-semibold text-white shadow-sm'
-    : 'rounded-lg border-2 border-emerald-400 bg-emerald-500 px-3 py-1.5 text-sm font-semibold text-slate-950 shadow-sm';
-  const tabInactiveClass = isLight
-    ? 'rounded-lg border border-slate-300 bg-white px-3 py-1.5 text-sm font-medium text-slate-700 hover:bg-slate-100 hover:text-slate-900'
-    : 'rounded-lg border border-slate-700 bg-slate-900/70 px-3 py-1.5 text-sm font-medium text-slate-300 hover:border-slate-500 hover:bg-slate-800 hover:text-slate-100';
+    ? 'border-b-2 border-emerald-600 text-emerald-900'
+    : 'border-b-2 border-emerald-500 text-emerald-300';
+  const tabInactiveClass = isLight ? 'text-slate-600 hover:text-slate-900' : 'text-slate-400 hover:text-slate-300';
+  const tabMutedClass = isLight ? 'cursor-not-allowed text-slate-400' : 'cursor-not-allowed text-slate-500';
   const popupMenuClass = isLight
     ? 'absolute top-full right-0 z-50 mt-1 rounded-lg border border-slate-200 bg-white shadow-lg ring-1 ring-slate-900/5 min-w-[160px] py-1'
     : 'absolute top-full right-0 z-50 mt-1 bg-slate-800 border border-slate-700 rounded-lg shadow-lg min-w-[160px] py-1';
@@ -1037,7 +1036,6 @@ export function EndOfLifePlannerTool({ toolId }: EndOfLifePlannerToolProps) {
   const [awaitingInitialData, setAwaitingInitialData] = useState(true);
   const [saveStatus, setSaveStatus] = useState<'idle' | 'saving' | 'saved' | 'error'>('idle');
   const [formError, setFormError] = useState('');
-  const [showArchived, setShowArchived] = useState(false);
   const [isCreatingPlan, setIsCreatingPlan] = useState(false);
   const [newPlanName, setNewPlanName] = useState('');
   const [newPersonName, setNewPersonName] = useState('');
@@ -1052,8 +1050,6 @@ export function EndOfLifePlannerTool({ toolId }: EndOfLifePlannerToolProps) {
   const [editRelationshipCustom, setEditRelationshipCustom] = useState('');
   const [editDob, setEditDob] = useState('');
   const [editColor, setEditColor] = useState('#10b981');
-  const [showPlanColorPicker, setShowPlanColorPicker] = useState(false);
-  const [menuOpenPlanId, setMenuOpenPlanId] = useState<string | null>(null);
   const [menuOpenTabId, setMenuOpenTabId] = useState<string | null>(null);
   const [activeTab, setActiveTab] = useState<TabId>('personal');
   const [addingKey, setAddingKey] = useState<AddingKey>(null);
@@ -1063,11 +1059,9 @@ export function EndOfLifePlannerTool({ toolId }: EndOfLifePlannerToolProps) {
   const [revealedLetters, setRevealedLetters] = useState<Record<string, boolean>>({});
   const [deleteTarget, setDeleteTarget] = useState<DeleteTarget | null>(null);
   const [deleteConfirmText, setDeleteConfirmText] = useState('');
-  const [archiveConfirmPlanId, setArchiveConfirmPlanId] = useState<string | null>(null);
   const [showExportPopup, setShowExportPopup] = useState(false);
   const [exportAllPlans, setExportAllPlans] = useState(false);
   const [exportPlanId, setExportPlanId] = useState('');
-  const [exportIncludeArchived, setExportIncludeArchived] = useState(false);
   const [exportIncludeSecrets, setExportIncludeSecrets] = useState(false);
   const [exportIncludePrivateLetters, setExportIncludePrivateLetters] = useState(false);
   const [isExportingPdf, setIsExportingPdf] = useState(false);
@@ -1220,10 +1214,6 @@ export function EndOfLifePlannerTool({ toolId }: EndOfLifePlannerToolProps) {
         setDeleteConfirmText('');
         return;
       }
-      if (archiveConfirmPlanId) {
-        setArchiveConfirmPlanId(null);
-        return;
-      }
       if (showExportPopup) {
         if (!isExportingPdf) setShowExportPopup(false);
         return;
@@ -1232,18 +1222,17 @@ export function EndOfLifePlannerTool({ toolId }: EndOfLifePlannerToolProps) {
         setRenamingSectionId(null);
         return;
       }
-      if (menuOpenPlanId) setMenuOpenPlanId(null);
+      if (editingPlanId) {
+        setEditingPlanId(null);
+        setFormError('');
+        return;
+      }
       if (menuOpenTabId) setMenuOpenTabId(null);
       if (menuOpenSubsectionId) setMenuOpenSubsectionId(null);
     };
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
-  }, [attachmentModal, archiveConfirmPlanId, deleteTarget, showExportPopup, isExportingPdf, renamingSectionId, menuOpenPlanId, menuOpenTabId, menuOpenSubsectionId]);
-
-  const visiblePlans = useMemo(
-    () => plans.filter((plan) => showArchived || plan.status === 'Active'),
-    [plans, showArchived]
-  );
+  }, [attachmentModal, deleteTarget, showExportPopup, isExportingPdf, renamingSectionId, editingPlanId, menuOpenTabId, menuOpenSubsectionId]);
 
   const selectedPlan = plans.find((plan) => plan.id === selectedPlanId) || null;
   const overall = selectedPlan ? overallPlanPercent(selectedPlan) : 0;
@@ -1544,7 +1533,6 @@ export function EndOfLifePlannerTool({ toolId }: EndOfLifePlannerToolProps) {
     setIsCreatingPlan(true);
     setSelectedPlanId(null);
     setEditingPlanId(null);
-    setMenuOpenPlanId(null);
     setNewPlanName('');
     setNewPersonName('');
     setNewRelationship('');
@@ -1600,28 +1588,8 @@ export function EndOfLifePlannerTool({ toolId }: EndOfLifePlannerToolProps) {
     setEditRelationship(plan.relationship);
     setEditRelationshipCustom(plan.relationshipCustom);
     setEditDob(plan.dateOfBirth);
-    setEditColor(plan.card_color);
-    setShowPlanColorPicker(false);
-    setMenuOpenPlanId(null);
+    setEditColor(plan.card_color || '#10b981');
     setFormError('');
-  };
-
-  const startChangingPlanColor = (plan: EolPlan) => {
-    startEditPlan(plan);
-    setShowPlanColorPicker(true);
-  };
-
-  const savePlanColor = () => {
-    if (!editingPlanId) return;
-    const next = plans.map((plan) =>
-      plan.id === editingPlanId
-        ? appendPlanHistory({ ...plan, card_color: editColor }, 'edit', 'Changed plan color')
-        : plan
-    );
-    setEditingPlanId(null);
-    setShowPlanColorPicker(false);
-    setFormError('');
-    commitPlans(next, { immediate: true });
   };
 
   const savePlanEdit = () => {
@@ -1640,7 +1608,7 @@ export function EndOfLifePlannerTool({ toolId }: EndOfLifePlannerToolProps) {
               relationship: editRelationship,
               relationshipCustom: editRelationshipCustom.trim(),
               dateOfBirth: editDob,
-              card_color: plan.card_color,
+              card_color: editColor,
             },
             'edit',
             'Edited plan details'
@@ -1650,30 +1618,6 @@ export function EndOfLifePlannerTool({ toolId }: EndOfLifePlannerToolProps) {
     setEditingPlanId(null);
     setFormError('');
     commitPlans(next, { immediate: true });
-  };
-
-  const archivePlan = (id: string, archived: boolean) => {
-    if (archived) {
-      setMenuOpenPlanId(null);
-      setArchiveConfirmPlanId(id);
-      return;
-    }
-    applyArchivePlan(id, false);
-  };
-
-  const applyArchivePlan = (id: string, archived: boolean) => {
-    const next = plans.map((plan) =>
-      plan.id === id
-        ? appendPlanHistory(
-            { ...plan, status: archived ? 'Archived' : 'Active' },
-            archived ? 'archive' : 'restore',
-            archived ? 'Archived plan' : 'Restored plan'
-          )
-        : plan
-    );
-    setMenuOpenPlanId(null);
-    const shouldDeselect = archived && selectedPlanId === id && !showArchived;
-    commitPlans(next, { selectedId: shouldDeselect ? null : selectedPlanId, immediate: true });
   };
 
   const confirmDelete = async () => {
@@ -1845,7 +1789,6 @@ export function EndOfLifePlannerTool({ toolId }: EndOfLifePlannerToolProps) {
                 event.stopPropagation();
                 setMenuOpenSubsectionId(menuOpenSubsectionId === menuId ? null : menuId);
                 setMenuOpenTabId(null);
-                setMenuOpenPlanId(null);
               }}
               className={
                 isLight
@@ -3399,7 +3342,6 @@ export function EndOfLifePlannerTool({ toolId }: EndOfLifePlannerToolProps) {
         {
           exportAll: exportAllPlans,
           planId: exportPlanId,
-          includeArchived: exportIncludeArchived,
           includeSecrets: exportIncludeSecrets,
           includePrivateLetters: exportIncludePrivateLetters,
         }
@@ -3443,119 +3385,14 @@ export function EndOfLifePlannerTool({ toolId }: EndOfLifePlannerToolProps) {
       {formError ? <div className={errorBannerClass}>{formError}</div> : null}
 
       <div className={cardCompactClass}>
-        <div className="flex items-start justify-between gap-4 mb-3">
-          <label className={isLight ? 'text-sm font-medium text-slate-700' : 'text-sm font-medium text-slate-300'}>
-            Select a Plan
-          </label>
-          {!isCreatingPlan ? (
-            <div className="flex flex-col items-end gap-1.5">
-              {selectedPlan ? (
-                <p className={`text-xs text-right whitespace-nowrap ${mutedTextClass}`}>
-                  Last updated {formatDateTimeDisplay(selectedPlan.lastUpdated)}
-                </p>
-              ) : null}
-              <label className={`inline-flex items-center gap-2 text-sm ${mutedTextClass}`}>
-                <input
-                  type="checkbox"
-                  checked={showArchived}
-                  onChange={(event) => setShowArchived(event.target.checked)}
-                  className="h-4 w-4 rounded border-slate-400 text-emerald-600 focus:ring-emerald-500"
-                />
-                Show archived plans
-              </label>
-            </div>
-          ) : null}
-        </div>
+        <label className={`mb-3 block ${isLight ? 'text-sm font-medium text-slate-700' : 'text-sm font-medium text-slate-300'}`}>
+          Select a Plan
+        </label>
         {!isCreatingPlan ? (
           <>
             <div className="flex items-center gap-3 flex-wrap">
-              {visiblePlans.map((plan) =>
-                showPlanColorPicker && editingPlanId === plan.id ? (
-                  <div
-                    key={plan.id}
-                    className={isLight ? 'px-4 py-3 rounded-lg border border-slate-300 bg-slate-100 min-w-[180px]' : 'px-4 py-3 rounded-lg border border-slate-700 bg-slate-800/50 min-w-[180px]'}
-                  >
-                    <div className="mb-3">
-                      <div className={isLight ? 'mb-2 text-sm font-medium text-slate-800' : 'mb-2 text-sm font-medium text-slate-200'}>{plan.name}</div>
-                      <div className="flex items-center gap-2">
-                        <label htmlFor="plan-card-color" className={isLight ? 'text-xs text-slate-600' : 'text-xs text-slate-400'}>
-                          Card Color:
-                        </label>
-                        <input
-                          id="plan-card-color"
-                          type="color"
-                          value={editColor}
-                          onChange={(event) => setEditColor(event.target.value)}
-                          className="h-8 w-16 cursor-pointer rounded border border-slate-600"
-                        />
-                      </div>
-                    </div>
-                    <div className="flex items-center gap-2">
-                      <button
-                        type="button"
-                        onClick={savePlanColor}
-                        className={isLight ? 'flex-1 rounded bg-emerald-600 px-2 py-1 text-xs font-semibold text-white hover:bg-emerald-500' : 'flex-1 rounded bg-emerald-500 px-2 py-1 text-xs font-medium text-slate-950 hover:bg-emerald-400'}
-                      >
-                        Save
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => {
-                          setEditingPlanId(null);
-                          setShowPlanColorPicker(false);
-                        }}
-                        className={isLight ? 'rounded border border-slate-300 bg-white px-2 py-1 text-xs text-slate-700 hover:bg-slate-100' : 'rounded border border-slate-600 bg-slate-700 px-2 py-1 text-xs text-slate-200 hover:bg-slate-600'}
-                      >
-                        Cancel
-                      </button>
-                    </div>
-                  </div>
-                ) : editingPlanId === plan.id ? (
-                  <div
-                    key={plan.id}
-                    className="px-4 py-3 rounded-lg border min-w-[280px] max-w-md"
-                    style={{ borderColor: plan.card_color || '#10b981', backgroundColor: `${plan.card_color || '#10b981'}15` }}
-                  >
-                    <div className="space-y-3">
-                      <div>
-                        <label htmlFor="edit-plan-name" className={labelClass}>
-                          Plan name
-                        </label>
-                        <input id="edit-plan-name" value={editName} onChange={(event) => setEditName(event.target.value)} className={inputClass} />
-                      </div>
-                      <div>
-                        <label htmlFor="edit-person-name" className={labelClass}>
-                          Person’s full name
-                        </label>
-                        <input id="edit-person-name" value={editPersonName} onChange={(event) => setEditPersonName(event.target.value)} className={inputClass} />
-                      </div>
-                      {relationshipFields(editRelationship, editRelationshipCustom, setEditRelationship, setEditRelationshipCustom, 'edit')}
-                      <div>
-                        <label htmlFor="edit-dob" className={labelClass}>
-                          Date of birth
-                        </label>
-                        <input id="edit-dob" type="date" value={editDob} onChange={(event) => setEditDob(event.target.value)} className={inputClass} />
-                      </div>
-                      <p className={helperClass}>Created {formatDisplayDate(plan.dateCreated.split('T')[0])} · Last updated {formatDateTimeDisplay(plan.lastUpdated)}</p>
-                      <div className="flex gap-2">
-                        <button type="button" onClick={savePlanEdit} disabled={!editName.trim() || !editPersonName.trim()} className={primaryButtonClass}>
-                          Save
-                        </button>
-                        <button
-                          type="button"
-                          onClick={() => {
-                            setEditingPlanId(null);
-                            setShowPlanColorPicker(false);
-                          }}
-                          className={secondaryButtonClass}
-                        >
-                          Cancel
-                        </button>
-                      </div>
-                    </div>
-                  </div>
-                ) : (
-                  <div key={plan.id} className="relative">
+              {plans.map((plan) => (
+                  <div key={plan.id} className="relative shrink-0">
                     <button
                       type="button"
                       onClick={() => {
@@ -3564,7 +3401,7 @@ export function EndOfLifePlannerTool({ toolId }: EndOfLifePlannerToolProps) {
                         setActiveTab('personal');
                       }}
                       aria-pressed={selectedPlanId === plan.id}
-                      className={`px-4 py-3 rounded-lg transition-all duration-200 min-w-[120px] ${
+                      className={`rounded-lg py-3 pl-4 pr-14 transition-all duration-200 min-w-[120px] ${
                         selectedPlanId === plan.id
                           ? 'border-2 font-semibold shadow-lg'
                           : isLight
@@ -3584,64 +3421,26 @@ export function EndOfLifePlannerTool({ toolId }: EndOfLifePlannerToolProps) {
                             : undefined,
                       }}
                     >
-                      <div className="text-center">{plan.name}</div>
-                      {plan.status === 'Archived' ? <div className="text-xs mt-1 opacity-80">Archived</div> : null}
-                      <div className="text-xs mt-1 opacity-80">Updated {formatDateTimeDisplay(plan.lastUpdated)}</div>
+                      <div className="whitespace-nowrap text-center">{plan.name}</div>
                     </button>
                     <button
                       type="button"
                       onClick={(event) => {
                         event.stopPropagation();
-                        setMenuOpenPlanId(menuOpenPlanId === plan.id ? null : plan.id);
                         setMenuOpenTabId(null);
                         setMenuOpenSubsectionId(null);
+                        startEditPlan(plan);
                       }}
-                      className={`absolute top-1 right-1 inline-flex min-h-11 min-w-11 items-center justify-center rounded transition-colors ${isLight ? 'text-slate-600 hover:bg-slate-200/80 hover:text-slate-900' : 'text-slate-400 hover:bg-slate-700/50 hover:text-slate-200'}`}
-                      aria-label="Plan options"
-                      title="Plan options"
+                      className={`absolute right-0.5 top-1/2 z-10 inline-flex min-h-11 min-w-11 -translate-y-1/2 items-center justify-center rounded transition-colors ${isLight ? 'text-slate-600 hover:bg-slate-200/80 hover:text-slate-900' : 'text-slate-400 hover:bg-slate-700/50 hover:text-slate-200'}`}
+                      aria-label="Edit plan"
+                      title="Edit plan"
                     >
                       <svg className={isLight ? 'h-4 w-4 text-slate-600 hover:text-slate-900' : 'h-4 w-4 text-slate-400 hover:text-slate-200'} fill="currentColor" viewBox="0 0 24 24">
                         <path d={ICON.dots} />
                       </svg>
                     </button>
-                    {menuOpenPlanId === plan.id ? (
-                      <div className={popupMenuClass}>
-                        <button type="button" className={popupMenuItemClass} onClick={() => startEditPlan(plan)}>
-                          <OutlineIcon d={ICON.edit} className="h-4 w-4" />
-                          Edit
-                        </button>
-                        <button type="button" className={popupMenuItemClass} onClick={() => startChangingPlanColor(plan)}>
-                          <OutlineIcon d={ICON.palette} className="h-4 w-4" />
-                          Change color
-                        </button>
-                        {plan.status === 'Active' ? (
-                          <button type="button" className={popupMenuItemClass} onClick={() => archivePlan(plan.id, true)}>
-                            <OutlineIcon d={ICON.archive} className="h-4 w-4" />
-                            Archive
-                          </button>
-                        ) : (
-                          <button type="button" className={popupMenuItemClass} onClick={() => archivePlan(plan.id, false)}>
-                            <OutlineIcon d={ICON.restore} className="h-4 w-4" />
-                            Restore
-                          </button>
-                        )}
-                        <button
-                          type="button"
-                          className={popupMenuDangerItemClass}
-                          onClick={() => {
-                            setMenuOpenPlanId(null);
-                            setDeleteTarget({ kind: 'plan', id: plan.id, label: plan.name });
-                            setDeleteConfirmText('');
-                          }}
-                        >
-                          <OutlineIcon d={ICON.trash} className="h-4 w-4" />
-                          Delete
-                        </button>
-                      </div>
-                    ) : null}
                   </div>
-                )
-              )}
+              ))}
               <button
                 type="button"
                 onClick={startCreatePlan}
@@ -3735,11 +3534,10 @@ export function EndOfLifePlannerTool({ toolId }: EndOfLifePlannerToolProps) {
         )}
       </div>
 
-      {menuOpenPlanId || menuOpenTabId || menuOpenSubsectionId ? (
+      {menuOpenTabId || menuOpenSubsectionId ? (
         <div
           className="fixed inset-0 z-40"
           onClick={() => {
-            setMenuOpenPlanId(null);
             setMenuOpenTabId(null);
             setMenuOpenSubsectionId(null);
           }}
@@ -3760,72 +3558,52 @@ export function EndOfLifePlannerTool({ toolId }: EndOfLifePlannerToolProps) {
 
       {selectedPlan ? (
         <>
-          <div className={`${tabStripClass} relative z-50`}>
-            <div className="flex flex-wrap gap-2">
+          <div className={`${tabStripClass} relative z-50 min-w-0`}>
+            <div className="flex min-w-0 flex-wrap gap-1">
               {tabs.map((tab) => {
                 const sectionKey = tab.custom && tab.id.startsWith('custom:') ? tab.id.slice(7) : String(tab.id);
                 const isActive = activeTab === tab.id && !tab.inactive;
-                const showMenu = true;
-                const inactiveTabClass = isLight
-                  ? 'relative rounded-lg border border-slate-300 bg-slate-200 px-3 py-1.5 text-sm font-medium text-slate-500'
-                  : 'relative rounded-lg border border-slate-700 bg-slate-950 px-3 py-1.5 text-sm font-medium text-slate-500';
                 return (
-                  <div key={tab.id} className="relative">
-                    <div
-                      className={`inline-flex items-center ${
-                        tab.inactive ? inactiveTabClass : isActive ? tabActiveClass : tabInactiveClass
+                  <div
+                    key={tab.id}
+                    className={`relative inline-flex max-w-full items-center rounded-lg border bg-transparent ${
+                      isLight ? 'border-slate-400' : 'border-slate-500'
+                    }`}
+                  >
+                    <button
+                      type="button"
+                      onClick={() => {
+                        if (!tab.inactive) setActiveTab(tab.id);
+                      }}
+                      disabled={tab.inactive}
+                      aria-current={isActive ? 'page' : undefined}
+                      aria-disabled={tab.inactive || undefined}
+                      title={tab.inactive ? `${tab.label} is inactive` : undefined}
+                      className={`max-w-full px-3 py-2 text-sm font-medium transition-colors ${
+                        tab.inactive ? tabMutedClass : isActive ? tabActiveClass : tabInactiveClass
                       }`}
                     >
-                      <button
-                        type="button"
-                        onClick={() => {
-                          if (!tab.inactive) setActiveTab(tab.id);
-                        }}
-                        disabled={tab.inactive}
-                        aria-current={isActive ? 'page' : undefined}
-                        aria-disabled={tab.inactive || undefined}
-                        title={tab.inactive ? `${tab.label} is inactive` : undefined}
-                        className={`px-0.5 ${tab.inactive ? 'cursor-not-allowed' : ''}`}
-                      >
-                        {tab.label}
-                      </button>
-                      {tab.inactive ? (
-                        <span
-                          className={
-                            isLight
-                              ? 'pointer-events-none absolute inset-0 rounded-lg bg-white/55'
-                              : 'pointer-events-none absolute inset-0 rounded-lg bg-slate-950/55'
-                          }
-                          aria-hidden
-                        />
-                      ) : null}
-                      {showMenu ? (
-                        <button
-                          type="button"
-                          onClick={(event) => {
-                            event.stopPropagation();
-                            setMenuOpenTabId(menuOpenTabId === tab.id ? null : tab.id);
-                            setMenuOpenPlanId(null);
-                            setMenuOpenSubsectionId(null);
-                          }}
-                          className={`relative z-10 ml-1 rounded p-0.5 ${
-                            isActive
-                              ? isLight
-                                ? 'text-white hover:bg-white/15'
-                                : 'text-slate-950 hover:bg-slate-950/10'
-                              : isLight
-                                ? 'text-slate-600 hover:bg-slate-200 hover:text-slate-900'
-                                : 'text-slate-400 hover:bg-slate-700 hover:text-slate-100'
-                          }`}
-                          aria-label={`${tab.label} options`}
-                          title={`${tab.label} options`}
-                        >
-                          <svg className="h-4 w-4" fill="currentColor" viewBox="0 0 24 24" aria-hidden>
-                            <path d={ICON.dots} />
-                          </svg>
-                        </button>
-                      ) : null}
-                    </div>
+                      {tab.label}
+                    </button>
+                    <button
+                      type="button"
+                      onClick={(event) => {
+                        event.stopPropagation();
+                        setMenuOpenTabId(menuOpenTabId === tab.id ? null : tab.id);
+                        setMenuOpenSubsectionId(null);
+                      }}
+                      className={`inline-flex h-8 w-8 items-center justify-center rounded ${
+                        isLight
+                          ? 'text-slate-500 hover:bg-slate-100 hover:text-slate-800'
+                          : 'text-slate-400 hover:bg-slate-800 hover:text-slate-200'
+                      }`}
+                      aria-label={`${tab.label} options`}
+                      title={`${tab.label} options`}
+                    >
+                      <svg className="h-4 w-4" fill="currentColor" viewBox="0 0 24 24" aria-hidden>
+                        <path d={ICON.dots} />
+                      </svg>
+                    </button>
                     {menuOpenTabId === tab.id ? (
                       <div className={popupMenuClass}>
                         <button
@@ -5042,32 +4820,91 @@ export function EndOfLifePlannerTool({ toolId }: EndOfLifePlannerToolProps) {
         </>
       ) : null}
 
-      {archiveConfirmPlanId ? (
-        <div className={overlayClass}>
-          <div className={modalCardClass} role="dialog" aria-modal="true" aria-labelledby="eolp-archive-title">
-            <h3 id="eolp-archive-title" className={isLight ? 'text-xl font-semibold text-slate-900 mb-2' : 'text-xl font-semibold text-slate-50 mb-2'}>
-              Archive Plan
+      {editingPlanId ? (
+        <div
+          className={overlayClass}
+          onClick={() => {
+            setEditingPlanId(null);
+            setFormError('');
+          }}
+        >
+          <div
+            className={`${modalCardClass} max-h-[90vh] overflow-y-auto`}
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="eol-edit-plan-title"
+            onClick={(event) => event.stopPropagation()}
+          >
+            <h3 id="eol-edit-plan-title" className={isLight ? 'mb-4 text-xl font-semibold text-slate-900' : 'mb-4 text-xl font-semibold text-slate-50'}>
+              Edit Plan
             </h3>
-            <p className={isLight ? 'text-slate-700 mb-4' : 'text-slate-300 mb-4'}>
-              Archive “{plans.find((item) => item.id === archiveConfirmPlanId)?.name || 'this plan'}”? The plan and its data stay available under Show archived plans.
-            </p>
-            <div className="flex gap-3">
+            <div className="space-y-3">
+              <div>
+                <label htmlFor="edit-plan-name" className={labelClass}>
+                  Plan name
+                </label>
+                <input id="edit-plan-name" value={editName} onChange={(event) => setEditName(event.target.value)} className={inputClass} />
+              </div>
+              <div>
+                <label htmlFor="edit-person-name" className={labelClass}>
+                  Person’s full name
+                </label>
+                <input id="edit-person-name" value={editPersonName} onChange={(event) => setEditPersonName(event.target.value)} className={inputClass} />
+              </div>
+              {relationshipFields(editRelationship, editRelationshipCustom, setEditRelationship, setEditRelationshipCustom, 'edit')}
+              <div>
+                <label htmlFor="edit-dob" className={labelClass}>
+                  Date of birth
+                </label>
+                <input id="edit-dob" type="date" value={editDob} onChange={(event) => setEditDob(event.target.value)} className={inputClass} />
+              </div>
+              <div>
+                <label htmlFor="edit-plan-color" className={labelClass}>
+                  Card color
+                </label>
+                <input
+                  id="edit-plan-color"
+                  type="color"
+                  value={editColor}
+                  onChange={(event) => setEditColor(event.target.value)}
+                  className="h-10 w-16 cursor-pointer rounded border border-slate-400"
+                />
+              </div>
+              {formError ? <p className={isLight ? 'text-sm text-red-700' : 'text-sm text-red-300'}>{formError}</p> : null}
+              <div className="flex gap-3">
+                <button type="button" onClick={savePlanEdit} disabled={!editName.trim() || !editPersonName.trim()} className={primaryButtonClass}>
+                  Save
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setEditingPlanId(null);
+                    setFormError('');
+                  }}
+                  className={secondaryButtonClass}
+                >
+                  Cancel
+                </button>
+              </div>
+            </div>
+            <div className={`mt-6 border-t pt-4 ${isLight ? 'border-slate-200' : 'border-slate-800'}`}>
               <button
                 type="button"
                 onClick={() => {
-                  applyArchivePlan(archiveConfirmPlanId, true);
-                  setArchiveConfirmPlanId(null);
+                  const plan = plans.find((item) => item.id === editingPlanId);
+                  setEditingPlanId(null);
+                  setFormError('');
+                  if (!plan) return;
+                  setDeleteTarget({ kind: 'plan', id: plan.id, label: plan.name });
+                  setDeleteConfirmText('');
                 }}
-                className={`flex-1 ${primaryButtonClass}`}
+                className={
+                  isLight
+                    ? 'w-full rounded-lg border border-red-300 px-4 py-2 text-sm font-medium text-red-700 transition-colors hover:bg-red-50'
+                    : 'w-full rounded-lg border border-red-500/40 px-4 py-2 text-sm font-medium text-red-300 transition-colors hover:bg-red-500/10'
+                }
               >
-                Archive
-              </button>
-              <button
-                type="button"
-                onClick={() => setArchiveConfirmPlanId(null)}
-                className={secondaryButtonClass}
-              >
-                Cancel
+                Delete
               </button>
             </div>
           </div>
@@ -5211,7 +5048,7 @@ export function EndOfLifePlannerTool({ toolId }: EndOfLifePlannerToolProps) {
                       <option value="">Select a plan</option>
                       {exportPlanChoices.map((plan) => (
                         <option key={plan.id} value={plan.id}>
-                          {plan.status === 'Archived' ? `${plan.name} (Archived)` : plan.name}
+                          {plan.name}
                         </option>
                       ))}
                     </select>
@@ -5219,16 +5056,6 @@ export function EndOfLifePlannerTool({ toolId }: EndOfLifePlannerToolProps) {
                 ) : null}
               </fieldset>
               <div className="space-y-2">
-                <label className={`flex items-start gap-3 cursor-pointer ${bodyTextClass}`}>
-                  <input
-                    type="checkbox"
-                    checked={exportIncludeArchived}
-                    onChange={(event) => setExportIncludeArchived(event.target.checked)}
-                    disabled={isExportingPdf}
-                    className="mt-0.5 h-4 w-4 rounded border-slate-400 text-emerald-600 focus:ring-emerald-500"
-                  />
-                  <span>Include archived plans</span>
-                </label>
                 <label className={`flex items-start gap-3 cursor-pointer ${bodyTextClass}`}>
                   <input
                     type="checkbox"

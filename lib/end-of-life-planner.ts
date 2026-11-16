@@ -36,7 +36,7 @@ export function withSecret(value: string): EolSecretString {
   return { value, sensitivity: 'secret' };
 }
 
-export type EolPlanStatus = 'Active' | 'Archived';
+export type EolPlanStatus = 'Active';
 
 export type EolRelationship = 'Spouse/partner' | 'Self' | 'Parent' | 'Child' | 'Other';
 
@@ -2501,7 +2501,7 @@ function normalizePlan(raw: unknown): EolPlan | null {
     dateCreated: asString(item.dateCreated) || nowIso(),
     lastUpdated: asString(item.lastUpdated) || nowIso(),
     card_color: asString(item.card_color) || '#10b981',
-    status: item.status === 'Archived' ? 'Archived' : 'Active',
+    status: 'Active',
     historyEvents: seedPlanHistory({
       historyEvents: normalizeHistoryEvents(item.historyEvents),
       dateCreated: asString(item.dateCreated) || nowIso(),

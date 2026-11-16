@@ -63,7 +63,6 @@ type Chunk =
 export type EolPdfExportOptions = {
   exportAll: boolean;
   planId: string;
-  includeArchived: boolean;
   includeSecrets: boolean;
   includePrivateLetters: boolean;
 };
@@ -73,9 +72,7 @@ export function sortEolPlansByName(plans: EolPlan[]): EolPlan[] {
 }
 
 export function eolExportPlanChoices(plans: EolPlan[]): EolPlan[] {
-  const active = sortEolPlansByName(plans.filter((plan) => plan.status !== 'Archived'));
-  const archived = sortEolPlansByName(plans.filter((plan) => plan.status === 'Archived'));
-  return [...active, ...archived];
+  return sortEolPlansByName(plans);
 }
 
 export function pickDefaultEolPlanId(
@@ -88,14 +85,12 @@ export function pickDefaultEolPlanId(
   return eolExportPlanChoices(plans)[0]?.id || '';
 }
 
-export function eolExportSubtitle(plan: EolPlan | null, exportAll: boolean, includeArchived: boolean): string {
+export function eolExportSubtitle(plan: EolPlan | null, exportAll: boolean): string {
   if (!exportAll) {
     const name = plan?.name?.trim() || 'Selected plan';
-    return plan?.status === 'Archived'
-      ? `Archived plan  ·  One plan  ·  ${name}`
-      : `Active plans only  ·  One plan  ·  ${name}`;
+    return `One plan  ·  ${name}`;
   }
-  return includeArchived ? 'Active and archived plans  ·  All plans' : 'Active plans only  ·  All plans';
+  return 'All plans';
 }
 
 function text(value: string | null | undefined): string {
@@ -1112,7 +1107,6 @@ function printPlan(doc: ReportDoc, plan: EolPlan, includeSecrets: boolean, inclu
   doc.field("Person's full name", plan.personFullName);
   doc.field('Relationship', relationshipText(plan));
   doc.date('Date of birth', plan.dateOfBirth);
-  if (plan.status === 'Archived') doc.field('Status', 'Archived');
   printPlanSections(doc, plan, includeSecrets, includePrivateLetters);
   if (doc.chunks.length === headerAt + 1) {
     doc.chunks.push({ t: 'line', text: 'No saved details to include.', muted: true });
@@ -1124,10 +1118,7 @@ function plansForExport(plans: EolPlan[], options: EolPdfExportOptions): EolPlan
     const chosen = plans.find((plan) => plan.id === options.planId);
     return chosen ? [chosen] : [];
   }
-  const active = sortEolPlansByName(plans.filter((plan) => plan.status !== 'Archived'));
-  if (!options.includeArchived) return active;
-  const archived = sortEolPlansByName(plans.filter((plan) => plan.status === 'Archived'));
-  return [...active, ...archived];
+  return sortEolPlansByName(plans);
 }
 
 function localCalendarDayStamp(date: Date): string {
@@ -1434,7 +1425,7 @@ export async function downloadEolPlannerPdf(plans: EolPlan[], options: EolPdfExp
     pdf,
     doc.chunks,
     doc.attachments,
-    eolExportSubtitle(chosen, options.exportAll, options.includeArchived),
+    eolExportSubtitle(chosen, options.exportAll),
     generatedAt,
     logoDataUrl,
   );

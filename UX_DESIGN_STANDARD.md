@@ -1484,7 +1484,7 @@ Never use the browser’s `alert()`, `confirm()`, or `prompt()`. Those dialogs s
 
 **Non-destructive / reversible:** an in-app modal with a title, a one-sentence question, a primary confirm button, and Cancel. Escape and Cancel dismiss without doing the work. The confirm button is the user gesture that starts the action (needed for `keepalive` fetches).
 
-Examples: Meal Planner “Create Shopping List”, End of Life Planner “Archive Plan”.
+Examples: Meal Planner “Create Shopping List”.
 
 
 #### UX-DEL-003 — Typed-delete for permanent destruction
@@ -3127,11 +3127,11 @@ Five file stores on list rows that already had a place for scans. Do not attach 
 - **Personal item files** (`tools_eolp_personal_item_attachments`, path `{userId}/personal-items/{itemId}/...`): multiple photos/docs on My Wishes → Personal Items.
 - **Other record files** (`tools_eolp_other_record_attachments`, path `{userId}/other/{recordId}/...`): multiple files on the Other record, never on custom fields (those rebuild on save).
 - Keep `digital_location`, `document_location`, and `photo_reference` as optional text. Paperclip is the only file control.
-- Archived plans stay editable (Show archived plans still has Edit). Files stay editable. No paperclip on Archive / Restore.
+- Plans are updated or deleted. There is no archive control on a plan. Files stay editable.
+
+**Plan header menu exception (intentional):** The three-dot control on a plan card opens one edit popup. The popup has the plan fields, the card color picker, Save and Cancel, and Delete at the bottom. Delete still opens the typed-delete confirmation. This is the exception for `UX-NAV-004` on plan cards. Section tabs keep their own menus.
 - No record-password overlay. Secret fields stay as they are.
 - No paperclip on Categories-style chrome, Export, search, or plan History.
-
-“Archive Plan” uses the reversible in-app confirm, not typed delete.
 
 **Desktop list exception (intentional):** Repeatable record lists stay multi-column tables on desktop. This is the exception for `UX-LST-003` at desktop widths. Narrow widths still follow `UX-RSP-003`. The desktop-table exception does not allow clipped titles, clipped row actions, or horizontal scrolling on mobile.
 
