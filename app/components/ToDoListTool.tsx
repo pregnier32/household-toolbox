@@ -1,5 +1,7 @@
 'use client';
 
+import { postToolFile } from '@/lib/direct-file-upload';
+
 import { useState, useEffect, useRef } from 'react';
 import { useTheme } from './AppThemeProvider';
 import { ToolDataLoadingBox } from './ToolDataLoadingBox';
@@ -596,7 +598,7 @@ export function ToDoListTool({ toolId }: ToDoListToolProps) {
           formData.append('toolId', toolId);
           formData.append('taskId', createdTaskId);
           formData.append('file', item.file);
-          const uploadResponse = await fetch('/api/tools/to-do-list/attachments', { method: 'POST', body: formData });
+          const uploadResponse = await postToolFile('/api/tools/to-do-list/attachments', formData);
           if (!uploadResponse.ok) {
             const errorData = await uploadResponse.json().catch(() => ({}));
             throw new Error(errorData.error || 'Task saved, but a file failed to upload.');
@@ -755,7 +757,7 @@ export function ToDoListTool({ toolId }: ToDoListToolProps) {
         formData.append('toolId', toolId);
         formData.append('taskId', taskId);
         formData.append('file', file);
-        const response = await fetch('/api/tools/to-do-list/attachments', { method: 'POST', body: formData });
+        const response = await postToolFile('/api/tools/to-do-list/attachments', formData);
         const data = await response.json().catch(() => ({}));
         if (!response.ok) {
           throw new Error(data.error || 'Failed to add file');

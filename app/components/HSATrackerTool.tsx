@@ -1,5 +1,7 @@
 'use client';
 
+import { postToolFile } from '@/lib/direct-file-upload';
+
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useTheme } from './AppThemeProvider';
 import { ToolDataLoadingBox } from './ToolDataLoadingBox';
@@ -971,7 +973,7 @@ export function HSATrackerTool({ toolId }: HSATrackerToolProps) {
             formData.append('toolId', toolId);
             formData.append('expenseId', createdExpenseId);
             formData.append('file', queued.file);
-            const uploadResponse = await fetch('/api/tools/hsa-tracker/attachments', { method: 'POST', body: formData });
+            const uploadResponse = await postToolFile('/api/tools/hsa-tracker/attachments', formData);
             if (!uploadResponse.ok) {
               const errorData = await uploadResponse.json().catch(() => ({}));
               throw new Error(errorData.error || 'Expense saved, but a file failed to upload.');
@@ -1169,7 +1171,7 @@ export function HSATrackerTool({ toolId }: HSATrackerToolProps) {
         formData.append('toolId', toolId);
         formData.append('expenseId', expenseId);
         formData.append('file', file);
-        const response = await fetch('/api/tools/hsa-tracker/attachments', { method: 'POST', body: formData });
+        const response = await postToolFile('/api/tools/hsa-tracker/attachments', formData);
         const data = await response.json().catch(() => ({}));
         if (!response.ok) throw new Error(data.error || 'Failed to add file');
       }

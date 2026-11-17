@@ -1,5 +1,7 @@
 'use client';
 
+import { postToolFile } from '@/lib/direct-file-upload';
+
 import { useState, useEffect, useMemo, useCallback } from 'react';
 import { useTheme } from './AppThemeProvider';
 import { ToolDataLoadingBox } from './ToolDataLoadingBox';
@@ -1251,7 +1253,7 @@ export function TravelLogTool({ toolId }: TravelLogToolProps) {
     formData.append('toolId', toolId);
     formData.append('tripId', tripId);
     formData.append('file', file);
-    const response = await fetch('/api/tools/travel-log/attachments', { method: 'POST', body: formData });
+    const response = await postToolFile('/api/tools/travel-log/attachments', formData);
     const data = await response.json().catch(() => ({}));
     if (!response.ok) throw new Error(data.error || 'Failed to add file');
   };

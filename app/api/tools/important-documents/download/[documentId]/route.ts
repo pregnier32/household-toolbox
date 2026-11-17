@@ -2,11 +2,12 @@ import { denyLockedToolAccess, denyRemovedTool } from '@/lib/billing-access';
 import { NextRequest, NextResponse } from 'next/server';
 import { getHouseholdDataSession } from '@/lib/session';
 import { supabaseServer } from '@/lib/supabaseServer';
+import { readFileDownloadBody, streamStoredObject } from '@/lib/stored-file-transfer';
 import bcrypt from 'bcryptjs';
 import { authorizeStoredFileRead, type StoredFileGrant } from '@/lib/storage-owner';
 
-// GET - Download a document file
-export async function GET(
+// POST - Download a document file. The password is in the JSON body.
+export async function POST(
   request: NextRequest,
   { params }: { params: Promise<{ documentId: string }> }
 ) {
@@ -27,10 +28,9 @@ export async function GET(
       return NextResponse.json({ error: 'Document ID is required' }, { status: 400 });
     }
 
-    // Get password from query parameter if provided
-    const { searchParams } = new URL(request.url);
-    const password = searchParams.get('password');
-    const inline = searchParams.get('inline') === '1';
+    const download = await readFileDownloadBody(request);
+    if (download instanceof NextResponse) return download;
+    const { password, inline } = download;
 
     // Fetch document to verify ownership and get file info
     const { data: document, error: docError } = await supabaseServer
@@ -93,34 +93,15 @@ export async function GET(
     const storagePath = decision.path;
 
     // Download file from Supabase Storage
-    const { data: fileData, error: downloadError } = await supabaseServer
-      .storage
-      .from('important-documents')
-      .download(storagePath);
-
-    if (downloadError || !fileData) {
-      console.error('Error downloading file from storage:', downloadError);
-      return NextResponse.json(
-        { error: 'Failed to download file from storage' },
-        { status: 500 }
-      );
-    }
-
-    // Convert the downloaded data to a buffer
-    const arrayBuffer = await fileData.arrayBuffer();
-    const buffer = Buffer.from(arrayBuffer);
-
-    const safeName = (document.file_name || 'document').replace(/["\r\n]/g, '');
-    return new NextResponse(buffer, {
-      status: 200,
-      headers: {
-        'Content-Type': document.file_type || 'application/octet-stream',
-        'Content-Disposition': `${inline ? 'inline' : 'attachment'}; filename="${safeName}"`,
-        'Content-Length': buffer.length.toString(),
-      },
+    return streamStoredObject({
+      bucket: 'important-documents',
+      path: storagePath,
+      fileName: document.file_name,
+      contentType: document.file_type,
+      inline,
     });
   } catch (error: any) {
-    console.error('Error in GET /api/tools/important-documents/download/[documentId]:', error);
+    console.error('Error in POST /api/tools/important-documents/download/[documentId]:', error);
     return NextResponse.json(
       { error: 'Internal server error' },
       { status: 500 }

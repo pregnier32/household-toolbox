@@ -684,14 +684,19 @@ test('document responses omit password hashes and downloads require the password
   assert.equal(listedText.includes('deed.pdf'), true);
 
   const hashBefore = read('tools_id_documents', 'doc-a')?.download_password_hash;
-  const missing = await download.GET(new NextRequest('http://local/documents/doc-a'), { params: Promise.resolve({ documentId: 'doc-a' }) });
+  const missing = await download.POST(post('http://local/documents/doc-a', {}), { params: Promise.resolve({ documentId: 'doc-a' }) });
   assert.equal(missing.status, 403);
-  const wrong = await download.GET(new NextRequest('http://local/documents/doc-a?password=nope'), { params: Promise.resolve({ documentId: 'doc-a' }) });
+  const wrong = await download.POST(post('http://local/documents/doc-a', { password: 'nope' }), { params: Promise.resolve({ documentId: 'doc-a' }) });
   assert.equal(wrong.status, 403);
   assert.equal(read('tools_id_documents', 'doc-a')?.download_password_hash, hashBefore);
+  const fromQuery = await download.POST(
+    new NextRequest('http://local/documents/doc-a?password=correct-password', { method: 'POST' }),
+    { params: Promise.resolve({ documentId: 'doc-a' }) }
+  );
+  assert.equal(fromQuery.status, 403);
 
-  const allowed = await download.GET(
-    new NextRequest('http://local/documents/doc-a?password=correct-password'),
+  const allowed = await download.POST(
+    post('http://local/documents/doc-a', { password: 'correct-password' }),
     { params: Promise.resolve({ documentId: 'doc-a' }) }
   );
   assert.equal(allowed.status, 200);
@@ -700,8 +705,8 @@ test('document responses omit password hashes and downloads require the password
   assert.equal(Buffer.from(bytes).toString('utf8').includes(passwordHash), false);
 
   signIn(OWNER_B);
-  const cross = await download.GET(
-    new NextRequest('http://local/documents/doc-a?password=correct-password'),
+  const cross = await download.POST(
+    post('http://local/documents/doc-a', { password: 'correct-password' }),
     { params: Promise.resolve({ documentId: 'doc-a' }) }
   );
   assert.equal(cross.status, 404);

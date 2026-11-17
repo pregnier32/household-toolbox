@@ -2,6 +2,7 @@ import { denyLockedToolAccess, denyRemovedTool } from '@/lib/billing-access';
 import { NextRequest, NextResponse } from 'next/server';
 import { getHouseholdDataSession } from '@/lib/session';
 import { supabaseServer } from '@/lib/supabaseServer';
+import { streamStoredObject } from '@/lib/stored-file-transfer';
 import {
   CLEANING_SCHEDULE_BUCKET,
   extractCleaningStoragePath,
@@ -79,23 +80,12 @@ export async function GET(
       return NextResponse.json({ error: 'Invalid file path' }, { status: 404 });
     }
 
-    const { data: fileData, error: downloadError } = await supabaseServer.storage
-      .from(CLEANING_SCHEDULE_BUCKET)
-      .download(storagePath);
-
-    if (downloadError || !fileData) {
-      return NextResponse.json({ error: 'Failed to download file from storage' }, { status: 500 });
-    }
-
-    const buffer = Buffer.from(await fileData.arrayBuffer());
-    const safeName = (attachment.file_name || 'attachment').replace(/["\r\n]/g, '');
-    return new NextResponse(buffer, {
-      status: 200,
-      headers: {
-        'Content-Type': attachment.file_type || 'application/octet-stream',
-        'Content-Disposition': `${inline ? 'inline' : 'attachment'}; filename="${safeName}"`,
-        'Content-Length': buffer.length.toString(),
-      },
+    return streamStoredObject({
+      bucket: CLEANING_SCHEDULE_BUCKET,
+      path: storagePath,
+      fileName: attachment.file_name,
+      contentType: attachment.file_type,
+      inline,
     });
   } catch (error) {
     const message = error instanceof Error ? error.message : 'Internal server error';

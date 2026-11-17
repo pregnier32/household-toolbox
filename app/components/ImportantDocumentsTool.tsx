@@ -1,5 +1,7 @@
 'use client';
 
+import { postToolFile } from '@/lib/direct-file-upload';
+
 import { useState, useEffect } from 'react';
 import { useTheme } from './AppThemeProvider';
 import { ToolDataLoadingBox } from './ToolDataLoadingBox';
@@ -563,10 +565,7 @@ export function ImportantDocumentsTool({ toolId }: ImportantDocumentsToolProps) 
         ));
       }
 
-      const response = await fetch('/api/tools/important-documents', {
-        method: 'POST',
-        body: formData,
-      });
+      const response = await postToolFile('/api/tools/important-documents', formData);
 
       if (response.ok) {
         // Reload documents from API
@@ -709,10 +708,7 @@ export function ImportantDocumentsTool({ toolId }: ImportantDocumentsToolProps) 
       formData.append('selectedTags', JSON.stringify(editingDocument.selectedTags));
       // Note: Security questions are only set on create, not on update unless password is being changed
 
-      const response = await fetch('/api/tools/important-documents', {
-        method: 'POST',
-        body: formData,
-      });
+      const response = await postToolFile('/api/tools/important-documents', formData);
 
       if (response.ok) {
         // Reload documents from API
@@ -767,10 +763,7 @@ export function ImportantDocumentsTool({ toolId }: ImportantDocumentsToolProps) 
       formData.append('documentId', id);
       formData.append('action', 'inactivate');
 
-      const response = await fetch('/api/tools/important-documents', {
-        method: 'POST',
-        body: formData,
-      });
+      const response = await postToolFile('/api/tools/important-documents', formData);
 
       if (response.ok) {
         // Reload documents from API
@@ -824,10 +817,7 @@ export function ImportantDocumentsTool({ toolId }: ImportantDocumentsToolProps) 
       formData.append('documentId', id);
       formData.append('action', 'activate');
 
-      const response = await fetch('/api/tools/important-documents', {
-        method: 'POST',
-        body: formData,
-      });
+      const response = await postToolFile('/api/tools/important-documents', formData);
 
       if (response.ok) {
         // Reload documents from API
@@ -1243,11 +1233,14 @@ export function ImportantDocumentsTool({ toolId }: ImportantDocumentsToolProps) 
   };
 
   const fetchDocumentBlob = async (doc: Document, password?: string, inline = false): Promise<Blob> => {
-    const params = new URLSearchParams();
-    if (inline) params.set('inline', '1');
-    if (password) params.set('password', password);
-    const query = params.toString();
-    const response = await fetch(`/api/tools/important-documents/download/${doc.id}${query ? `?${query}` : ''}`);
+    const response = await fetch(`/api/tools/important-documents/download/${doc.id}`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        ...(password ? { password } : {}),
+        ...(inline ? { inline: true } : {}),
+      }),
+    });
     if (!response.ok) {
       const errorData = await response.json().catch(() => ({ error: 'Failed to open file' }));
       throw new Error(errorData.error || 'Failed to open file');
@@ -1406,7 +1399,7 @@ export function ImportantDocumentsTool({ toolId }: ImportantDocumentsToolProps) 
       formData.append('action', 'replaceFile');
       formData.append('file', file);
       if (password) formData.append('password', password);
-      const response = await fetch('/api/tools/important-documents', { method: 'POST', body: formData });
+      const response = await postToolFile('/api/tools/important-documents', formData);
       const data = await response.json().catch(() => ({}));
       if (!response.ok) {
         throw new Error(data.error || 'Failed to replace file');
@@ -1437,7 +1430,7 @@ export function ImportantDocumentsTool({ toolId }: ImportantDocumentsToolProps) 
       formData.append('documentId', documentId);
       formData.append('action', 'removeFile');
       if (password) formData.append('password', password);
-      const response = await fetch('/api/tools/important-documents', { method: 'POST', body: formData });
+      const response = await postToolFile('/api/tools/important-documents', formData);
       const data = await response.json().catch(() => ({}));
       if (!response.ok) {
         throw new Error(data.error || 'Failed to remove file');

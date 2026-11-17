@@ -1,5 +1,7 @@
 'use client';
 
+import { postToolFile } from '@/lib/direct-file-upload';
+
 import { useState, useEffect } from 'react';
 import { useTheme } from './AppThemeProvider';
 import { ToolDataLoadingBox } from './ToolDataLoadingBox';
@@ -678,7 +680,7 @@ export function RepairHistoryTool({ toolId }: RepairHistoryToolProps) {
     formData.append('toolId', toolId);
     formData.append('recordId', recordId);
     formData.append('file', file);
-    const response = await fetch('/api/tools/repair-history/attachments', { method: 'POST', body: formData });
+    const response = await postToolFile('/api/tools/repair-history/attachments', formData);
     const data = await response.json().catch(() => ({}));
     if (!response.ok) throw new Error(data.error || 'Failed to add file');
   };
@@ -875,10 +877,7 @@ export function RepairHistoryTool({ toolId }: RepairHistoryToolProps) {
       formData.append('cardColor', '#10b981'); // Default emerald
       formData.append('categoryType', newHeaderCategoryType);
 
-      const response = await fetch('/api/tools/repair-history', {
-        method: 'POST',
-        body: formData,
-      });
+      const response = await postToolFile('/api/tools/repair-history', formData);
 
       if (response.ok) {
         const data = await response.json();
@@ -959,10 +958,7 @@ export function RepairHistoryTool({ toolId }: RepairHistoryToolProps) {
       formData.append('cardColor', editingHeaderColor);
       formData.append('categoryType', editingHeaderCategoryType);
 
-      const response = await fetch('/api/tools/repair-history', {
-        method: 'POST',
-        body: formData,
-      });
+      const response = await postToolFile('/api/tools/repair-history', formData);
 
       if (response.ok) {
         const data = await response.json();
@@ -1004,10 +1000,7 @@ export function RepairHistoryTool({ toolId }: RepairHistoryToolProps) {
       formData.append('action', 'delete');
       formData.append('headerId', deleteConfirmHeaderId);
 
-      const response = await fetch('/api/tools/repair-history', {
-        method: 'POST',
-        body: formData,
-      });
+      const response = await postToolFile('/api/tools/repair-history', formData);
 
       if (response.ok) {
         // If the deleted header was selected, clear selection
@@ -1102,10 +1095,7 @@ export function RepairHistoryTool({ toolId }: RepairHistoryToolProps) {
       formData.append('manualLink', newRecord.manualLink || '');
       formData.append('notes', newRecord.notes || '');
 
-      const response = await fetch('/api/tools/repair-history', {
-        method: 'POST',
-        body: formData,
-      });
+      const response = await postToolFile('/api/tools/repair-history', formData);
 
       if (response.ok) {
         const data = await response.json();
@@ -1206,10 +1196,7 @@ export function RepairHistoryTool({ toolId }: RepairHistoryToolProps) {
       formData.append('manualLink', editingRecord.manualLink || '');
       formData.append('notes', editingRecord.notes || '');
 
-      const response = await fetch('/api/tools/repair-history', {
-        method: 'POST',
-        body: formData,
-      });
+      const response = await postToolFile('/api/tools/repair-history', formData);
 
       if (response.ok) {
         // Reload records to get updated data
@@ -1334,10 +1321,7 @@ export function RepairHistoryTool({ toolId }: RepairHistoryToolProps) {
       formData.append('name', newItemName.trim());
       formData.append('area', newItemArea.trim());
 
-      const response = await fetch('/api/tools/repair-history', {
-        method: 'POST',
-        body: formData,
-      });
+      const response = await postToolFile('/api/tools/repair-history', formData);
 
       if (response.ok) {
         // Reload items to get the new one
@@ -1404,10 +1388,7 @@ export function RepairHistoryTool({ toolId }: RepairHistoryToolProps) {
       formData.append('name', editingItemName.trim());
       formData.append('area', editingItemArea.trim());
 
-      const response = await fetch('/api/tools/repair-history', {
-        method: 'POST',
-        body: formData,
-      });
+      const response = await postToolFile('/api/tools/repair-history', formData);
 
       if (response.ok) {
         // Reload items to get updated data

@@ -8,6 +8,7 @@ import { assertCanStoreBytes, isStorageLimitError, refreshUserStorageUsage } fro
 import { findOwnedRow, requireOwnedIds } from '@/lib/owned-record';
 import { withoutSecrets } from '@/lib/protected-content';
 import { objectPathForOwner } from '@/lib/storage-owner';
+import { placeAttachmentFile, readAttachmentRequest } from '@/lib/stored-file-transfer';
 
 // Constants
 const MAX_FILE_SIZE = 10 * 1024 * 1024; // 10MB in bytes
@@ -179,10 +180,11 @@ export async function POST(request: NextRequest) {
   if (removedTool) return removedTool;
 
   try {
-    const formData = await request.formData();
-    const toolId = formData.get('toolId') as string;
-    const documentId = formData.get('documentId') as string | null;
-    const action = formData.get('action') as string; // 'create', 'update', 'inactivate', 'activate', 'delete'
+    const incoming = await readAttachmentRequest(request);
+    if (incoming instanceof NextResponse) return incoming;
+    const toolId = incoming.get('toolId');
+    const documentId = incoming.get('documentId');
+    const action = incoming.get('action'); // 'create', 'update', 'inactivate', 'activate', 'delete'
 
     if (!toolId) {
       return NextResponse.json({ error: 'Tool ID is required' }, { status: 400 });
@@ -263,7 +265,7 @@ export async function POST(request: NextRequest) {
       }
 
       if (existing.requires_password_for_download) {
-        const password = (formData.get('password') as string | null)?.trim() || '';
+        const password = incoming.get('password');
         if (!password) {
           return NextResponse.json({ error: 'Password required' }, { status: 403 });
         }
@@ -298,7 +300,7 @@ export async function POST(request: NextRequest) {
         return NextResponse.json({ success: true });
       }
 
-      const file = formData.get('file') as File | null;
+      const file = incoming.fileMetadata();
       if (!file || file.size <= 0) {
         return NextResponse.json({ error: 'A file is required' }, { status: 400 });
       }
@@ -316,27 +318,25 @@ export async function POST(request: NextRequest) {
       }
 
       const sanitizedFileName = file.name.replace(/[^a-zA-Z0-9.-]/g, '_');
-      const storageFileName = `${user.id}/${Date.now()}-${sanitizedFileName}`;
+      let storageFileName = `${user.id}/${Date.now()}-${sanitizedFileName}`;
       if (!objectPathForOwner(storageFileName, DOCUMENT_BUCKET, user.id)) {
         return NextResponse.json({ error: 'Invalid file path' }, { status: 400 });
       }
-      const buffer = Buffer.from(await file.arrayBuffer());
-      const { error: uploadError } = await supabaseServer.storage.from(DOCUMENT_BUCKET).upload(storageFileName, buffer, {
-        contentType: file.type,
-        upsert: false,
+      const placed = await placeAttachmentFile({
+        bucket: DOCUMENT_BUCKET,
+        ownerId: user.id,
+        storagePath: storageFileName,
+        upload: incoming,
       });
-      if (uploadError) {
-        return NextResponse.json({ error: 'Failed to upload file: ' + uploadError.message }, { status: 500 });
-      }
-
-      const { data: urlData } = supabaseServer.storage.from(DOCUMENT_BUCKET).getPublicUrl(storageFileName);
+      if (placed instanceof NextResponse) return placed;
+      storageFileName = placed.path;
       const { error: updateError } = await supabaseServer
         .from('tools_id_documents')
         .update({
-          file_url: urlData.publicUrl,
-          file_name: file.name,
-          file_size: file.size,
-          file_type: file.type,
+          file_url: placed.path,
+          file_name: placed.fileName,
+          file_size: placed.fileSize,
+          file_type: placed.fileType,
         })
         .eq('id', documentId)
         .eq('user_id', user.id)
@@ -356,14 +356,14 @@ export async function POST(request: NextRequest) {
     }
 
     // Handle create or update
-    const documentName = formData.get('documentName') as string;
-    const uploadedDate = formData.get('uploadedDate') as string;
-    const effectiveDate = formData.get('effectiveDate') as string | null;
-    const note = formData.get('note') as string | null;
-    const requiresPasswordForDownload = formData.get('requiresPasswordForDownload') === 'true';
-    const downloadPassword = formData.get('downloadPassword') as string | null;
-    const selectedTags = JSON.parse(formData.get('selectedTags') as string || '[]') as string[];
-    const securityQuestions = JSON.parse(formData.get('securityQuestions') as string || '[]') as Array<{ questionId: string; answer: string }>;
+    const documentName = incoming.get('documentName');
+    const uploadedDate = incoming.get('uploadedDate');
+    const effectiveDate = incoming.get('effectiveDate');
+    const note = incoming.get('note');
+    const requiresPasswordForDownload = incoming.get('requiresPasswordForDownload') === 'true';
+    const downloadPassword = incoming.get('downloadPassword', { trim: false });
+    const selectedTags = JSON.parse(incoming.get('selectedTags') || '[]') as string[];
+    const securityQuestions = JSON.parse(incoming.get('securityQuestions') || '[]') as Array<{ questionId: string; answer: string }>;
 
     // Validation
     if (!documentName || !uploadedDate) {
@@ -381,12 +381,35 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'Tag not found' }, { status: 404 });
     }
 
+    if (requiresPasswordForDownload && action === 'create') {
+      if (securityQuestions.length !== 3) {
+        return NextResponse.json(
+          { error: 'Exactly 3 security questions are required when password protection is enabled' },
+          { status: 400 }
+        );
+      }
+      const questionIds = securityQuestions.map(sq => sq.questionId);
+      if (new Set(questionIds).size !== questionIds.length) {
+        return NextResponse.json(
+          { error: 'Security questions must be unique' },
+          { status: 400 }
+        );
+      }
+      if (securityQuestions.some(sq => !sq.questionId || !sq.answer.trim())) {
+        return NextResponse.json(
+          { error: 'All security questions must have answers' },
+          { status: 400 }
+        );
+      }
+    }
+
     // Handle file upload
-    const file = formData.get('file') as File | null;
+    const file = incoming.fileMetadata();
     let fileUrl: string | null = null;
     let fileName: string | null = null;
     let fileSize: number | null = null;
     let fileType: string | null = null;
+    let uploadedPath: string | null = null;
 
     if (file && file.size > 0) {
       // Server-side file size validation
@@ -406,42 +429,23 @@ export async function POST(request: NextRequest) {
         throw error;
       }
 
-      // Upload file to Supabase Storage
       const sanitizedFileName = file.name.replace(/[^a-zA-Z0-9.-]/g, '_');
       const storageFileName = `${user.id}/${Date.now()}-${sanitizedFileName}`;
       if (!objectPathForOwner(storageFileName, DOCUMENT_BUCKET, user.id)) {
         return NextResponse.json({ error: 'Invalid file path' }, { status: 400 });
       }
-
-      // Convert File to ArrayBuffer for Supabase Storage
-      const arrayBuffer = await file.arrayBuffer();
-      const buffer = Buffer.from(arrayBuffer);
-      
-      const { data: uploadData, error: uploadError } = await supabaseServer
-        .storage
-        .from('important-documents')
-        .upload(storageFileName, buffer, {
-          contentType: file.type,
-          upsert: false
-        });
-      
-      if (uploadError) {
-        console.error('Error uploading file:', uploadError);
-        return NextResponse.json({ error: 'Failed to upload file: ' + uploadError.message }, { status: 500 });
-      }
-      
-      // Get public URL for the uploaded file (or signed URL if bucket is private)
-      // For private buckets, we'll use getPublicUrl which works if RLS policies allow
-      // If that doesn't work, we may need to generate signed URLs
-      const { data: urlData } = supabaseServer
-        .storage
-        .from('important-documents')
-        .getPublicUrl(storageFileName);
-      
-      fileUrl = urlData.publicUrl;
-      fileName = file.name;
-      fileSize = file.size;
-      fileType = file.type;
+      const placed = await placeAttachmentFile({
+        bucket: DOCUMENT_BUCKET,
+        ownerId: user.id,
+        storagePath: storageFileName,
+        upload: incoming,
+      });
+      if (placed instanceof NextResponse) return placed;
+      uploadedPath = placed.path;
+      fileUrl = placed.path;
+      fileName = placed.fileName;
+      fileSize = placed.fileSize;
+      fileType = placed.fileType;
       await refreshUserStorageUsage(user.id);
     }
 
@@ -449,33 +453,6 @@ export async function POST(request: NextRequest) {
     let downloadPasswordHash: string | null = null;
     if (requiresPasswordForDownload && downloadPassword) {
       downloadPasswordHash = await bcrypt.hash(downloadPassword, SALT_ROUNDS);
-    }
-
-    // Validate security questions if password protection is enabled
-    if (requiresPasswordForDownload && action === 'create') {
-      if (securityQuestions.length !== 3) {
-        return NextResponse.json(
-          { error: 'Exactly 3 security questions are required when password protection is enabled' },
-          { status: 400 }
-        );
-      }
-
-      // Check for duplicate questions
-      const questionIds = securityQuestions.map(sq => sq.questionId);
-      if (new Set(questionIds).size !== questionIds.length) {
-        return NextResponse.json(
-          { error: 'Security questions must be unique' },
-          { status: 400 }
-        );
-      }
-
-      // Validate all questions have answers
-      if (securityQuestions.some(sq => !sq.questionId || !sq.answer.trim())) {
-        return NextResponse.json(
-          { error: 'All security questions must have answers' },
-          { status: 400 }
-        );
-      }
     }
 
     if (action === 'create' || !documentId) {
@@ -502,6 +479,10 @@ export async function POST(request: NextRequest) {
 
       if (docError) {
         console.error('Error creating document:', docError);
+        if (uploadedPath) {
+          await supabaseServer.storage.from(DOCUMENT_BUCKET).remove([uploadedPath]);
+          await refreshUserStorageUsage(user.id);
+        }
         return NextResponse.json({ error: 'Failed to create document' }, { status: 500 });
       }
 
@@ -579,6 +560,10 @@ export async function POST(request: NextRequest) {
 
       if (updateError) {
         console.error('Error updating document:', updateError);
+        if (uploadedPath) {
+          await supabaseServer.storage.from(DOCUMENT_BUCKET).remove([uploadedPath]);
+          await refreshUserStorageUsage(user.id);
+        }
         return NextResponse.json({ error: 'Failed to update document' }, { status: 500 });
       }
 

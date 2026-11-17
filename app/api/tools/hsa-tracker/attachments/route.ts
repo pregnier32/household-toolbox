@@ -3,6 +3,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { getHouseholdDataSession } from '@/lib/session';
 import { supabaseServer } from '@/lib/supabaseServer';
 import { objectPathForOwner } from '@/lib/storage-owner';
+import { placeAttachmentFile, readAttachmentRequest } from '@/lib/stored-file-transfer';
 import { ATTACHMENT_MAX_FILE_BYTES, isAllowedAttachmentType } from '@/lib/attachments';
 import { assertCanStoreBytes, isStorageLimitError, refreshUserStorageUsage } from '@/lib/user-storage';
 import { HSA_BUCKET, isMissingRelationError, loadOwnedExpense, mapHsaAttachment, removeHsaStorageFiles } from '@/lib/hsa-storage';
@@ -20,10 +21,11 @@ export async function POST(request: NextRequest) {
   if (removedTool) return removedTool;
 
   try {
-    const formData = await request.formData();
-    const toolId = (formData.get('toolId') as string | null)?.trim() || '';
-    const expenseId = (formData.get('expenseId') as string | null)?.trim() || '';
-    const file = formData.get('file') as File | null;
+    const incoming = await readAttachmentRequest(request);
+    if (incoming instanceof NextResponse) return incoming;
+    const toolId = incoming.get('toolId');
+    const expenseId = incoming.get('expenseId');
+    const file = incoming.fileMetadata();
 
     if (!toolId || !expenseId) {
       return NextResponse.json({ error: 'Tool ID and Expense ID are required' }, { status: 400 });
@@ -43,26 +45,25 @@ export async function POST(request: NextRequest) {
     await assertCanStoreBytes(user.id, file.size);
 
     const sanitized = file.name.replace(/[^a-zA-Z0-9.-]/g, '_');
-    const storagePath = `${user.id}/${expenseId}/${Date.now()}-${sanitized}`;
+    let storagePath = `${user.id}/${expenseId}/${Date.now()}-${sanitized}`;
     if (!objectPathForOwner(storagePath, HSA_BUCKET, user.id)) {
       return NextResponse.json({ error: 'Invalid file path' }, { status: 400 });
     }
-    const buffer = Buffer.from(await file.arrayBuffer());
-    const { error: uploadError } = await supabaseServer.storage.from(HSA_BUCKET).upload(storagePath, buffer, {
-      contentType: file.type,
-      upsert: false,
+    const placed = await placeAttachmentFile({
+      bucket: HSA_BUCKET,
+      ownerId: user.id,
+      storagePath,
+      upload: incoming,
     });
-    if (uploadError) {
-      return NextResponse.json({ error: 'Failed to upload file: ' + uploadError.message }, { status: 500 });
-    }
-
-    const { data: urlData } = supabaseServer.storage.from(HSA_BUCKET).getPublicUrl(storagePath);
+    if (placed instanceof NextResponse) return placed;
+    const fileUrl = placed.path;
+    storagePath = placed.path;
     const { data: attachment, error: insertError } = await supabaseServer
       .from('tools_hsa_expense_receipts')
       .insert({
         expense_id: expenseId,
         user_id: user.id,
-        file_url: urlData.publicUrl,
+        file_url: fileUrl,
         file_name: file.name,
         file_size: file.size,
         file_type: file.type,

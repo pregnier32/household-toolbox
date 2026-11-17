@@ -2,6 +2,7 @@ import { denyLockedToolAccess, denyRemovedTool } from '@/lib/billing-access';
 import { NextRequest, NextResponse } from 'next/server';
 import { getHouseholdDataSession } from '@/lib/session';
 import { supabaseServer } from '@/lib/supabaseServer';
+import { streamStoredObject } from '@/lib/stored-file-transfer';
 import {
   END_OF_LIFE_PLANNER_BUCKET,
   extractEolStoragePath,
@@ -46,23 +47,12 @@ export async function GET(
       return NextResponse.json({ error: 'Invalid file path' }, { status: 404 });
     }
 
-    const { data: fileData, error: downloadError } = await supabaseServer.storage
-      .from(END_OF_LIFE_PLANNER_BUCKET)
-      .download(storagePath);
-
-    if (downloadError || !fileData) {
-      return NextResponse.json({ error: 'Failed to download file from storage' }, { status: 500 });
-    }
-
-    const buffer = Buffer.from(await fileData.arrayBuffer());
-    const safeName = (found.attachment.file_name || 'attachment').replace(/["\r\n]/g, '');
-    return new NextResponse(buffer, {
-      status: 200,
-      headers: {
-        'Content-Type': found.attachment.file_type || 'application/octet-stream',
-        'Content-Disposition': `${inline ? 'inline' : 'attachment'}; filename="${safeName}"`,
-        'Content-Length': buffer.length.toString(),
-      },
+    return streamStoredObject({
+      bucket: END_OF_LIFE_PLANNER_BUCKET,
+      path: storagePath,
+      fileName: found.attachment.file_name,
+      contentType: found.attachment.file_type,
+      inline,
     });
   } catch (error) {
     const message = error instanceof Error ? error.message : 'Internal server error';

@@ -1,5 +1,7 @@
 'use client';
 
+import { postToolFile } from '@/lib/direct-file-upload';
+
 import { useState, useEffect } from 'react';
 import { useTheme } from './AppThemeProvider';
 import { ToolDataLoadingBox } from './ToolDataLoadingBox';
@@ -515,7 +517,7 @@ export function NotesTool({ toolId }: NotesToolProps) {
             if (newNote.requiresPasswordForView && newNote.viewPassword.trim()) {
               formData.append('password', newNote.viewPassword.trim());
             }
-            const uploadResponse = await fetch('/api/tools/notes/attachments', { method: 'POST', body: formData });
+            const uploadResponse = await postToolFile('/api/tools/notes/attachments', formData);
             if (!uploadResponse.ok) {
               const errorData = await uploadResponse.json().catch(() => ({}));
               throw new Error(errorData.error || 'Note saved, but a file failed to upload.');
@@ -1269,11 +1271,14 @@ export function NotesTool({ toolId }: NotesToolProps) {
         : [];
 
   const fetchNoteAttachmentBlob = async (attachmentId: string, password?: string, inline = false) => {
-    const params = new URLSearchParams();
-    if (inline) params.set('inline', '1');
-    if (password) params.set('password', password);
-    const query = params.toString();
-    const response = await fetch(`/api/tools/notes/attachments/${attachmentId}${query ? `?${query}` : ''}`);
+    const response = await fetch(`/api/tools/notes/attachments/${attachmentId}`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        ...(password ? { password } : {}),
+        ...(inline ? { inline: true } : {}),
+      }),
+    });
     if (!response.ok) {
       const errorData = await response.json().catch(() => ({ error: 'Failed to open file' }));
       throw new Error(errorData.error || 'Failed to open file');
@@ -1353,7 +1358,7 @@ export function NotesTool({ toolId }: NotesToolProps) {
         formData.append('file', file);
         const password = noteUnlocks[noteId];
         if (password) formData.append('password', password);
-        const response = await fetch('/api/tools/notes/attachments', { method: 'POST', body: formData });
+        const response = await postToolFile('/api/tools/notes/attachments', formData);
         const data = await response.json().catch(() => ({}));
         if (!response.ok) {
           throw new Error(data.error || 'Failed to add file');

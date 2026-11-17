@@ -1,5 +1,7 @@
 'use client';
 
+import { postToolFile } from '@/lib/direct-file-upload';
+
 /**
  * End of Life Planner.
  * Persists to /api/tools/end-of-life-planner (tools_eolp_*).
@@ -1360,7 +1362,7 @@ export function EndOfLifePlannerTool({ toolId }: EndOfLifePlannerToolProps) {
     formData.append('toolId', toolId);
     formData.append(ownerFormField(store), ownerId);
     formData.append('file', file);
-    const response = await fetch('/api/tools/end-of-life-planner/attachments', { method: 'POST', body: formData });
+    const response = await postToolFile('/api/tools/end-of-life-planner/attachments', formData);
     const data = await response.json().catch(() => ({}));
     if (!response.ok) throw new Error(data.error || 'Failed to add file');
     return data.attachment as EolAttachment;

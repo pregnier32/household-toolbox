@@ -2,6 +2,7 @@ import { denyLockedToolAccess, denyRemovedTool } from '@/lib/billing-access';
 import { NextRequest, NextResponse } from 'next/server';
 import { getHouseholdDataSession } from '@/lib/session';
 import { supabaseServer } from '@/lib/supabaseServer';
+import { readFileDownloadBody, streamStoredObject } from '@/lib/stored-file-transfer';
 import bcrypt from 'bcryptjs';
 import { authorizeStoredFileRead } from '@/lib/storage-owner';
 import {
@@ -13,7 +14,7 @@ import {
   noteFileErrorStatus,
 } from '@/lib/notes-storage';
 
-export async function GET(
+export async function POST(
   request: NextRequest,
   { params }: { params: Promise<{ attachmentId: string }> }
 ) {
@@ -26,9 +27,9 @@ export async function GET(
 
   try {
     const { attachmentId } = await params;
-    const { searchParams } = new URL(request.url);
-    const password = searchParams.get('password');
-    const inline = searchParams.get('inline') === '1';
+    const download = await readFileDownloadBody(request);
+    if (download instanceof NextResponse) return download;
+    const { password, inline } = download;
 
     const { data: attachment, error } = await supabaseServer
       .from('tools_note_attachments')
@@ -67,23 +68,12 @@ export async function GET(
     }
     const storagePath = decision.path;
 
-    const { data: fileData, error: downloadError } = await supabaseServer.storage
-      .from(NOTES_BUCKET)
-      .download(storagePath);
-
-    if (downloadError || !fileData) {
-      return NextResponse.json({ error: 'Failed to download file from storage' }, { status: 500 });
-    }
-
-    const buffer = Buffer.from(await fileData.arrayBuffer());
-    const safeName = (attachment.file_name || 'attachment').replace(/["\r\n]/g, '');
-    return new NextResponse(buffer, {
-      status: 200,
-      headers: {
-        'Content-Type': attachment.file_type || 'application/octet-stream',
-        'Content-Disposition': `${inline ? 'inline' : 'attachment'}; filename="${safeName}"`,
-        'Content-Length': buffer.length.toString(),
-      },
+    return streamStoredObject({
+      bucket: NOTES_BUCKET,
+      path: storagePath,
+      fileName: attachment.file_name,
+      contentType: attachment.file_type,
+      inline,
     });
   } catch (error) {
     const message = error instanceof Error ? error.message : 'Internal server error';

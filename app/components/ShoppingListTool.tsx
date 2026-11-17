@@ -1,5 +1,7 @@
 'use client';
 
+import { postToolFile } from '@/lib/direct-file-upload';
+
 import { useState, useMemo, useEffect } from 'react';
 import { createPortal } from 'react-dom';
 import { useTheme } from './AppThemeProvider';
@@ -374,7 +376,7 @@ export function ShoppingListTool({ toolId }: ShoppingListToolProps) {
     formData.append('toolId', toolId);
     formData.append('listId', listId);
     formData.append('file', file);
-    const response = await fetch(`${API_BASE}/attachments`, { method: 'POST', body: formData });
+    const response = await postToolFile(`${API_BASE}/attachments`, formData);
     const data = await response.json().catch(() => ({}));
     if (!response.ok) throw new Error(data.error || 'Failed to add file');
   };

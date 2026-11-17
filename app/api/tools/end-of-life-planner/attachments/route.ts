@@ -3,6 +3,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { getHouseholdDataSession } from '@/lib/session';
 import { supabaseServer } from '@/lib/supabaseServer';
 import { objectPathForOwner } from '@/lib/storage-owner';
+import { placeAttachmentFile, readAttachmentRequest } from '@/lib/stored-file-transfer';
 import { ATTACHMENT_MAX_FILE_BYTES, isAllowedAttachmentType } from '@/lib/attachments';
 import { assertCanStoreBytes, isStorageLimitError, refreshUserStorageUsage } from '@/lib/user-storage';
 import {
@@ -20,13 +21,13 @@ function missingTableMessage() {
   return 'End of Life Planner attachments table is missing. Run supabase/archive/tools/end-of-life-planner.sql.';
 }
 
-function ownerFromForm(formData: FormData): { store: EolAttachmentStore; ownerId: string } | null {
+function ownerFromForm(formData: { get(name: string): string | null }): { store: EolAttachmentStore; ownerId: string } | null {
   const pairs: Array<[EolAttachmentStore, string]> = [
-    ['document', (formData.get('documentId') as string | null)?.trim() || ''],
-    ['insurance', (formData.get('insuranceId') as string | null)?.trim() || ''],
-    ['letter', (formData.get('letterId') as string | null)?.trim() || ''],
-    ['personal-item', (formData.get('personalItemId') as string | null)?.trim() || ''],
-    ['other', (formData.get('otherId') as string | null)?.trim() || ''],
+    ['document', (formData.get('documentId') || '').trim()],
+    ['insurance', (formData.get('insuranceId') || '').trim()],
+    ['letter', (formData.get('letterId') || '').trim()],
+    ['personal-item', (formData.get('personalItemId') || '').trim()],
+    ['other', (formData.get('otherId') || '').trim()],
   ];
   const present = pairs.filter(([, id]) => id);
   if (present.length !== 1) return null;
@@ -42,10 +43,11 @@ export async function POST(request: NextRequest) {
   if (removedTool) return removedTool;
 
   try {
-    const formData = await request.formData();
-    const toolId = (formData.get('toolId') as string | null)?.trim() || '';
-    const owner = ownerFromForm(formData);
-    const file = formData.get('file') as File | null;
+    const incoming = await readAttachmentRequest(request);
+    if (incoming instanceof NextResponse) return incoming;
+    const toolId = incoming.get('toolId');
+    const owner = ownerFromForm(incoming);
+    const file = incoming.fileMetadata();
 
     if (!toolId || !owner) {
       return NextResponse.json(
@@ -70,26 +72,25 @@ export async function POST(request: NextRequest) {
 
     const { table, ownerColumn, folder } = storeConfig(owner.store);
     const sanitized = file.name.replace(/[^a-zA-Z0-9.-]/g, '_');
-    const storagePath = `${user.id}/${folder}/${owner.ownerId}/${Date.now()}-${sanitized}`;
+    let storagePath = `${user.id}/${folder}/${owner.ownerId}/${Date.now()}-${sanitized}`;
     if (!objectPathForOwner(storagePath, END_OF_LIFE_PLANNER_BUCKET, user.id)) {
       return NextResponse.json({ error: 'Invalid file path' }, { status: 400 });
     }
-    const buffer = Buffer.from(await file.arrayBuffer());
-    const { error: uploadError } = await supabaseServer.storage.from(END_OF_LIFE_PLANNER_BUCKET).upload(storagePath, buffer, {
-      contentType: file.type,
-      upsert: false,
+    const placed = await placeAttachmentFile({
+      bucket: END_OF_LIFE_PLANNER_BUCKET,
+      ownerId: user.id,
+      storagePath,
+      upload: incoming,
     });
-    if (uploadError) {
-      return NextResponse.json({ error: 'Failed to upload file: ' + uploadError.message }, { status: 500 });
-    }
-
-    const { data: urlData } = supabaseServer.storage.from(END_OF_LIFE_PLANNER_BUCKET).getPublicUrl(storagePath);
+    if (placed instanceof NextResponse) return placed;
+    const fileUrl = placed.path;
+    storagePath = placed.path;
     const { data: attachment, error: insertError } = await supabaseServer
       .from(table)
       .insert({
         [ownerColumn]: owner.ownerId,
         user_id: user.id,
-        file_url: urlData.publicUrl,
+        file_url: fileUrl,
         file_name: file.name,
         file_size: file.size,
         file_type: file.type,

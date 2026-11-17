@@ -440,24 +440,32 @@ async function runIsolatedHouseholds() {
       assert.equal(serialized.includes('download_password_hash'), false);
       assert.equal(serialized.includes(documentUrl), false);
 
-      const blockedDownload = await download.GET(
-        new NextRequest(`http://local/api/tools/important-documents/download/${documentId}`),
+      const downloadRequest = (id: string, password?: string) => new NextRequest(
+        `http://local/api/tools/important-documents/download/${id}`,
+        {
+          method: 'POST',
+          headers: { 'content-type': 'application/json' },
+          body: JSON.stringify(password ? { password } : {}),
+        }
+      );
+      const blockedDownload = await download.POST(
+        downloadRequest(documentId),
         { params: Promise.resolve({ documentId }) }
       );
       assert.equal(blockedDownload.status, 403);
-      const wrongPassword = await download.GET(
-        new NextRequest(`http://local/api/tools/important-documents/download/${documentId}?password=wrong-password`),
+      const wrongPassword = await download.POST(
+        downloadRequest(documentId, 'wrong-password'),
         { params: Promise.resolve({ documentId }) }
       );
       assert.equal(wrongPassword.status, 403);
-      const openedDownload = await download.GET(
-        new NextRequest(`http://local/api/tools/important-documents/download/${documentId}?password=correct-password`),
+      const openedDownload = await download.POST(
+        downloadRequest(documentId, 'correct-password'),
         { params: Promise.resolve({ documentId }) }
       );
       assert.equal(openedDownload.status, 200);
       assert.deepEqual(Array.from(new Uint8Array(await openedDownload.arrayBuffer())), [9, 8, 7]);
-      const foreignDownload = await download.GET(
-        new NextRequest(`http://local/api/tools/important-documents/download/${foreignDocumentId}?password=correct-password`),
+      const foreignDownload = await download.POST(
+        downloadRequest(foreignDocumentId, 'correct-password'),
         { params: Promise.resolve({ documentId: foreignDocumentId }) }
       );
       assert.equal(foreignDownload.status, 404);

@@ -1,5 +1,7 @@
 'use client';
 
+import { postToolFile } from '@/lib/direct-file-upload';
+
 import { useState, useEffect, useRef } from 'react';
 import { formatDisplayDate } from '@/lib/format-display-date';
 import { useTheme } from './AppThemeProvider';
@@ -558,7 +560,7 @@ export function HealthcareApptsHistoryTool({ toolId }: HealthcareApptsHistoryToo
     formData.append('toolId', toolId);
     formData.append('recordId', recordId);
     formData.append('file', file);
-    const response = await fetch(`${API_BASE}/attachments`, { method: 'POST', body: formData });
+    const response = await postToolFile(`${API_BASE}/attachments`, formData);
     const data = await response.json().catch(() => ({}));
     if (!response.ok) throw new Error(data.error || 'Failed to add file');
   };
@@ -701,7 +703,7 @@ export function HealthcareApptsHistoryTool({ toolId }: HealthcareApptsHistoryToo
       formData.append('action', 'create');
       formData.append('name', newHeaderName.trim());
       formData.append('cardColor', newHeaderColor);
-      const response = await fetch(API_BASE, { method: 'POST', body: formData });
+      const response = await postToolFile(API_BASE, formData);
       if (!response.ok) {
         const err = await response.json().catch(() => ({}));
         throw new Error((err as { error?: string }).error || 'Failed to create header');
@@ -758,7 +760,7 @@ export function HealthcareApptsHistoryTool({ toolId }: HealthcareApptsHistoryToo
       formData.append('headerId', editingHeaderId);
       formData.append('name', editingHeaderName.trim());
       formData.append('cardColor', editingHeaderColor);
-      const response = await fetch(API_BASE, { method: 'POST', body: formData });
+      const response = await postToolFile(API_BASE, formData);
       if (!response.ok) {
         const err = await response.json().catch(() => ({}));
         throw new Error((err as { error?: string }).error || 'Failed to update header');
@@ -787,7 +789,7 @@ export function HealthcareApptsHistoryTool({ toolId }: HealthcareApptsHistoryToo
       formData.append('resource', 'header');
       formData.append('action', 'delete');
       formData.append('headerId', deleteConfirmHeaderId);
-      const response = await fetch(API_BASE, { method: 'POST', body: formData });
+      const response = await postToolFile(API_BASE, formData);
       if (!response.ok) {
         const err = await response.json().catch(() => ({}));
         throw new Error((err as { error?: string }).error || 'Failed to delete header');
@@ -876,7 +878,7 @@ export function HealthcareApptsHistoryTool({ toolId }: HealthcareApptsHistoryToo
       formData.append('insurancePaid', newRecord.insurancePaid);
       formData.append('currentAmountDue', newRecord.currentAmountDue);
       formData.append('addToDashboard', String(newRecord.addToDashboard === true));
-      const response = await fetch(API_BASE, { method: 'POST', body: formData });
+      const response = await postToolFile(API_BASE, formData);
       if (!response.ok) {
         const err = await response.json().catch(() => ({}));
         throw new Error((err as { error?: string }).error || 'Failed to add appointment');
@@ -951,7 +953,7 @@ export function HealthcareApptsHistoryTool({ toolId }: HealthcareApptsHistoryToo
       formData.append('insurancePaid', editingRecord.insurancePaid);
       formData.append('currentAmountDue', editingRecord.currentAmountDue);
       formData.append('addToDashboard', String(editingRecord.addToDashboard === true));
-      const response = await fetch(API_BASE, { method: 'POST', body: formData });
+      const response = await postToolFile(API_BASE, formData);
       if (!response.ok) {
         const err = await response.json().catch(() => ({}));
         throw new Error((err as { error?: string }).error || 'Failed to save appointment');

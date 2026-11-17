@@ -1,5 +1,7 @@
 'use client';
 
+import { postToolFile } from '@/lib/direct-file-upload';
+
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useTheme } from './AppThemeProvider';
 import { ToolDataLoadingBox } from './ToolDataLoadingBox';
@@ -1212,7 +1214,7 @@ export function HomeMaintenanceScheduleTool({ toolId }: HomeMaintenanceScheduleT
     if (owner.itemId) formData.append('itemId', owner.itemId);
     if (owner.completionId) formData.append('completionId', owner.completionId);
     formData.append('file', file);
-    const response = await fetch(`${API_BASE}/attachments`, { method: 'POST', body: formData });
+    const response = await postToolFile(`${API_BASE}/attachments`, formData);
     const data = await response.json().catch(() => ({}));
     if (!response.ok) throw new Error(data.error || 'Failed to add file');
   };
