@@ -1,7 +1,7 @@
 import { authorizeStoredFileRead, objectPathForOwner, type StoredFileGrant } from '@/lib/storage-owner';
 import bcrypt from 'bcryptjs';
 import { supabaseServer } from '@/lib/supabaseServer';
-import { refreshUserStorageUsage } from '@/lib/user-storage';
+import { removeStoredObjects } from '@/lib/user-storage';
 
 export const NOTES_BUCKET = 'notes';
 
@@ -23,8 +23,7 @@ export function extractNotesStoragePath(fileUrl: string | null | undefined, owne
 export async function removeNotesStorageFiles(fileUrls: Array<string | null | undefined>, userId: string): Promise<void> {
   const paths = fileUrls.map((fileUrl) => extractNotesStoragePath(fileUrl, userId)).filter((path): path is string => Boolean(path));
   if (paths.length === 0) return;
-  await supabaseServer.storage.from(NOTES_BUCKET).remove(paths);
-  await refreshUserStorageUsage(userId);
+  await removeStoredObjects(userId, NOTES_BUCKET, paths);
 }
 
 export async function loadNoteFileGrants(ownerId: string, exceptAttachmentId: string): Promise<StoredFileGrant[]> {

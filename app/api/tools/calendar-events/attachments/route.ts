@@ -5,7 +5,7 @@ import { supabaseServer } from '@/lib/supabaseServer';
 import { objectPathForOwner } from '@/lib/storage-owner';
 import { placeAttachmentFile, readAttachmentRequest } from '@/lib/stored-file-transfer';
 import { ATTACHMENT_MAX_FILE_BYTES, isAllowedAttachmentType } from '@/lib/attachments';
-import { assertCanStoreBytes, isStorageLimitError, refreshUserStorageUsage } from '@/lib/user-storage';
+import { assertCanStoreBytes, isStorageLimitError, adjustUserStorageUsage } from '@/lib/user-storage';
 import {
   CALENDAR_EVENTS_BUCKET,
   isMissingRelationError,
@@ -89,7 +89,7 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'Failed to save attachment' }, { status: 500 });
     }
 
-    await refreshUserStorageUsage(user.id);
+    await adjustUserStorageUsage(user.id, placed.fileSize);
     return NextResponse.json({ attachment: mapCalendarEventAttachment(attachment) });
   } catch (error) {
     if (isStorageLimitError(error)) {

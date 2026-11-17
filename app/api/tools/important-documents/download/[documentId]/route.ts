@@ -5,6 +5,7 @@ import { supabaseServer } from '@/lib/supabaseServer';
 import { readFileDownloadBody, streamStoredObject } from '@/lib/stored-file-transfer';
 import bcrypt from 'bcryptjs';
 import { authorizeStoredFileRead, type StoredFileGrant } from '@/lib/storage-owner';
+import { clearSecretAttempts, registerSecretFailure, rejectLockedSecret } from '@/lib/secret-attempt-lock';
 
 // POST - Download a document file. The password is in the JSON body.
 export async function POST(
@@ -52,6 +53,12 @@ export async function POST(
       return NextResponse.json({ error: 'Password not set for this document' }, { status: 500 });
     }
 
+    const attempt = { ownerId: user.id, kind: 'document' as const, recordId: documentId };
+    if (document.requires_password_for_download) {
+      const locked = await rejectLockedSecret(attempt);
+      if (locked) return locked;
+    }
+
     const relatedResult = await supabaseServer
       .from('tools_id_documents')
       .select('id, file_url, requires_password_for_download, download_password_hash')
@@ -69,7 +76,7 @@ export async function POST(
         requiresPassword: Boolean(row.requires_password_for_download),
         passwordHash: row.download_password_hash,
       }));
-    const decision = authorizeStoredFileRead({
+    const decision = await authorizeStoredFileRead({
       bucket: 'important-documents',
       ownerId: user.id,
       requested: {
@@ -80,7 +87,7 @@ export async function POST(
       },
       related,
       password,
-      passwordMatches: (entered, hash) => bcrypt.compareSync(entered, hash),
+      passwordMatches: (entered, hash) => bcrypt.compare(entered, hash),
     });
     if (!decision.ok) {
       const error = decision.error === 'Incorrect password'
@@ -88,7 +95,13 @@ export async function POST(
         : decision.error === 'Password required'
           ? 'Password required for download'
           : 'Invalid file path';
+      if (decision.error === 'Incorrect password') {
+        return registerSecretFailure(attempt, NextResponse.json({ error }, { status: decision.status }));
+      }
       return NextResponse.json({ error }, { status: decision.status });
+    }
+    if (document.requires_password_for_download) {
+      await clearSecretAttempts(attempt);
     }
     const storagePath = decision.path;
 

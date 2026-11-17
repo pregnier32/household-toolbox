@@ -2,6 +2,7 @@ import { denyLockedToolAccess, denyRemovedTool } from '@/lib/billing-access';
 import { NextRequest, NextResponse } from 'next/server';
 import { getHouseholdDataSession } from '@/lib/session';
 import { supabaseServer } from '@/lib/supabaseServer';
+import { clearSecretAttempts, registerSecretFailure, rejectLockedSecret } from '@/lib/secret-attempt-lock';
 import bcrypt from 'bcryptjs';
 
 // Security questions list (must match client-side)
@@ -65,6 +66,9 @@ export async function GET(request: NextRequest) {
     if (!document.requires_password_for_download) {
       return NextResponse.json({ error: 'Document does not require a password' }, { status: 400 });
     }
+
+    const locked = await rejectLockedSecret({ ownerId: user.id, kind: 'document', recordId: documentId });
+    if (locked) return locked;
 
     // Fetch security questions
     const { data: securityQuestions, error: sqError } = await supabaseServer
@@ -144,6 +148,10 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'Security questions not found' }, { status: 404 });
     }
 
+    const attempt = { ownerId: user.id, kind: 'document' as const, recordId: String(documentId) };
+    const locked = await rejectLockedSecret(attempt);
+    if (locked) return locked;
+
     // Verify all answers - match by question_id, not by index
     const answerPromises = answers.map(async (answerObj: { questionId: string; answer: string }) => {
       const securityQuestion = securityQuestions.find(sq => sq.question_id === answerObj.questionId);
@@ -158,8 +166,13 @@ export async function POST(request: NextRequest) {
     const allCorrect = answerResults.every(result => result === true);
 
     if (!allCorrect) {
-      return NextResponse.json({ error: 'One or more answers are incorrect' }, { status: 403 });
+      return registerSecretFailure(
+        attempt,
+        NextResponse.json({ error: 'One or more answers are incorrect' }, { status: 403 })
+      );
     }
+
+    await clearSecretAttempts(attempt);
 
     // If verify only, return success without updating password
     if (verifyOnly) {

@@ -1451,7 +1451,11 @@ export function ImportantDocumentsTool({ toolId }: ImportantDocumentsToolProps) 
       const response = await fetch(`/api/tools/important-documents/reset-password?documentId=${downloadPasswordModalId}`);
       if (!response.ok) {
         const errorData = await response.json();
-        showError('Failed to load security questions: ' + (errorData.error || 'Unknown error'));
+        showError(
+          response.status === 429
+            ? (errorData.error || 'Too many attempts. Try again later.')
+            : 'Failed to load security questions: ' + (errorData.error || 'Unknown error')
+        );
         setIsLoading(false);
         return;
       }
@@ -1502,8 +1506,12 @@ export function ImportantDocumentsTool({ toolId }: ImportantDocumentsToolProps) 
         }
       } else {
         const errorData = await response.json();
-        showError('One or more answers are incorrect. Please try again.');
-        setSecurityAnswers(securityAnswers.map(a => ({ ...a, answer: '' })));
+        if (response.status === 429) {
+          showError(errorData.error || 'Too many attempts. Try again later.');
+        } else {
+          showError('One or more answers are incorrect. Please try again.');
+          setSecurityAnswers(securityAnswers.map(a => ({ ...a, answer: '' })));
+        }
       }
     } catch (error) {
       console.error('Error verifying answers:', error);
@@ -1629,9 +1637,11 @@ export function ImportantDocumentsTool({ toolId }: ImportantDocumentsToolProps) 
       } else {
         const errorData = await response.json();
         setDownloadPasswordError(
-          errorData.error === 'Incorrect password'
-            ? 'Incorrect password. Please try again.'
-            : `Failed to verify password: ${errorData.error || 'Unknown error'}`
+          response.status === 429
+            ? (errorData.error || 'Too many attempts. Try again later.')
+            : errorData.error === 'Incorrect password'
+              ? 'Incorrect password. Please try again.'
+              : `Failed to verify password: ${errorData.error || 'Unknown error'}`
         );
         setDownloadPasswordInput('');
       }

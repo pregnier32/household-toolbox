@@ -1,6 +1,6 @@
 import { objectPathForOwner } from '@/lib/storage-owner';
 import { supabaseServer } from '@/lib/supabaseServer';
-import { refreshUserStorageUsage } from '@/lib/user-storage';
+import { removeStoredObjects } from '@/lib/user-storage';
 
 export const MEAL_PLANNER_BUCKET = 'meal-planner';
 
@@ -25,8 +25,7 @@ export async function removeMealPlannerStorageFiles(
 ): Promise<void> {
   const paths = [...new Set(fileUrls.map((fileUrl) => extractMealPlannerStoragePath(fileUrl, userId)).filter((path): path is string => Boolean(path)))];
   if (paths.length === 0) return;
-  await supabaseServer.storage.from(MEAL_PLANNER_BUCKET).remove(paths);
-  await refreshUserStorageUsage(userId);
+  await removeStoredObjects(userId, MEAL_PLANNER_BUCKET, paths);
 }
 
 export function mapMealPlannerAttachment(row: {

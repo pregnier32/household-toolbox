@@ -68,7 +68,7 @@ export function DashboardClient({ user }: { user: User }) {
 
   useEffect(() => {
     loadTools();
-  }, [activeTab, loadTools]);
+  }, [loadTools]);
 
   const deepLinkAppliedRef = useRef(false);
   const toolsLoadStartedRef = useRef(false);
@@ -312,14 +312,15 @@ export function DashboardClient({ user }: { user: User }) {
               {accessNotice.message}
             </p>
           )}
-          {activeTab === 'tools' && (
+          <div hidden={activeTab !== 'tools'}>
             <ToolboxPanel
               tools={tools}
               isLoadingTools={isLoadingTools}
               activeToolId={activeToolId}
+              openedToolIds={openedToolIds}
               onToolClick={handleToolClick}
             />
-          )}
+          </div>
           {activeTab === 'calendar' && <CalendarPanel />}
           {activeTab === 'store' && isHouseholdAdmin && (
             <StorePanel

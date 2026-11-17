@@ -1,6 +1,6 @@
 import { objectPathForOwner } from '@/lib/storage-owner';
 import { supabaseServer } from '@/lib/supabaseServer';
-import { refreshUserStorageUsage } from '@/lib/user-storage';
+import { removeStoredObjects } from '@/lib/user-storage';
 
 export const EBP_BUCKET = 'event-budget-planner';
 
@@ -22,8 +22,7 @@ export function extractEbpStoragePath(fileUrl: string | null | undefined, ownerI
 export async function removeEbpStorageFiles(fileUrls: Array<string | null | undefined>, userId: string): Promise<void> {
   const paths = [...new Set(fileUrls.map((fileUrl) => extractEbpStoragePath(fileUrl, userId)).filter((path): path is string => Boolean(path)))];
   if (paths.length === 0) return;
-  await supabaseServer.storage.from(EBP_BUCKET).remove(paths);
-  await refreshUserStorageUsage(userId);
+  await removeStoredObjects(userId, EBP_BUCKET, paths);
 }
 
 export function mapEbpAttachment(row: {

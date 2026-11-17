@@ -1434,7 +1434,11 @@ export function NotesTool({ toolId }: NotesToolProps) {
       const response = await fetch(`/api/tools/notes/reset-password?noteId=${viewPasswordModalId}`);
       if (!response.ok) {
         const errorData = await response.json();
-        showError('Failed to load security questions: ' + (errorData.error || 'Unknown error'));
+        showError(
+          response.status === 429
+            ? (errorData.error || 'Too many attempts. Try again later.')
+            : 'Failed to load security questions: ' + (errorData.error || 'Unknown error')
+        );
         setIsLoading(false);
         return;
       }
@@ -1484,8 +1488,12 @@ export function NotesTool({ toolId }: NotesToolProps) {
         }
       } else {
         const errorData = await response.json();
-        showError('One or more answers are incorrect. Please try again.');
-        setSecurityAnswers(securityAnswers.map(a => ({ ...a, answer: '' })));
+        if (response.status === 429) {
+          showError(errorData.error || 'Too many attempts. Try again later.');
+        } else {
+          showError('One or more answers are incorrect. Please try again.');
+          setSecurityAnswers(securityAnswers.map(a => ({ ...a, answer: '' })));
+        }
       }
     } catch (error) {
       console.error('Error verifying answers:', error);
@@ -1624,7 +1632,12 @@ export function NotesTool({ toolId }: NotesToolProps) {
         }
       } else {
         const errorData = await response.json().catch(() => ({ error: 'Unknown error' }));
-        showError('Failed to verify password: ' + (errorData.error || 'Unknown error'));
+        if (response.status === 429) {
+          setViewPasswordError(errorData.error || 'Too many attempts. Try again later.');
+          setViewPasswordInput('');
+        } else {
+          showError('Failed to verify password: ' + (errorData.error || 'Unknown error'));
+        }
       }
     } catch (error) {
       showError('Error verifying password. Please try again.');

@@ -2,6 +2,7 @@ import { denyLockedToolAccess, denyRemovedTool } from '@/lib/billing-access';
 import { NextRequest, NextResponse } from 'next/server';
 import { getHouseholdDataSession } from '@/lib/session';
 import { supabaseServer } from '@/lib/supabaseServer';
+import { clearSecretAttempts, registerSecretFailure, rejectLockedSecret } from '@/lib/secret-attempt-lock';
 import bcrypt from 'bcryptjs';
 
 // POST - Verify view password for a note
@@ -44,10 +45,14 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'Password not set for this note' }, { status: 400 });
     }
 
-    // Verify password
-    const isValid = await bcrypt.compare(password, note.view_password_hash);
-    if (!isValid) return NextResponse.json({ valid: false });
+    const attempt = { ownerId: user.id, kind: 'note' as const, recordId: String(noteId) };
+    const locked = await rejectLockedSecret(attempt);
+    if (locked) return locked;
 
+    const isValid = await bcrypt.compare(password, note.view_password_hash);
+    if (!isValid) return registerSecretFailure(attempt, NextResponse.json({ valid: false }));
+
+    await clearSecretAttempts(attempt);
     return NextResponse.json({ valid: true, note: note.note ?? '' });
   } catch (error: any) {
     console.error('Error in POST /api/tools/notes/verify-password:', error);

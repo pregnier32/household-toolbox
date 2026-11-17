@@ -78,14 +78,6 @@ export function DynamicIcon({ iconName, size = 24, className = '', fallback }: D
     return <IconComponent size={size} className={className} />;
   }
 
-  // Icon not found - log for debugging in development
-  if (process.env.NODE_ENV === 'development') {
-    console.warn(`Icon not found: "${iconName}" (trimmed: "${iconName.trim()}"). Available icons include:`, 
-      Object.keys(LucideIcons).filter(k => k.toLowerCase().includes(iconName.trim().toLowerCase().slice(0, 3))).slice(0, 5)
-    );
-  }
-
-  // Icon not found, show fallback or nothing
   if (fallback) {
     return <>{fallback}</>;
   }

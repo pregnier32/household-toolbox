@@ -134,12 +134,6 @@ export async function GET() {
       };
     });
 
-    // Log tools without icons for debugging
-    const toolsWithoutIcons = allTools?.filter(tool => !iconsByTool[tool.id] || Object.keys(iconsByTool[tool.id]).length === 0);
-    if (toolsWithoutIcons && toolsWithoutIcons.length > 0) {
-      console.log('Tools without icons:', toolsWithoutIcons.map(t => ({ id: t.id, name: t.name })));
-    }
-
     let accessNotice: ReturnType<typeof toolAccessNotice> = { locked: false, unverified: false, message: null };
     if (ownedToolIds.size > 0) {
       try {

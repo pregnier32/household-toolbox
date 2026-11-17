@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { imageTypeForBytes } from '@/lib/icon-image';
 import { getHouseholdDataSession } from '@/lib/session';
 import { supabaseServer } from '@/lib/supabaseServer';
 
@@ -31,15 +32,6 @@ export async function GET(
       .eq('id', iconId)
       .single();
     
-    // Log the raw response to debug
-    console.log('Raw Supabase response:', {
-      hasData: !!icon,
-      hasError: !!iconError,
-      error: iconError,
-      iconKeys: icon ? Object.keys(icon) : null,
-      iconDataValue: icon?.icon_data ? (typeof icon.icon_data) : null
-    });
-
     if (iconError) {
       console.error('Icon fetch error:', iconError);
       // Return a 1x1 transparent PNG instead of JSON so the browser doesn't show broken image
@@ -48,6 +40,7 @@ export async function GET(
         status: 404,
         headers: {
           'Content-Type': 'image/png',
+          'Cache-Control': 'private, no-store',
         },
       });
     }
@@ -60,22 +53,17 @@ export async function GET(
         status: 404,
         headers: {
           'Content-Type': 'image/png',
+          'Cache-Control': 'private, no-store',
         },
       });
     }
 
-    console.log('Icon found:', { 
-      id: iconId, 
-      has_icon_url: !!icon.icon_url, 
-      has_icon_data: !!icon.icon_data,
-      icon_data_type: typeof icon.icon_data,
-      icon_data_is_buffer: Buffer.isBuffer(icon.icon_data),
-      icon_data_is_uint8array: icon.icon_data instanceof Uint8Array
-    });
-
-    // If icon_url is available, redirect to it
-    if (icon.icon_url) {
-      return NextResponse.redirect(icon.icon_url);
+    const iconLocation = typeof icon.icon_url === 'string' ? icon.icon_url.trim() : '';
+    const canRedirect = iconLocation.startsWith('https://')
+      || iconLocation.startsWith('http://')
+      || iconLocation.startsWith('/');
+    if (!icon.icon_data && canRedirect) {
+      return NextResponse.redirect(iconLocation);
     }
 
     // If icon_data is available, serve it
@@ -87,7 +75,6 @@ export async function GET(
         if (Buffer.isBuffer(icon.icon_data)) {
           // Already a Buffer - use directly
           buffer = icon.icon_data;
-          console.log('Using Buffer directly, length:', buffer.length);
         } else if (typeof icon.icon_data === 'string') {
           // If it's a string, it might be base64 encoded
           // Check if it's already a data URL
@@ -95,24 +82,19 @@ export async function GET(
             // Extract base64 part from data URL
             const base64Data = icon.icon_data.split(',')[1];
             buffer = Buffer.from(base64Data, 'base64');
-            console.log('Decoded from data URL, length:', buffer.length);
           } else {
             // Assume it's raw base64
             buffer = Buffer.from(icon.icon_data, 'base64');
-            console.log('Decoded from base64 string, length:', buffer.length);
           }
         } else if (icon.icon_data instanceof Uint8Array) {
           // Convert Uint8Array to Buffer
           buffer = Buffer.from(icon.icon_data);
-          console.log('Converted from Uint8Array, length:', buffer.length);
         } else if (Array.isArray(icon.icon_data)) {
           // If it's an array of numbers, convert to Buffer
           buffer = Buffer.from(icon.icon_data);
-          console.log('Converted from array, length:', buffer.length);
         } else {
           // Try to convert to buffer directly
           buffer = Buffer.from(icon.icon_data as any);
-          console.log('Converted directly, length:', buffer.length);
         }
         
         if (!buffer || buffer.length === 0) {
@@ -123,16 +105,26 @@ export async function GET(
             status: 500,
             headers: {
               'Content-Type': 'image/png',
+              'Cache-Control': 'private, no-store',
             },
           });
         }
         
-        console.log('Serving icon, buffer length:', buffer.length);
-        // Convert Buffer to Uint8Array for NextResponse (which accepts BodyInit types)
+        const type = imageTypeForBytes(buffer);
+        if (!type) {
+          const transparentPng = Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==', 'base64');
+          return new NextResponse(new Uint8Array(transparentPng), {
+            status: 415,
+            headers: {
+              'Content-Type': 'image/png',
+              'Cache-Control': 'private, no-store',
+            },
+          });
+        }
         return new NextResponse(new Uint8Array(buffer), {
           headers: {
-            'Content-Type': 'image/jpeg',
-            'Cache-Control': 'public, max-age=31536000, immutable',
+            'Content-Type': type,
+            'Cache-Control': 'private, max-age=3600',
           },
         });
       } catch (bufferError) {
@@ -143,6 +135,7 @@ export async function GET(
           status: 500,
           headers: {
             'Content-Type': 'image/png',
+            'Cache-Control': 'private, no-store',
           },
         });
       }
@@ -155,6 +148,7 @@ export async function GET(
       status: 404,
       headers: {
         'Content-Type': 'image/png',
+        'Cache-Control': 'private, no-store',
       },
     });
   } catch (error) {

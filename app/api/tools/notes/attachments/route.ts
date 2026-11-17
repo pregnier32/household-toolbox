@@ -5,10 +5,10 @@ import { supabaseServer } from '@/lib/supabaseServer';
 import { objectPathForOwner } from '@/lib/storage-owner';
 import { placeAttachmentFile, readAttachmentRequest } from '@/lib/stored-file-transfer';
 import { isAllowedAttachmentType, ATTACHMENT_MAX_FILE_BYTES } from '@/lib/attachments';
-import { assertCanStoreBytes, isStorageLimitError, refreshUserStorageUsage } from '@/lib/user-storage';
+import { assertCanStoreBytes, isStorageLimitError, adjustUserStorageUsage } from '@/lib/user-storage';
+import { clearSecretAttempts, notePasswordDenied } from '@/lib/secret-attempt-lock';
 import {
   NOTES_BUCKET,
-  assertNotePassword,
   isMissingRelationError,
   loadOwnedNote,
   noteFileErrorStatus,
@@ -96,7 +96,11 @@ export async function POST(request: NextRequest) {
     if (note.is_active === false) {
       return NextResponse.json({ error: 'Restore this item to add or change files.' }, { status: 403 });
     }
-    await assertNotePassword(note, password);
+    const denied = await notePasswordDenied(user.id, note, password);
+    if (denied) return denied;
+    if (note.requires_password_for_view) {
+      await clearSecretAttempts({ ownerId: user.id, kind: 'note', recordId: note.id });
+    }
     await assertCanStoreBytes(user.id, file.size);
 
     const sanitized = file.name.replace(/[^a-zA-Z0-9.-]/g, '_');
@@ -137,7 +141,7 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'Failed to save attachment' }, { status: 500 });
     }
 
-    await refreshUserStorageUsage(user.id);
+    await adjustUserStorageUsage(user.id, placed.fileSize);
     return NextResponse.json({ attachment: mapAttachment(attachment) });
   } catch (error) {
     if (isStorageLimitError(error)) {
@@ -185,7 +189,11 @@ export async function DELETE(request: NextRequest) {
     if (note.is_active === false) {
       return NextResponse.json({ error: 'Restore this item to add or change files.' }, { status: 403 });
     }
-    await assertNotePassword(note, password);
+    const denied = await notePasswordDenied(user.id, note, password);
+    if (denied) return denied;
+    if (note.requires_password_for_view) {
+      await clearSecretAttempts({ ownerId: user.id, kind: 'note', recordId: note.id });
+    }
 
     const { error: deleteError } = await supabaseServer
       .from('tools_note_attachments')

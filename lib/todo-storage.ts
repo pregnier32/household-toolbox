@@ -1,6 +1,6 @@
 import { objectPathForOwner } from '@/lib/storage-owner';
 import { supabaseServer } from '@/lib/supabaseServer';
-import { refreshUserStorageUsage } from '@/lib/user-storage';
+import { removeStoredObjects } from '@/lib/user-storage';
 
 export const TODO_BUCKET = 'to-do-list';
 
@@ -15,8 +15,7 @@ export function extractTodoStoragePath(fileUrl: string | null | undefined, owner
 export async function removeTodoStorageFiles(fileUrls: Array<string | null | undefined>, userId: string): Promise<void> {
   const paths = fileUrls.map((fileUrl) => extractTodoStoragePath(fileUrl, userId)).filter((path): path is string => Boolean(path));
   if (paths.length === 0) return;
-  await supabaseServer.storage.from(TODO_BUCKET).remove(paths);
-  await refreshUserStorageUsage(userId);
+  await removeStoredObjects(userId, TODO_BUCKET, paths);
 }
 
 export async function loadOwnedTask(taskId: string, userId: string, toolId?: string | null) {

@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { imageTypeForBytes } from '@/lib/icon-image';
 import { getSession } from '@/lib/session';
 import { supabaseServer } from '@/lib/supabaseServer';
 
@@ -372,8 +373,14 @@ export async function PUT(request: NextRequest) {
         );
       }
 
+      if (iconFile.size > 1024 * 1024) {
+        return NextResponse.json({ error: 'Icon image must be 1 MB or smaller.' }, { status: 400 });
+      }
       const arrayBuffer = await iconFile.arrayBuffer();
       const buffer = Buffer.from(arrayBuffer);
+      if (!imageTypeForBytes(buffer)) {
+        return NextResponse.json({ error: 'Upload a PNG, JPEG, GIF, or WebP image.' }, { status: 400 });
+      }
 
       // Check if icon already exists for this tool and type
       const { data: existingIcon } = await supabaseServer

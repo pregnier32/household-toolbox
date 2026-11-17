@@ -300,6 +300,67 @@ export async function refreshUserStorageUsage(userId: string): Promise<StorageQu
   return recountUserStorage(userId);
 }
 
+export async function adjustUserStorageUsage(userId: string, deltaBytes: number): Promise<void> {
+  if (!Number.isFinite(deltaBytes) || deltaBytes === 0) return;
+  const delta = Math.trunc(deltaBytes);
+
+  for (let attempt = 0; attempt < 3; attempt += 1) {
+    const row = await readUserStorageRow(userId);
+    const stored = row.storage_used_bytes ?? 0;
+    const current = Math.max(0, Number(stored) || 0);
+    const next = Math.max(0, current + delta);
+    const { data, error } = await supabaseServer
+      .from('users')
+      .update({
+        storage_used_bytes: next,
+        storage_usage_updated_at: new Date().toISOString(),
+      })
+      .eq('id', userId)
+      .eq('storage_used_bytes', stored)
+      .select('storage_used_bytes')
+      .maybeSingle();
+    if (error) {
+      console.error('Failed to adjust storage usage:', error.message);
+      return;
+    }
+    if (data) return;
+  }
+
+  console.error('Failed to adjust storage usage after concurrent updates');
+}
+
+type StorageObjectApi = {
+  info?: (path: string) => Promise<{ data: { size?: number } | null; error: { message?: string } | null }>;
+  remove: (paths: string[]) => Promise<{ error: { message?: string } | null }>;
+};
+
+async function storedObjectBytes(bucket: string, paths: string[]): Promise<number> {
+  const api = supabaseServer.storage.from(bucket) as StorageObjectApi;
+  if (typeof api.info !== 'function') return 0;
+  let total = 0;
+  for (const path of paths) {
+    try {
+      const info = await api.info(path);
+      const size = Number(info.data?.size ?? 0);
+      if (!info.error && Number.isFinite(size) && size > 0) total += Math.trunc(size);
+    } catch (error) {
+      console.error('Failed to read stored object size:', error instanceof Error ? error.message : 'unknown');
+    }
+  }
+  return total;
+}
+
+export async function removeStoredObjects(userId: string, bucket: string, paths: string[]): Promise<void> {
+  if (paths.length === 0) return;
+  const released = await storedObjectBytes(bucket, paths);
+  const { error } = await (supabaseServer.storage.from(bucket) as StorageObjectApi).remove(paths);
+  if (error) {
+    console.error('Failed to remove stored objects:', error.message ?? 'unknown');
+    return;
+  }
+  await adjustUserStorageUsage(userId, -released);
+}
+
 export type SiteStorageStats = {
   documentCount: number;
   usedBytes: number;

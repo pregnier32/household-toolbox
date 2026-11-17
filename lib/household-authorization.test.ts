@@ -189,7 +189,10 @@ let shopping: typeof import('@/app/api/tools/shopping-list/route');
 let meals: typeof import('@/app/api/tools/meal-planner/route');
 let notes: typeof import('@/app/api/tools/notes/route');
 let verifyPassword: typeof import('@/app/api/tools/notes/verify-password/route');
+let noteReset: typeof import('@/app/api/tools/notes/reset-password/route');
 let documents: typeof import('@/app/api/tools/important-documents/route');
+let secretAttemptLimit = 5;
+let adjustUserStorageUsage: typeof import('@/lib/user-storage').adjustUserStorageUsage;
 let download: typeof import('@/app/api/tools/important-documents/download/[documentId]/route');
 let addresses: typeof import('@/app/api/tools/address-book/route');
 let repairs: typeof import('@/app/api/tools/repair-history/route');
@@ -248,7 +251,10 @@ const ready = (async () => {
   meals = await import('@/app/api/tools/meal-planner/route');
   notes = await import('@/app/api/tools/notes/route');
   verifyPassword = await import('@/app/api/tools/notes/verify-password/route');
+  noteReset = await import('@/app/api/tools/notes/reset-password/route');
   documents = await import('@/app/api/tools/important-documents/route');
+  secretAttemptLimit = (await import('@/lib/secret-attempt-lock')).SECRET_ATTEMPT_LIMIT;
+  ({ adjustUserStorageUsage } = await import('@/lib/user-storage'));
   download = await import('@/app/api/tools/important-documents/download/[documentId]/route');
   addresses = await import('@/app/api/tools/address-book/route');
   repairs = await import('@/app/api/tools/repair-history/route');
@@ -303,6 +309,10 @@ function read(table: string, id: string) {
 
 function count(table: string) {
   return tables.get(table)?.size ?? 0;
+}
+
+function lockRows() {
+  return [...(tables.get('secret_attempt_locks')?.values() ?? [])];
 }
 
 function snapshot(table: string) {
@@ -629,6 +639,112 @@ test('protected notes hide content until the server accepts the password', async
   assert.equal(foreignText.includes('B-SECRET'), false);
 });
 
+test('a household shares one lock for a note, and another household cannot change it', async () => {
+  seedHouseholds();
+  seed('tools_note_security_questions', {
+    id: 'sq-locked',
+    note_id: 'note-locked',
+    user_id: OWNER_A,
+    question_id: 'q1',
+    answer_hash: passwordHash,
+  });
+  signIn(OWNER_A);
+
+  const questions = await noteReset.GET(new NextRequest('http://local/notes/reset?noteId=note-locked'));
+  const questionText = await questions.text();
+  assert.equal(questions.status, 200);
+  assert.equal(questionText.includes('What city were you born in?'), true);
+  assert.equal(questionText.includes(passwordHash), false);
+
+  for (let attempt = 1; attempt < secretAttemptLimit - 1; attempt += 1) {
+    const wrong = await verifyPassword.POST(post('http://local/notes/verify', { noteId: 'note-locked', password: 'nope' }));
+    assert.equal(wrong.status, 200);
+    assert.deepEqual(await wrong.json(), { valid: false });
+  }
+  const wrongAnswers = await noteReset.POST(post('http://local/notes/reset', {
+    noteId: 'note-locked',
+    answers: [{ questionId: 'q1', answer: 'nope' }],
+    newPassword: '',
+  }));
+  assert.equal(wrongAnswers.status, 403);
+
+  signIn(OWNER_A, 'user');
+  const lockedAttempt = await verifyPassword.POST(post('http://local/notes/verify', { noteId: 'note-locked', password: 'nope' }));
+  const lockedBody = await lockedAttempt.json();
+  assert.equal(lockedAttempt.status, 429);
+  assert.equal(String(lockedBody.error).includes('Too many attempts'), true);
+  assert.equal(lockedAttempt.headers.get('retry-after') !== null, true);
+
+  signIn(OWNER_A);
+  const stillLocked = await verifyPassword.POST(post('http://local/notes/verify', { noteId: 'note-locked', password: 'correct-password' }));
+  const stillLockedText = await stillLocked.text();
+  assert.equal(stillLocked.status, 429);
+  assert.equal(stillLockedText.includes('SECRET-BODY'), false);
+
+  const questionsWhileLocked = await noteReset.GET(new NextRequest('http://local/notes/reset?noteId=note-locked'));
+  assert.equal(questionsWhileLocked.status, 429);
+  const countedWhileLocked = await noteReset.POST(post('http://local/notes/reset', {
+    noteId: 'note-locked',
+    answers: [{ questionId: 'q1', answer: 'nope' }],
+    newPassword: '',
+  }));
+  assert.equal(countedWhileLocked.status, 429);
+  assert.equal(lockRows().length, 1);
+  assert.equal(lockRows()[0]?.user_id, OWNER_A);
+  assert.equal(lockRows()[0]?.record_kind, 'note');
+  assert.equal(lockRows()[0]?.record_id, 'note-locked');
+  assert.equal(lockRows()[0]?.failure_count, secretAttemptLimit);
+
+  signIn(OWNER_B);
+  const foreign = await verifyPassword.POST(post('http://local/notes/verify', { noteId: 'note-locked', password: 'correct-password' }));
+  assert.equal(foreign.status, 404);
+  assert.equal(lockRows().length, 1);
+  assert.equal(lockRows()[0]?.failure_count, secretAttemptLimit);
+
+  signIn(OWNER_A);
+  const stored = lockRows()[0];
+  assert.ok(stored);
+  stored.locked_until = new Date(Date.now() - 1000).toISOString();
+  const unlocked = await verifyPassword.POST(post('http://local/notes/verify', { noteId: 'note-locked', password: 'correct-password' }));
+  assert.equal(unlocked.status, 200);
+  assert.deepEqual(await unlocked.json(), { valid: true, note: 'SECRET-BODY' });
+  assert.equal(lockRows().length, 0);
+
+  const missingPassword = await download.POST(post('http://local/documents/doc-a', {}), { params: Promise.resolve({ documentId: 'doc-a' }) });
+  assert.equal(missingPassword.status, 403);
+  assert.equal(lockRows().length, 0);
+  for (let attempt = 1; attempt <= secretAttemptLimit; attempt += 1) {
+    const wrong = await download.POST(
+      post('http://local/documents/doc-a', { password: 'nope' }),
+      { params: Promise.resolve({ documentId: 'doc-a' }) }
+    );
+    assert.equal(wrong.status, attempt === secretAttemptLimit ? 429 : 403);
+  }
+  const documentLocked = await download.POST(
+    post('http://local/documents/doc-a', { password: 'correct-password' }),
+    { params: Promise.resolve({ documentId: 'doc-a' }) }
+  );
+  const documentLockedText = await documentLocked.text();
+  assert.equal(documentLocked.status, 429);
+  assert.equal(documentLockedText.includes(passwordHash), false);
+  assert.equal(lockRows()[0]?.record_kind, 'document');
+  assert.equal(lockRows()[0]?.record_id, 'doc-a');
+  assert.equal(lockRows()[0]?.user_id, OWNER_A);
+
+  const noteStillOpens = await verifyPassword.POST(post('http://local/notes/verify', { noteId: 'note-locked', password: 'correct-password' }));
+  assert.equal(noteStillOpens.status, 200);
+
+  signIn(OWNER_B);
+  const foreignDocument = await download.POST(
+    post('http://local/documents/doc-a', { password: 'correct-password' }),
+    { params: Promise.resolve({ documentId: 'doc-a' }) }
+  );
+  assert.equal(foreignDocument.status, 404);
+  assert.equal(lockRows().length, 1);
+  assert.equal(lockRows()[0]?.user_id, OWNER_A);
+  assert.equal(lockRows()[0]?.failure_count, secretAttemptLimit);
+});
+
 test('note and address tag ids from another household do not change the record', async () => {
   seedHouseholds();
   signIn(OWNER_A);
@@ -847,4 +963,33 @@ test('another household cannot add storage to this account', async () => {
   assert.equal(response.status, 200);
   assert.equal(read('users', OWNER_A)?.storage_addon_gb, 1);
   assert.equal(read('users', OWNER_B)?.storage_addon_gb, 1);
+});
+
+test('saved storage usage adds and subtracts without changing another household', async () => {
+  tables.clear();
+  seed('users', {
+    id: OWNER_A,
+    storage_addon_gb: 0,
+    storage_plan: 'free',
+    storage_used_bytes: 100,
+    storage_usage_updated_at: '2026-01-01T00:00:00.000Z',
+  });
+  seed('users', {
+    id: OWNER_B,
+    storage_addon_gb: 0,
+    storage_plan: 'free',
+    storage_used_bytes: 80,
+    storage_usage_updated_at: '2026-01-01T00:00:00.000Z',
+  });
+
+  await adjustUserStorageUsage(OWNER_A, 50);
+  assert.equal(read('users', OWNER_A)?.storage_used_bytes, 150);
+  assert.equal(read('users', OWNER_B)?.storage_used_bytes, 80);
+
+  await adjustUserStorageUsage(OWNER_A, -40);
+  assert.equal(read('users', OWNER_A)?.storage_used_bytes, 110);
+
+  await adjustUserStorageUsage(OWNER_A, -1000);
+  assert.equal(read('users', OWNER_A)?.storage_used_bytes, 0);
+  assert.equal(read('users', OWNER_B)?.storage_used_bytes, 80);
 });

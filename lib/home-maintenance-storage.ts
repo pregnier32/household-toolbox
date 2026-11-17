@@ -1,6 +1,6 @@
 import { objectPathForOwner } from '@/lib/storage-owner';
 import { supabaseServer } from '@/lib/supabaseServer';
-import { refreshUserStorageUsage } from '@/lib/user-storage';
+import { removeStoredObjects } from '@/lib/user-storage';
 import type { HmsAttachment } from '@/lib/home-maintenance-schedule';
 
 export const HOME_MAINTENANCE_SCHEDULE_BUCKET = 'home-maintenance-schedule';
@@ -16,8 +16,7 @@ export function extractHmsStoragePath(fileUrl: string | null | undefined, ownerI
 export async function removeHmsStorageFiles(fileUrls: Array<string | null | undefined>, userId: string): Promise<void> {
   const paths = fileUrls.map((fileUrl) => extractHmsStoragePath(fileUrl, userId)).filter((path): path is string => Boolean(path));
   if (paths.length === 0) return;
-  await supabaseServer.storage.from(HOME_MAINTENANCE_SCHEDULE_BUCKET).remove(paths);
-  await refreshUserStorageUsage(userId);
+  await removeStoredObjects(userId, HOME_MAINTENANCE_SCHEDULE_BUCKET, paths);
 }
 
 export function mapHmsAttachment(row: {

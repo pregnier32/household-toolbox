@@ -1,6 +1,6 @@
 import { objectPathForOwner } from '@/lib/storage-owner';
 import { supabaseServer } from '@/lib/supabaseServer';
-import { refreshUserStorageUsage } from '@/lib/user-storage';
+import { removeStoredObjects } from '@/lib/user-storage';
 
 export const SHOPPING_LIST_BUCKET = 'shopping-list';
 
@@ -25,8 +25,7 @@ export async function removeShoppingListStorageFiles(
 ): Promise<void> {
   const paths = [...new Set(fileUrls.map((fileUrl) => extractShoppingListStoragePath(fileUrl, userId)).filter((path): path is string => Boolean(path)))];
   if (paths.length === 0) return;
-  await supabaseServer.storage.from(SHOPPING_LIST_BUCKET).remove(paths);
-  await refreshUserStorageUsage(userId);
+  await removeStoredObjects(userId, SHOPPING_LIST_BUCKET, paths);
 }
 
 export function mapShoppingListAttachment(row: {

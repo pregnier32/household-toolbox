@@ -4,11 +4,12 @@ import { NextRequest, NextResponse } from 'next/server';
 import { getHouseholdDataSession } from '@/lib/session';
 import { supabaseServer } from '@/lib/supabaseServer';
 import bcrypt from 'bcryptjs';
-import { assertCanStoreBytes, isStorageLimitError, refreshUserStorageUsage } from '@/lib/user-storage';
+import { adjustUserStorageUsage, assertCanStoreBytes, isStorageLimitError, removeStoredObjects } from '@/lib/user-storage';
 import { findOwnedRow, requireOwnedIds } from '@/lib/owned-record';
 import { withoutSecrets } from '@/lib/protected-content';
 import { objectPathForOwner } from '@/lib/storage-owner';
 import { placeAttachmentFile, readAttachmentRequest } from '@/lib/stored-file-transfer';
+import { clearSecretAttempts, registerSecretFailure, rejectLockedSecret } from '@/lib/secret-attempt-lock';
 
 // Constants
 const MAX_FILE_SIZE = 10 * 1024 * 1024; // 10MB in bytes
@@ -35,8 +36,7 @@ function extractStoragePath(fileUrl: string | null | undefined, ownerId: string)
 async function removeStoredDocumentFile(fileUrl: string | null | undefined, userId: string): Promise<void> {
   const path = extractStoragePath(fileUrl, userId);
   if (!path) return;
-  await supabaseServer.storage.from(DOCUMENT_BUCKET).remove([path]);
-  await refreshUserStorageUsage(userId);
+  await removeStoredObjects(userId, DOCUMENT_BUCKET, [path]);
 }
 
 // GET - Fetch all documents and tags for the current user
@@ -265,6 +265,9 @@ export async function POST(request: NextRequest) {
       }
 
       if (existing.requires_password_for_download) {
+        const attempt = { ownerId: user.id, kind: 'document' as const, recordId: documentId };
+        const locked = await rejectLockedSecret(attempt);
+        if (locked) return locked;
         const password = incoming.get('password');
         if (!password) {
           return NextResponse.json({ error: 'Password required' }, { status: 403 });
@@ -274,8 +277,12 @@ export async function POST(request: NextRequest) {
         }
         const isValid = await bcrypt.compare(password, existing.download_password_hash);
         if (!isValid) {
-          return NextResponse.json({ error: 'Incorrect password' }, { status: 403 });
+          return registerSecretFailure(
+            attempt,
+            NextResponse.json({ error: 'Incorrect password' }, { status: 403 })
+          );
         }
+        await clearSecretAttempts(attempt);
       }
 
       if (action === 'removeFile') {
@@ -349,9 +356,9 @@ export async function POST(request: NextRequest) {
 
       const oldPath = extractStoragePath(existing.file_url, user.id);
       if (oldPath) {
-        await supabaseServer.storage.from(DOCUMENT_BUCKET).remove([oldPath]);
+        await removeStoredObjects(user.id, DOCUMENT_BUCKET, [oldPath]);
       }
-      await refreshUserStorageUsage(user.id);
+      await adjustUserStorageUsage(user.id, placed.fileSize);
       return NextResponse.json({ success: true });
     }
 
@@ -446,7 +453,6 @@ export async function POST(request: NextRequest) {
       fileName = placed.fileName;
       fileSize = placed.fileSize;
       fileType = placed.fileType;
-      await refreshUserStorageUsage(user.id);
     }
 
     // Hash password if provided
@@ -481,9 +487,12 @@ export async function POST(request: NextRequest) {
         console.error('Error creating document:', docError);
         if (uploadedPath) {
           await supabaseServer.storage.from(DOCUMENT_BUCKET).remove([uploadedPath]);
-          await refreshUserStorageUsage(user.id);
         }
         return NextResponse.json({ error: 'Failed to create document' }, { status: 500 });
+      }
+
+      if (uploadedPath && fileSize) {
+        await adjustUserStorageUsage(user.id, fileSize);
       }
 
       // Create document-tag relationships
@@ -562,9 +571,12 @@ export async function POST(request: NextRequest) {
         console.error('Error updating document:', updateError);
         if (uploadedPath) {
           await supabaseServer.storage.from(DOCUMENT_BUCKET).remove([uploadedPath]);
-          await refreshUserStorageUsage(user.id);
         }
         return NextResponse.json({ error: 'Failed to update document' }, { status: 500 });
+      }
+
+      if (uploadedPath && fileSize) {
+        await adjustUserStorageUsage(user.id, fileSize);
       }
 
       // Update tags - delete old ones and insert new ones

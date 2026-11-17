@@ -1,6 +1,6 @@
 import { objectPathForOwner } from '@/lib/storage-owner';
 import { supabaseServer } from '@/lib/supabaseServer';
-import { refreshUserStorageUsage } from '@/lib/user-storage';
+import { removeStoredObjects } from '@/lib/user-storage';
 
 export const PET_CARE_BUCKET = 'pet-care-schedule';
 
@@ -61,8 +61,7 @@ export async function removePetCareStorageFiles(
     ...new Set(fileUrls.map((fileUrl) => extractPetCareStoragePath(fileUrl, userId)).filter((path): path is string => Boolean(path))),
   ];
   if (paths.length === 0) return;
-  await supabaseServer.storage.from(PET_CARE_BUCKET).remove(paths);
-  await refreshUserStorageUsage(userId);
+  await removeStoredObjects(userId, PET_CARE_BUCKET, paths);
 }
 
 function ownerIdFromRow(row: object, ownerColumn: string): string {

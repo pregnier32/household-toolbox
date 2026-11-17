@@ -1,6 +1,6 @@
 import { objectPathForOwner } from '@/lib/storage-owner';
 import { supabaseServer } from '@/lib/supabaseServer';
-import { refreshUserStorageUsage } from '@/lib/user-storage';
+import { removeStoredObjects } from '@/lib/user-storage';
 import type { CleaningAttachment } from '@/lib/cleaning-schedule';
 
 export const CLEANING_SCHEDULE_BUCKET = 'cleaning-schedule';
@@ -16,8 +16,7 @@ export function extractCleaningStoragePath(fileUrl: string | null | undefined, o
 export async function removeCleaningStorageFiles(fileUrls: Array<string | null | undefined>, userId: string): Promise<void> {
   const paths = fileUrls.map((fileUrl) => extractCleaningStoragePath(fileUrl, userId)).filter((path): path is string => Boolean(path));
   if (paths.length === 0) return;
-  await supabaseServer.storage.from(CLEANING_SCHEDULE_BUCKET).remove(paths);
-  await refreshUserStorageUsage(userId);
+  await removeStoredObjects(userId, CLEANING_SCHEDULE_BUCKET, paths);
 }
 
 export function mapCleaningAttachment(row: {

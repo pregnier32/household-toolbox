@@ -5,9 +5,9 @@ import { supabaseServer } from '@/lib/supabaseServer';
 import { readFileDownloadBody, streamStoredObject } from '@/lib/stored-file-transfer';
 import bcrypt from 'bcryptjs';
 import { authorizeStoredFileRead } from '@/lib/storage-owner';
+import { clearSecretAttempts, notePasswordDenied, registerSecretFailure } from '@/lib/secret-attempt-lock';
 import {
   NOTES_BUCKET,
-  assertNotePassword,
   isMissingRelationError,
   loadNoteFileGrants,
   loadOwnedNote,
@@ -47,10 +47,11 @@ export async function POST(
 
     const note = await loadOwnedNote(attachment.note_id, user.id);
     if (!note) return NextResponse.json({ error: 'Note not found' }, { status: 404 });
-    await assertNotePassword(note, password);
+    const denied = await notePasswordDenied(user.id, note, password);
+    if (denied) return denied;
 
     const related = await loadNoteFileGrants(user.id, attachment.id);
-    const decision = authorizeStoredFileRead({
+    const decision = await authorizeStoredFileRead({
       bucket: NOTES_BUCKET,
       ownerId: user.id,
       requested: {
@@ -61,10 +62,24 @@ export async function POST(
       },
       related,
       password,
-      passwordMatches: (entered, hash) => bcrypt.compareSync(entered, hash),
+      passwordMatches: (entered, hash) => bcrypt.compare(entered, hash),
     });
     if (!decision.ok) {
-      return NextResponse.json({ error: decision.error === 'Incorrect password' ? 'Incorrect password' : decision.error === 'Password required' ? 'Password required' : 'Invalid file path' }, { status: decision.status });
+      const error = decision.error === 'Incorrect password'
+        ? 'Incorrect password'
+        : decision.error === 'Password required'
+          ? 'Password required'
+          : 'Invalid file path';
+      if (decision.error === 'Incorrect password') {
+        return registerSecretFailure(
+          { ownerId: user.id, kind: 'note', recordId: note.id },
+          NextResponse.json({ error }, { status: decision.status })
+        );
+      }
+      return NextResponse.json({ error }, { status: decision.status });
+    }
+    if (note.requires_password_for_view) {
+      await clearSecretAttempts({ ownerId: user.id, kind: 'note', recordId: note.id });
     }
     const storagePath = decision.path;
 

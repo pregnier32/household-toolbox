@@ -1,6 +1,6 @@
 import { objectPathForOwner } from '@/lib/storage-owner';
 import { supabaseServer } from '@/lib/supabaseServer';
-import { refreshUserStorageUsage } from '@/lib/user-storage';
+import { removeStoredObjects } from '@/lib/user-storage';
 
 export const REPAIR_HISTORY_BUCKET = 'repair-history';
 
@@ -25,8 +25,7 @@ export async function removeRepairHistoryStorageFiles(
 ): Promise<void> {
   const paths = [...new Set(fileUrls.map((fileUrl) => extractRepairHistoryStoragePath(fileUrl, userId)).filter((path): path is string => Boolean(path)))];
   if (paths.length === 0) return;
-  await supabaseServer.storage.from(REPAIR_HISTORY_BUCKET).remove(paths);
-  await refreshUserStorageUsage(userId);
+  await removeStoredObjects(userId, REPAIR_HISTORY_BUCKET, paths);
 }
 
 export function mapRepairHistoryAttachment(row: {

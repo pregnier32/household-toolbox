@@ -1,6 +1,6 @@
 import { objectPathForOwner } from '@/lib/storage-owner';
 import { supabaseServer } from '@/lib/supabaseServer';
-import { refreshUserStorageUsage } from '@/lib/user-storage';
+import { removeStoredObjects } from '@/lib/user-storage';
 
 export const GOALS_TRACKING_BUCKET = 'goals-tracking';
 
@@ -27,8 +27,7 @@ export async function removeGoalsTrackingStorageFiles(
     ...new Set(fileUrls.map((fileUrl) => extractGoalsTrackingStoragePath(fileUrl, userId)).filter((path): path is string => Boolean(path))),
   ];
   if (paths.length === 0) return;
-  await supabaseServer.storage.from(GOALS_TRACKING_BUCKET).remove(paths);
-  await refreshUserStorageUsage(userId);
+  await removeStoredObjects(userId, GOALS_TRACKING_BUCKET, paths);
 }
 
 export function mapGoalsTrackingAttachment(row: {

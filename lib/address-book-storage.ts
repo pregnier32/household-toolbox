@@ -1,6 +1,6 @@
 import { objectPathForOwner } from '@/lib/storage-owner';
 import { supabaseServer } from '@/lib/supabaseServer';
-import { refreshUserStorageUsage } from '@/lib/user-storage';
+import { removeStoredObjects } from '@/lib/user-storage';
 
 export const ADDRESS_BOOK_BUCKET = 'address-book';
 
@@ -25,8 +25,7 @@ export async function removeAddressBookStorageFiles(
 ): Promise<void> {
   const paths = [...new Set(fileUrls.map((fileUrl) => extractAddressBookStoragePath(fileUrl, userId)).filter((path): path is string => Boolean(path)))];
   if (paths.length === 0) return;
-  await supabaseServer.storage.from(ADDRESS_BOOK_BUCKET).remove(paths);
-  await refreshUserStorageUsage(userId);
+  await removeStoredObjects(userId, ADDRESS_BOOK_BUCKET, paths);
 }
 
 export function mapAddressBookAttachment(row: {

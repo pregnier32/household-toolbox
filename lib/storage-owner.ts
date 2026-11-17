@@ -126,14 +126,14 @@ export function authorizeStorageKey(input: {
  * supplied password. A copy's own password is not enough when another record
  * protects that key with a different hash.
  */
-export function authorizeStoredFileRead(input: {
+export async function authorizeStoredFileRead(input: {
   bucket: string;
   ownerId: string;
   requested: StoredFileGrant;
   related?: StoredFileGrant[];
   password?: string | null;
-  passwordMatches?: (entered: string, hash: string) => boolean;
-}): StorageAccessDecision {
+  passwordMatches?: (entered: string, hash: string) => boolean | Promise<boolean>;
+}): Promise<StorageAccessDecision> {
   const path = objectPathForOwner(input.requested.fileReference, input.bucket, input.ownerId);
   if (!path) return { ok: false, status: 404, error: 'Invalid file path' };
 
@@ -153,7 +153,7 @@ export function authorizeStoredFileRead(input: {
   }
   const hashes = [...new Set(grants.map((grant) => grant.passwordHash).filter((hash): hash is string => Boolean(hash)))];
   for (const hash of hashes) {
-    if (!input.passwordMatches(entered, hash)) {
+    if (!(await input.passwordMatches(entered, hash))) {
       return { ok: false, status: 403, error: 'Incorrect password' };
     }
   }

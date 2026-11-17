@@ -19,9 +19,9 @@ const FOREIGN = `${OTHER}/1700000000000-deed.pdf`;
 
 const same = (entered: string, hash: string) => entered === hash;
 
-test('an owner and a household member using the admin id can read an owned file', () => {
+test('an owner and a household member using the admin id can read an owned file', async () => {
   for (const ownerId of [OWNER, OWNER]) {
-    const decision = authorizeStoredFileRead({
+    const decision = await authorizeStoredFileRead({
       bucket: BUCKET,
       ownerId,
       requested: { recordId: 'doc-a', fileReference: OWNED, requiresPassword: false },
@@ -68,8 +68,8 @@ test('rewriting an owned reference to another household file fails', () => {
   assert.equal(storageObjectOwnedBy(OWNER, OWNER), true);
 });
 
-test('a same-household file reference cannot skip a document password', () => {
-  const unprotected = authorizeStoredFileRead({
+test('a same-household file reference cannot skip a document password', async () => {
+  const unprotected = await authorizeStoredFileRead({
     bucket: BUCKET,
     ownerId: OWNER,
     requested: { recordId: 'copy', fileReference: OWNED, requiresPassword: false },
@@ -80,7 +80,7 @@ test('a same-household file reference cannot skip a document password', () => {
   assert.equal(unprotected.ok, false);
   if (!unprotected.ok) assert.equal(unprotected.status, 403);
 
-  const copyPassword = authorizeStoredFileRead({
+  const copyPassword = await authorizeStoredFileRead({
     bucket: 'notes',
     ownerId: OWNER,
     requested: { recordId: 'copy', fileReference: NESTED, requiresPassword: true, passwordHash: 'copy-hash' },
@@ -90,7 +90,7 @@ test('a same-household file reference cannot skip a document password', () => {
   });
   assert.equal(copyPassword.ok, false);
 
-  const originalPassword = authorizeStoredFileRead({
+  const originalPassword = await authorizeStoredFileRead({
     bucket: BUCKET,
     ownerId: OWNER,
     requested: { recordId: 'copy', fileReference: OWNED, requiresPassword: false },
@@ -100,7 +100,7 @@ test('a same-household file reference cannot skip a document password', () => {
   });
   assert.equal(originalPassword.ok, true);
 
-  const differentFile = authorizeStoredFileRead({
+  const differentFile = await authorizeStoredFileRead({
     bucket: BUCKET,
     ownerId: OWNER,
     requested: { recordId: 'mine', fileReference: `${OWNER}/mine.pdf`, requiresPassword: false },
@@ -109,8 +109,8 @@ test('a same-household file reference cannot skip a document password', () => {
   assert.equal(differentFile.ok, true);
 });
 
-test('two records with the same password hash still open with that password', () => {
-  const opened = authorizeStoredFileRead({
+test('two records with the same password hash still open with that password', async () => {
+  const opened = await authorizeStoredFileRead({
     bucket: 'notes',
     ownerId: OWNER,
     requested: { recordId: 'copy', fileReference: NESTED, requiresPassword: true, passwordHash: 'shared-hash' },
@@ -119,6 +119,15 @@ test('two records with the same password hash still open with that password', ()
     passwordMatches: same,
   });
   assert.equal(opened.ok, true);
+
+  const promised = await authorizeStoredFileRead({
+    bucket: 'notes',
+    ownerId: OWNER,
+    requested: { recordId: 'copy', fileReference: NESTED, requiresPassword: true, passwordHash: 'shared-hash' },
+    password: 'shared-hash',
+    passwordMatches: async (entered, hash) => entered === hash,
+  });
+  assert.equal(promised.ok, true);
 });
 
 test('owned deletes keep the owned key and drop every other key', () => {

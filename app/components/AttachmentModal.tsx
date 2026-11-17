@@ -104,12 +104,10 @@ export function AttachmentModal({
       return true;
     };
 
-    fetch('/api/account/storage?refresh=1')
+    fetch('/api/account/storage')
       .then((res) => (res.ok ? res.json() : null))
-      .then(async (data) => {
-        if (applyStorage(data)) return;
-        const cached = await fetch('/api/account/storage');
-        applyStorage(cached.ok ? await cached.json() : null);
+      .then((data) => {
+        applyStorage(data);
       })
       .catch(() => setStorage(null));
 

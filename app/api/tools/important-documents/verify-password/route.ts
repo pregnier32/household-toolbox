@@ -2,6 +2,7 @@ import { denyLockedToolAccess, denyRemovedTool } from '@/lib/billing-access';
 import { NextRequest, NextResponse } from 'next/server';
 import { getHouseholdDataSession } from '@/lib/session';
 import { supabaseServer } from '@/lib/supabaseServer';
+import { clearSecretAttempts, registerSecretFailure, rejectLockedSecret } from '@/lib/secret-attempt-lock';
 import bcrypt from 'bcryptjs';
 
 // POST - Verify download password for a document
@@ -44,10 +45,15 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'Password not set for this document' }, { status: 400 });
     }
 
-    // Verify password
-    const isValid = await bcrypt.compare(password, document.download_password_hash);
+    const attempt = { ownerId: user.id, kind: 'document' as const, recordId: String(documentId) };
+    const locked = await rejectLockedSecret(attempt);
+    if (locked) return locked;
 
-    return NextResponse.json({ valid: isValid });
+    const isValid = await bcrypt.compare(password, document.download_password_hash);
+    if (!isValid) return registerSecretFailure(attempt, NextResponse.json({ valid: false }));
+
+    await clearSecretAttempts(attempt);
+    return NextResponse.json({ valid: true });
   } catch (error: any) {
     console.error('Error in POST /api/tools/important-documents/verify-password:', error);
     return NextResponse.json(

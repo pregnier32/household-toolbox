@@ -1,6 +1,6 @@
 import { objectPathForOwner } from '@/lib/storage-owner';
 import { supabaseServer } from '@/lib/supabaseServer';
-import { refreshUserStorageUsage } from '@/lib/user-storage';
+import { removeStoredObjects } from '@/lib/user-storage';
 
 export const HSA_BUCKET = 'hsa-tracker';
 
@@ -22,8 +22,7 @@ export function extractHsaStoragePath(fileUrl: string | null | undefined, ownerI
 export async function removeHsaStorageFiles(fileUrls: Array<string | null | undefined>, userId: string): Promise<void> {
   const paths = fileUrls.map((fileUrl) => extractHsaStoragePath(fileUrl, userId)).filter((path): path is string => Boolean(path));
   if (paths.length === 0) return;
-  await supabaseServer.storage.from(HSA_BUCKET).remove(paths);
-  await refreshUserStorageUsage(userId);
+  await removeStoredObjects(userId, HSA_BUCKET, paths);
 }
 
 export function mapHsaAttachment(row: {

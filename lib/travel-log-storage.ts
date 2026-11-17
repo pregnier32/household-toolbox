@@ -1,6 +1,6 @@
 import { objectPathForOwner } from '@/lib/storage-owner';
 import { supabaseServer } from '@/lib/supabaseServer';
-import { refreshUserStorageUsage } from '@/lib/user-storage';
+import { removeStoredObjects } from '@/lib/user-storage';
 
 export const TRAVEL_LOG_BUCKET = 'travel-log';
 
@@ -22,8 +22,7 @@ export function extractTravelLogStoragePath(fileUrl: string | null | undefined, 
 export async function removeTravelLogStorageFiles(fileUrls: Array<string | null | undefined>, userId: string): Promise<void> {
   const paths = fileUrls.map((fileUrl) => extractTravelLogStoragePath(fileUrl, userId)).filter((path): path is string => Boolean(path));
   if (paths.length === 0) return;
-  await supabaseServer.storage.from(TRAVEL_LOG_BUCKET).remove(paths);
-  await refreshUserStorageUsage(userId);
+  await removeStoredObjects(userId, TRAVEL_LOG_BUCKET, paths);
 }
 
 export function mapTravelLogAttachment(row: {

@@ -821,7 +821,6 @@ export function PetCareScheduleTool({ toolId }: PetCareScheduleToolProps) {
             priority: (c.priority && ['low', 'medium', 'high'].includes(c.priority)) ? c.priority : 'medium' as 'low' | 'medium' | 'high',
             addToDashboard: c.addToDashboard === true && c.is_active !== false,
           };
-          console.log(`Loading care plan item: ${mappedItem.name}, notes: "${mappedItem.notes}"`);
           return mappedItem;
         }));
         
@@ -898,9 +897,6 @@ export function PetCareScheduleTool({ toolId }: PetCareScheduleToolProps) {
     const documentsToUse = documentsToSave || documents;
     const notesToUse = notesToSave ?? notesRef.current;
     notesRef.current = notesToUse;
-    
-    console.log(`[savePetData] Starting save for pet ${petIdForSave}, care plan items count: ${itemsToUse.length}`);
-    console.log(`[savePetData] Care plan items:`, itemsToUse.map(c => ({ name: c.name, notes: c.notes })));
 
     try {
       const petData = {
@@ -947,7 +943,6 @@ export function PetCareScheduleTool({ toolId }: PetCareScheduleToolProps) {
           })),
           carePlanItems: itemsToUse.map(c => {
             const notesValue = (c.notes && typeof c.notes === 'string' && c.notes.trim()) ? c.notes.trim() : '';
-            console.log(`Saving care plan item: ${c.name}, notes: "${notesValue}", priority: "${c.priority || 'medium'}"`);
             return {
               id: c.id,
               name: c.name,
@@ -1698,7 +1693,6 @@ export function PetCareScheduleTool({ toolId }: PetCareScheduleToolProps) {
     
     // Save to database immediately using the updated items
     setTimeout(() => {
-      console.log(`Saving with updated foods, food notes: ${updatedFoods.find(f => f.id === editingFoodId)?.notes}`);
       savePetData(undefined, updatedFoods);
     }, 100);
   };
@@ -1740,7 +1734,6 @@ export function PetCareScheduleTool({ toolId }: PetCareScheduleToolProps) {
   };
 
   const startEditingCareItem = (item: CarePlanItem) => {
-    console.log(`Starting to edit care plan item: ${item.name}, current notes: "${item.notes}"`);
     setEditingCareItemId(item.id);
     setEditingCareItem({ 
       name: item.name, 
@@ -1760,8 +1753,7 @@ export function PetCareScheduleTool({ toolId }: PetCareScheduleToolProps) {
     if (!editingCareItemId || !editingCareItem.name.trim()) return;
     
     const notesValue = (editingCareItem.notes && editingCareItem.notes.trim()) ? editingCareItem.notes.trim() : '';
-    console.log(`Saving care plan item edit: ${editingCareItem.name}, notes: "${notesValue}"`);
-    
+
     // Calculate updated items first (outside of setState)
             const updatedItems = carePlanItems.map(item => 
       item.id === editingCareItemId 
@@ -1775,11 +1767,7 @@ export function PetCareScheduleTool({ toolId }: PetCareScheduleToolProps) {
           }
         : item
     );
-    
-    // Log the updated item to verify notes are included
-    const updatedItem = updatedItems.find(item => item.id === editingCareItemId);
-    console.log(`Updated care plan item: ${updatedItem?.name}, notes: "${updatedItem?.notes}"`);
-    
+
     // Update state
     setCarePlanItems(updatedItems);
     
@@ -1788,7 +1776,6 @@ export function PetCareScheduleTool({ toolId }: PetCareScheduleToolProps) {
     
     // Save to database using the updated items (after state update)
     setTimeout(() => {
-      console.log(`Saving with updated items, care plan item notes: ${updatedItem?.notes}`);
       savePetData(updatedItems);
     }, 100);
   };
@@ -1857,7 +1844,6 @@ export function PetCareScheduleTool({ toolId }: PetCareScheduleToolProps) {
     
     // Save to database immediately using the updated items
     setTimeout(() => {
-      console.log(`Saving with updated vaccinations, vaccination notes: ${updatedVaccinations.find(v => v.id === editingVaccinationId)?.notes}`);
       savePetData(undefined, undefined, undefined, updatedVaccinations);
     }, 100);
   };
@@ -2040,7 +2026,6 @@ export function PetCareScheduleTool({ toolId }: PetCareScheduleToolProps) {
     
     // Save to database immediately using the updated items
     setTimeout(() => {
-      console.log(`Saving with updated vet records, vet record notes: ${updatedVetRecords.find(v => v.id === editingVetRecordId)?.notes}`);
       savePetData(undefined, undefined, updatedVetRecords);
     }, 100);
   };
@@ -2118,7 +2103,6 @@ export function PetCareScheduleTool({ toolId }: PetCareScheduleToolProps) {
     
     // Save to database immediately using the updated items
     setTimeout(() => {
-      console.log(`Saving with updated documents`);
       savePetData(undefined, undefined, undefined, undefined, undefined, updatedDocuments);
     }, 100);
   };
@@ -2189,7 +2173,6 @@ export function PetCareScheduleTool({ toolId }: PetCareScheduleToolProps) {
     
     // Save to database immediately using the updated items
     setTimeout(() => {
-      console.log(`Saving with updated notes, note content: ${updatedNotes.find(n => n.id === editingNoteId)?.content}`);
       savePetData(undefined, undefined, undefined, undefined, undefined, undefined, updatedNotes);
     }, 100);
   };

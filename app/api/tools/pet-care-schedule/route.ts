@@ -232,19 +232,6 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'Tool ID is required' }, { status: 400 });
     }
 
-    // Debug logging
-    console.log('Pet Care Schedule POST - Received data:');
-    console.log(`- petId: ${petId}`);
-    console.log(`- toolId: ${toolId}`);
-    console.log(`- appointments: ${appointments?.length || 0} items`);
-    console.log(`- carePlanItems: ${carePlanItems?.length || 0} items`);
-    if (appointments && appointments.length > 0) {
-      console.log('Appointments:', JSON.stringify(appointments, null, 2));
-    }
-    if (carePlanItems && carePlanItems.length > 0) {
-      console.log('Care Plan Items:', JSON.stringify(carePlanItems, null, 2));
-    }
-
     let finalPetId = petId;
 
     // Create or update pet
