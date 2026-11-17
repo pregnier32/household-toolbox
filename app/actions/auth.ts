@@ -7,6 +7,7 @@ import { getSession, getSessionGate } from '@/lib/session';
 import { createSupabaseAuthServerClient } from '@/lib/supabaseAuthServer';
 import { authCallbackUrl } from '@/lib/auth-app-origin';
 import { sendWelcomeEmailForNewUser } from '@/lib/email';
+import { existingEmailSignUpResult, publicSignUpResult } from '@/lib/signup-response';
 import { isThemeMode, type ThemeMode } from '@/lib/theme-mode';
 
 type SignUpData = {
@@ -183,10 +184,6 @@ export async function signUp(data: SignUpData): Promise<SignUpResult> {
       console.error('Signup existing-user check failed');
       return { success: false, error: 'An unexpected error occurred. Please try again.' };
     }
-    if (existingUser) {
-      return { success: false, error: 'An account with this email already exists' };
-    }
-
     const supabase = await createSupabaseAuthServerClient();
     const created = await supabase.auth.signUp({
       email,
@@ -195,21 +192,27 @@ export async function signUp(data: SignUpData): Promise<SignUpResult> {
         emailRedirectTo: authCallbackUrl('/dashboard'),
       },
     });
+    if (created.data.session) {
+      await supabase.auth.signOut();
+    }
+
+    const existingReply = existingEmailSignUpResult({
+      errorCode: created.error?.code,
+      identities: created.error ? null : created.data.user?.identities,
+    });
+    if (existingReply) return existingReply;
 
     if (created.error || !created.data.user) {
-      if (created.error?.code === 'user_already_exists') {
-        return { success: false, error: 'An account with this email already exists' };
-      }
       console.error('Auth signup failed', created.error?.code ?? 'no_user');
       return { success: false, error: 'An unexpected error occurred. Please try again.' };
     }
 
-    const identities = created.data.user.identities ?? [];
-    if (identities.length === 0) {
-      return { success: false, error: 'An account with this email already exists' };
-    }
-
     const userId = created.data.user.id;
+    if (existingUser) {
+      const removed = await supabaseServer.auth.admin.deleteUser(userId);
+      if (removed.error) console.error('Failed to delete signup that matched an existing profile', userId);
+      return publicSignUpResult(!created.data.user.email_confirmed_at);
+    }
 
     const userData: TablesInsert<'users'> = {
       id: userId,
@@ -223,26 +226,22 @@ export async function signUp(data: SignUpData): Promise<SignUpResult> {
     };
 
     const { error: insertError } = await supabaseServer.from('users').insert(userData).select('id').single();
+    const needsEmailConfirmation = !created.data.user.email_confirmed_at;
     if (insertError) {
       console.error('Profile insert failed after Auth signup', userId);
       const removed = await supabaseServer.auth.admin.deleteUser(userId);
       if (removed.error) {
         console.error('Failed to delete orphaned Auth user', userId);
       }
-      await supabase.auth.signOut();
+      if (insertError.code === '23505') return publicSignUpResult(needsEmailConfirmation);
       return { success: false, error: 'An unexpected error occurred. Please try again.' };
     }
 
-    if (created.data.session) {
-      await supabase.auth.signOut();
-    }
-
-    const needsEmailConfirmation = !created.data.user.email_confirmed_at;
     if (!needsEmailConfirmation) {
       await sendWelcomeEmailForNewUser({ userId, to: email, firstName });
     }
 
-    return { success: true, userId, needsEmailConfirmation };
+    return publicSignUpResult(needsEmailConfirmation);
   } catch {
     console.error('Sign up error');
     return { success: false, error: 'An unexpected error occurred. Please try again.' };

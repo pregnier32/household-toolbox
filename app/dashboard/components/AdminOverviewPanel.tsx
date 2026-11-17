@@ -224,15 +224,18 @@ export function AdminOverviewPanel() {
                       borderRadius: '8px',
                       color: '#e2e8f0',
                     }}
-                    formatter={(value: number) => [
-                      new Intl.NumberFormat('en-US', {
-                        style: 'currency',
-                        currency: 'USD',
-                        minimumFractionDigits: 2,
-                        maximumFractionDigits: 2,
-                      }).format(value),
-                      'Revenue',
-                    ]}
+                    formatter={(value) => {
+                      const amount = typeof value === 'number' ? value : 0;
+                      return [
+                        new Intl.NumberFormat('en-US', {
+                          style: 'currency',
+                          currency: 'USD',
+                          minimumFractionDigits: 2,
+                          maximumFractionDigits: 2,
+                        }).format(amount),
+                        'Revenue',
+                      ];
+                    }}
                   />
                   <Bar dataKey="revenue" fill="#10b981" radius={[4, 4, 0, 0]} />
                 </BarChart>
