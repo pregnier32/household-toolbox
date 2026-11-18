@@ -11,6 +11,7 @@ import {
   type InvoiceStatus,
   type LedgerInvoice,
 } from '@/lib/billing-ledger';
+import { savedToolLockIsFresh } from '@/lib/tool-access-policy';
 
 export type BillingAccountRow = {
   user_id: string;
@@ -111,7 +112,14 @@ export async function ensureBillingAccount(userId: string): Promise<void> {
 
 export async function syncHouseholdToolAccess(userId: string, locked: boolean, reason: string, known?: BillingAccountRow | null): Promise<void> {
   const account = known === undefined ? await loadBillingAccount(userId) : known;
-  if (account && Boolean(account.tool_access_locked) === locked && (account.tool_access_reason ?? 'open') === reason) return;
+  const sameDecision = Boolean(account)
+    && Boolean(account?.tool_access_locked) === locked
+    && (account?.tool_access_reason ?? 'open') === reason;
+  if (
+    sameDecision
+    && typeof account?.tool_access_locked === 'boolean'
+    && savedToolLockIsFresh(account.tool_access_synced_at)
+  ) return;
   if (!account) {
     const { error } = await supabaseServer.from('billing_accounts').insert(stripeMode() === 'live'
       ? {

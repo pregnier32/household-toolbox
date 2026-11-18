@@ -46,6 +46,15 @@ export function ToolModal({ tool, isOpen, onClose, onBuy, isBuying = false, buyM
   const trialNoticeTextClass = isLight
     ? 'text-sm text-amber-900 text-center'
     : 'text-sm text-amber-300 text-center';
+  const trialNotice = !tool
+    ? ''
+    : tool.offerNote ||
+      (tool.offers_trial === false
+        ? `Expected cost $${tool.price.toFixed(2)} per month. Payment setup will be required later. No payment is collected now.`
+        : tool.trialEligible === false
+          ? 'You already used the 7-day trial for this tool. If it is not covered, payment setup will be required later. No payment is collected now.'
+          : '7-day free trial. No payment is required to start.');
+  const showFreeToolsLine = trialNotice === '7-day free trial. No payment is required to start.';
 
   // Close modal on Escape key
   useEffect(() => {
@@ -131,16 +140,16 @@ export function ToolModal({ tool, isOpen, onClose, onBuy, isBuying = false, buyM
               ${tool.price.toFixed(2)} / month
             </p>
             {tool.status !== 'coming_soon' && tool.status !== 'custom' && (
-              <div className={trialNoticeWrapClass}>
-                <p className={trialNoticeTextClass}>
-                  {tool.offerNote ||
-                    (tool.offers_trial === false
-                      ? `Expected cost $${tool.price.toFixed(2)} per month. Payment setup will be required later. No payment is collected now.`
-                      : tool.trialEligible === false
-                        ? 'You already used the 7-day trial for this tool. If it is not covered, payment setup will be required later. No payment is collected now.'
-                        : '7-day free trial. No payment is required to start.')}
-                </p>
-              </div>
+              <>
+                <div className={trialNoticeWrapClass}>
+                  <p className={trialNoticeTextClass}>{trialNotice}</p>
+                </div>
+                {showFreeToolsLine && (
+                  <p className="-mt-2 mb-4 text-center text-sm text-slate-300">
+                    Your first 2 tools are always free.
+                  </p>
+                )}
+              </>
             )}
           </>
         )}

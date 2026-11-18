@@ -1,9 +1,20 @@
-import { NextResponse } from 'next/server';
+import { NextRequest, NextResponse } from 'next/server';
 import { getSession } from '@/lib/session';
 import { supabaseServer } from '@/lib/supabaseServer';
-import { getSiteStorageStats } from '@/lib/user-storage';
+import { getSiteStorageStatsAsOf } from '@/lib/user-storage';
+import { describeBillingSummary } from '@/lib/billing-summary';
+import { loadAccountPricingInputs } from '@/lib/load-account-pricing';
+import {
+  calendarMonthKey,
+  paymentsFromLedger,
+  resolveAsOf,
+  revenueByDayOfMonth,
+  revenueSummary,
+  type LedgerInvoiceRow,
+  type PaymentEventRow,
+} from '@/lib/admin-overview-stats';
 
-export async function GET() {
+export async function GET(request: NextRequest) {
   // Check if user is authenticated and is a superadmin
   const user = await getSession();
   
@@ -16,10 +27,16 @@ export async function GET() {
   }
 
   try {
+    const asOf = resolveAsOf(request.nextUrl.searchParams.get('asOf'));
+    const createdFrom = <T extends { gte: (column: string, value: string) => T }>(query: T): T => (
+      query.gte('created_at', asOf.start)
+    );
+
     const { count: adminStatusCount, error: adminStatusError } = await supabaseServer
       .from('users')
       .select('*', { count: 'exact', head: true })
-      .eq('user_status', 'admin');
+      .eq('user_status', 'admin')
+      .gte('created_at', asOf.start);
 
     if (adminStatusError) {
       console.error('Error fetching admin user count:', adminStatusError);
@@ -30,7 +47,8 @@ export async function GET() {
     const { count: guestCount, error: guestError } = await supabaseServer
       .from('users')
       .select('*', { count: 'exact', head: true })
-      .eq('user_status', 'guest');
+      .eq('user_status', 'guest')
+      .gte('created_at', asOf.start);
 
     if (guestError) {
       console.error('Error fetching guest user count:', guestError);
@@ -55,7 +73,7 @@ export async function GET() {
 
     // Count active tools owned by accounts other than superadmin
     const { count: activeTrialToolsCount, error: toolsError } = await excludeSuperadmin(
-      supabaseServer.from('users_tools').select('*', { count: 'exact', head: true }).eq('status', 'active'),
+      createdFrom(supabaseServer.from('users_tools').select('*', { count: 'exact', head: true }).eq('status', 'active')),
       'user_id',
     );
 
@@ -70,7 +88,7 @@ export async function GET() {
       : 0;
 
     const { data: usersToolsData, error: usersToolsError } = await excludeSuperadmin(
-      supabaseServer.from('users_tools').select('tool_id').eq('status', 'active'),
+      createdFrom(supabaseServer.from('users_tools').select('tool_id').eq('status', 'active')),
       'user_id',
     );
 
@@ -106,13 +124,10 @@ export async function GET() {
         return a.name.localeCompare(b.name, undefined, { sensitivity: 'base' });
       });
 
-    // Twelve months starting August 2026.
-    const chartStart = new Date(2026, 7, 1);
-
     const { data: usersData, error: usersError } = await supabaseServer
       .from('users')
       .select('created_at')
-      .gte('created_at', new Date(Date.UTC(2026, 7, 1)).toISOString())
+      .gte('created_at', asOf.start)
       .neq('user_status', 'superadmin');
 
     if (usersError) {
@@ -120,42 +135,26 @@ export async function GET() {
       return NextResponse.json({ error: 'Failed to fetch stats' }, { status: 500 });
     }
 
-    const monthsData: { month: string; count: number; monthKey: string }[] = [];
-    const monthCounts = new Map<string, number>();
+    const monthCounts = new Map<string, number>(asOf.series.map((item) => [item.monthKey, 0]));
 
-    for (let i = 0; i < 12; i++) {
-      const cursor = new Date(chartStart.getFullYear(), chartStart.getMonth() + i, 1);
-      const monthKey = `${cursor.getFullYear()}-${String(cursor.getMonth() + 1).padStart(2, '0')}`;
-      const monthLabel = cursor.toLocaleDateString('en-US', { month: 'short', year: 'numeric' });
-      monthCounts.set(monthKey, 0);
-      monthsData.push({ month: monthLabel, count: 0, monthKey });
-    }
-
-    // Count users by month
     if (usersData) {
-      usersData.forEach((user) => {
-        if (user.created_at) {
-          const createdDate = new Date(user.created_at);
-          const monthKey = `${createdDate.getFullYear()}-${String(createdDate.getMonth() + 1).padStart(2, '0')}`;
-          const currentCount = monthCounts.get(monthKey) || 0;
-          monthCounts.set(monthKey, currentCount + 1);
-        }
-      });
-
-      // Update monthsData with counts
-      monthsData.forEach((item) => {
-        item.count = monthCounts.get(item.monthKey) || 0;
+      usersData.forEach((row) => {
+        if (!row.created_at) return;
+        const monthKey = calendarMonthKey(new Date(row.created_at));
+        if (!monthCounts.has(monthKey)) return;
+        monthCounts.set(monthKey, (monthCounts.get(monthKey) || 0) + 1);
       });
     }
 
-    // Remove monthKey from response
-    const responseData = monthsData.map(({ month, count }) => ({ month, count }));
+    const responseData = asOf.series.map((item) => ({
+      month: item.month,
+      count: monthCounts.get(item.monthKey) || 0,
+    }));
 
-    // Legacy billing tables were removed; return zero revenue values until Stripe replaces this.
-    const monthlyRevenue = 0;
-    const lifetimeRevenue = 0;
-    const revenueByDay: { date: string; revenue: number }[] = [];
-    const storageStats = await getSiteStorageStats(superadminIds);
+    const payments = await loadCollectedPayments(superadminIds);
+    const revenue = revenueSummary(payments, asOf.date);
+    const revenueByDay = await loadRevenueByDayOfMonth(superadminIds, new Date(asOf.start));
+    const storageStats = await getSiteStorageStatsAsOf(superadminIds, asOf.start);
 
     return NextResponse.json({ 
       adminStatusCount: adminStatusCount || 0,
@@ -164,9 +163,10 @@ export async function GET() {
       avgToolsPerAdmin: Math.round(avgToolsPerAdmin * 100) / 100, // Round to 2 decimal places
       usersByMonth: responseData,
       toolsByName: toolsByName,
-      monthlyRevenue: Math.round(monthlyRevenue * 100) / 100, // Round to 2 decimal places
-      lifetimeRevenue: Math.round(lifetimeRevenue * 100) / 100, // Round to 2 decimal places
-      revenueByDay: revenueByDay,
+      asOfDate: asOf.date,
+      monthlyRevenue: revenue.monthlyRevenue,
+      lifetimeRevenue: revenue.lifetimeRevenue,
+      revenueByDay,
       documentCount: storageStats.documentCount,
       storageUsedBytes: storageStats.usedBytes,
       storageUsedLabel: storageStats.usedLabel,
@@ -174,6 +174,116 @@ export async function GET() {
   } catch (error) {
     console.error('Error in stats API:', error);
     return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
+  }
+}
+
+function missingRelation(error: { code?: string; message?: string } | null): boolean {
+  if (!error) return false;
+  const message = (error.message || '').toLowerCase();
+  return error.code === '42P01' || error.code === 'PGRST205' || message.includes('does not exist') || message.includes('schema cache');
+}
+
+async function loadCollectedPayments(excludeUserIds: string[]): Promise<{ paidAt: string; amountCents: number }[]> {
+  // System Stats reports live collections. Sandbox invoices stay out of the business totals.
+  const livemode = true;
+
+  const invoices = await supabaseServer
+    .from('billing_invoices')
+    .select('stripe_invoice_id, user_id, status, amount_paid_cents, created_at, livemode')
+    .gt('amount_paid_cents', 0);
+  if (invoices.error) {
+    if (!missingRelation(invoices.error)) console.error('Error fetching paid invoices:', invoices.error);
+    return [];
+  }
+
+  const events = await supabaseServer
+    .from('stripe_events')
+    .select('type, created_at, payload')
+    .in('type', ['invoice.paid', 'payment_intent.succeeded'])
+    .eq('livemode', livemode);
+  if (events.error && !missingRelation(events.error)) {
+    console.error('Error fetching payment timestamps:', events.error);
+  }
+
+  const invoiceRows: LedgerInvoiceRow[] = (invoices.data ?? []).flatMap((row) => {
+    if (!row.stripe_invoice_id || !row.user_id || !row.created_at) return [];
+    return [{
+      stripeInvoiceId: row.stripe_invoice_id,
+      userId: row.user_id,
+      status: row.status ?? '',
+      amountPaidCents: Number(row.amount_paid_cents) || 0,
+      createdAt: row.created_at,
+      livemode: typeof row.livemode === 'boolean' ? row.livemode : null,
+    }];
+  });
+  const eventRows: PaymentEventRow[] = events.error ? [] : (events.data ?? []).flatMap((row) => {
+    if (!row.type || !row.created_at) return [];
+    return [{ type: row.type, createdAt: row.created_at, payload: row.payload }];
+  });
+
+  return paymentsFromLedger({
+    invoices: invoiceRows,
+    events: eventRows,
+    livemode,
+    excludeUserIds,
+  });
+}
+
+async function loadRevenueByDayOfMonth(excludeUserIds: string[], from: Date): Promise<{ day: string; revenue: number }[]> {
+  try {
+    const excluded = new Set(excludeUserIds);
+    const users = await supabaseServer
+      .from('users')
+      .select('id, is_test_account')
+      .neq('user_status', 'superadmin');
+    if (users.error) {
+      console.error('Error fetching accounts for billing days:', users.error);
+      return revenueByDayOfMonth([]);
+    }
+    const ids = (users.data ?? [])
+      .filter((row) => row.id && !row.is_test_account && !excluded.has(row.id))
+      .map((row) => row.id);
+    if (ids.length === 0) return revenueByDayOfMonth([]);
+
+    const [pricing, entitlements, owned] = await Promise.all([
+      loadAccountPricingInputs(ids),
+      supabaseServer.from('user_tool_entitlements').select('user_id, first_started_at').in('user_id', ids),
+      supabaseServer.from('users_tools').select('user_id, created_at').in('user_id', ids),
+    ]);
+    if (owned.error) {
+      console.error('Error fetching tool start dates:', owned.error);
+      return revenueByDayOfMonth([]);
+    }
+
+    const signupMs = new Map<string, number>();
+    const remember = (userId: string | null, value: string | null) => {
+      if (!userId || !value) return;
+      const parsed = Date.parse(value);
+      if (!Number.isFinite(parsed)) return;
+      const current = signupMs.get(userId);
+      if (current == null || parsed < current) signupMs.set(userId, parsed);
+    };
+    if (!entitlements.error) {
+      for (const row of entitlements.data ?? []) remember(row.user_id, row.first_started_at);
+    } else if (!missingRelation(entitlements.error)) {
+      console.error('Error fetching entitlement start dates:', entitlements.error);
+    }
+    for (const row of owned.data ?? []) remember(row.user_id, row.created_at);
+
+    const bills: { at: string; amountCents: number }[] = [];
+    for (const id of ids) {
+      const input = pricing.get(id);
+      const started = signupMs.get(id);
+      if (!input || started == null || input.tools.length === 0) continue;
+      const summary = describeBillingSummary(input, new Date(started).toISOString(), from, null);
+      const nextMs = Date.parse(summary.renewalAt);
+      if (summary.renewalCents <= 0 || !Number.isFinite(nextMs) || nextMs < from.getTime()) continue;
+      bills.push({ at: summary.renewalAt, amountCents: summary.renewalCents });
+    }
+    return revenueByDayOfMonth(bills);
+  } catch (error) {
+    console.error('Error building revenue by day:', error);
+    return revenueByDayOfMonth([]);
   }
 }
 

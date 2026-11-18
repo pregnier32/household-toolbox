@@ -13,7 +13,7 @@
     "test:authorization": "npx --yes tsx --import ./scripts/register-server-only.mjs --test --test-concurrency=1 lib/household-authorization.test.ts",
     "test:isolation": "npx --yes tsx --import ./scripts/register-server-only.mjs --test --test-concurrency=1 lib/household-isolation.integration.test.ts",
     "test:storage-owner": "npx --yes tsx --test lib/storage-owner.test.ts",
-    "test:billing": "npx --yes tsx --conditions=react-server --test --test-concurrency=1 lib/billing-ledger.test.ts lib/billing-card.test.ts lib/billing-payment-workflow.test.ts lib/billing-payment-state.test.ts lib/billing-stripe-anchor.test.ts lib/billing-db.test.ts lib/tool-access-policy.test.ts lib/billing-summary.test.ts lib/billing-checkout-payment.test.ts lib/billing-subscription.test.ts lib/billing-account-deletion.test.ts lib/billing-deletion-webhook.test.ts lib/auth-app-origin.test.ts lib/stripe-mode.test.ts lib/billing-commencement.test.ts lib/plan-stripe-refresh.test.ts lib/billing-job-log.test.ts"
+    "test:billing": "npx --yes tsx --conditions=react-server --test --test-concurrency=1 lib/billing-ledger.test.ts lib/billing-card.test.ts lib/billing-payment-workflow.test.ts lib/billing-payment-state.test.ts lib/billing-stripe-anchor.test.ts lib/billing-db.test.ts lib/tool-access-policy.test.ts lib/billing-summary.test.ts lib/billing-checkout-payment.test.ts lib/billing-subscription.test.ts lib/billing-account-deletion.test.ts lib/billing-deletion-webhook.test.ts lib/auth-app-origin.test.ts lib/stripe-mode.test.ts lib/billing-commencement.test.ts lib/plan-stripe-refresh.test.ts lib/billing-job-log.test.ts lib/admin-overview-stats.test.ts"
   },
   "dependencies": {
     "@supabase/ssr": "^0.12.7",

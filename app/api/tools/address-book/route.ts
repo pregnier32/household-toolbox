@@ -278,10 +278,6 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ address: { ...newAddress, attachments: [] } });
     }
 
-    if (tagIds.length === 0) {
-      return NextResponse.json({ error: 'At least one tag is required' }, { status: 400 });
-    }
-
     const { data: updatedAddress, error: updateError } = await supabaseServer
       .from('tools_ab_addresses')
       .update(addressRow)

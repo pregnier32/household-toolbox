@@ -18,6 +18,9 @@ import { billingAccountForMode } from './billing-environment';
 import { supabaseServer } from './supabaseServer';
 import {
   describeToolAccessPolicy,
+  LOCKED_ADMIN_MESSAGE,
+  LOCKED_MEMBER_MESSAGE,
+  savedToolLockIsFresh,
   toolAccessDenial,
   type AccessInvoice,
   type ToolAccessPolicy,
@@ -193,7 +196,14 @@ export async function denyLockedToolAccess(
   userId: string,
   role: 'admin' | 'user' = 'admin',
 ): Promise<NextResponse | null> {
-  const denial = toolAccessDenial(await loadToolAccessPolicy(userId), role);
+  const saved = await loadBillingAccount(userId);
+  if (saved && typeof saved.tool_access_locked === 'boolean' && savedToolLockIsFresh(saved.tool_access_synced_at)) {
+    if (!saved.tool_access_locked) return null;
+    return NextResponse.json({
+      error: role === 'user' ? LOCKED_MEMBER_MESSAGE : LOCKED_ADMIN_MESSAGE,
+    }, { status: 403 });
+  }
+  const denial = toolAccessDenial(await loadToolAccessPolicy(userId, new Date(), { account: saved }), role);
   if (!denial) return null;
   return NextResponse.json({ error: denial.error }, { status: denial.status });
 }

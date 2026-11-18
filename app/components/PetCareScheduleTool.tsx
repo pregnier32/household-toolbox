@@ -214,6 +214,15 @@ function formatPriorityLabel(value: string): string {
   return priority.charAt(0).toUpperCase() + priority.slice(1);
 }
 
+function withoutRemovedIds<T extends { id: string }>(rows: T[], removed: Set<string>): T[] {
+  if (removed.size === 0) return rows;
+  return rows.filter((row) => !removed.has(row.id));
+}
+
+function isAbortError(error: unknown): boolean {
+  return typeof error === 'object' && error !== null && 'name' in error && (error as { name: string }).name === 'AbortError';
+}
+
 function mapStoredFiles(raw: unknown): StoredAttachment[] {
   if (!Array.isArray(raw)) return [];
   return raw
@@ -507,8 +516,9 @@ export function PetCareScheduleTool({ toolId }: PetCareScheduleToolProps) {
   // Delete confirmation
   const [deleteConfirmPetId, setDeleteConfirmPetId] = useState<string | null>(null);
   const [deleteConfirmText, setDeleteConfirmText] = useState('');
-  const [deleteEntryConfirm, setDeleteEntryConfirm] = useState<{ label: string; onConfirm: () => void } | null>(null);
+  const [deleteEntryConfirm, setDeleteEntryConfirm] = useState<{ label: string; onConfirm: () => void | Promise<void> } | null>(null);
   const [deleteEntryConfirmText, setDeleteEntryConfirmText] = useState('');
+  const [deleteEntryBusy, setDeleteEntryBusy] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
   const isSavingRef = useRef(false);
   const saveChainRef = useRef<Promise<void>>(Promise.resolve());
@@ -591,7 +601,22 @@ export function PetCareScheduleTool({ toolId }: PetCareScheduleToolProps) {
   // Notes
   const [notes, setNotes] = useState<Note[]>([]);
   const notesRef = useRef(notes);
+  const foodsRef = useRef(foods);
+  const veterinaryRecordsRef = useRef(veterinaryRecords);
+  const carePlanItemsRef = useRef(carePlanItems);
+  const vaccinationsRef = useRef(vaccinations);
+  const appointmentsRef = useRef(appointments);
+  const documentsRef = useRef(documents);
+  const removedChildIdsRef = useRef(new Set<string>());
+  const saveGenerationRef = useRef(0);
+  const childLoadAbortRef = useRef<AbortController | null>(null);
   notesRef.current = notes;
+  foodsRef.current = foods;
+  veterinaryRecordsRef.current = veterinaryRecords;
+  carePlanItemsRef.current = carePlanItems;
+  vaccinationsRef.current = vaccinations;
+  appointmentsRef.current = appointments;
+  documentsRef.current = documents;
   const [currentNote, setCurrentNote] = useState('');
   const [editingNoteId, setEditingNoteId] = useState<string | null>(null);
   const [editingNote, setEditingNote] = useState({ content: '' });
@@ -701,7 +726,8 @@ export function PetCareScheduleTool({ toolId }: PetCareScheduleToolProps) {
   }, [petName, petType, customPetType, birthdate, breed, whereGotPet, weight, color, microchipNumber, foods, veterinaryRecords, carePlanItems, vaccinations, appointments, documents, notes]);
 
 
-  const loadPets = async () => {
+  const loadPets = async (signal?: AbortSignal) => {
+    if (signal?.aborted) return;
     if (!toolId) {
       setSaveMessage({ type: 'error', text: 'Tool ID is missing. Please refresh the page.' });
       setIsLoading(false);
@@ -711,7 +737,7 @@ export function PetCareScheduleTool({ toolId }: PetCareScheduleToolProps) {
     
     setIsLoading(true);
     try {
-      const response = await fetch(`/api/tools/pet-care-schedule?toolId=${toolId}`, { cache: 'no-store' });
+      const response = await fetch(`/api/tools/pet-care-schedule?toolId=${toolId}`, { cache: 'no-store', signal });
       const data = await response.json();
       
       if (!response.ok) {
@@ -725,6 +751,7 @@ export function PetCareScheduleTool({ toolId }: PetCareScheduleToolProps) {
       setPets(data.pets || []);
       setSaveMessage(null); // Clear any previous errors
     } catch (error) {
+      if (isAbortError(error)) return;
       console.error('Error loading pets:', error);
       const errorMessage = error instanceof Error ? error.message : 'Failed to load pets';
       setSaveMessage({ type: 'error', text: errorMessage });
@@ -749,22 +776,23 @@ export function PetCareScheduleTool({ toolId }: PetCareScheduleToolProps) {
     setMicrochipNumber('');
   };
 
-  const loadPetData = async (petId: string, requestId?: number) => {
+  const loadPetData = async (petId: string, requestId?: number, saveGeneration?: number, signal?: AbortSignal) => {
+    if (signal?.aborted || !toolId) return;
     if (requestId == null) {
       if (selectedPetIdRef.current !== petId) return;
       requestId = ++petLoadRequestRef.current;
     }
     const loadId = requestId;
-    if (!toolId) return;
 
     const stillSelected = () =>
       loadId === petLoadRequestRef.current && selectedPetIdRef.current === petId;
     
     try {
-      const response = await fetch(`/api/tools/pet-care-schedule?toolId=${toolId}&petId=${petId}`, { cache: 'no-store' });
+      const response = await fetch(`/api/tools/pet-care-schedule?toolId=${toolId}&petId=${petId}`, { cache: 'no-store', signal });
       const data = await response.json();
 
       if (!stillSelected()) return;
+      if (saveGeneration != null && saveGeneration !== saveGenerationRef.current) return;
       
       if (!response.ok) {
         throw new Error(data.error || 'Failed to load pet data');
@@ -772,6 +800,7 @@ export function PetCareScheduleTool({ toolId }: PetCareScheduleToolProps) {
       
       const pet = data.pet;
       if (!pet || pet.id !== petId || !stillSelected()) return;
+      if (saveGeneration != null && saveGeneration !== saveGenerationRef.current) return;
 
       // Load pet's basic info
         setPetName(pet.name);
@@ -861,7 +890,7 @@ export function PetCareScheduleTool({ toolId }: PetCareScheduleToolProps) {
           setLastSavedData(loadedDataSnapshot);
         }, 300);
     } catch (error) {
-      if (!stillSelected()) return;
+      if (isAbortError(error) || !stillSelected()) return;
       console.error('Error loading pet data:', error);
       setSaveMessage({ type: 'error', text: 'Failed to load pet data' });
     }
@@ -874,8 +903,13 @@ export function PetCareScheduleTool({ toolId }: PetCareScheduleToolProps) {
     vaccinationsToSave?: typeof vaccinations,
     appointmentsToSave?: typeof appointments,
     documentsToSave?: typeof documents,
-    notesToSave?: typeof notes
+    notesToSave?: typeof notes,
+    generation?: number,
+    loadSignal?: AbortSignal
   ) => {
+    // A newer save was queued with the latest lists. Skip this one so it cannot write a deleted row back.
+    if (generation != null && generation !== saveGenerationRef.current) return;
+
     const petIdForSave = selectedPetId;
     if (!petIdForSave || !toolId) {
       setSaveMessage({ type: 'error', text: 'Please select a pet first' });
@@ -888,14 +922,15 @@ export function PetCareScheduleTool({ toolId }: PetCareScheduleToolProps) {
     setIsSaving(true);
     setSaveMessage(null);
 
-    // Use provided items or fall back to state
-    const itemsToUse = carePlanItemsToSave || carePlanItems;
-    const foodsToUse = foodsToSave || foods;
-    const vetRecordsToUse = veterinaryRecordsToSave || veterinaryRecords;
-    const vaccinationsToUse = vaccinationsToSave || vaccinations;
-    const appointmentsToUse = appointmentsToSave || appointments;
-    const documentsToUse = documentsToSave || documents;
-    const notesToUse = notesToSave ?? notesRef.current;
+    const removedIds = removedChildIdsRef.current;
+    // Use provided items or the latest list. Drop ids the user already confirmed deleted.
+    const itemsToUse = withoutRemovedIds(carePlanItemsToSave || carePlanItemsRef.current, removedIds);
+    const foodsToUse = withoutRemovedIds(foodsToSave || foodsRef.current, removedIds);
+    const vetRecordsToUse = withoutRemovedIds(veterinaryRecordsToSave || veterinaryRecordsRef.current, removedIds);
+    const vaccinationsToUse = withoutRemovedIds(vaccinationsToSave || vaccinationsRef.current, removedIds);
+    const appointmentsToUse = withoutRemovedIds(appointmentsToSave || appointmentsRef.current, removedIds);
+    const documentsToUse = withoutRemovedIds(documentsToSave || documentsRef.current, removedIds);
+    const notesToUse = withoutRemovedIds(notesToSave ?? notesRef.current, removedIds);
     notesRef.current = notesToUse;
 
     try {
@@ -912,78 +947,81 @@ export function PetCareScheduleTool({ toolId }: PetCareScheduleToolProps) {
         card_color: null, // Keep existing card_color when saving pet data
       };
 
+      const payload = JSON.stringify({
+        petId: petIdForSave,
+        toolId: toolId,
+        petData,
+        foods: foodsToUse.map(f => ({
+          id: f.id,
+          name: f.name,
+          rating: f.rating,
+          startDate: f.startDate,
+          endDate: f.endDate,
+          isCurrent: f.isCurrent,
+          notes: f.notes || '',
+        })),
+        veterinaryRecords: vetRecordsToUse.map(v => ({
+          id: v.id,
+          veterinarianName: v.veterinarianName,
+          clinicName: v.clinicName,
+          phone: v.phone,
+          email: v.email,
+          address: v.address,
+          status: v.status,
+          dateAdded: v.dateAdded,
+          notes: v.notes || '',
+        })),
+        carePlanItems: itemsToUse.map(c => {
+          const notesValue = (c.notes && typeof c.notes === 'string' && c.notes.trim()) ? c.notes.trim() : '';
+          return {
+            id: c.id,
+            name: c.name,
+            frequency: c.frequency,
+            isActive: c.isActive,
+            startDate: c.startDate,
+            endDate: c.endDate,
+            notes: notesValue,
+            priority: (c.priority && ['low', 'medium', 'high'].includes(c.priority)) ? c.priority : 'medium',
+            addToDashboard: c.addToDashboard === true && c.isActive !== false,
+          };
+        }),
+        vaccinations: vaccinationsToUse.map(v => ({
+          id: v.id,
+          name: v.name,
+          date: v.date,
+          veterinarian: v.veterinarian,
+          notes: v.notes || '',
+        })),
+        appointments: appointmentsToUse.map(a => ({
+          id: a.id,
+          date: a.date,
+          time: a.time,
+          type: a.type,
+          veterinarian: a.veterinarian,
+          notes: a.notes || '',
+          isUpcoming: a.isUpcoming,
+          addToDashboard: a.addToDashboard === true,
+        })),
+        documents: documentsToUse.map(d => ({
+          id: d.id,
+          name: d.name,
+          date: d.date,
+          description: d.description,
+        })),
+        notes: notesToUse.map(n => ({
+          content: n.content,
+          date: n.date,
+          isCurrent: n.isCurrent,
+        })),
+      });
       const response = await fetch('/api/tools/pet-care-schedule', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
         },
-        body: JSON.stringify({
-          petId: petIdForSave,
-          toolId: toolId,
-          petData,
-          foods: foodsToUse.map(f => ({
-            id: f.id,
-            name: f.name,
-            rating: f.rating,
-            startDate: f.startDate,
-            endDate: f.endDate,
-            isCurrent: f.isCurrent,
-            notes: f.notes || '',
-          })),
-          veterinaryRecords: vetRecordsToUse.map(v => ({
-            id: v.id,
-            veterinarianName: v.veterinarianName,
-            clinicName: v.clinicName,
-            phone: v.phone,
-            email: v.email,
-            address: v.address,
-            status: v.status,
-            dateAdded: v.dateAdded,
-            notes: v.notes || '',
-          })),
-          carePlanItems: itemsToUse.map(c => {
-            const notesValue = (c.notes && typeof c.notes === 'string' && c.notes.trim()) ? c.notes.trim() : '';
-            return {
-              id: c.id,
-              name: c.name,
-              frequency: c.frequency,
-              isActive: c.isActive,
-              startDate: c.startDate,
-              endDate: c.endDate,
-              notes: notesValue,
-              priority: (c.priority && ['low', 'medium', 'high'].includes(c.priority)) ? c.priority : 'medium',
-              addToDashboard: c.addToDashboard === true && c.isActive !== false,
-            };
-          }),
-          vaccinations: vaccinationsToUse.map(v => ({
-            id: v.id,
-            name: v.name,
-            date: v.date,
-            veterinarian: v.veterinarian,
-            notes: v.notes || '',
-          })),
-          appointments: appointmentsToUse.map(a => ({
-            id: a.id,
-            date: a.date,
-            time: a.time,
-            type: a.type,
-            veterinarian: a.veterinarian,
-            notes: a.notes || '',
-            isUpcoming: a.isUpcoming,
-            addToDashboard: a.addToDashboard === true,
-          })),
-          documents: documentsToUse.map(d => ({
-            id: d.id,
-            name: d.name,
-            date: d.date,
-            description: d.description,
-          })),
-          notes: notesToUse.map(n => ({
-            content: n.content,
-            date: n.date,
-            isCurrent: n.isCurrent,
-          })),
-        }),
+        body: payload,
+        // A reload in the same moment should still commit the delete.
+        keepalive: payload.length < 60_000,
       });
 
       const data = await response.json();
@@ -991,6 +1029,8 @@ export function PetCareScheduleTool({ toolId }: PetCareScheduleToolProps) {
       if (!response.ok) {
         throw new Error(data.error || 'Failed to save pet data');
       }
+
+      if (generation != null && generation !== saveGenerationRef.current) return;
 
       // Update last saved data snapshot immediately after successful save
       // Use the same function to ensure exact match - do this BEFORE reloading
@@ -1001,8 +1041,9 @@ export function PetCareScheduleTool({ toolId }: PetCareScheduleToolProps) {
       setTimeout(() => setSaveMessage(null), 3000);
       
       // Reload pets to get updated data (this will also update the snapshot after load)
-      await loadPets();
-      if (selectedPetIdRef.current === petIdForSave) await loadPetData(petIdForSave);
+      await loadPets(loadSignal);
+      if (generation != null && generation !== saveGenerationRef.current) return;
+      if (selectedPetIdRef.current === petIdForSave) await loadPetData(petIdForSave, undefined, generation, loadSignal);
       
       // After reload, update snapshot again to ensure it matches loaded data
       setTimeout(() => {
@@ -1028,9 +1069,13 @@ export function PetCareScheduleTool({ toolId }: PetCareScheduleToolProps) {
     documentsToSave?: typeof documents,
     notesToSave?: typeof notes
   ) => {
+    const generation = ++saveGenerationRef.current;
+    childLoadAbortRef.current?.abort();
+    const loadAbort = new AbortController();
+    childLoadAbortRef.current = loadAbort;
     const queued = saveChainRef.current.then(
-      () => writePetData(carePlanItemsToSave, foodsToSave, veterinaryRecordsToSave, vaccinationsToSave, appointmentsToSave, documentsToSave, notesToSave),
-      () => writePetData(carePlanItemsToSave, foodsToSave, veterinaryRecordsToSave, vaccinationsToSave, appointmentsToSave, documentsToSave, notesToSave)
+      () => writePetData(carePlanItemsToSave, foodsToSave, veterinaryRecordsToSave, vaccinationsToSave, appointmentsToSave, documentsToSave, notesToSave, generation, loadAbort.signal),
+      () => writePetData(carePlanItemsToSave, foodsToSave, veterinaryRecordsToSave, vaccinationsToSave, appointmentsToSave, documentsToSave, notesToSave, generation, loadAbort.signal)
     );
     saveChainRef.current = queued.then(() => undefined, () => undefined);
     return queued;
@@ -1925,9 +1970,11 @@ export function PetCareScheduleTool({ toolId }: PetCareScheduleToolProps) {
   };
 
   const deleteAppointment = (appointmentId: string) => {
-    const next = appointments.filter((appointment) => appointment.id !== appointmentId);
+    removedChildIdsRef.current.add(appointmentId);
+    const next = appointmentsRef.current.filter((appointment) => appointment.id !== appointmentId);
+    appointmentsRef.current = next;
     setAppointments(next);
-    savePetData(undefined, undefined, undefined, undefined, next);
+    void savePetData(undefined, undefined, undefined, undefined, next);
   };
 
   const addVeterinaryRecord = async () => {
@@ -2583,20 +2630,64 @@ export function PetCareScheduleTool({ toolId }: PetCareScheduleToolProps) {
   };
 
 
-  const deleteItem = (array: any[], setter: any, id: string) => {
-    setter(array.filter(item => item.id !== id));
+  const deleteChild = (
+    kind: 'foods' | 'veterinary' | 'carePlan' | 'vaccinations' | 'documents' | 'notes',
+    id: string
+  ) => {
+    removedChildIdsRef.current.add(id);
+    if (kind === 'foods') {
+      const next = foodsRef.current.filter((item) => item.id !== id);
+      foodsRef.current = next;
+      setFoods(next);
+      return savePetData(undefined, next);
+    }
+    if (kind === 'veterinary') {
+      const next = veterinaryRecordsRef.current.filter((item) => item.id !== id);
+      veterinaryRecordsRef.current = next;
+      setVeterinaryRecords(next);
+      return savePetData(undefined, undefined, next);
+    }
+    if (kind === 'carePlan') {
+      const next = carePlanItemsRef.current.filter((item) => item.id !== id);
+      carePlanItemsRef.current = next;
+      setCarePlanItems(next);
+      return savePetData(next);
+    }
+    if (kind === 'vaccinations') {
+      const next = vaccinationsRef.current.filter((item) => item.id !== id);
+      vaccinationsRef.current = next;
+      setVaccinations(next);
+      return savePetData(undefined, undefined, undefined, next);
+    }
+    if (kind === 'documents') {
+      const next = documentsRef.current.filter((item) => item.id !== id);
+      documentsRef.current = next;
+      setDocuments(next);
+      return savePetData(undefined, undefined, undefined, undefined, undefined, next);
+    }
+    const next = notesRef.current.filter((item) => item.id !== id);
+    notesRef.current = next;
+    setNotes(next);
+    return savePetData(undefined, undefined, undefined, undefined, undefined, undefined, next);
   };
 
-  const requestDeleteEntry = (label: string, onConfirm: () => void) => {
+  const requestDeleteEntry = (label: string, onConfirm: () => void | Promise<void>) => {
     setDeleteEntryConfirm({ label, onConfirm });
     setDeleteEntryConfirmText('');
   };
 
-  const confirmDeleteEntry = () => {
-    if (!deleteEntryConfirm || deleteEntryConfirmText.toLowerCase() !== 'delete') return;
-    deleteEntryConfirm.onConfirm();
-    setDeleteEntryConfirm(null);
-    setDeleteEntryConfirmText('');
+  const confirmDeleteEntry = async () => {
+    if (!deleteEntryConfirm || deleteEntryConfirmText.toLowerCase() !== 'delete' || deleteEntryBusy) return;
+    const action = deleteEntryConfirm.onConfirm;
+    setDeleteEntryBusy(true);
+    try {
+      await action();
+      await saveChainRef.current;
+    } finally {
+      setDeleteEntryBusy(false);
+      setDeleteEntryConfirm(null);
+      setDeleteEntryConfirmText('');
+    }
   };
 
   const renderStars = (rating: number | null, onChange?: (rating: number) => void) => {
@@ -3038,7 +3129,7 @@ export function PetCareScheduleTool({ toolId }: PetCareScheduleToolProps) {
               className={isLight ? 'w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900 placeholder-slate-500 focus:border-red-500/50 focus:outline-none focus:ring-1 focus:ring-red-500/50 mb-4' : 'w-full rounded-lg border border-slate-700 bg-slate-900/70 px-3 py-2 text-sm text-slate-100 placeholder-slate-500 focus:border-red-500/50 focus:outline-none focus:ring-1 focus:ring-red-500/50 mb-4'}
               autoFocus
               onKeyDown={(e) => {
-                if (e.key === 'Escape') {
+                if (e.key === 'Escape' && !deleteEntryBusy) {
                   setDeleteEntryConfirm(null);
                   setDeleteEntryConfirmText('');
                 }
@@ -3047,16 +3138,17 @@ export function PetCareScheduleTool({ toolId }: PetCareScheduleToolProps) {
             <div className="flex gap-3">
               <button
                 onClick={confirmDeleteEntry}
-                disabled={deleteEntryConfirmText.toLowerCase() !== 'delete'}
+                disabled={deleteEntryConfirmText.toLowerCase() !== 'delete' || deleteEntryBusy}
                 className="flex-1 px-4 py-2 rounded-lg bg-red-600 text-white font-medium hover:bg-red-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
               >
-                Delete Record
+                {deleteEntryBusy ? 'Deleting...' : 'Delete Record'}
               </button>
               <button
                 onClick={() => {
                   setDeleteEntryConfirm(null);
                   setDeleteEntryConfirmText('');
                 }}
+                disabled={deleteEntryBusy}
                 className={secondaryButtonClass}
               >
                 Cancel
@@ -3393,7 +3485,7 @@ export function PetCareScheduleTool({ toolId }: PetCareScheduleToolProps) {
                             <svg className="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M20.25 7.5l-.625 10.632a2.25 2.25 0 01-2.247 2.118H6.622a2.25 2.25 0 01-2.247-2.118L3.75 7.5M10 11.25h4M3.375 7.5h17.25c.621 0 1.125-.504 1.125-1.125v-1.5c0-.621-.504-1.125-1.125-1.125H3.375c-.621 0-1.125.504-1.125 1.125v1.5c0 .621.504 1.125 1.125 1.125z" /></svg>
                           </button>
                           <button
-                            onClick={() => requestDeleteEntry('active food item', () => deleteItem(foods, setFoods, food.id))}
+                            onClick={() => requestDeleteEntry('active food item', () => deleteChild('foods', food.id))}
                             className={rowIconDangerClass}
                             title="Delete food"
                             aria-label="Delete food"
@@ -3510,7 +3602,7 @@ export function PetCareScheduleTool({ toolId }: PetCareScheduleToolProps) {
                             </svg>
                           </button>
                           <button
-                            onClick={() => requestDeleteEntry('food history item', () => deleteItem(foods, setFoods, food.id))}
+                            onClick={() => requestDeleteEntry('food history item', () => deleteChild('foods', food.id))}
                             className={rowIconDangerClass}
                             title="Delete food"
                             aria-label="Delete food"
@@ -3803,7 +3895,7 @@ export function PetCareScheduleTool({ toolId }: PetCareScheduleToolProps) {
                               <svg className="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M20.25 7.5l-.625 10.632a2.25 2.25 0 01-2.247 2.118H6.622a2.25 2.25 0 01-2.247-2.118L3.75 7.5M10 11.25h4M3.375 7.5h17.25c.621 0 1.125-.504 1.125-1.125v-1.5c0-.621-.504-1.125-1.125-1.125H3.375c-.621 0-1.125.504-1.125 1.125v1.5c0 .621.504 1.125 1.125 1.125z" /></svg>
                             </button>
                             <button
-                              onClick={() => requestDeleteEntry('veterinary contact', () => deleteItem(veterinaryRecords, setVeterinaryRecords, record.id))}
+                              onClick={() => requestDeleteEntry('veterinary contact', () => deleteChild('veterinary', record.id))}
                               className={rowIconDangerClass}
                               title="Delete contact"
                               aria-label="Delete contact"
@@ -3974,7 +4066,7 @@ export function PetCareScheduleTool({ toolId }: PetCareScheduleToolProps) {
                               <svg className="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 15L3 9m0 0l6-6M3 9h12a6 6 0 010 12h-3" /></svg>
                             </button>
                             <button
-                              onClick={() => requestDeleteEntry('veterinary contact history record', () => deleteItem(veterinaryRecords, setVeterinaryRecords, record.id))}
+                              onClick={() => requestDeleteEntry('veterinary contact history record', () => deleteChild('veterinary', record.id))}
                               className={rowIconDangerClass}
                               title="Delete contact"
                               aria-label="Delete contact"
@@ -4201,7 +4293,7 @@ export function PetCareScheduleTool({ toolId }: PetCareScheduleToolProps) {
                             <svg className="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M20.25 7.5l-.625 10.632a2.25 2.25 0 01-2.247 2.118H6.622a2.25 2.25 0 01-2.247-2.118L3.75 7.5M10 11.25h4M3.375 7.5h17.25c.621 0 1.125-.504 1.125-1.125v-1.5c0-.621-.504-1.125-1.125-1.125H3.375c-.621 0-1.125.504-1.125 1.125v1.5c0 .621.504 1.125 1.125 1.125z" /></svg>
                           </button>
                           <button
-                            onClick={() => requestDeleteEntry('active care plan item', () => deleteItem(carePlanItems, setCarePlanItems, item.id))}
+                            onClick={() => requestDeleteEntry('active care plan item', () => deleteChild('carePlan', item.id))}
                             className={rowIconDangerClass}
                             title="Delete care item"
                             aria-label="Delete care item"
@@ -4337,7 +4429,7 @@ export function PetCareScheduleTool({ toolId }: PetCareScheduleToolProps) {
                             </svg>
                           </button>
                           <button
-                            onClick={() => requestDeleteEntry('care plan history item', () => deleteItem(carePlanItems, setCarePlanItems, item.id))}
+                            onClick={() => requestDeleteEntry('care plan history item', () => deleteChild('carePlan', item.id))}
                             className={rowIconDangerClass}
                             title="Delete care item"
                             aria-label="Delete care item"
@@ -4528,7 +4620,7 @@ export function PetCareScheduleTool({ toolId }: PetCareScheduleToolProps) {
                               <svg className="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" /></svg>
                             </button>
                             <button
-                              onClick={() => requestDeleteEntry('vaccination record', () => deleteItem(vaccinations, setVaccinations, vaccination.id))}
+                              onClick={() => requestDeleteEntry('vaccination record', () => deleteChild('vaccinations', vaccination.id))}
                               className={rowIconDangerClass}
                               title="Delete vaccination"
                               aria-label="Delete vaccination"
@@ -5103,7 +5195,7 @@ export function PetCareScheduleTool({ toolId }: PetCareScheduleToolProps) {
                               <svg className="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" /></svg>
                             </button>
                             <button
-                              onClick={() => requestDeleteEntry('document', () => deleteItem(documents, setDocuments, document.id))}
+                              onClick={() => requestDeleteEntry('document', () => deleteChild('documents', document.id))}
                               className={rowIconDangerClass}
                               title="Delete document"
                               aria-label="Delete document"
@@ -5224,7 +5316,7 @@ export function PetCareScheduleTool({ toolId }: PetCareScheduleToolProps) {
                               <svg className="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M20.25 7.5l-.625 10.632a2.25 2.25 0 01-2.247 2.118H6.622a2.25 2.25 0 01-2.247-2.118L3.75 7.5M10 11.25h4M3.375 7.5h17.25c.621 0 1.125-.504 1.125-1.125v-1.5c0-.621-.504-1.125-1.125-1.125H3.375c-.621 0-1.125.504-1.125 1.125v1.5c0 .621.504 1.125 1.125 1.125z" /></svg>
                             </button>
                             <button
-                              onClick={() => requestDeleteEntry('current note', () => deleteItem(notes, setNotes, note.id))}
+                              onClick={() => requestDeleteEntry('current note', () => deleteChild('notes', note.id))}
                               className={rowIconDangerClass}
                               title="Delete note"
                               aria-label="Delete note"
@@ -5303,7 +5395,7 @@ export function PetCareScheduleTool({ toolId }: PetCareScheduleToolProps) {
                               </svg>
                             </button>
                             <button
-                              onClick={() => requestDeleteEntry('note history record', () => deleteItem(notes, setNotes, note.id))}
+                              onClick={() => requestDeleteEntry('note history record', () => deleteChild('notes', note.id))}
                               className={rowIconDangerClass}
                               title="Delete note"
                               aria-label="Delete note"

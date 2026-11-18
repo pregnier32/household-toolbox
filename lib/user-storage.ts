@@ -531,6 +531,74 @@ async function storageOwnedByUsers(userIds: string[]): Promise<{ files: number; 
   return { files: fileCounts.reduce((sum, count) => sum + count, 0), bytes };
 }
 
+type StorageListItem = {
+  name: string;
+  id: string | null;
+  created_at?: string | null;
+  updated_at?: string | null;
+  metadata?: { size?: number | string } | null;
+};
+
+async function storageTotalsFrom(
+  bucket: string,
+  prefix: string,
+  startMs: number,
+  excludeOwners: Set<string>,
+): Promise<{ files: number; bytes: number }> {
+  let offset = 0;
+  let files = 0;
+  let bytes = 0;
+  const limit = 1000;
+
+  while (true) {
+    const { data, error } = await supabaseServer.storage.from(bucket).list(prefix, { limit, offset });
+    if (error || !data?.length) {
+      if (error) console.error(`Storage list failed for ${bucket}:`, error.message ?? 'unknown');
+      break;
+    }
+
+    for (const item of data as StorageListItem[]) {
+      const path = prefix ? `${prefix}/${item.name}` : item.name;
+      const owner = path.split('/')[0]?.toLowerCase() ?? '';
+      if (excludeOwners.has(owner)) continue;
+      if (item.id) {
+        const createdMs = Date.parse(item.created_at || item.updated_at || '');
+        if (!Number.isFinite(createdMs) || createdMs < startMs) continue;
+        files += 1;
+        const size = Number(item.metadata?.size ?? 0);
+        if (Number.isFinite(size) && size > 0) bytes += size;
+        continue;
+      }
+      const nested = await storageTotalsFrom(bucket, path, startMs, excludeOwners);
+      files += nested.files;
+      bytes += nested.bytes;
+    }
+
+    if (data.length < limit) break;
+    offset += limit;
+  }
+
+  return { files, bytes };
+}
+
+/** File count and bytes for objects created on or after the start instant. Superadmin prefixes are left out. */
+export async function getSiteStorageStatsAsOf(excludeUserIds: string[], startAt: string): Promise<SiteStorageStats> {
+  const startMs = Date.parse(startAt);
+  const excludeOwners = new Set(excludeUserIds.map((id) => id.toLowerCase()));
+  let files = 0;
+  let bytes = 0;
+  for (const tool of STORAGE_TOOL_BUCKETS) {
+    const totals = await storageTotalsFrom(tool.bucket, '', startMs, excludeOwners);
+    files += totals.files;
+    bytes += totals.bytes;
+  }
+  return {
+    documentCount: files,
+    usedBytes: bytes,
+    usedLabel: formatStorageBytes(bytes),
+  };
+}
+
 export async function getSiteStorageStats(excludeUserIds: string[] = []): Promise<SiteStorageStats> {
   const { data, error } = await supabaseServer.rpc('get_site_storage_stats');
   if (!error) {

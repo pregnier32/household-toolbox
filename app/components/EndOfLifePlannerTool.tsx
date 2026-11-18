@@ -418,8 +418,12 @@ function FamilyMemberList(props: {
     return () => window.removeEventListener('keydown', onKey);
   }, [editor]);
 
+  const seenAddRequestKey = useRef(props.addRequestKey ?? 0);
   useEffect(() => {
-    if (!props.addRequestKey) return;
+    const nextKey = props.addRequestKey ?? 0;
+    if (nextKey === seenAddRequestKey.current) return;
+    seenAddRequestKey.current = nextKey;
+    if (!nextKey) return;
     setEditor({ mode: 'add', draft: emptyFamilyPerson() });
   }, [props.addRequestKey]);
 
@@ -730,22 +734,25 @@ function RecordTableList<T extends { id: string }>(props: {
     return () => window.removeEventListener('keydown', onKey);
   }, [editor, props.attachmentOpen]);
 
+  const seenAddRequestKey = useRef(props.addRequestKey ?? 0);
   useEffect(() => {
-    if (!props.addRequestKey) return;
+    const nextKey = props.addRequestKey ?? 0;
+    if (nextKey === seenAddRequestKey.current) return;
+    seenAddRequestKey.current = nextKey;
+    if (!nextKey) return;
     setEditor({ mode: 'add', draft: props.createDraft() });
-  }, [props.addRequestKey]);
+  }, [props.addRequestKey, props.createDraft]);
 
   const saveEditor = async () => {
     if (!editor || !props.requiredValue(editor.draft)) return;
     const draft = editor.draft;
     const mode = editor.mode;
-    await Promise.resolve(
-      props.onCommit(
-        mode === 'add' ? [...props.records, draft] : replaceListItem(props.records, draft.id, draft),
-        true
-      )
+    const commit = props.onCommit(
+      mode === 'add' ? [...props.records, draft] : replaceListItem(props.records, draft.id, draft),
+      true
     );
     setEditor(null);
+    await Promise.resolve(commit);
     await Promise.resolve(props.onAfterCommit?.(draft, mode));
   };
 
@@ -1132,6 +1139,7 @@ export function EndOfLifePlannerTool({ toolId }: EndOfLifePlannerToolProps) {
         if (savedPlans.length) {
           setPlans((current) => current.map((plan) => savedPlans.find((saved) => saved.id === plan.id) || plan));
         }
+        if (options?.selectionOnly) return;
         setSaveStatus('saved');
         window.setTimeout(() => {
           setSaveStatus((current) => (current === 'saved' ? 'idle' : current));
@@ -1141,7 +1149,8 @@ export function EndOfLifePlannerTool({ toolId }: EndOfLifePlannerToolProps) {
       }
     };
     if (persistTimer.current) window.clearTimeout(persistTimer.current);
-    setSaveStatus('saving');
+    const quiet = Boolean(options?.selectionOnly);
+    if (!quiet) setSaveStatus('saving');
     if (immediate) return write();
     persistTimer.current = window.setTimeout(() => {
       void write();
@@ -3398,9 +3407,10 @@ export function EndOfLifePlannerTool({ toolId }: EndOfLifePlannerToolProps) {
                     <button
                       type="button"
                       onClick={() => {
+                        setActiveTab('personal');
+                        if (selectedPlanId === plan.id) return;
                         setSelectedPlanId(plan.id);
                         persist(plans, plan.id, true, { selectionOnly: true });
-                        setActiveTab('personal');
                       }}
                       aria-pressed={selectedPlanId === plan.id}
                       className={`rounded-lg py-3 pl-4 pr-14 transition-all duration-200 min-w-[120px] ${

@@ -10,6 +10,26 @@ import type { InvoiceRole, InvoiceStatus } from './billing-ledger';
 /** Retained for callers. An open Checkout inside this window does not grant tool access. */
 export const PAYMENT_PENDING_MS = 15 * 60 * 1000;
 
+/**
+ * How long a tool read or write may trust `billing_accounts.tool_access_synced_at`
+ * instead of recomputing the lock. Matches the payment-state cache: a request
+ * does not serve a decision older than the Stripe check it skips. A webhook or
+ * billing refresh writes a new timestamp as soon as the decision changes.
+ */
+export const SAVED_TOOL_LOCK_FRESH_MS = 5 * 60 * 1000;
+
+export function savedToolLockIsFresh(
+  syncedAt: string | null | undefined,
+  now = new Date(),
+  freshMs = SAVED_TOOL_LOCK_FRESH_MS,
+): boolean {
+  if (!syncedAt) return false;
+  const synced = Date.parse(syncedAt);
+  if (Number.isNaN(synced)) return false;
+  const age = now.getTime() - synced;
+  return age >= 0 && age < freshMs;
+}
+
 export const LOCKED_ADMIN_MESSAGE = 'Tool access is paused because your account needs payment attention. All household tools, including free tools, are temporarily unavailable. Update your payment or remove the tools requiring payment to restore access. Your saved data is safe.';
 
 export const LOCKED_MEMBER_MESSAGE = 'Your household\'s tool access is paused. Ask your household admin to review Plan & Billing.';

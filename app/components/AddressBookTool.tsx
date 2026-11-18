@@ -386,13 +386,9 @@ export function AddressBookTool({ toolId }: AddressBookToolProps) {
     selectedTags: [...record.tags],
   });
 
-  const validateForm = (form: AddressFormState, requireTag = true): boolean => {
+  const validateForm = (form: AddressFormState): boolean => {
     if (!form.lastName.trim() && !form.mailingName.trim()) {
       showError('Enter a last name or an alternative name.');
-      return false;
-    }
-    if (requireTag && form.selectedTags.length === 0) {
-      showError('Please select at least one tag.');
       return false;
     }
     return true;
@@ -592,7 +588,7 @@ export function AddressBookTool({ toolId }: AddressBookToolProps) {
   }, [toolId, seedDefaultTagsIfNeeded]);
 
   const addAddress = async () => {
-    if (!validateForm(newAddress, false) || !toolId) return;
+    if (!validateForm(newAddress) || !toolId) return;
 
     setIsLoading(true);
     try {
@@ -1035,14 +1031,7 @@ export function AddressBookTool({ toolId }: AddressBookToolProps) {
         </div>
       </div>
       <div>
-        <label className={labelClass}>
-          Tags{isEdit ? (
-            <>
-              {' '}
-              <span className="text-red-400">*</span> (Select one or more)
-            </>
-          ) : null}
-        </label>
+        <label className={labelClass}>Tags</label>
         <div className={tagPickerClass}>
           {activeTags.length > 0 ? (
             activeTags.map((tag) => (

@@ -7,6 +7,7 @@ import {
   PAYMENT_PENDING_MS,
   describeToolAccessPolicy,
   TOOL_ACCESS_UNVERIFIED_MESSAGE,
+  savedToolLockIsFresh,
   toolAccessBlocked,
   toolAccessDenial,
   toolAccessNotice,
@@ -455,4 +456,14 @@ test('a confirmed payment restores access and a retry is not a second failure', 
   assert.equal(needsConfirmation.reason, 'authentication_required');
   assert.match(needsConfirmation.adminMessage || '', /confirm/);
   assert.deepEqual(needsConfirmation.recovery, ['manage_billing', 'review_tools']);
+});
+
+test('a saved tool lock is fresh only inside the payment-state window', () => {
+  const now = new Date('2026-11-17T05:10:00.000Z');
+  assert.equal(savedToolLockIsFresh(null, now), false);
+  assert.equal(savedToolLockIsFresh('not-a-time', now), false);
+  assert.equal(savedToolLockIsFresh('2026-11-17T05:10:30.000Z', now), false);
+  assert.equal(savedToolLockIsFresh('2026-11-17T05:09:00.000Z', now), true);
+  assert.equal(savedToolLockIsFresh('2026-11-17T05:05:00.000Z', now), false);
+  assert.equal(savedToolLockIsFresh('2026-11-17T05:05:00.001Z', now), true);
 });
