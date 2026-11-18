@@ -145,6 +145,35 @@ export function compareIso(a: string, b: string): number {
   return a.localeCompare(b);
 }
 
+const DATE_ONLY = /^\d{4}-\d{2}-\d{2}$/;
+
+function dateKeyInZone(instant: Date, timeZone?: string): string {
+  const options: Intl.DateTimeFormatOptions = { year: 'numeric', month: '2-digit', day: '2-digit' };
+  if (timeZone) options.timeZone = timeZone;
+  const parts = new Intl.DateTimeFormat('en-US', options).formatToParts(instant);
+  const value = (type: Intl.DateTimeFormatPartTypes) => parts.find((part) => part.type === type)?.value ?? '';
+  return `${value('year')}-${value('month')}-${value('day')}`;
+}
+
+/** Date-only strings stay as written. Timestamps use the calendar day in the given zone. */
+export function dueDateKey(value: string, timeZone?: string): string {
+  const trimmed = value.trim();
+  if (DATE_ONLY.test(trimmed)) return trimmed;
+  const instant = new Date(trimmed);
+  if (Number.isNaN(instant.getTime())) {
+    const day = asDateOnly(trimmed);
+    return DATE_ONLY.test(day) ? day : '';
+  }
+  return dateKeyInZone(instant, timeZone);
+}
+
+/** Sunday through Saturday, matching Date.getDay() (0 = Sunday) already used by Cleaning Schedule. */
+export function thisWeekBounds(today: string, timeZone?: string): { start: string; end: string } {
+  const day = dueDateKey(today, timeZone);
+  const start = addDays(day, -parseLocalDate(day).getDay());
+  return { start, end: addDays(start, 6) };
+}
+
 export function expandOccurrences(
   nextDueDate: string,
   frequency: CleaningFrequency,
@@ -162,6 +191,19 @@ export function expandOccurrences(
     guard += 1;
   }
   return dates;
+}
+
+/** Occurrences whose calendar day is inside the current Sunday–Saturday week, both ends inclusive. */
+export function thisWeekDueDates(
+  nextDueDate: string,
+  frequency: CleaningFrequency,
+  today: string,
+  timeZone?: string
+): string[] {
+  const due = dueDateKey(nextDueDate, timeZone);
+  if (!DATE_ONLY.test(due)) return [];
+  const { start, end } = thisWeekBounds(today, timeZone);
+  return expandOccurrences(due, frequency, start, end);
 }
 
 function firstSaturdayOfMonth(year: number, month: number): string {

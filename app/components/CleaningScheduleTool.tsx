@@ -31,6 +31,8 @@ import {
   expandOccurrences,
   FrequencyKind,
   parseLocalDate,
+  thisWeekBounds,
+  thisWeekDueDates,
   toIso,
   todayIso,
 } from '@/lib/cleaning-schedule';
@@ -144,16 +146,6 @@ function formatDateForDisplay(isoDate: string): string {
 
 function formatReportDate(date: Date): string {
   return formatPaddedDisplayDate(date);
-}
-
-function startOfWeek(iso: string): string {
-  const date = parseLocalDate(iso);
-  date.setDate(date.getDate() - date.getDay());
-  return toIso(date);
-}
-
-function endOfWeek(iso: string): string {
-  return addDays(startOfWeek(iso), 6);
 }
 
 function startOfMonth(iso: string): string {
@@ -284,7 +276,10 @@ function emptyItemForm(): ItemForm {
 
 function rangeWindow(range: RangeId, today: string): { start: string; end: string } | null {
   if (range === 'overdue') return { start: '0001-01-01', end: addDays(today, -1) };
-  if (range === 'this_week') return { start: startOfWeek(today), end: endOfWeek(today) };
+  if (range === 'this_week') {
+    const week = thisWeekBounds(today);
+    return { start: week.start, end: week.end };
+  }
   if (range === 'this_month') return { start: startOfMonth(today), end: endOfMonth(today) };
   if (range === 'next_3_months') return { start: today, end: addMonthsSetDay(today, 3) };
   return null;
@@ -409,11 +404,8 @@ function datesForRange(range: RangeId, nextDueDate: string, frequency: CleaningF
   if (range === 'overdue') {
     return compareIso(nextDue, today) < 0 ? [nextDue] : [];
   }
+  if (range === 'this_week') return thisWeekDueDates(nextDueDate, frequency, today);
   const window = rangeWindow(range, today);
-  if (range === 'this_week' && window) {
-    if (compareIso(nextDue, window.start) < 0 || compareIso(nextDue, window.end) > 0) return [];
-    return expandOccurrences(nextDue, frequency, window.start, window.end);
-  }
   return window ? expandOccurrences(nextDue, frequency, window.start, window.end) : [nextDue];
 }
 
