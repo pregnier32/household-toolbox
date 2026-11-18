@@ -137,6 +137,37 @@ export function paymentsFromLedger(input: {
   });
 }
 
+export type LiveSubscriptionRow = {
+  userId: string;
+  status: string | null;
+  cancelAtPeriodEnd: boolean;
+  livemode: boolean | null;
+  billingCycleAnchor: string | null;
+  currentPeriodEnd: string | null;
+  syncedAmountCents: number | null;
+};
+
+const EXPECTED_SUBSCRIPTION_STATUSES = new Set(['active', 'past_due', 'trialing']);
+
+/** Recurring amount a live subscription will bill, on its billing day of the month. */
+export function liveSubscriptionCharges(
+  rows: LiveSubscriptionRow[],
+  excludeUserIds: string[] = [],
+): { at: string; amountCents: number }[] {
+  const excluded = new Set(excludeUserIds);
+  return rows.flatMap((row) => {
+    if (row.livemode !== true) return [];
+    if (row.cancelAtPeriodEnd) return [];
+    if (!row.status || !EXPECTED_SUBSCRIPTION_STATUSES.has(row.status)) return [];
+    if (excluded.has(row.userId)) return [];
+    const amountCents = row.syncedAmountCents ?? 0;
+    if (amountCents <= 0) return [];
+    const at = row.billingCycleAnchor || row.currentPeriodEnd;
+    if (!at || !Number.isFinite(Date.parse(at))) return [];
+    return [{ at, amountCents }];
+  });
+}
+
 export function revenueByDayOfMonth(
   bills: { at: string; amountCents: number }[],
   timeZone = STATS_TIME_ZONE,

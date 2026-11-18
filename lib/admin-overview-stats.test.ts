@@ -5,6 +5,7 @@ import {
   monthSeriesFrom,
   paymentsFromLedger,
   resolveAsOf,
+  liveSubscriptionCharges,
   revenueByDayOfMonth,
   revenueSummary,
 } from './admin-overview-stats';
@@ -111,7 +112,70 @@ test('a start date keeps that day and later payments, including later months', (
   assert.equal(summary.lifetimeRevenue, 6);
 });
 
-test('revenue by day totals upcoming bills on each day of the month', () => {
+test('live subscriptions land on their Chicago billing day and add together', () => {
+  const rows = revenueByDayOfMonth(liveSubscriptionCharges([
+    {
+      userId: 'payer',
+      status: 'active',
+      cancelAtPeriodEnd: false,
+      livemode: true,
+      billingCycleAnchor: '2026-11-25T03:36:00.000Z',
+      currentPeriodEnd: '2026-11-25T03:36:00.000Z',
+      syncedAmountCents: 400,
+    },
+    {
+      userId: 'same-day',
+      status: 'past_due',
+      cancelAtPeriodEnd: false,
+      livemode: true,
+      billingCycleAnchor: null,
+      currentPeriodEnd: '2026-12-24T18:00:00.000Z',
+      syncedAmountCents: 200,
+    },
+    {
+      userId: 'sandbox',
+      status: 'active',
+      cancelAtPeriodEnd: false,
+      livemode: false,
+      billingCycleAnchor: '2026-11-01T16:00:00.000Z',
+      currentPeriodEnd: '2026-11-01T16:00:00.000Z',
+      syncedAmountCents: 100,
+    },
+    {
+      userId: 'canceling',
+      status: 'active',
+      cancelAtPeriodEnd: true,
+      livemode: true,
+      billingCycleAnchor: '2026-11-24T16:00:00.000Z',
+      currentPeriodEnd: '2026-11-24T16:00:00.000Z',
+      syncedAmountCents: 900,
+    },
+    {
+      userId: 'ended',
+      status: 'canceled',
+      cancelAtPeriodEnd: false,
+      livemode: true,
+      billingCycleAnchor: '2026-11-10T16:00:00.000Z',
+      currentPeriodEnd: '2026-11-10T16:00:00.000Z',
+      syncedAmountCents: 500,
+    },
+    {
+      userId: 'staff',
+      status: 'active',
+      cancelAtPeriodEnd: false,
+      livemode: true,
+      billingCycleAnchor: '2026-11-24T16:00:00.000Z',
+      currentPeriodEnd: '2026-11-24T16:00:00.000Z',
+      syncedAmountCents: 700,
+    },
+  ], ['staff']));
+  assert.equal(rows.length, 31);
+  assert.equal(rows[0]?.revenue, 0);
+  assert.equal(rows[23]?.day, '24');
+  assert.equal(rows[23]?.revenue, 6);
+});
+
+test('revenue by day totals bills on each day of the month', () => {
   const rows = revenueByDayOfMonth([
     { at: '2026-11-24T16:00:00.000Z', amountCents: 400 },
     { at: '2026-12-24T16:00:00.000Z', amountCents: 200 },

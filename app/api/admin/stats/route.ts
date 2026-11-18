@@ -2,15 +2,15 @@ import { NextRequest, NextResponse } from 'next/server';
 import { getSession } from '@/lib/session';
 import { supabaseServer } from '@/lib/supabaseServer';
 import { getSiteStorageStatsAsOf } from '@/lib/user-storage';
-import { describeBillingSummary } from '@/lib/billing-summary';
-import { loadAccountPricingInputs } from '@/lib/load-account-pricing';
 import {
   calendarMonthKey,
+  liveSubscriptionCharges,
   paymentsFromLedger,
   resolveAsOf,
   revenueByDayOfMonth,
   revenueSummary,
   type LedgerInvoiceRow,
+  type LiveSubscriptionRow,
   type PaymentEventRow,
 } from '@/lib/admin-overview-stats';
 
@@ -153,7 +153,7 @@ export async function GET(request: NextRequest) {
 
     const payments = await loadCollectedPayments(superadminIds);
     const revenue = revenueSummary(payments, asOf.date);
-    const revenueByDay = await loadRevenueByDayOfMonth(superadminIds, new Date(asOf.start));
+    const revenueByDay = await loadRevenueByDayOfMonth(superadminIds);
     const storageStats = await getSiteStorageStatsAsOf(superadminIds, asOf.start);
 
     return NextResponse.json({ 
@@ -229,58 +229,29 @@ async function loadCollectedPayments(excludeUserIds: string[]): Promise<{ paidAt
   });
 }
 
-async function loadRevenueByDayOfMonth(excludeUserIds: string[], from: Date): Promise<{ day: string; revenue: number }[]> {
+async function loadRevenueByDayOfMonth(excludeUserIds: string[]): Promise<{ day: string; revenue: number }[]> {
   try {
-    const excluded = new Set(excludeUserIds);
-    const users = await supabaseServer
-      .from('users')
-      .select('id, is_test_account')
-      .neq('user_status', 'superadmin');
-    if (users.error) {
-      console.error('Error fetching accounts for billing days:', users.error);
+    const accounts = await supabaseServer
+      .from('billing_accounts')
+      .select('user_id, subscription_status, cancel_at_period_end, billing_cycle_anchor, current_period_end, synced_amount_cents, livemode')
+      .eq('livemode', true);
+    if (accounts.error) {
+      if (!missingRelation(accounts.error)) console.error('Error fetching live subscriptions:', accounts.error);
       return revenueByDayOfMonth([]);
     }
-    const ids = (users.data ?? [])
-      .filter((row) => row.id && !row.is_test_account && !excluded.has(row.id))
-      .map((row) => row.id);
-    if (ids.length === 0) return revenueByDayOfMonth([]);
-
-    const [pricing, entitlements, owned] = await Promise.all([
-      loadAccountPricingInputs(ids),
-      supabaseServer.from('user_tool_entitlements').select('user_id, first_started_at').in('user_id', ids),
-      supabaseServer.from('users_tools').select('user_id, created_at').in('user_id', ids),
-    ]);
-    if (owned.error) {
-      console.error('Error fetching tool start dates:', owned.error);
-      return revenueByDayOfMonth([]);
-    }
-
-    const signupMs = new Map<string, number>();
-    const remember = (userId: string | null, value: string | null) => {
-      if (!userId || !value) return;
-      const parsed = Date.parse(value);
-      if (!Number.isFinite(parsed)) return;
-      const current = signupMs.get(userId);
-      if (current == null || parsed < current) signupMs.set(userId, parsed);
-    };
-    if (!entitlements.error) {
-      for (const row of entitlements.data ?? []) remember(row.user_id, row.first_started_at);
-    } else if (!missingRelation(entitlements.error)) {
-      console.error('Error fetching entitlement start dates:', entitlements.error);
-    }
-    for (const row of owned.data ?? []) remember(row.user_id, row.created_at);
-
-    const bills: { at: string; amountCents: number }[] = [];
-    for (const id of ids) {
-      const input = pricing.get(id);
-      const started = signupMs.get(id);
-      if (!input || started == null || input.tools.length === 0) continue;
-      const summary = describeBillingSummary(input, new Date(started).toISOString(), from, null);
-      const nextMs = Date.parse(summary.renewalAt);
-      if (summary.renewalCents <= 0 || !Number.isFinite(nextMs) || nextMs < from.getTime()) continue;
-      bills.push({ at: summary.renewalAt, amountCents: summary.renewalCents });
-    }
-    return revenueByDayOfMonth(bills);
+    const rows: LiveSubscriptionRow[] = (accounts.data ?? []).flatMap((row) => {
+      if (!row.user_id) return [];
+      return [{
+        userId: row.user_id,
+        status: row.subscription_status ?? null,
+        cancelAtPeriodEnd: row.cancel_at_period_end === true,
+        livemode: typeof row.livemode === 'boolean' ? row.livemode : null,
+        billingCycleAnchor: row.billing_cycle_anchor ?? null,
+        currentPeriodEnd: row.current_period_end ?? null,
+        syncedAmountCents: Number(row.synced_amount_cents) || 0,
+      }];
+    });
+    return revenueByDayOfMonth(liveSubscriptionCharges(rows, excludeUserIds));
   } catch (error) {
     console.error('Error building revenue by day:', error);
     return revenueByDayOfMonth([]);

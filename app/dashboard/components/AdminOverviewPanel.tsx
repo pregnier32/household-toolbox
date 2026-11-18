@@ -213,7 +213,7 @@ export function AdminOverviewPanel() {
         </div>
         <div className="rounded-2xl border border-slate-800 bg-slate-900/70 p-6">
           <h3 className="mb-1 text-sm font-semibold text-slate-100">Revenue by Day</h3>
-          <p className="text-xs text-slate-400">Upcoming bill by day of the month</p>
+          <p className="text-xs text-slate-400">Expected from live subscriptions, by day of the month</p>
           {isLoadingStats ? (
             <p className="mt-4 text-xs text-slate-400">Loading...</p>
           ) : (
@@ -239,7 +239,7 @@ export function AdminOverviewPanel() {
                     labelFormatter={(label) => `Day ${label}`}
                     formatter={(value) => {
                       const amount = typeof value === 'number' ? value : 0;
-                      return [currency.format(amount), 'Billed'];
+                      return [currency.format(amount), 'Expected'];
                     }}
                   />
                   <Bar dataKey="revenue" fill="#10b981" radius={[4, 4, 0, 0]} />
