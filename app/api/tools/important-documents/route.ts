@@ -532,7 +532,7 @@ export async function POST(request: NextRequest) {
         }
       }
 
-      return NextResponse.json({ document: withoutStorageUrl(newDocument) });
+      return NextResponse.json({ document: { ...withoutStorageUrl(newDocument), tags: selectedTags } });
     } else {
       // Update existing document
       const updateData: any = {
@@ -618,7 +618,7 @@ export async function POST(request: NextRequest) {
           .insert(securityQuestionInserts);
       }
 
-      return NextResponse.json({ document: withoutStorageUrl(updatedDocument) });
+      return NextResponse.json({ document: { ...withoutStorageUrl(updatedDocument), tags: selectedTags } });
     }
   } catch (error: any) {
     console.error('Error in POST /api/tools/important-documents:', error);

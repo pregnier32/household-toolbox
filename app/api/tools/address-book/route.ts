@@ -275,7 +275,7 @@ export async function POST(request: NextRequest) {
 
       await replaceAddressTags(newAddress.id, tagIds);
 
-      return NextResponse.json({ address: { ...newAddress, attachments: [] } });
+      return NextResponse.json({ address: { ...newAddress, tags: tagIds, attachments: [] } });
     }
 
     const { data: updatedAddress, error: updateError } = await supabaseServer
@@ -294,7 +294,7 @@ export async function POST(request: NextRequest) {
 
     await replaceAddressTags(addressId, tagIds);
 
-    return NextResponse.json({ address: updatedAddress });
+    return NextResponse.json({ address: { ...updatedAddress, tags: tagIds } });
   } catch (error: unknown) {
     console.error('Error in POST /api/tools/address-book:', error);
     return NextResponse.json({ error: 'Internal server error' }, { status: 500 });

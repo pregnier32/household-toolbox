@@ -721,6 +721,9 @@ export function EventBudgetPlannerTool({ toolId }: EventBudgetPlannerToolProps) 
         addToDashboard: eventForm.addToDashboard,
       });
       const createdEventId = data.event?.id as string | undefined;
+      if (data.event?.id) {
+        setEvents((current) => [data.event, ...current.filter((event) => event.id !== data.event.id)]);
+      }
       if (createdEventId && pendingEventAttachments.length > 0) {
         try {
           for (const queued of pendingEventAttachments) {
@@ -781,7 +784,7 @@ export function EventBudgetPlannerTool({ toolId }: EventBudgetPlannerToolProps) 
     if (!editingEventId || !eventForm.name.trim() || !eventForm.typeId || !toolId) return;
     setIsLoading(true);
     try {
-      await postMain({
+      const data = await postMain({
         action: 'updateEvent',
         eventId: editingEventId,
         name: eventForm.name,
@@ -790,6 +793,20 @@ export function EventBudgetPlannerTool({ toolId }: EventBudgetPlannerToolProps) 
         notes: eventForm.notes,
         addToDashboard: eventForm.addToDashboard,
       });
+      if (data.event?.id) {
+        setEvents((current) => current.map((event) => (
+          event.id === data.event.id
+            ? {
+                ...event,
+                ...data.event,
+                addToDashboard: typeof data.event.addToDashboard === 'boolean' ? data.event.addToDashboard : event.addToDashboard,
+                categoryBudgets: event.categoryBudgets,
+                expenses: event.expenses,
+                attachments: event.attachments,
+              }
+            : event
+        )));
+      }
     } catch (error: unknown) {
       showError(error instanceof Error ? error.message : 'Failed to save event.');
     } finally {
@@ -2503,10 +2520,10 @@ export function EventBudgetPlannerTool({ toolId }: EventBudgetPlannerToolProps) 
                 <button
                   type="button"
                   onClick={saveNewEvent}
-                  disabled={!eventForm.name.trim() || !eventForm.typeId}
+                  disabled={isLoading || !eventForm.name.trim() || !eventForm.typeId}
                   className={primaryButtonClass}
                 >
-                  Create Event
+                  {isLoading ? 'Saving…' : 'Create Event'}
                 </button>
                 <button type="button" onClick={cancelEventForm} className={secondaryButtonClass}>
                   Cancel
@@ -2534,10 +2551,10 @@ export function EventBudgetPlannerTool({ toolId }: EventBudgetPlannerToolProps) 
                 <button
                   type="button"
                   onClick={saveEventEdit}
-                  disabled={!eventForm.name.trim() || !eventForm.typeId}
+                  disabled={isLoading || !eventForm.name.trim() || !eventForm.typeId}
                   className={primaryButtonClass}
                 >
-                  Save Event Details
+                  {isLoading ? 'Saving…' : 'Save Event Details'}
                 </button>
               </div>
               {renderEventBudgetSection()}

@@ -285,9 +285,10 @@ async function persistPlanData(userId: string, toolId: string, planId: string, p
   const sections = (sectionRows || []) as SectionRow[];
   const builtinByKey = new Map(sections.filter((row) => row.kind === 'builtin' && row.builtin_key).map((row) => [row.builtin_key as string, row]));
 
-  for (const tab of EOL_BUILT_IN_TABS) {
+  const writes: Promise<unknown>[] = [];
+  writes.push(Promise.all(EOL_BUILT_IN_TABS.map(async (tab) => {
     const current = builtinByKey.get(tab.id);
-    if (!current) continue;
+    if (!current) return;
     const { error } = await supabaseServer
       .from('tools_eolp_sections')
       .update({
@@ -303,7 +304,7 @@ async function persistPlanData(userId: string, toolId: string, planId: string, p
       })
       .eq('id', current.id);
     await throwIfError(error, `update section ${tab.id}`);
-  }
+  })));
 
   const incomingCustom = (data.customSections || []).map((section) => ({
     ...section,
@@ -335,15 +336,16 @@ async function persistPlanData(userId: string, toolId: string, planId: string, p
       return (ordered >= 0 ? ordered : 20 + index) * 10;
     })(),
   }));
-  await syncRows({
+  writes.push(syncRows({
     table: 'tools_eolp_sections',
     planId,
     rows: customRows,
     scope: { column: 'kind', value: 'custom' },
-  });
+  }));
 
   const builtinIds = new Set(EOL_BUILT_IN_TABS.map((tab) => tab.id));
   const customIds = new Set(incomingCustom.map((section) => section.id));
+  writes.push((async () => {
   const { data: existingSubsections } = await supabaseServer
     .from('tools_eolp_subsections')
     .select('id, subsection_key')
@@ -372,8 +374,10 @@ async function persistPlanData(userId: string, toolId: string, planId: string, p
     });
   });
   await syncRows({ table: 'tools_eolp_subsections', planId, rows: subsectionRows });
+  })());
 
   const personal = data.personal;
+  writes.push((async () => {
   const { error: personalError } = await supabaseServer
     .from('tools_eolp_personal')
     .update({
@@ -407,13 +411,14 @@ async function persistPlanData(userId: string, toolId: string, planId: string, p
     })
     .eq('plan_id', planId);
   await throwIfError(personalError, 'update personal');
+  })());
 
   const extraBlocks = (data.personalExtraSections || []).map((block, index) => ({
     id: rowId(block.id),
     source: block,
     display_order: index * 10,
   }));
-  await syncRows({
+  writes.push(syncRows({
     table: 'tools_eolp_personal_blocks',
     planId,
     rows: extraBlocks.map(({ id, source, display_order }) => ({
@@ -440,7 +445,7 @@ async function persistPlanData(userId: string, toolId: string, planId: string, p
       discharge_records_location: source.military.dischargeRecordsLocation,
       notes: source.notes,
     })),
-  });
+  }));
 
   const familyRows = [
     ...personal.familyMembers.map((member, index) => ({
@@ -464,10 +469,10 @@ async function persistPlanData(userId: string, toolId: string, planId: string, p
       }))
     ),
   ];
-  await syncRows({ table: 'tools_eolp_family_members', planId, rows: familyRows });
+  writes.push(syncRows({ table: 'tools_eolp_family_members', planId, rows: familyRows }));
 
   const sectionId = (key: EolBuiltInSectionId) => builtinByKey.get(key)?.id || null;
-  await syncScopedList('tools_eolp_contacts', planId, sectionId('contacts'), data.contacts.map((item, index) => ({
+  writes.push(syncScopedList('tools_eolp_contacts', planId, sectionId('contacts'), data.contacts.map((item, index) => ({
     id: rowId(item.id),
     ...own,
     section_id: sectionId('contacts'),
@@ -481,9 +486,9 @@ async function persistPlanData(userId: string, toolId: string, planId: string, p
     address: item.address,
     why_contact: item.whyContact,
     priority: item.priority || index + 1,
-  })));
+  }))));
   for (const section of incomingCustom.filter((item) => item.modeledAfter === 'contacts')) {
-    await syncScopedList('tools_eolp_contacts', planId, section.id, section.contacts.map((item, index) => ({
+    writes.push(syncScopedList('tools_eolp_contacts', planId, section.id, section.contacts.map((item, index) => ({
       id: rowId(item.id),
       ...own,
       section_id: section.id,
@@ -497,10 +502,10 @@ async function persistPlanData(userId: string, toolId: string, planId: string, p
       address: item.address,
       why_contact: item.whyContact,
       priority: item.priority || index + 1,
-    })));
+    }))));
   }
 
-  await syncScopedList('tools_eolp_devices', planId, sectionId('devices'), data.devices.map((item) => ({
+  writes.push(syncScopedList('tools_eolp_devices', planId, sectionId('devices'), data.devices.map((item) => ({
     id: rowId(item.id),
     ...own,
     section_id: sectionId('devices'),
@@ -516,9 +521,9 @@ async function persistPlanData(userId: string, toolId: string, planId: string, p
     associated_account: item.associatedAccount,
     access_instructions: item.accessInstructions,
     stored_information: item.storedInformation,
-  })));
+  }))));
   for (const section of incomingCustom.filter((item) => item.modeledAfter === 'devices')) {
-    await syncScopedList('tools_eolp_devices', planId, section.id, section.devices.map((item) => ({
+    writes.push(syncScopedList('tools_eolp_devices', planId, section.id, section.devices.map((item) => ({
       id: rowId(item.id),
       ...own,
       section_id: section.id,
@@ -534,10 +539,10 @@ async function persistPlanData(userId: string, toolId: string, planId: string, p
       associated_account: item.associatedAccount,
       access_instructions: item.accessInstructions,
       stored_information: item.storedInformation,
-    })));
+    }))));
   }
 
-  await syncScopedList('tools_eolp_online_accounts', planId, sectionId('online'), data.onlineAccounts.map((item) => ({
+  writes.push(syncScopedList('tools_eolp_online_accounts', planId, sectionId('online'), data.onlineAccounts.map((item) => ({
     id: rowId(item.id),
     ...own,
     section_id: sectionId('online'),
@@ -556,9 +561,9 @@ async function persistPlanData(userId: string, toolId: string, planId: string, p
     special_instructions: item.specialInstructions,
     password_stored_elsewhere: item.passwordStoredElsewhere,
     password_stored_elsewhere_detail: item.passwordStoredElsewhereDetail,
-  })));
+  }))));
   for (const section of incomingCustom.filter((item) => item.modeledAfter === 'online')) {
-    await syncScopedList('tools_eolp_online_accounts', planId, section.id, section.onlineAccounts.map((item) => ({
+    writes.push(syncScopedList('tools_eolp_online_accounts', planId, section.id, section.onlineAccounts.map((item) => ({
       id: rowId(item.id),
       ...own,
       section_id: section.id,
@@ -577,10 +582,10 @@ async function persistPlanData(userId: string, toolId: string, planId: string, p
       special_instructions: item.specialInstructions,
       password_stored_elsewhere: item.passwordStoredElsewhere,
       password_stored_elsewhere_detail: item.passwordStoredElsewhereDetail,
-    })));
+    }))));
   }
 
-  await syncScopedList('tools_eolp_documents', planId, sectionId('documents'), data.documents.map((item) => ({
+  writes.push(syncScopedList('tools_eolp_documents', planId, sectionId('documents'), data.documents.map((item) => ({
     id: rowId(item.id),
     ...own,
     section_id: sectionId('documents'),
@@ -595,9 +600,9 @@ async function persistPlanData(userId: string, toolId: string, planId: string, p
     last_updated: dateOrNull(item.lastUpdated),
     expiration_date: dateOrNull(item.expirationDate),
     special_instructions: item.specialInstructions,
-  })));
+  }))));
   for (const section of incomingCustom.filter((item) => item.modeledAfter === 'documents')) {
-    await syncScopedList('tools_eolp_documents', planId, section.id, section.documents.map((item) => ({
+    writes.push(syncScopedList('tools_eolp_documents', planId, section.id, section.documents.map((item) => ({
       id: rowId(item.id),
       ...own,
       section_id: section.id,
@@ -612,10 +617,10 @@ async function persistPlanData(userId: string, toolId: string, planId: string, p
       last_updated: dateOrNull(item.lastUpdated),
       expiration_date: dateOrNull(item.expirationDate),
       special_instructions: item.specialInstructions,
-    })));
+    }))));
   }
 
-  await syncScopedList('tools_eolp_insurance', planId, sectionId('insurance'), data.insurance.map((item) => ({
+  writes.push(syncScopedList('tools_eolp_insurance', planId, sectionId('insurance'), data.insurance.map((item) => ({
     id: rowId(item.id),
     ...own,
     section_id: sectionId('insurance'),
@@ -637,9 +642,9 @@ async function persistPlanData(userId: string, toolId: string, planId: string, p
     claim_contact: item.claimContact,
     document_location: item.documentLocation,
     instructions: item.instructions,
-  })));
+  }))));
   for (const section of incomingCustom.filter((item) => item.modeledAfter === 'insurance')) {
-    await syncScopedList('tools_eolp_insurance', planId, section.id, section.insurance.map((item) => ({
+    writes.push(syncScopedList('tools_eolp_insurance', planId, section.id, section.insurance.map((item) => ({
       id: rowId(item.id),
       ...own,
       section_id: section.id,
@@ -661,11 +666,11 @@ async function persistPlanData(userId: string, toolId: string, planId: string, p
       claim_contact: item.claimContact,
       document_location: item.documentLocation,
       instructions: item.instructions,
-    })));
+    }))));
   }
 
   const financial = data.financial;
-  await syncRows({
+  writes.push(syncRows({
     table: 'tools_eolp_bank_accounts',
     planId,
     rows: financial.bankAccounts.map((item, index) => ({
@@ -683,8 +688,8 @@ async function persistPlanData(userId: string, toolId: string, planId: string, p
       purpose: item.purpose,
       display_order: index * 10,
     })),
-  });
-  await syncRows({
+  }));
+  writes.push(syncRows({
     table: 'tools_eolp_investments',
     planId,
     rows: financial.investments.map((item, index) => ({
@@ -699,8 +704,8 @@ async function persistPlanData(userId: string, toolId: string, planId: string, p
       website_login: item.websiteLogin,
       display_order: index * 10,
     })),
-  });
-  await syncRows({
+  }));
+  writes.push(syncRows({
     table: 'tools_eolp_credit_cards',
     planId,
     rows: financial.creditCards.map((item, index) => ({
@@ -716,8 +721,8 @@ async function persistPlanData(userId: string, toolId: string, planId: string, p
       closing_instructions: item.closingInstructions,
       display_order: index * 10,
     })),
-  });
-  await syncRows({
+  }));
+  writes.push(syncRows({
     table: 'tools_eolp_debts',
     planId,
     rows: financial.debts.map((item, index) => ({
@@ -733,8 +738,8 @@ async function persistPlanData(userId: string, toolId: string, planId: string, p
       contact: item.contact,
       display_order: index * 10,
     })),
-  });
-  await syncRows({
+  }));
+  writes.push(syncRows({
     table: 'tools_eolp_income_sources',
     planId,
     rows: financial.incomeSources.map((item, index) => ({
@@ -747,8 +752,8 @@ async function persistPlanData(userId: string, toolId: string, planId: string, p
       survivor_benefits: yesNo(item.survivorBenefits),
       display_order: index * 10,
     })),
-  });
-  await syncRows({
+  }));
+  writes.push(syncRows({
     table: 'tools_eolp_recurring_bills',
     planId,
     rows: financial.recurringBills.map((item, index) => ({
@@ -764,9 +769,10 @@ async function persistPlanData(userId: string, toolId: string, planId: string, p
       cancel_after_death: yesNo(item.cancelAfterDeath),
       display_order: index * 10,
     })),
-  });
+  }));
 
   const home = data.home;
+  writes.push((async () => {
   const { error: homeError } = await supabaseServer
     .from('tools_eolp_home')
     .update({
@@ -790,8 +796,9 @@ async function persistPlanData(userId: string, toolId: string, planId: string, p
     })
     .eq('plan_id', planId);
   await throwIfError(homeError, 'update home');
+  })());
 
-  await syncRows({
+  writes.push(syncRows({
     table: 'tools_eolp_utilities',
     planId,
     rows: home.utilities.map((item, index) => ({
@@ -806,8 +813,8 @@ async function persistPlanData(userId: string, toolId: string, planId: string, p
       login_reference: item.loginReference,
       display_order: index * 10,
     })),
-  });
-  await syncRows({
+  }));
+  writes.push(syncRows({
     table: 'tools_eolp_providers',
     planId,
     rows: home.providers.map((item, index) => ({
@@ -820,8 +827,8 @@ async function persistPlanData(userId: string, toolId: string, planId: string, p
       notes: item.notes,
       display_order: index * 10,
     })),
-  });
-  await syncRows({
+  }));
+  writes.push(syncRows({
     table: 'tools_eolp_vehicles',
     planId,
     rows: home.vehicles.map((item, index) => ({
@@ -837,7 +844,9 @@ async function persistPlanData(userId: string, toolId: string, planId: string, p
       spare_key_location: item.spareKeyLocation,
       display_order: index * 10,
     })),
-  });
+  }));
+
+  await Promise.all(writes);
 
   const contactIds = new Set([
     ...data.contacts.map((item) => rowId(item.id)),
@@ -872,6 +881,8 @@ async function persistPlanData(userId: string, toolId: string, planId: string, p
     })),
   });
 
+  await Promise.all([
+  (async () => {
   const wishes = data.eolWishes;
   const { error: wishesError } = await supabaseServer
     .from('tools_eolp_eol_wishes')
@@ -908,7 +919,8 @@ async function persistPlanData(userId: string, toolId: string, planId: string, p
     })
     .eq('plan_id', planId);
   await throwIfError(wishesError, 'update eol wishes');
-
+  })(),
+  (async () => {
   const myWishes = data.myWishes;
   const { error: myWishesError } = await supabaseServer
     .from('tools_eolp_my_wishes')
@@ -949,7 +961,8 @@ async function persistPlanData(userId: string, toolId: string, planId: string, p
       display_order: index * 10,
     })),
   });
-
+  })(),
+  (async () => {
   await syncScopedList('tools_eolp_letters', planId, sectionId('letters'), data.letters.map((item) => ({
     id: rowId(item.id),
     ...own,
@@ -1043,6 +1056,8 @@ async function persistPlanData(userId: string, toolId: string, planId: string, p
     const { error } = await supabaseServer.from('tools_eolp_other_custom_fields').upsert(fieldRows, { onConflict: 'id' });
     await throwIfError(error, 'upsert custom fields');
   }
+  })(),
+  ]);
 }
 
 async function syncScopedList(table: string, planId: string, sectionId: string | null, rows: Record<string, unknown>[]) {

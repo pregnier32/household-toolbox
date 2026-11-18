@@ -1099,7 +1099,7 @@ export function EndOfLifePlannerTool({ toolId }: EndOfLifePlannerToolProps) {
     nextPlans: EolPlan[],
     nextSelected: string | null,
     immediate: boolean,
-    options?: { selectionOnly?: boolean; planIds?: string[] }
+    options?: { selectionOnly?: boolean; planIds?: string[]; skipSelection?: boolean; restorePlans?: EolPlan[] }
   ) => {
     const generation = ++persistGeneration.current;
     const write = async () => {
@@ -1130,14 +1130,18 @@ export function EndOfLifePlannerTool({ toolId }: EndOfLifePlannerToolProps) {
           setSaveStatus('error');
           return;
         }
-        await eolPlannerRequest<{ ok: true }>(eolPlannerUrl(toolId), {
-          method: 'PATCH',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ toolId, selectedPlanId: nextSelected }),
-        });
+        if (!options?.skipSelection) {
+          await eolPlannerRequest<{ ok: true }>(eolPlannerUrl(toolId), {
+            method: 'PATCH',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ toolId, selectedPlanId: nextSelected }),
+          });
+        }
         if (generation !== persistGeneration.current) return;
         if (savedPlans.length) {
-          setPlans((current) => current.map((plan) => savedPlans.find((saved) => saved.id === plan.id) || plan));
+          const confirmed = savedPlans;
+          plansRef.current = plansRef.current.map((plan) => confirmed.find((saved) => saved.id === plan.id) || plan);
+          setPlans(plansRef.current);
         }
         if (options?.selectionOnly) return;
         setSaveStatus('saved');
@@ -1145,7 +1149,12 @@ export function EndOfLifePlannerTool({ toolId }: EndOfLifePlannerToolProps) {
           setSaveStatus((current) => (current === 'saved' ? 'idle' : current));
         }, 3000);
       } catch {
-        if (generation === persistGeneration.current) setSaveStatus('error');
+        if (generation !== persistGeneration.current) return;
+        if (options?.restorePlans) {
+          plansRef.current = options.restorePlans;
+          setPlans(options.restorePlans);
+        }
+        setSaveStatus('error');
       }
     };
     if (persistTimer.current) window.clearTimeout(persistTimer.current);
@@ -1281,9 +1290,14 @@ export function EndOfLifePlannerTool({ toolId }: EndOfLifePlannerToolProps) {
         const updated = touchPlan(updater(plan));
         return immediate ? appendPlanHistory(updated, 'edit', 'Edited plan') : updated;
       });
+      const previous = plansRef.current;
       plansRef.current = nextPlans;
-      setPlans(nextPlans);
-      return persist(nextPlans, currentId, immediate, { planIds: [currentId] });
+      if (!immediate) setPlans(nextPlans);
+      return persist(nextPlans, currentId, immediate, {
+        planIds: [currentId],
+        skipSelection: true,
+        restorePlans: immediate ? previous : undefined,
+      });
     },
     [persist]
   );

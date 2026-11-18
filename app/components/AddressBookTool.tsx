@@ -604,12 +604,21 @@ export function AddressBookTool({ toolId }: AddressBookToolProps) {
 
       const data = await response.json().catch(() => ({}));
       if (response.ok) {
+        const saved = data.address ? transformAddressFromDb(data.address) : null;
+        if (saved) {
+          setAddresses((current) => [saved, ...current.filter((row) => row.id !== saved.id)]);
+        }
         const createdId = data.address?.id as string | undefined;
         if (createdId && pendingAttachments.length > 0) {
           try {
+            const uploaded = [];
             for (const queued of pendingAttachments) {
               if (!queued.file) continue;
-              await uploadAddressFile(queued.file, createdId);
+              uploaded.push(await uploadAddressFile(queued.file, createdId));
+            }
+            if (saved) {
+              const withFiles = { ...saved, attachments: uploaded };
+              setAddresses((current) => current.map((row) => (row.id === saved.id ? withFiles : row)));
             }
           } catch (uploadError) {
             clearPendingAttachments();
@@ -621,7 +630,6 @@ export function AddressBookTool({ toolId }: AddressBookToolProps) {
           }
         }
         clearPendingAttachments();
-        await reloadAddresses();
         setNewAddress(emptyAddressForm());
         setIsAdding(false);
       } else {
@@ -659,13 +667,16 @@ export function AddressBookTool({ toolId }: AddressBookToolProps) {
           ...formToApiPayload(editingAddress),
         }),
       });
+      const data = await response.json().catch(() => ({}));
 
-      if (response.ok) {
-        await reloadAddresses();
+      if (response.ok && data.address) {
+        const saved = transformAddressFromDb(data.address);
+        setAddresses((current) => current.map((row) => (
+          row.id === saved.id ? { ...saved, attachments: row.attachments } : row
+        )));
         cancelEditing();
       } else {
-        const errorData = await response.json().catch(() => ({ error: 'Unknown error' }));
-        showError(errorData.error || 'Failed to update address.');
+        showError(data.error || 'Failed to update address.');
       }
     } catch {
       showError('Error updating address. Please try again.');
@@ -1098,9 +1109,10 @@ export function AddressBookTool({ toolId }: AddressBookToolProps) {
             <div className="flex gap-2">
               <button
                 onClick={saveEdit}
+                disabled={isLoading}
                 className={primaryButtonClass}
               >
-                Save
+                {isLoading ? 'Saving…' : 'Save'}
               </button>
               <button onClick={cancelEditing} className={secondaryButtonClass}>
                 Cancel
@@ -1604,9 +1616,10 @@ export function AddressBookTool({ toolId }: AddressBookToolProps) {
                 <button
                   type="button"
                   onClick={addAddress}
+                  disabled={isLoading}
                   className={primaryButtonClass}
                 >
-                  Add Address
+                  {isLoading ? 'Saving…' : 'Add Address'}
                 </button>
                 <button
                   type="button"

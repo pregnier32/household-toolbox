@@ -46,6 +46,28 @@ type Document = {
   securityQuestions: SecurityQuestion[] | null;
 };
 
+function documentFromApi(doc: Record<string, unknown>): Document {
+  return {
+    id: String(doc.id),
+    documentName: String(doc.document_name || ''),
+    uploadedDate: String(doc.uploaded_date || ''),
+    effectiveDate: (doc.effective_date as string | null) ?? null,
+    note: (doc.note as string | null) ?? null,
+    hasFile: Boolean(doc.has_file),
+    fileGroup: (doc.file_group as string | null) || null,
+    fileName: (doc.file_name as string | null) ?? null,
+    fileSize: typeof doc.file_size === 'number' ? doc.file_size : null,
+    fileType: (doc.file_type as string | null) ?? null,
+    tags: Array.isArray(doc.tags) ? doc.tags.map(String) : [],
+    isActive: doc.is_active !== false,
+    dateAdded: String(doc.date_added || ''),
+    dateInactivated: (doc.date_inactivated as string | undefined) || undefined,
+    requiresPasswordForDownload: Boolean(doc.requires_password_for_download),
+    downloadPassword: null,
+    securityQuestions: null,
+  };
+}
+
 const DEFAULT_TAGS = [
   'Receipts',
   'Warranties',
@@ -566,33 +588,11 @@ export function ImportantDocumentsTool({ toolId }: ImportantDocumentsToolProps) 
       }
 
       const response = await postToolFile('/api/tools/important-documents', formData);
+      const data = await response.json().catch(() => ({}));
 
-      if (response.ok) {
-        // Reload documents from API
-        const loadResponse = await fetch(`/api/tools/important-documents?toolId=${toolId}`);
-        if (loadResponse.ok) {
-          const data = await loadResponse.json();
-          const transformedDocuments: Document[] = (data.documents || []).map((doc: any) => ({
-            id: doc.id,
-            documentName: doc.document_name,
-            uploadedDate: doc.uploaded_date,
-            effectiveDate: doc.effective_date,
-            note: doc.note,
-            hasFile: Boolean(doc.has_file),
-            fileGroup: doc.file_group || null,
-            fileName: doc.file_name,
-            fileSize: doc.file_size,
-            fileType: doc.file_type,
-            tags: doc.tags || [],
-            isActive: doc.is_active !== false,
-            dateAdded: doc.date_added,
-            dateInactivated: doc.date_inactivated,
-            requiresPasswordForDownload: doc.requires_password_for_download || false,
-            downloadPassword: null,
-            securityQuestions: null
-          }));
-          setDocuments(transformedDocuments);
-        }
+      if (response.ok && data.document) {
+        const saved = documentFromApi(data.document);
+        setDocuments((current) => [saved, ...current.filter((row) => row.id !== saved.id)]);
         
         // Reset form
         setNewDocument({
@@ -615,9 +615,8 @@ export function ImportantDocumentsTool({ toolId }: ImportantDocumentsToolProps) 
         setAttachmentModal(null);
         setIsAdding(false);
       } else {
-        const errorData = await response.json();
-        console.error('Failed to add document:', errorData.error);
-        showError('Failed to add document: ' + (errorData.error || 'Unknown error'));
+        console.error('Failed to add document:', data.error);
+        showError('Failed to add document: ' + (data.error || 'Unknown error'));
       }
     } catch (error) {
       console.error('Error adding document:', error);
@@ -709,38 +708,15 @@ export function ImportantDocumentsTool({ toolId }: ImportantDocumentsToolProps) 
       // Note: Security questions are only set on create, not on update unless password is being changed
 
       const response = await postToolFile('/api/tools/important-documents', formData);
+      const data = await response.json().catch(() => ({}));
 
-      if (response.ok) {
-        // Reload documents from API
-        const loadResponse = await fetch(`/api/tools/important-documents?toolId=${toolId}`);
-        if (loadResponse.ok) {
-          const data = await loadResponse.json();
-          const transformedDocuments: Document[] = (data.documents || []).map((doc: any) => ({
-            id: doc.id,
-            documentName: doc.document_name,
-            uploadedDate: doc.uploaded_date,
-            effectiveDate: doc.effective_date,
-            note: doc.note,
-            hasFile: Boolean(doc.has_file),
-            fileGroup: doc.file_group || null,
-            fileName: doc.file_name,
-            fileSize: doc.file_size,
-            fileType: doc.file_type,
-            tags: doc.tags || [],
-            isActive: doc.is_active !== false,
-            dateAdded: doc.date_added,
-            dateInactivated: doc.date_inactivated,
-            requiresPasswordForDownload: doc.requires_password_for_download || false,
-            downloadPassword: null,
-            securityQuestions: null
-          }));
-          setDocuments(transformedDocuments);
-        }
+      if (response.ok && data.document) {
+        const saved = documentFromApi(data.document);
+        setDocuments((current) => current.map((row) => (row.id === saved.id ? saved : row)));
         cancelEditing();
       } else {
-        const errorData = await response.json();
-        console.error('Failed to update document:', errorData.error);
-        showError('Failed to update document: ' + (errorData.error || 'Unknown error'));
+        console.error('Failed to update document:', data.error);
+        showError('Failed to update document: ' + (data.error || 'Unknown error'));
       }
     } catch (error) {
       console.error('Error updating document:', error);
@@ -2303,6 +2279,7 @@ export function ImportantDocumentsTool({ toolId }: ImportantDocumentsToolProps) 
                   <button
                     onClick={addDocument}
                     disabled={
+                      isLoading ||
                       !newDocument.documentName.trim() || 
                       !newDocument.uploadedDate ||
                       !newDocument.file ||
@@ -2312,7 +2289,7 @@ export function ImportantDocumentsTool({ toolId }: ImportantDocumentsToolProps) 
                     }
                     className={primaryButtonClass}
                   >
-                    Add Document
+                    {isLoading ? 'Saving…' : 'Add Document'}
                   </button>
                   <button
                     onClick={() => {
@@ -2551,6 +2528,7 @@ export function ImportantDocumentsTool({ toolId }: ImportantDocumentsToolProps) 
                           <button
                             onClick={saveEdit}
                             disabled={
+                              isLoading ||
                               !editingDocument.documentName.trim() || 
                               !editingDocument.uploadedDate ||
                               editingDocument.selectedTags.length === 0 ||
@@ -2559,7 +2537,7 @@ export function ImportantDocumentsTool({ toolId }: ImportantDocumentsToolProps) 
                             }
                             className="px-4 py-2.5 rounded-lg bg-emerald-500 text-slate-950 font-semibold hover:bg-emerald-400 transition-colors focus:outline-none focus:ring-2 focus:ring-emerald-500/50 focus:ring-offset-2 focus:ring-offset-slate-900 disabled:cursor-not-allowed disabled:opacity-50"
                           >
-                            Save
+                            {isLoading ? 'Saving…' : 'Save'}
                           </button>
                           <button
                             onClick={cancelEditing}

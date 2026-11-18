@@ -1323,6 +1323,14 @@ export function CleaningScheduleTool({ toolId }: CleaningScheduleToolProps) {
         notes: itemForm.notes.trim(),
         ...itemCategoryPayload(itemForm),
       });
+      if (data.category?.id) {
+        setCategories((current) => (
+          current.some((category) => category.id === data.category.id) ? current : [...current, data.category]
+        ));
+      }
+      if (data.item?.id) {
+        setLibraryItems((current) => [data.item, ...current.filter((item) => item.id !== data.item.id)]);
+      }
       const createdItemId = typeof data.createdItemId === 'string' ? data.createdItemId : '';
       if (createdItemId && pendingItemAttachments.length > 0) {
         try {
@@ -1380,7 +1388,7 @@ export function CleaningScheduleTool({ toolId }: CleaningScheduleToolProps) {
     if (!editingItemId || !itemFormReady(editItemForm) || isSaving) return;
     setIsSaving(true);
     try {
-      await postAction({
+      const data = await postAction({
         action: 'updateItem',
         itemId: editingItemId,
         name: editItemForm.name.trim(),
@@ -1388,6 +1396,23 @@ export function CleaningScheduleTool({ toolId }: CleaningScheduleToolProps) {
         notes: editItemForm.notes.trim(),
         ...itemCategoryPayload(editItemForm),
       });
+      if (data.category?.id) {
+        setCategories((current) => (
+          current.some((category) => category.id === data.category.id) ? current : [...current, data.category]
+        ));
+      }
+      if (data.item?.id) {
+        setLibraryItems((current) => current.map((item) => (
+          item.id === data.item.id
+            ? {
+                ...item,
+                ...data.item,
+                name: data.item.name || item.name,
+                attachments: item.attachments,
+              }
+            : item
+        )));
+      }
       setEditingItemId(null);
       showBanner('success', 'Item updated.');
     } catch (error) {

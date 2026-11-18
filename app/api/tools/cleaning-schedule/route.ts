@@ -747,7 +747,19 @@ export async function POST(request: NextRequest) {
         success: true,
         createdItemId: created.id,
         createdCategoryId: category.id,
-        ...(await fetchAllData(user.id, toolId)),
+        item: {
+          id: created.id,
+          name: name.trim(),
+          categoryId: category.id,
+          description: (description ?? '').trim(),
+          notes: (notes ?? '').trim(),
+          isDefault: false,
+          isHidden: false,
+          attachments: [],
+        },
+        category: newCategoryName?.trim()
+          ? { id: category.id, name: newCategoryName.trim(), isDefault: false, isActive: true }
+          : undefined,
       });
     }
 
@@ -858,7 +870,24 @@ export async function POST(request: NextRequest) {
         }
       }
 
-      return NextResponse.json({ success: true, ...(await fetchAllData(user.id, toolId)) });
+      if (action === 'updateSchedule') {
+        return NextResponse.json({ success: true, ...(await fetchAllData(user.id, toolId)) });
+      }
+      return NextResponse.json({
+        success: true,
+        item: {
+          id: resolvedItemId,
+          name: typeof itemUpdate.name === 'string' ? itemUpdate.name : undefined,
+          categoryId: category.id,
+          description: itemUpdate.description,
+          notes: itemUpdate.notes,
+          isDefault: item.is_default === true,
+          isHidden: false,
+        },
+        category: newCategoryName?.trim()
+          ? { id: category.id, name: newCategoryName.trim(), isDefault: false, isActive: true }
+          : undefined,
+      });
     }
 
     if (action === 'hideItem' || action === 'restoreItem') {

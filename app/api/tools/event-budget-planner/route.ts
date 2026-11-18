@@ -512,9 +512,22 @@ export async function POST(request: NextRequest) {
         }
       }
 
-      const data = await fetchAllData(user.id, toolId);
-      const event = data.events.find((e) => e.id === created.id);
-      return NextResponse.json({ success: true, event, ...data });
+      return NextResponse.json({
+        success: true,
+        event: {
+          id: created.id,
+          name: created.name,
+          date: created.event_date,
+          typeId: created.type_id,
+          notes: created.notes ?? '',
+          isActive: created.is_active !== false,
+          dateAdded: created.date_added || created.created_at?.split('T')[0] || todayIso(),
+          addToDashboard: addToDashboard === true,
+          attachments: [],
+          categoryBudgets: [],
+          expenses: [],
+        },
+      });
     }
 
     if (action === 'updateEvent') {
@@ -555,7 +568,17 @@ export async function POST(request: NextRequest) {
         }
       }
 
-      return NextResponse.json({ success: true, ...(await fetchAllData(user.id, toolId)) });
+      return NextResponse.json({
+        success: true,
+        event: {
+          id: eventId,
+          name: name.trim(),
+          date,
+          typeId,
+          notes: (notes ?? '').trim(),
+          addToDashboard: typeof addToDashboard === 'boolean' ? addToDashboard : undefined,
+        },
+      });
     }
 
     if (action === 'inactivateEvent') {
